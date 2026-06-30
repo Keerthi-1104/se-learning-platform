@@ -1,0 +1,53 @@
+{
+  "id": "sm.comparison",
+  "levelId": 5,
+  "title": "Comparison & Best Practices",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Compare all approaches on key axes",
+    "Pick the right tool for a given app",
+    "Apply universal state best practices"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "There is no universally 'best' state manager — only the best fit for your app size, team, and complexity. The goal is the same everywhere: separate UI from logic, rebuild granularly, and keep state testable." },
+    { "type": "table", "headers": ["Approach", "Boilerplate", "Testability", "Best for"], "rows": [
+      ["setState", "None", "Low", "Local widget state"],
+      ["Provider", "Low", "Medium", "Small/medium shared state"],
+      ["Riverpod", "Low-Med", "High", "Most apps; compile-safe DI"],
+      ["BLoC/Cubit", "Medium", "High", "Large, event-driven teams"],
+      ["GetX", "Very low", "Low-Med", "Prototypes/small apps"],
+      ["Redux", "High", "High", "Very large, auditable state"],
+      ["MobX", "Low (codegen)", "Medium", "Reactive/auto-tracking fans"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "A great answer to 'which state management?' is: 'It depends — setState for local UI, Riverpod or BLoC for most production apps (testable, scalable), and I avoid one-size-fits-all. I separate logic from UI and rebuild granularly regardless of the tool.'" },
+    { "type": "callout", "variant": "best", "markdown": "Universal best practices: keep business logic out of widgets; make state immutable; rebuild only what changed (Selector/select/Consumer); model async as loading/error/data; and make state unit-testable without the widget tree." },
+    { "type": "callout", "variant": "tip", "markdown": "You can mix approaches: setState for trivial local state and Riverpod/BLoC for shared domain state in the same app. Consistency within a feature matters more than picking one global winner." }
+  ],
+  "flashcards": [
+    { "front": "Which approaches are most testable?", "back": "Riverpod, BLoC/Cubit, and Redux — logic is separated and easily unit-tested." },
+    { "front": "Best default for most production apps?", "back": "Riverpod or BLoC — scalable, testable, with clear UI/logic separation." },
+    { "front": "Universal best practice?", "back": "Separate logic from UI, immutable state, granular rebuilds, testable logic." }
+  ],
+  "quiz": [
+    { "q": "The best state management is…", "options": ["Always BLoC", "Always Provider", "Whatever fits the app/team/complexity", "Always GetX"], "answer": 2, "explain": "Fit beats dogma; there's no universal winner." },
+    { "q": "Which is best for quick prototypes?", "options": ["Redux", "GetX", "BLoC", "Manual InheritedWidget"], "answer": 1, "explain": "GetX minimizes boilerplate for speed." },
+    { "q": "A universal best practice is…", "options": ["Logic inside widgets", "Mutable global state", "Granular rebuilds + immutable state", "Rebuild the whole screen"], "answer": 2, "explain": "Granular rebuilds and immutability apply to every approach." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "List which approach you'd pick for 3 app scenarios and why." },
+    { "level": "Medium", "text": "Build the same todo feature in Provider and Riverpod; compare." },
+    { "level": "Hard", "text": "Implement one feature in BLoC and Redux; compare boilerplate and testability." },
+    { "level": "Expert", "text": "Write a decision guide for your team mapping app traits to a recommended approach." }
+  ],
+  "interviewQuestions": [
+    "Which state management do you prefer and why?",
+    "How do you choose a state approach for a new app?",
+    "Compare BLoC, Riverpod and Provider.",
+    "What best practices apply to ALL approaches?",
+    "Can you mix multiple approaches in one app?"
+  ],
+  "references": [
+    { "label": "Flutter — State management options", "url": "https://docs.flutter.dev/data-and-backend/state-mgmt/options" }
+  ]
+}

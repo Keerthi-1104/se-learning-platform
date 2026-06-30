@@ -1,0 +1,51 @@
+{
+  "id": "android.kotlin",
+  "levelId": 3,
+  "title": "Native Java & Kotlin",
+  "xp": 50,
+  "estimatedMinutes": 30,
+  "objectives": [
+    "Explain Kotlin's null safety and key features",
+    "Use data classes, extensions and scope functions",
+    "Understand Kotlin/Java interop"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Kotlin is the modern, official language for Android — concise, null-safe, and fully interoperable with Java. It compiles to the same JVM bytecode, so Kotlin and Java coexist in one project." },
+    { "type": "code", "language": "kotlin", "code": "val name: String = \"Ada\"      // non-null\nvar nick: String? = null      // nullable\nval len = nick?.length ?: 0   // safe call + Elvis\ndata class User(val id: Int, val name: String) // equals/hashCode/copy free\nfun String.shout() = uppercase() + \"!\"          // extension function" },
+    { "type": "table", "headers": ["Feature", "What it gives"], "rows": [
+      ["Null safety", "String vs String? checked by compiler"],
+      ["data class", "equals/hashCode/toString/copy generated"],
+      ["Extension functions", "Add methods without subclassing"],
+      ["Scope functions", "let/run/apply/also for concise setup"],
+      ["Coroutines", "First-class async"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Kotlin's null safety eliminates most NullPointerExceptions at compile time by separating nullable (String?) from non-nullable (String) types. This is the single biggest reason Google recommends Kotlin." },
+    { "type": "callout", "variant": "mistake", "markdown": "Overusing the !! (not-null assertion) operator — it throws an NPE if the value is null, defeating null safety. Prefer ?., ?:, and proper nullable types." }
+  ],
+  "flashcards": [
+    { "front": "How does Kotlin prevent NPEs?", "back": "The type system distinguishes nullable (T?) from non-null (T); the compiler enforces null checks." },
+    { "front": "What does a data class generate?", "back": "equals, hashCode, toString, copy, and componentN functions." },
+    { "front": "Java/Kotlin interop?", "back": "Both compile to JVM bytecode and call each other freely in the same project." }
+  ],
+  "quiz": [
+    { "q": "Kotlin's biggest safety win is…", "options": ["Faster GC", "Compile-time null safety", "Smaller APKs", "Native code"], "answer": 1, "explain": "Nullable vs non-null types catch NPEs at compile time." },
+    { "q": "A data class automatically provides…", "options": ["Coroutines", "equals/hashCode/toString/copy", "Network calls", "UI"], "answer": 1, "explain": "Data classes generate value-based methods plus copy()." },
+    { "q": "The !! operator…", "options": ["Is always safe", "Throws NPE if the value is null", "Converts to Int", "Starts a coroutine"], "answer": 1, "explain": "It asserts non-null and throws if wrong — use sparingly." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Convert a Java POJO to a Kotlin data class." },
+    { "level": "Medium", "text": "Write extension functions and use scope functions (let/apply)." },
+    { "level": "Hard", "text": "Refactor null-heavy Java code to null-safe Kotlin with ?./?:." },
+    { "level": "Expert", "text": "Call Kotlin coroutines/suspend functions from Java interop code." }
+  ],
+  "interviewQuestions": [
+    "How does Kotlin handle null safety?",
+    "data class vs regular class?",
+    "What are extension functions and scope functions?",
+    "How do Kotlin and Java interoperate?",
+    "val vs var vs const?"
+  ],
+  "references": [
+    { "label": "Kotlin docs", "url": "https://kotlinlang.org/docs/home.html" }
+  ]
+}

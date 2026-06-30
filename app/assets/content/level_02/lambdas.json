@@ -1,0 +1,50 @@
+{
+  "id": "java.lambdas",
+  "levelId": 2,
+  "title": "Lambda Expressions",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Write lambdas and method references",
+    "Use the standard functional interfaces",
+    "Understand variable capture rules"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "A lambda is an anonymous function you can pass around. It implements a **functional interface** (exactly one abstract method) concisely." },
+    { "type": "code", "language": "java", "code": "Runnable r = () -> System.out.println(\"hi\");\nComparator<String> byLen = (a, b) -> a.length() - b.length();\n// Method reference shorthand\nlist.forEach(System.out::println);\nlist.stream().map(String::toUpperCase);" },
+    { "type": "table", "headers": ["Interface", "Signature", "Use"], "rows": [
+      ["Function<T,R>", "R apply(T)", "Transform"],
+      ["Predicate<T>", "boolean test(T)", "Filter"],
+      ["Consumer<T>", "void accept(T)", "Side effect"],
+      ["Supplier<T>", "T get()", "Produce"]
+    ]},
+    { "type": "callout", "variant": "note", "markdown": "Lambdas capture **effectively final** local variables (you can't reassign them). They don't introduce a new scope for `this` — `this` refers to the enclosing instance, unlike anonymous classes." },
+    { "type": "callout", "variant": "tip", "markdown": "Prefer method references (String::toUpperCase) when they read clearly; fall back to lambdas for logic. Keep lambdas short — extract to a named method if they grow." }
+  ],
+  "flashcards": [
+    { "front": "What is a functional interface?", "back": "An interface with exactly one abstract method (e.g. Runnable, Comparator), targetable by a lambda." },
+    { "front": "Function vs Predicate vs Consumer vs Supplier?", "back": "Function transforms (T→R), Predicate tests (T→boolean), Consumer accepts (T→void), Supplier produces (→T)." },
+    { "front": "What variables can a lambda capture?", "back": "Effectively final locals — variables not reassigned after initialization." }
+  ],
+  "quiz": [
+    { "q": "A lambda can implement…", "options": ["Any interface", "A functional interface (one abstract method)", "Only Runnable", "Abstract classes"], "answer": 1, "explain": "Lambdas target functional interfaces with a single abstract method." },
+    { "q": "Which transforms T to R?", "options": ["Predicate", "Consumer", "Function", "Supplier"], "answer": 2, "explain": "Function<T,R> applies a transformation." },
+    { "q": "Lambdas can capture locals that are…", "options": ["Any local", "Effectively final", "Static only", "Volatile only"], "answer": 1, "explain": "Captured locals must be effectively final." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Sort a list of strings by length using a lambda comparator." },
+    { "level": "Medium", "text": "Compose two Functions with andThen and compose." },
+    { "level": "Hard", "text": "Build a tiny event bus using Consumer<T> handlers." },
+    { "level": "Expert", "text": "Implement currying/partial application with nested Functions." }
+  ],
+  "interviewQuestions": [
+    "What is a functional interface?",
+    "Lambda vs anonymous class — differences (including this)?",
+    "What does 'effectively final' mean?",
+    "When use a method reference over a lambda?",
+    "Name the core functional interfaces."
+  ],
+  "references": [
+    { "label": "Java Lambdas — Oracle", "url": "https://docs.oracle.com/javase/tutorial/java/javaOO/lambdaexpressions.html" }
+  ]
+}

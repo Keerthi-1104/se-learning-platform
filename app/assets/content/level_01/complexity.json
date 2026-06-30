@@ -1,0 +1,53 @@
+{
+  "id": "cs.complexity",
+  "levelId": 1,
+  "title": "Time & Space Complexity",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Order the Big-O growth ladder",
+    "Analyze loops to a Big-O bound",
+    "Always report both time and space"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Big-O describes how an algorithm's time or memory grows as input size n grows, ignoring constants and lower-order terms. It is the language of efficiency." },
+    { "type": "table", "headers": ["Big-O", "Name", "Example"], "rows": [
+      ["O(1)", "Constant", "Hash lookup"],
+      ["O(log n)", "Logarithmic", "Binary search"],
+      ["O(n)", "Linear", "Scan an array"],
+      ["O(n log n)", "Linearithmic", "Merge/Quick sort"],
+      ["O(n^2)", "Quadratic", "Nested loops"],
+      ["O(2^n)", "Exponential", "Naive recursion"]
+    ]},
+    { "type": "callout", "variant": "analogy", "markdown": "Big-O is about how a **recipe scales**, not how fast your stove is. O(n²) means doubling guests quadruples the work — regardless of how fast any single step runs." },
+    { "type": "code", "language": "text", "code": "for i in 0..n:        # O(n)\n  for j in 0..n:      # nested -> O(n^2)\n    work()            # O(1)\nRules: drop constants; drop lower terms;\n       nested loops multiply, sequential loops add." },
+    { "type": "callout", "variant": "mistake", "markdown": "Forgetting space complexity. A recursive solution may be O(n) time but O(n) stack space. Always state both." },
+    { "type": "callout", "variant": "interview", "markdown": "Give complexity unprompted: 'This is O(n) time, O(1) space.' Then note worst vs average and whether a better bound exists." }
+  ],
+  "flashcards": [
+    { "front": "The Big-O ladder, best to worst?", "back": "O(1) < O(log n) < O(n) < O(n log n) < O(n²) < O(2ⁿ) < O(n!)." },
+    { "front": "O vs Ω vs Θ?", "back": "O = upper bound (worst), Ω = lower bound (best), Θ = tight bound (both)." },
+    { "front": "How do nested vs sequential loops combine?", "back": "Nested loops multiply their costs; sequential loops add." }
+  ],
+  "quiz": [
+    { "q": "Two nested loops over n give…", "options": ["O(n)", "O(log n)", "O(n^2)", "O(2^n)"], "answer": 2, "explain": "Each level multiplies: n × n = n²." },
+    { "q": "Which is fastest-growing (worst) for large n?", "options": ["O(n log n)", "O(n^2)", "O(2^n)", "O(n)"], "answer": 2, "explain": "Exponential growth dwarfs polynomial growth as n increases." },
+    { "q": "O(2n + 5) simplifies to…", "options": ["O(2n)", "O(n)", "O(5)", "O(n^2)"], "answer": 1, "explain": "Drop constants and lower terms: O(n)." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Given snippets, state the time and space complexity of each." },
+    { "level": "Medium", "text": "Rewrite an O(n²) duplicate-finder as O(n) with a hash set." },
+    { "level": "Hard", "text": "Find the k-th largest element in O(n) average with quickselect." },
+    { "level": "Expert", "text": "Solve a problem in O(1) extra space you first solved in O(n) (e.g. Floyd cycle detection)." }
+  ],
+  "interviewQuestions": [
+    "Difference between O, Ω and Θ?",
+    "What's the complexity of binary search and why?",
+    "Average vs worst case for quicksort and hash lookups?",
+    "What is amortized complexity?",
+    "Reduce a given O(n²) solution to O(n log n) or O(n)."
+  ],
+  "references": [
+    { "label": "Big-O Cheat Sheet", "url": "https://www.bigocheatsheet.com" }
+  ]
+}

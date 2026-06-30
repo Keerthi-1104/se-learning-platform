@@ -1,0 +1,51 @@
+{
+  "id": "cs.networking",
+  "levelId": 1,
+  "title": "Networking",
+  "xp": 40,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Map the OSI model onto TCP/IP",
+    "Explain encapsulation layer by layer",
+    "Identify a connection by its 5-tuple"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Networking connects devices so they exchange data using agreed protocols organized in layers (the OSI and TCP/IP models)." },
+    { "type": "callout", "variant": "analogy", "markdown": "Sending a **letter**: you write it (Application), put it in an addressed envelope (Transport/Network), trucks route it (Network), and roads/planes carry it (Physical). Each layer only cares about its own job." },
+    { "type": "table", "headers": ["OSI layer", "TCP/IP", "Examples"], "rows": [
+      ["Application", "Application", "HTTP, DNS, SMTP"],
+      ["Transport", "Transport", "TCP, UDP"],
+      ["Network", "Internet", "IP, ICMP"],
+      ["Data Link / Physical", "Link", "Ethernet, Wi-Fi"]
+    ]},
+    { "type": "code", "language": "text", "code": "Encapsulation (going down the stack):\n  data:                 [ HTTP body ]\n  +TCP header:     [TCP][ HTTP body ]\n  +IP header:  [IP][TCP][ HTTP body ]\n  +Ethernet:  [ETH][IP][TCP][data][CRC]" },
+    { "type": "theory", "markdown": "## Addressing\n- **IP address**: logical host address (IPv4 32-bit, IPv6 128-bit).\n- **MAC address**: hardware address used within one link.\n- **Port**: identifies a process/service (HTTP 80, HTTPS 443).\n- **Socket**: the (IP, port) endpoint of a connection." },
+    { "type": "callout", "variant": "interview", "markdown": "A connection is uniquely identified by its **5-tuple**: source IP, source port, destination IP, destination port, and protocol." }
+  ],
+  "flashcards": [
+    { "front": "Difference between IP and MAC address?", "back": "IP is a logical, routable host address; MAC is a hardware address used within a single link." },
+    { "front": "What is a socket?", "back": "The endpoint of a connection — the pair (IP address, port)." },
+    { "front": "What is encapsulation?", "back": "Each layer wraps the data with its own header going down, and strips it going up." }
+  ],
+  "quiz": [
+    { "q": "Which uniquely identifies a TCP connection?", "options": ["The IP address only", "The port only", "The 5-tuple (src/dst IP, src/dst port, protocol)", "The MAC address"], "answer": 2, "explain": "Connections are tracked by the full 5-tuple." },
+    { "q": "At which layer does IP operate?", "options": ["Application", "Transport", "Network/Internet", "Physical"], "answer": 2, "explain": "IP is the Internet/Network layer protocol responsible for routing across networks." },
+    { "q": "A port number identifies…", "options": ["A physical cable", "A specific process/service on a host", "A subnet", "A DNS record"], "answer": 1, "explain": "Ports let one host run many services (80 for HTTP, 443 for HTTPS, etc.)." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Parse a CIDR string and print the number of usable host addresses." },
+    { "level": "Medium", "text": "Write a TCP echo client and server using raw sockets." },
+    { "level": "Hard", "text": "Implement a tiny HTTP/1.1 server that parses request lines and headers." },
+    { "level": "Expert", "text": "Build a minimal concurrent port scanner with a timeout." }
+  ],
+  "interviewQuestions": [
+    "Walk through what happens when you type a URL and press Enter.",
+    "Difference between IP address, MAC address and port?",
+    "What is the OSI model and how does TCP/IP map onto it?",
+    "What does CIDR / a subnet mask mean?",
+    "What is NAT and why is it used?"
+  ],
+  "references": [
+    { "label": "High Performance Browser Networking (free)", "url": "https://hpbn.co" }
+  ]
+}

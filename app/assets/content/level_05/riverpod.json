@@ -1,0 +1,52 @@
+{
+  "id": "sm.riverpod",
+  "levelId": 5,
+  "title": "Riverpod",
+  "xp": 50,
+  "estimatedMinutes": 30,
+  "objectives": [
+    "Explain how Riverpod improves on Provider",
+    "Use the main provider types",
+    "Leverage compile-safe DI + testability"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Riverpod is a reactive state + dependency-injection framework (by Provider's author) that fixes Provider's limits: it's compile-safe, not tied to the widget tree/BuildContext, and easy to test and compose." },
+    { "type": "code", "language": "dart", "code": "final counterProvider = StateProvider<int>((ref) => 0);\n// read in a ConsumerWidget:\nfinal count = ref.watch(counterProvider);\nref.read(counterProvider.notifier).state++;\n// async:\nfinal userProvider = FutureProvider((ref) => api.getUser());" },
+    { "type": "table", "headers": ["Provider type", "Use"], "rows": [
+      ["Provider", "Expose a value/service"],
+      ["StateProvider", "Simple mutable state"],
+      ["NotifierProvider", "Complex state + logic"],
+      ["FutureProvider", "Async value (loading/error/data)"],
+      ["StreamProvider", "Stream of values"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Riverpod's wins over Provider: no BuildContext needed to read state, multiple providers of the same type, compile-time safety (no ProviderNotFound at runtime), and trivial overriding for tests. AsyncValue elegantly models loading/error/data." },
+    { "type": "callout", "variant": "mistake", "markdown": "Calling ref.watch inside callbacks (use ref.read) or doing side effects during build. Keep build pure; trigger actions via notifiers/ref.read." },
+    { "type": "callout", "variant": "tip", "markdown": "Use code generation (@riverpod) for less boilerplate and auto-dispose. autoDispose frees provider state when no longer watched — important for memory." }
+  ],
+  "flashcards": [
+    { "front": "How does Riverpod improve on Provider?", "back": "Compile-safe, no BuildContext needed, multiple same-type providers, easy testing/overrides." },
+    { "front": "What is AsyncValue?", "back": "A type modeling loading/error/data from Future/Stream providers, with .when()." },
+    { "front": "watch vs read in Riverpod?", "back": "watch subscribes/rebuilds in build; read is a one-off (use in callbacks)." }
+  ],
+  "quiz": [
+    { "q": "A key Riverpod advantage over Provider is…", "options": ["It needs BuildContext", "Compile-time safety (no runtime ProviderNotFound)", "It's slower", "It can't be tested"], "answer": 1, "explain": "Errors surface at compile time, not runtime." },
+    { "q": "Async loading/error/data is modeled by…", "options": ["bool flags", "AsyncValue", "setState", "a Stream only"], "answer": 1, "explain": "FutureProvider/StreamProvider expose AsyncValue with .when()." },
+    { "q": "In a callback you should use…", "options": ["ref.watch", "ref.read", "Consumer", "setState"], "answer": 1, "explain": "read() avoids subscribing inside callbacks." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Counter with StateProvider." },
+    { "level": "Medium", "text": "Fetch data with FutureProvider and render AsyncValue.when()." },
+    { "level": "Hard", "text": "Build a NotifierProvider with complex state + actions." },
+    { "level": "Expert", "text": "Override providers with fakes in widget tests; verify behavior." }
+  ],
+  "interviewQuestions": [
+    "How does Riverpod improve on Provider?",
+    "Explain the main provider types.",
+    "What is AsyncValue and how do you use it?",
+    "watch vs read vs listen?",
+    "How does autoDispose help memory?"
+  ],
+  "references": [
+    { "label": "Riverpod docs", "url": "https://riverpod.dev" }
+  ]
+}

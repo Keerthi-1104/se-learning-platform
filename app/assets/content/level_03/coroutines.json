@@ -1,0 +1,50 @@
+{
+  "id": "android.coroutines",
+  "levelId": 3,
+  "title": "Coroutines",
+  "xp": 50,
+  "estimatedMinutes": 30,
+  "objectives": [
+    "Write async code with suspend functions",
+    "Use dispatchers and structured concurrency",
+    "Collect Flows safely on Android"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Kotlin coroutines are lightweight, suspendable computations for asynchronous code that reads sequentially. A suspend function can pause without blocking a thread." },
+    { "type": "code", "language": "kotlin", "code": "viewModelScope.launch {              // structured: tied to ViewModel\n  val user = withContext(Dispatchers.IO) { api.getUser() } // off main\n  _state.value = user                 // back on main automatically\n}" },
+    { "type": "table", "headers": ["Dispatcher", "Use for"], "rows": [
+      ["Main", "UI updates"],
+      ["IO", "Network / disk"],
+      ["Default", "CPU-bound work"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**Structured concurrency**: coroutines launched in a scope (viewModelScope, lifecycleScope) are automatically cancelled when the scope ends — no leaked work after a screen closes. This is a key advantage over raw callbacks/threads." },
+    { "type": "callout", "variant": "mistake", "markdown": "Doing blocking I/O on Dispatchers.Main (freezes the UI), or collecting a Flow without a lifecycle-aware collector (repeatOnLifecycle), which wastes work while the UI is in the background." },
+    { "type": "callout", "variant": "tip", "markdown": "Flow is the coroutine-native reactive stream. Use StateFlow for UI state and collect it with repeatOnLifecycle(STARTED) so collection pauses when the screen isn't visible." }
+  ],
+  "flashcards": [
+    { "front": "What does suspend mean?", "back": "The function can pause and resume without blocking its thread." },
+    { "front": "What is structured concurrency?", "back": "Coroutines are bound to a scope and auto-cancelled when it ends, preventing leaks." },
+    { "front": "Which dispatcher for network calls?", "back": "Dispatchers.IO." }
+  ],
+  "quiz": [
+    { "q": "A suspend function…", "options": ["Blocks its thread", "Can pause without blocking a thread", "Runs on the GPU", "Is synchronous only"], "answer": 1, "explain": "Suspension frees the thread instead of blocking it." },
+    { "q": "Network calls should run on…", "options": ["Dispatchers.Main", "Dispatchers.IO", "Dispatchers.Default", "No dispatcher"], "answer": 1, "explain": "IO is optimized for blocking I/O like network/disk." },
+    { "q": "Structured concurrency prevents…", "options": ["Fast code", "Leaked coroutines after a scope ends", "UI rendering", "Compilation"], "answer": 1, "explain": "Scoped coroutines are cancelled when the scope is destroyed." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Call a suspend function from viewModelScope and update state." },
+    { "level": "Medium", "text": "Run two network calls in parallel with async/await and combine them." },
+    { "level": "Hard", "text": "Expose a StateFlow and collect it with repeatOnLifecycle(STARTED)." },
+    { "level": "Expert", "text": "Build a debounced search using Flow operators (debounce, flatMapLatest)." }
+  ],
+  "interviewQuestions": [
+    "What are coroutines and suspend functions?",
+    "Explain dispatchers and when to use each.",
+    "What is structured concurrency?",
+    "Flow vs LiveData vs StateFlow?",
+    "How do you collect a Flow safely on Android?"
+  ],
+  "references": [
+    { "label": "Kotlin Coroutines guide", "url": "https://kotlinlang.org/docs/coroutines-overview.html" }
+  ]
+}

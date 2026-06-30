@@ -1,0 +1,45 @@
+{
+  "id": "flutter.buildcontext",
+  "levelId": 4,
+  "title": "BuildContext",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Explain what BuildContext really is",
+    "Use it to look up inherited widgets and ancestors",
+    "Avoid the classic 'wrong context' errors"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "A BuildContext is a handle to the location of a widget in the tree — in fact it IS the widget's Element. It's how you access Theme, MediaQuery, Navigator, and inherited data relative to that position." },
+    { "type": "code", "language": "dart", "code": "final theme = Theme.of(context);          // walks UP to nearest Theme\nfinal width = MediaQuery.of(context).size.width;\nNavigator.of(context).push(route);" },
+    { "type": "callout", "variant": "interview", "markdown": "BuildContext is the Element. Theme.of(context) walks up the tree from this element to find the nearest matching InheritedWidget and registers a dependency, so the widget rebuilds when that data changes." },
+    { "type": "callout", "variant": "mistake", "markdown": "Using a context that's above the widget you need (e.g., calling Scaffold.of(context) in the same build method that creates the Scaffold) — it won't find it. Use a Builder or split into a child widget to get a context below the provider." },
+    { "type": "callout", "variant": "mistake", "markdown": "Using BuildContext across an async gap without checking mounted — after an await the element may be gone. Guard with `if (!context.mounted) return;`." }
+  ],
+  "flashcards": [
+    { "front": "What is a BuildContext?", "back": "A handle to a widget's location in the tree — it is the widget's Element." },
+    { "front": "What does Theme.of(context) do?", "back": "Walks up from the context's element to the nearest Theme InheritedWidget and subscribes to changes." },
+    { "front": "Why does Scaffold.of(context) sometimes fail?", "back": "The context is above the Scaffold; use a Builder/child widget to get a context below it." }
+  ],
+  "quiz": [
+    { "q": "A BuildContext essentially is…", "options": ["A widget", "An Element (tree location)", "A RenderObject", "A thread"], "answer": 1, "explain": "Each Element implements BuildContext, marking its place in the tree." },
+    { "q": "Theme.of(context) finds the Theme by…", "options": ["Searching the whole app", "Walking up to the nearest InheritedWidget", "Reading a global", "Querying the OS"], "answer": 1, "explain": "It looks up the ancestor chain and registers a dependency." },
+    { "q": "Using context after an await requires…", "options": ["Nothing", "Checking context.mounted", "A new isolate", "setState"], "answer": 1, "explain": "The element may be unmounted after the async gap." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Read Theme and MediaQuery via context and display values." },
+    { "level": "Medium", "text": "Fix a Scaffold.of(context) error using a Builder." },
+    { "level": "Hard", "text": "Create an InheritedWidget and read it with a .of(context) helper." },
+    { "level": "Expert", "text": "Demonstrate and fix a use-context-after-await bug with context.mounted." }
+  ],
+  "interviewQuestions": [
+    "What is BuildContext, really?",
+    "How does Theme.of(context) work internally?",
+    "Why can the 'wrong' context fail to find a Scaffold/Provider?",
+    "How do you safely use context after async?",
+    "Relationship between BuildContext and Element?"
+  ],
+  "references": [
+    { "label": "Flutter — BuildContext", "url": "https://api.flutter.dev/flutter/widgets/BuildContext-class.html" }
+  ]
+}

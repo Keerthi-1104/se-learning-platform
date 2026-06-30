@@ -1,0 +1,53 @@
+{
+  "id": "cs.algorithms",
+  "levelId": 1,
+  "title": "Algorithms",
+  "xp": 60,
+  "estimatedMinutes": 40,
+  "objectives": [
+    "Recognize the pattern from a problem's wording",
+    "Implement binary search correctly",
+    "Know when DP, greedy and BFS/DFS apply"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "An algorithm is a finite, well-defined sequence of steps that turns input into a desired output. Good ones are correct, efficient, and as simple as the problem allows." },
+    { "type": "table", "headers": ["Family", "Idea", "Examples"], "rows": [
+      ["Two pointers", "Scan from both ends", "Pair sum, palindrome"],
+      ["Sliding window", "Move a range over data", "Longest substring"],
+      ["Divide & conquer", "Split, solve, combine", "Merge sort"],
+      ["Greedy", "Locally optimal choice", "Interval scheduling"],
+      ["Dynamic programming", "Cache overlapping subproblems", "Knapsack, edit distance"],
+      ["Graph traversal", "Visit nodes systematically", "BFS, DFS, Dijkstra"]
+    ]},
+    { "type": "code", "language": "text", "code": "Binary search (sorted input, O(log n)):\n  lo=0, hi=n-1\n  while lo <= hi:\n    mid = lo + (hi-lo)/2   // avoids overflow\n    if a[mid]==target: return mid\n    elif a[mid]<target: lo=mid+1\n    else: hi=mid-1\n  return -1" },
+    { "type": "callout", "variant": "tip", "markdown": "Recognize the pattern, not the problem. 'Subarray with a constraint' → sliding window. 'Sorted / minimize the max' → binary search. 'Count of ways / optimal value' → DP. 'Shortest path' → BFS/Dijkstra." },
+    { "type": "callout", "variant": "mistake", "markdown": "Jumping straight to code. State the approach, the complexity, and edge cases (empty, duplicates, overflow) out loud first — interviewers grade your process." }
+  ],
+  "flashcards": [
+    { "front": "When does DP apply?", "back": "When a problem has overlapping subproblems and optimal substructure — cache subresults (memoization/tabulation)." },
+    { "front": "BFS vs DFS?", "back": "BFS finds shortest paths in unweighted graphs (queue); DFS explores deep (stack/recursion), good for cycles/topo sort." },
+    { "front": "Requirement for binary search?", "back": "The input must be sorted (or monotonic in the property you search)." }
+  ],
+  "quiz": [
+    { "q": "Binary search runs in…", "options": ["O(1)", "O(log n)", "O(n)", "O(n log n)"], "answer": 1, "explain": "It halves the search space each step." },
+    { "q": "'Longest substring without repeating characters' suggests…", "options": ["Sliding window", "Binary search", "Dijkstra", "Heap sort"], "answer": 0, "explain": "A moving range over the string with a seen-set is the sliding-window pattern." },
+    { "q": "Which finds the shortest path in an unweighted graph?", "options": ["DFS", "BFS", "Quick sort", "Greedy coin change"], "answer": 1, "explain": "BFS explores level by level, so the first time it reaches a node is the shortest path." },
+    { "q": "Memoization turns naive Fibonacci from…", "options": ["O(n) to O(1)", "O(2^n) to O(n)", "O(n) to O(n^2)", "O(log n) to O(n)"], "answer": 1, "explain": "Caching subproblem results removes the exponential repeated work." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Reverse a linked list; find the middle with fast/slow pointers." },
+    { "level": "Medium", "text": "Longest substring without repeating characters (sliding window)." },
+    { "level": "Hard", "text": "Course schedule / topological sort with cycle detection." },
+    { "level": "Expert", "text": "Edit distance (Levenshtein) with DP; reconstruct the operations." }
+  ],
+  "interviewQuestions": [
+    "Implement binary search and prove it's O(log n).",
+    "Quick sort vs merge sort — trade-offs; which is stable?",
+    "When does DP apply? Memoization vs tabulation?",
+    "BFS vs DFS — when use each?",
+    "How do you detect a cycle in a linked list?"
+  ],
+  "references": [
+    { "label": "NeetCode patterns", "url": "https://neetcode.io" }
+  ]
+}

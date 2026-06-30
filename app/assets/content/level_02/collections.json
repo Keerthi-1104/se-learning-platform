@@ -1,0 +1,54 @@
+{
+  "id": "java.collections",
+  "levelId": 2,
+  "title": "Java Collections",
+  "xp": 50,
+  "estimatedMinutes": 30,
+  "objectives": [
+    "Choose the right collection for a workload",
+    "Explain how HashMap works internally",
+    "Know which collections are ordered/sorted/thread-safe"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "The Collections Framework is a unified set of interfaces (List, Set, Map, Queue) and implementations for storing and manipulating groups of objects." },
+    { "type": "table", "headers": ["Type", "Implementation", "Order", "Lookup"], "rows": [
+      ["List", "ArrayList", "Insertion", "O(1) index"],
+      ["List", "LinkedList", "Insertion", "O(n)"],
+      ["Set", "HashSet", "None", "O(1)"],
+      ["Set", "TreeSet", "Sorted", "O(log n)"],
+      ["Map", "HashMap", "None", "O(1)"],
+      ["Map", "LinkedHashMap", "Insertion/access", "O(1)"],
+      ["Map", "TreeMap", "Sorted by key", "O(log n)"]
+    ]},
+    { "type": "code", "language": "text", "code": "HashMap internals:\n  bucket = hash(key) & (capacity-1)\n  collisions -> linked list, then a balanced TREE if a bucket > 8 (Java 8+)\n  load factor 0.75 -> resize (double) & rehash" },
+    { "type": "callout", "variant": "interview", "markdown": "Java 8 upgraded HashMap buckets from linked lists to **red-black trees** once a bucket exceeds 8 entries, improving worst-case from O(n) to O(log n)." },
+    { "type": "callout", "variant": "mistake", "markdown": "Using a key whose hashCode/equals you didn't override (or that's mutable) — lookups silently fail. Map keys should be immutable with correct equals/hashCode." },
+    { "type": "callout", "variant": "best", "markdown": "Default to ArrayList and HashMap. Use ConcurrentHashMap (not Hashtable) for concurrency; use the right Set/Map when you need ordering or sorting." }
+  ],
+  "flashcards": [
+    { "front": "ArrayList vs LinkedList?", "back": "ArrayList: O(1) index, cache-friendly. LinkedList: O(1) insert/remove at ends, O(n) access." },
+    { "front": "How does HashMap handle collisions in Java 8+?", "back": "Chaining; a bucket converts to a red-black tree past 8 entries for O(log n) worst case." },
+    { "front": "HashMap vs TreeMap?", "back": "HashMap: O(1), unordered. TreeMap: O(log n), sorted by key." }
+  ],
+  "quiz": [
+    { "q": "Which gives O(1) average lookup AND sorted keys?", "options": ["HashMap", "TreeMap", "Neither — you trade one for the other", "LinkedList"], "answer": 2, "explain": "HashMap is O(1) unordered; TreeMap is sorted but O(log n). You can't have both." },
+    { "q": "Java 8 HashMap buckets become trees after about…", "options": ["2 entries", "8 entries", "100 entries", "Never"], "answer": 1, "explain": "Treeification kicks in past 8 entries in a bucket." },
+    { "q": "Best map for high-concurrency reads/writes?", "options": ["HashMap", "Hashtable", "ConcurrentHashMap", "TreeMap"], "answer": 2, "explain": "ConcurrentHashMap offers fine-grained concurrency without locking the whole map." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Count word frequencies in a text using a HashMap." },
+    { "level": "Medium", "text": "Implement an LRU cache using LinkedHashMap's accessOrder." },
+    { "level": "Hard", "text": "Build a custom key class with correct equals/hashCode and verify map behavior." },
+    { "level": "Expert", "text": "Benchmark ArrayList vs LinkedList vs ArrayDeque for queue operations." }
+  ],
+  "interviewQuestions": [
+    "ArrayList vs LinkedList — when use each?",
+    "How does HashMap work internally? What changed in Java 8?",
+    "HashMap vs Hashtable vs ConcurrentHashMap?",
+    "Why must map keys override equals and hashCode?",
+    "Fail-fast vs fail-safe iterators?"
+  ],
+  "references": [
+    { "label": "Java Collections — Baeldung", "url": "https://www.baeldung.com/java-collections" }
+  ]
+}

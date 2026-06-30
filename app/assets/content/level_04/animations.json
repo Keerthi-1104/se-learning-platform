@@ -1,0 +1,49 @@
+{
+  "id": "flutter.animations",
+  "levelId": 4,
+  "title": "Animations",
+  "xp": 50,
+  "estimatedMinutes": 30,
+  "objectives": [
+    "Use implicit vs explicit animations",
+    "Drive animations with controllers, tweens and curves",
+    "Keep animations at 60fps"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Animations interpolate values over time to create motion. Flutter offers implicit animations (AnimatedFoo widgets) for simple cases and explicit animations (AnimationController) for full control." },
+    { "type": "table", "headers": ["", "Implicit", "Explicit"], "rows": [
+      ["Widgets", "AnimatedContainer, AnimatedOpacity", "AnimationController + Tween"],
+      ["Control", "Set a target; Flutter animates", "You drive forward/reverse/repeat"],
+      ["Use", "Simple state→state transitions", "Custom, looping, coordinated motion"]
+    ]},
+    { "type": "code", "language": "dart", "code": "late final c = AnimationController(\n  vsync: this, duration: Duration(seconds: 1))..forward();\nfinal fade = CurvedAnimation(parent: c, curve: Curves.easeIn);\n// ... FadeTransition(opacity: fade, child: ...)\n@override void dispose() { c.dispose(); super.dispose(); }" },
+    { "type": "callout", "variant": "mistake", "markdown": "Forgetting `with SingleTickerProviderStateMixin` (the vsync) or not disposing the controller — leaks and errors. Also, animating layout-affecting properties on many widgets can cause jank." },
+    { "type": "callout", "variant": "tip", "markdown": "Prefer transform/opacity animations (cheap, GPU-friendly) over animating layout. Wrap animated subtrees in RepaintBoundary, and use AnimatedBuilder to rebuild only the animating part." }
+  ],
+  "flashcards": [
+    { "front": "Implicit vs explicit animations?", "back": "Implicit: set a target on an AnimatedFoo widget. Explicit: drive an AnimationController yourself for full control." },
+    { "front": "What does an AnimationController need?", "back": "A vsync (TickerProvider, e.g. SingleTickerProviderStateMixin) and must be disposed." },
+    { "front": "Cheap things to animate?", "back": "Transform and opacity (GPU-friendly); avoid animating layout for many widgets." }
+  ],
+  "quiz": [
+    { "q": "AnimatedContainer is an example of…", "options": ["Explicit animation", "Implicit animation", "A controller", "A tween"], "answer": 1, "explain": "You set a target and Flutter animates implicitly." },
+    { "q": "An AnimationController requires a…", "options": ["Database", "vsync (TickerProvider)", "Navigator", "Stream"], "answer": 1, "explain": "vsync ties the controller to the frame signal." },
+    { "q": "For smooth animations, prefer animating…", "options": ["Layout of many widgets", "Transform/opacity", "The whole screen", "Network calls"], "answer": 1, "explain": "Transform/opacity are GPU-cheap; layout animations can jank." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Animate size/color with AnimatedContainer." },
+    { "level": "Medium", "text": "Build a fade+slide intro with AnimationController + Tween." },
+    { "level": "Hard", "text": "Coordinate staggered animations with Intervals." },
+    { "level": "Expert", "text": "Implement a custom Hero-like transition and keep it at 60fps." }
+  ],
+  "interviewQuestions": [
+    "Implicit vs explicit animations?",
+    "What does AnimationController need and why dispose it?",
+    "Tween vs Curve?",
+    "How do you keep animations at 60fps?",
+    "AnimatedBuilder vs rebuilding the whole widget?"
+  ],
+  "references": [
+    { "label": "Flutter — Animations", "url": "https://docs.flutter.dev/ui/animations" }
+  ]
+}

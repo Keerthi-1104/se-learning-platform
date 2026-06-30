@@ -1,0 +1,50 @@
+{
+  "id": "sm.cubit",
+  "levelId": 5,
+  "title": "Cubit",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain Cubit as a simpler BLoC",
+    "Emit states from methods directly",
+    "Choose Cubit vs BLoC"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "A Cubit is a lighter form of BLoC from the same package: instead of events, you call methods that emit new states directly. Less boilerplate, same testability and immutable-state model." },
+    { "type": "code", "language": "dart", "code": "class CounterCubit extends Cubit<int> {\n  CounterCubit() : super(0);\n  void increment() => emit(state + 1);\n}\n// UI: BlocBuilder<CounterCubit,int>(builder: (c,s)=>Text('$s'))" },
+    { "type": "table", "headers": ["", "Cubit", "BLoC"], "rows": [
+      ["Trigger", "Method calls", "Events"],
+      ["Boilerplate", "Less", "More"],
+      ["Traceability", "Method-level", "Full event log + transitions"],
+      ["Best for", "Simple/medium state", "Complex event-driven flows"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Use Cubit by default; reach for BLoC when you need the explicit event trail (auditing/debugging complex flows) or advanced event transformers (debounce, throttle, concurrency control)." },
+    { "type": "callout", "variant": "tip", "markdown": "Cubit and BLoC share the same widgets (BlocProvider/BlocBuilder/BlocListener) and the same testing tools, so migrating Cubit → BLoC later is straightforward." }
+  ],
+  "flashcards": [
+    { "front": "Cubit vs BLoC core difference?", "back": "Cubit emits states from method calls; BLoC maps explicit events to states." },
+    { "front": "When prefer BLoC over Cubit?", "back": "When you need an event trail or transformers (debounce/throttle/concurrency)." },
+    { "front": "Do Cubit and BLoC share widgets?", "back": "Yes — BlocProvider/BlocBuilder/BlocListener work for both." }
+  ],
+  "quiz": [
+    { "q": "A Cubit changes state by…", "options": ["Dispatching events", "Calling methods that emit", "Mutating fields", "setState"], "answer": 1, "explain": "Methods call emit(newState) directly." },
+    { "q": "Choose BLoC over Cubit when you need…", "options": ["Less code", "An explicit event trail/transformers", "No testing", "Global variables"], "answer": 1, "explain": "Events enable auditing and transformers." },
+    { "q": "Cubit and BLoC…", "options": ["Use different widgets", "Share the same widgets and tests", "Can't coexist", "Are unrelated"], "answer": 1, "explain": "Same package, same UI widgets and testing tools." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Build a counter Cubit." },
+    { "level": "Medium", "text": "Model a toggle/settings screen with a Cubit." },
+    { "level": "Hard", "text": "Convert a Cubit to a BLoC and keep tests passing." },
+    { "level": "Expert", "text": "Build a paginated list Cubit with loading-more and error states." }
+  ],
+  "interviewQuestions": [
+    "What is a Cubit?",
+    "Cubit vs BLoC — when use each?",
+    "How do you emit and test Cubit states?",
+    "Can you migrate Cubit to BLoC easily?",
+    "Why are Cubit states immutable?"
+  ],
+  "references": [
+    { "label": "Cubit — bloc library", "url": "https://bloclibrary.dev/bloc-concepts/#cubit" }
+  ]
+}

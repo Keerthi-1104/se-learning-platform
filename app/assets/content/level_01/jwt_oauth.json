@@ -1,0 +1,47 @@
+{
+  "id": "cs.jwt_oauth",
+  "levelId": 1,
+  "title": "JWT & OAuth",
+  "xp": 50,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Read a JWT's three parts and know what the signature protects",
+    "Explain the OAuth 2.0 authorization code flow",
+    "Distinguish access, refresh and ID tokens"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "A **JWT** is a signed token with three Base64URL parts: header.payload.signature. **OAuth 2.0** lets a user grant a third-party app scoped access without sharing their password." },
+    { "type": "code", "language": "text", "code": "header:    { \"alg\": \"HS256\", \"typ\": \"JWT\" }\npayload:   { \"sub\": \"user-42\", \"role\": \"admin\", \"exp\": 1735689600 }\nsignature: HMAC-SHA256(base64(header)+'.'+base64(payload), SECRET)\ntoken = eyJhbGci... . eyJzdWIi... . 3kF9..." },
+    { "type": "callout", "variant": "mistake", "markdown": "JWT payloads are Base64-encoded, **not encrypted** — anyone can read them. Never put passwords/secrets in a JWT. The signature only proves it wasn't tampered with." },
+    { "type": "callout", "variant": "mistake", "markdown": "Accepting alg:'none' or letting the client choose the algorithm lets attackers forge tokens. Always pin the expected algorithm server-side." },
+    { "type": "code", "language": "text", "code": "OAuth 2.0 Authorization Code flow:\n  User clicks 'Login' -> redirected to Auth Server (Google)\n  User approves consent -> redirect back with CODE\n  App exchanges code + secret -> access token + refresh token\n  App calls API with the access token" },
+    { "type": "callout", "variant": "note", "markdown": "Use Authorization Code + **PKCE** for mobile/SPA apps (the Implicit flow is deprecated). Access tokens are short-lived; refresh tokens get new ones without re-login." }
+  ],
+  "flashcards": [
+    { "front": "Is a JWT encrypted?", "back": "No — it's Base64-encoded and signed. Anyone can read the payload; the signature only prevents tampering." },
+    { "front": "Access vs refresh token?", "back": "Access token is short-lived and sent on each API call; refresh token is long-lived and used to get new access tokens." },
+    { "front": "Which OAuth flow for mobile/SPA?", "back": "Authorization Code with PKCE." }
+  ],
+  "quiz": [
+    { "q": "What does a JWT signature guarantee?", "options": ["The payload is hidden", "The token wasn't tampered with", "The user is an admin", "The token never expires"], "answer": 1, "explain": "The signature ensures integrity, not confidentiality — the payload is readable." },
+    { "q": "In OAuth 2.0, what is exchanged for tokens?", "options": ["The user's password", "An authorization code (+ client secret)", "The refresh token only", "The user's email"], "answer": 1, "explain": "The app exchanges the short-lived authorization code (with its secret) for tokens." },
+    { "q": "Which flow should a mobile app use?", "options": ["Implicit flow", "Password grant", "Authorization Code + PKCE", "No flow needed"], "answer": 2, "explain": "PKCE protects the code exchange on public clients; Implicit is deprecated." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Decode a JWT and print its header and payload (show it's not encrypted)." },
+    { "level": "Medium", "text": "Implement JWT issue + verify (HMAC sign, validate exp and signature)." },
+    { "level": "Hard", "text": "Add refresh-token rotation with a revocation list." },
+    { "level": "Expert", "text": "Implement the OAuth Authorization Code + PKCE flow end-to-end against a real provider." }
+  ],
+  "interviewQuestions": [
+    "Is a JWT encrypted? What does the signature protect?",
+    "How do you revoke a JWT before it expires?",
+    "Explain the OAuth 2.0 authorization code flow. Why PKCE?",
+    "Access token vs refresh token vs ID token?",
+    "What is the alg:'none' vulnerability?"
+  ],
+  "references": [
+    { "label": "jwt.io — decode & learn", "url": "https://jwt.io" },
+    { "label": "OAuth 2.0 Simplified", "url": "https://www.oauth.com" }
+  ]
+}

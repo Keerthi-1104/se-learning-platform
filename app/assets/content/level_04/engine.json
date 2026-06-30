@@ -1,0 +1,50 @@
+{
+  "id": "flutter.engine",
+  "levelId": 4,
+  "title": "Flutter Engine",
+  "xp": 50,
+  "estimatedMinutes": 30,
+  "objectives": [
+    "Describe the engine's layers and threads",
+    "Explain how Flutter draws its own pixels",
+    "Understand the embedder and framework split"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "The Flutter Engine (C++) provides the low-level runtime: the Dart VM, the graphics layer (Impeller/Skia), text layout, and platform plumbing. The Dart framework (widgets/material) runs on top of it." },
+    { "type": "callout", "variant": "interview", "markdown": "Unlike React Native, Flutter does NOT use native UI widgets. It draws every pixel itself via its own graphics engine on a canvas the OS gives it. That's why Flutter UIs look identical across platforms and versions." },
+    { "type": "table", "headers": ["Thread", "Role"], "rows": [
+      ["Platform", "OS messages, plugins, channels"],
+      ["UI (Dart)", "Runs your code, build/layout/paint"],
+      ["Raster", "Rasterizes layers via GPU"],
+      ["IO", "Asset/image decoding"]
+    ]},
+    { "type": "code", "language": "text", "code": "Your Dart app\n  -> Flutter Framework (widgets, rendering) [Dart]\n     -> Flutter Engine (Dart VM, Impeller/Skia, text) [C++]\n        -> Embedder (Android/iOS/desktop host) -> OS surface" },
+    { "type": "callout", "variant": "note", "markdown": "The embedder is the platform-specific entry point that hosts the engine, provides a render surface, and pumps events. This layered design is how Flutter targets mobile, web, desktop and embedded from one codebase." }
+  ],
+  "flashcards": [
+    { "front": "What language is the engine?", "back": "C++ — it hosts the Dart VM, graphics (Impeller/Skia), and text layout." },
+    { "front": "Does Flutter use native widgets?", "back": "No — it draws every pixel itself, so the UI is consistent across platforms." },
+    { "front": "What is the embedder?", "back": "The platform-specific host that runs the engine, gives it a surface, and delivers events." }
+  ],
+  "quiz": [
+    { "q": "Flutter renders its UI by…", "options": ["Using native OS widgets", "Drawing every pixel itself", "Generating HTML", "Calling SwiftUI"], "answer": 1, "explain": "Flutter paints to its own canvas via the engine's graphics layer." },
+    { "q": "The engine is written mostly in…", "options": ["Dart", "C++", "Kotlin", "Rust"], "answer": 1, "explain": "The engine is C++, hosting the Dart VM and graphics." },
+    { "q": "Which thread rasterizes layers?", "options": ["Platform", "UI", "Raster", "IO"], "answer": 2, "explain": "The raster thread turns layers into pixels via the GPU." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Diagram the engine/framework/embedder layers from memory." },
+    { "level": "Medium", "text": "Explain which thread each phase of a frame runs on." },
+    { "level": "Hard", "text": "Trace what happens from setState() to pixels on screen." },
+    { "level": "Expert", "text": "Build and run a custom engine/embedder for an embedded target (conceptual write-up)." }
+  ],
+  "interviewQuestions": [
+    "What does the Flutter Engine provide?",
+    "How is Flutter different from React Native at the rendering level?",
+    "What is the embedder?",
+    "Name the engine threads and their roles.",
+    "How does one codebase target so many platforms?"
+  ],
+  "references": [
+    { "label": "Flutter — Architectural overview", "url": "https://docs.flutter.dev/resources/architectural-overview" }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "id": "android.activity_lifecycle",
+  "levelId": 3,
+  "title": "Activity Lifecycle",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Order the activity lifecycle callbacks",
+    "Save and restore state across config changes",
+    "Avoid leaks and lost work on rotation"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "The activity lifecycle is the ordered set of callbacks Android invokes as an Activity is created, shown, hidden and destroyed, letting you set up and release resources at the right time." },
+    { "type": "code", "language": "text", "code": "onCreate -> onStart -> onResume   (now visible & interactive)\n   ... user leaves ...\nonPause -> onStop -> onDestroy\n   ... return ...\nonRestart -> onStart -> onResume" },
+    { "type": "table", "headers": ["Callback", "Use it to"], "rows": [
+      ["onCreate", "Inflate UI, init once"],
+      ["onStart/onResume", "Start UI updates, acquire resources"],
+      ["onPause", "Pause animations, save lightweight state (fast!)"],
+      ["onStop", "Release heavy resources, persist data"],
+      ["onDestroy", "Final cleanup"]
+    ]},
+    { "type": "callout", "variant": "mistake", "markdown": "Doing heavy work in onPause — it blocks the next activity from showing. Keep onPause fast; persist heavy data in onStop. Also: a rotation destroys and recreates the activity, losing in-memory state." },
+    { "type": "callout", "variant": "tip", "markdown": "Survive config changes with a ViewModel (kept across recreation) for UI state, and onSaveInstanceState for small bundles. ViewModel is the modern answer." }
+  ],
+  "flashcards": [
+    { "front": "Order of create-to-visible callbacks?", "back": "onCreate → onStart → onResume." },
+    { "front": "What happens on screen rotation?", "back": "The activity is destroyed and recreated; in-memory state is lost unless saved (ViewModel / onSaveInstanceState)." },
+    { "front": "Why keep onPause fast?", "back": "It runs before the next activity becomes visible, so slow work delays the UI." }
+  ],
+  "quiz": [
+    { "q": "Which callback makes an activity interactive?", "options": ["onCreate", "onStart", "onResume", "onStop"], "answer": 2, "explain": "onResume is the last step before the user can interact." },
+    { "q": "Rotating the screen by default…", "options": ["Keeps the activity untouched", "Destroys and recreates the activity", "Closes the app", "Pauses forever"], "answer": 1, "explain": "Configuration changes recreate the activity unless handled." },
+    { "q": "Best place to persist important data?", "options": ["onResume", "onStop", "onCreate", "Never"], "answer": 1, "explain": "onStop is a safe point to persist data before the activity is no longer visible." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Log every lifecycle callback and rotate to observe the sequence." },
+    { "level": "Medium", "text": "Preserve a form's text across rotation using onSaveInstanceState." },
+    { "level": "Hard", "text": "Move UI state into a ViewModel and survive config changes cleanly." },
+    { "level": "Expert", "text": "Diagnose and fix an activity leak caused by a long-lived callback/handler." }
+  ],
+  "interviewQuestions": [
+    "Walk through the activity lifecycle.",
+    "What happens on a configuration change / rotation?",
+    "onSaveInstanceState vs ViewModel?",
+    "Why must onPause be fast?",
+    "How do activity leaks happen and how to prevent them?"
+  ],
+  "references": [
+    { "label": "Android — Activity lifecycle", "url": "https://developer.android.com/guide/components/activities/activity-lifecycle" }
+  ]
+}

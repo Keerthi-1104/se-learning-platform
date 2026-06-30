@@ -1,0 +1,51 @@
+{
+  "id": "java.core",
+  "levelId": 2,
+  "title": "Core Java",
+  "xp": 50,
+  "estimatedMinutes": 30,
+  "objectives": [
+    "Explain JDK vs JRE vs JVM",
+    "Distinguish primitives from objects and pass-by-value semantics",
+    "Use == vs equals() correctly"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Core Java is the language plus its standard runtime: the **JVM** (executes bytecode), the **JRE** (JVM + libraries to run apps), and the **JDK** (JRE + compiler/tools to build apps)." },
+    { "type": "code", "language": "text", "code": ".java --(javac)--> .class bytecode --(JVM)--> native execution\nJDK = JRE + javac + tools\nJRE = JVM + standard libraries\nJVM = the engine that runs bytecode (write once, run anywhere)" },
+    { "type": "table", "headers": ["", "Primitive", "Object/Reference"], "rows": [
+      ["Examples", "int, double, boolean", "String, List, custom classes"],
+      ["Stored", "Value directly", "Reference to heap object"],
+      ["Default", "0 / false", "null"],
+      ["Compared with", "==", "equals()"]
+    ]},
+    { "type": "callout", "variant": "mistake", "markdown": "Using `==` to compare Strings/objects — it compares references, not content. `new String(\"a\") == new String(\"a\")` is false; use `.equals()`." },
+    { "type": "callout", "variant": "note", "markdown": "Java is always **pass-by-value**. For objects, the *reference* is passed by value — you can mutate the object, but reassigning the parameter doesn't change the caller's variable." },
+    { "type": "callout", "variant": "tip", "markdown": "Prefer immutability (final fields, unmodifiable collections). Immutable objects are thread-safe by default and eliminate a whole class of bugs." }
+  ],
+  "flashcards": [
+    { "front": "JDK vs JRE vs JVM?", "back": "JVM runs bytecode; JRE = JVM + libraries (run apps); JDK = JRE + compiler/tools (build apps)." },
+    { "front": "== vs equals()?", "back": "== compares references (or primitive values); equals() compares logical content." },
+    { "front": "Is Java pass-by-value or reference?", "back": "Always pass-by-value. For objects, the reference itself is copied by value." }
+  ],
+  "quiz": [
+    { "q": "What does the JVM execute?", "options": ["Source .java files", "Bytecode .class files", "Machine code only", "JSON"], "answer": 1, "explain": "javac compiles .java to bytecode, which the JVM runs." },
+    { "q": "How should you compare two Strings' contents?", "options": ["==", ".equals()", "<", "hashCode() only"], "answer": 1, "explain": "== compares references; .equals() compares content." },
+    { "q": "Java argument passing is…", "options": ["Pass-by-reference", "Pass-by-value (references copied by value)", "Pass-by-name", "Undefined"], "answer": 1, "explain": "Java copies values; for objects it copies the reference value." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Show that == and equals() differ for two equal-content Strings created with new." },
+    { "level": "Medium", "text": "Write an immutable Money class with value-based equals() and hashCode()." },
+    { "level": "Hard", "text": "Demonstrate pass-by-value: a method that mutates vs reassigns an object parameter." },
+    { "level": "Expert", "text": "Implement a generic, immutable Pair<A,B> with proper equals/hashCode/toString." }
+  ],
+  "interviewQuestions": [
+    "Difference between JDK, JRE and JVM?",
+    "Is Java pass-by-value or pass-by-reference?",
+    "== vs equals() and the equals/hashCode contract?",
+    "Why are Strings immutable in Java?",
+    "Stack vs heap — what lives where?"
+  ],
+  "references": [
+    { "label": "Oracle Java Tutorials", "url": "https://docs.oracle.com/javase/tutorial/" }
+  ]
+}

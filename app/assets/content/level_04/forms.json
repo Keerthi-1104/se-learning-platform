@@ -1,0 +1,44 @@
+{
+  "id": "flutter.forms",
+  "levelId": 4,
+  "title": "Forms & Validation",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Build forms with Form + TextFormField",
+    "Validate input and show errors",
+    "Manage controllers and focus correctly"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Flutter forms group input fields under a Form widget with a GlobalKey<FormState>, enabling collective validation, saving, and reset." },
+    { "type": "code", "language": "dart", "code": "final _key = GlobalKey<FormState>();\nForm(key: _key, child: TextFormField(\n  validator: (v) => (v==null||v.isEmpty) ? 'Required' : null,\n));\nif (_key.currentState!.validate()) { /* submit */ }" },
+    { "type": "callout", "variant": "mistake", "markdown": "Forgetting to dispose() TextEditingControllers and FocusNodes — a common leak. Create them in initState (or use a state manager) and dispose them in dispose()." },
+    { "type": "callout", "variant": "tip", "markdown": "Use autovalidateMode wisely (onUserInteraction, not always), give fields keyboardType/textInputAction for good UX, and validate on the server too — client validation is convenience, not security." }
+  ],
+  "flashcards": [
+    { "front": "How do you validate a whole form?", "back": "Hold a GlobalKey<FormState> and call _key.currentState!.validate()." },
+    { "front": "What must you dispose in forms?", "back": "TextEditingControllers and FocusNodes." },
+    { "front": "Is client validation enough?", "back": "No — always validate on the server too; client validation is for UX." }
+  ],
+  "quiz": [
+    { "q": "A Form's collective validation uses…", "options": ["A Provider", "A GlobalKey<FormState>", "setState only", "A Stream"], "answer": 1, "explain": "The FormState (via the key) validates and saves all fields." },
+    { "q": "TextEditingControllers must be…", "options": ["Ignored", "Disposed in dispose()", "Static", "Global"], "answer": 1, "explain": "Dispose them to avoid leaks." },
+    { "q": "Client-side validation is…", "options": ["A security boundary", "A UX convenience; still validate server-side", "Unnecessary", "Slower than server"], "answer": 1, "explain": "Never trust the client; revalidate on the server." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Build a login form with required + email validation." },
+    { "level": "Medium", "text": "Add focus traversal and submit-on-done across fields." },
+    { "level": "Hard", "text": "Cross-field validation (password == confirm) with good error UX." },
+    { "level": "Expert", "text": "Build a reactive form bound to a state manager with async (server) validation." }
+  ],
+  "interviewQuestions": [
+    "How does Form/FormState validation work?",
+    "How do you manage controllers and focus?",
+    "When use autovalidateMode?",
+    "Why isn't client validation enough?",
+    "How do you handle async/server validation?"
+  ],
+  "references": [
+    { "label": "Flutter — Build a form with validation", "url": "https://docs.flutter.dev/cookbook/forms/validation" }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "id": "cs.computer_architecture",
+  "levelId": 1,
+  "title": "Computer Architecture",
+  "xp": 50,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Explain the fetch-decode-execute cycle",
+    "Reason about the memory hierarchy and why caches matter",
+    "Use locality of reference to write faster code"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Computer architecture is the set of rules and structures describing how a computer's hardware (CPU, memory, I/O) is organized and how it cooperates to execute instructions." },
+    { "type": "theory", "markdown": "## Why it exists\nSoftware does not run on magic — it runs on silicon. Understanding the machine explains **why caches matter**, why memory layout affects speed, and why concurrency is hard. Interviewers probe this to see if you understand performance from first principles." },
+    { "type": "callout", "variant": "analogy", "markdown": "Think of a **kitchen**: the CPU is the chef, RAM is the countertop (fast but small), the SSD is the pantry (large but slower), registers are the chef's hands, and cache is the small shelf beside the stove. A good chef keeps what they need closest." },
+    { "type": "theory", "markdown": "## Internal working — the cycle\nThe CPU repeats four steps billions of times per second:\n- **Fetch** the next instruction (address in the Program Counter)\n- **Decode** what it means\n- **Execute** it in the ALU\n- **Write-back** the result; advance the PC" },
+    { "type": "code", "language": "text", "code": "[ CPU ]\n  Registers   ~1 cycle      (fastest, tiny)\n  L1 cache    ~4 cycles\n  L2 cache    ~12 cycles\n  L3 cache    ~40 cycles\n[ RAM ]       ~100-300 cycles\n[ SSD ]       ~10,000+ cycles\n[ Network ]   millions of cycles" },
+    { "type": "table", "headers": ["Concept", "What it is", "Why it matters"], "rows": [
+      ["Von Neumann", "Code & data share one bus", "Root of the 'memory wall'"],
+      ["Pipelining", "Overlap fetch/decode/execute", "More instructions per second"],
+      ["Cache", "Small fast memory near CPU", "Locality makes loops fast"],
+      ["Endianness", "Byte order (big/little)", "Matters in networking & files"]
+    ]},
+    { "type": "callout", "variant": "perf", "markdown": "**Locality of reference** is the #1 performance lever. Temporal = reuse data soon; spatial = use nearby data. Arrays beat linked lists in practice because contiguous memory is cache-friendly." },
+    { "type": "callout", "variant": "mistake", "markdown": "Beginners assume '1 line of code = 1 unit of time'. A cache miss can cost 100x more than an arithmetic op. Always think about data layout." },
+    { "type": "callout", "variant": "tip", "markdown": "Senior engineers reason in **cache lines** (~64 bytes). Struct-of-arrays often beats array-of-structs for hot loops because it packs the hot fields together." }
+  ],
+  "flashcards": [
+    { "front": "What are the 4 stages of the CPU cycle?", "back": "Fetch, Decode, Execute, Write-back" },
+    { "front": "Which memory is fastest?", "back": "CPU registers (~1 cycle), then L1/L2/L3 cache, then RAM." },
+    { "front": "What is locality of reference?", "back": "Temporal: reuse the same data soon. Spatial: access nearby data. Both make caches effective." },
+    { "front": "Von Neumann bottleneck?", "back": "Code and data share one memory bus, so the CPU can stall waiting on memory — the 'memory wall'." }
+  ],
+  "quiz": [
+    { "q": "Which storage is the fastest for the CPU to access?", "options": ["RAM", "L1 cache", "CPU registers", "SSD"], "answer": 2, "explain": "Registers sit inside the CPU and take ~1 cycle — faster than any cache or RAM." },
+    { "q": "What is the correct order of the instruction cycle?", "options": ["Decode → Fetch → Execute", "Fetch → Decode → Execute → Write-back", "Execute → Fetch → Decode", "Fetch → Execute → Decode"], "answer": 1, "explain": "The CPU fetches, decodes, executes, then writes back the result." },
+    { "q": "Why are arrays often faster than linked lists despite similar Big-O?", "options": ["Arrays use less code", "Contiguous memory is cache-friendly (spatial locality)", "Linked lists can't be sorted", "Arrays avoid the CPU entirely"], "answer": 1, "explain": "Arrays store elements contiguously, so cache lines bring in neighbors — great spatial locality." },
+    { "q": "A cache miss compared to an arithmetic operation is roughly…", "options": ["The same cost", "Slightly slower", "Up to ~100x more expensive", "Faster"], "answer": 2, "explain": "Going to main memory on a miss can cost ~100x an in-register op — why data layout matters." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Write a function that reports whether the host machine is big- or little-endian." },
+    { "level": "Medium", "text": "Benchmark summing a 2D array row-major vs column-major; explain the timing gap." },
+    { "level": "Hard", "text": "Implement an LRU cache — the idea CPUs approximate in hardware." },
+    { "level": "Expert", "text": "Write a matrix multiply and speed it up 5x+ using cache blocking (tiling)." }
+  ],
+  "interviewQuestions": [
+    "Explain the fetch-decode-execute cycle.",
+    "Difference between Von Neumann and Harvard architectures?",
+    "Why is accessing an array faster than a linked list even with equal Big-O?",
+    "What is a cache line and why does it matter?",
+    "How does pipelining increase throughput, and what is a stall?"
+  ],
+  "references": [
+    { "label": "Computer Systems: A Programmer's Perspective (CSAPP)", "url": "https://csapp.cs.cmu.edu" },
+    { "label": "What Every Programmer Should Know About Memory — Ulrich Drepper", "url": "" }
+  ]
+}

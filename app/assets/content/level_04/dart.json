@@ -1,0 +1,52 @@
+{
+  "id": "flutter.dart",
+  "levelId": 4,
+  "title": "Dart Fundamentals",
+  "xp": 50,
+  "estimatedMinutes": 30,
+  "objectives": [
+    "Explain Dart's sound null safety",
+    "Use async/await, Futures and Streams",
+    "Understand JIT vs AOT and the single-threaded isolate model"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Dart is the language behind Flutter — a typed, null-safe, object-oriented language that compiles JIT for fast development (hot reload) and AOT to native code for fast release builds." },
+    { "type": "code", "language": "dart", "code": "int x = 5;            // non-nullable\nint? y;               // nullable\nfinal len = y?.length ?? 0;\nFuture<User> fetch() async => await api.getUser();  // async\nStream<int> ticks() async* { for (var i=0;;i++) yield i; }" },
+    { "type": "table", "headers": ["Concept", "Meaning"], "rows": [
+      ["Sound null safety", "Types are non-null by default; ? marks nullable"],
+      ["Future", "A single async value"],
+      ["Stream", "A sequence of async values"],
+      ["Isolate", "Independent memory + event loop (no shared state)"],
+      ["JIT / AOT", "Dev hot reload / native release builds"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Dart is single-threaded per isolate with an event loop. There's no shared-memory concurrency — heavy work runs in a separate Isolate and communicates via messages, which is why Flutter UIs avoid most lock/race bugs." },
+    { "type": "callout", "variant": "mistake", "markdown": "Doing CPU-heavy work (parsing a huge JSON, image processing) on the main isolate freezes the UI. Use compute()/Isolate.run() to offload it." },
+    { "type": "callout", "variant": "tip", "markdown": "Prefer final/const and immutable data. const constructors let Flutter skip rebuilding and reuse widget instances — a real performance win." }
+  ],
+  "flashcards": [
+    { "front": "JIT vs AOT in Dart?", "back": "JIT powers hot reload in development; AOT compiles to native code for fast, optimized release builds." },
+    { "front": "Future vs Stream?", "back": "Future = one async value; Stream = a sequence of async values over time." },
+    { "front": "How does Dart do concurrency?", "back": "Single-threaded isolates with an event loop; heavy work runs in separate isolates communicating by messages (no shared memory)." }
+  ],
+  "quiz": [
+    { "q": "Dart release builds use…", "options": ["JIT", "AOT compilation to native", "An interpreter", "WebAssembly only"], "answer": 1, "explain": "AOT gives fast startup and optimized native code in release." },
+    { "q": "A Stream represents…", "options": ["One async value", "A sequence of async values", "A synchronous list", "A thread"], "answer": 1, "explain": "Streams emit multiple values over time; Futures emit one." },
+    { "q": "To run heavy CPU work without freezing the UI…", "options": ["Use setState", "Use compute()/Isolate", "Add more widgets", "Use a Future only"], "answer": 1, "explain": "Offload to another isolate; a Future on the main isolate still blocks during CPU work." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Write a null-safe function using ?., ??, and late." },
+    { "level": "Medium", "text": "Consume a Stream with async* and listen/await for." },
+    { "level": "Hard", "text": "Parse a large JSON off the main isolate with compute()." },
+    { "level": "Expert", "text": "Build a producer/consumer using Isolates and SendPort/ReceivePort." }
+  ],
+  "interviewQuestions": [
+    "What is sound null safety in Dart?",
+    "JIT vs AOT and how it enables hot reload?",
+    "Future vs Stream?",
+    "How does Dart handle concurrency (isolates)?",
+    "When and how do you use compute()?"
+  ],
+  "references": [
+    { "label": "Dart language tour", "url": "https://dart.dev/language" }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "id": "android.jetpack",
+  "levelId": 3,
+  "title": "Jetpack Components",
+  "xp": 50,
+  "estimatedMinutes": 30,
+  "objectives": [
+    "Explain what Jetpack is and its main libraries",
+    "Use ViewModel + LiveData/Flow for lifecycle-safe state",
+    "Describe Jetpack Compose's declarative model"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Android Jetpack is a suite of libraries that handle boilerplate and follow best practices: lifecycle-aware components, navigation, persistence, background work, and the modern Compose UI toolkit." },
+    { "type": "table", "headers": ["Library", "Solves"], "rows": [
+      ["ViewModel", "Hold UI state across config changes"],
+      ["LiveData / Flow", "Lifecycle-aware observable data"],
+      ["Lifecycle", "React to lifecycle safely"],
+      ["Navigation", "Single-activity in-app navigation"],
+      ["Room", "SQLite with compile-time checks"],
+      ["Compose", "Declarative UI toolkit"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**ViewModel** survives configuration changes (rotation), so UI state isn't lost. It exposes state via LiveData/StateFlow that the UI observes — the backbone of MVVM on Android." },
+    { "type": "callout", "variant": "note", "markdown": "Jetpack Compose replaces XML layouts with composable functions: UI is a function of state. When state changes, Compose recomposes only what changed." },
+    { "type": "callout", "variant": "tip", "markdown": "Adopt the recommended architecture: UI → ViewModel → Repository → data sources, with unidirectional data flow. Jetpack libraries are designed to snap together this way." }
+  ],
+  "flashcards": [
+    { "front": "Why does ViewModel survive rotation?", "back": "It's scoped to the lifecycle owner and retained across configuration changes, preserving UI state." },
+    { "front": "What is Jetpack Compose's core idea?", "back": "UI = a function of state; composables recompose when their state changes." },
+    { "front": "Recommended Android architecture layers?", "back": "UI → ViewModel → Repository → data sources, with unidirectional data flow." }
+  ],
+  "quiz": [
+    { "q": "ViewModel's main benefit is…", "options": ["Faster networking", "Surviving configuration changes with UI state", "Encrypting data", "Drawing pixels"], "answer": 1, "explain": "It retains state across rotation/recreation." },
+    { "q": "Jetpack Compose UI is…", "options": ["XML-based", "A function of state (declarative)", "Written in C++", "Server-rendered"], "answer": 1, "explain": "Composable functions describe UI for the current state." },
+    { "q": "Which Jetpack library handles in-app navigation?", "options": ["Room", "Navigation component", "WorkManager", "Hilt"], "answer": 1, "explain": "The Navigation component manages single-activity navigation." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Create a ViewModel exposing a counter via StateFlow and observe it." },
+    { "level": "Medium", "text": "Build a screen with the Navigation component and pass arguments." },
+    { "level": "Hard", "text": "Implement a small MVVM screen: UI → ViewModel → Repository." },
+    { "level": "Expert", "text": "Build the same screen in Compose with state hoisting and recomposition awareness." }
+  ],
+  "interviewQuestions": [
+    "What is Android Jetpack?",
+    "Why use a ViewModel? How does it survive rotation?",
+    "LiveData vs StateFlow?",
+    "What is Jetpack Compose and how does recomposition work?",
+    "Describe the recommended app architecture."
+  ],
+  "references": [
+    { "label": "Android — Jetpack", "url": "https://developer.android.com/jetpack" }
+  ]
+}

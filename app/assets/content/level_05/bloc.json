@@ -1,0 +1,51 @@
+{
+  "id": "sm.bloc",
+  "levelId": 5,
+  "title": "BLoC",
+  "xp": 50,
+  "estimatedMinutes": 30,
+  "objectives": [
+    "Explain the event → state model",
+    "Separate UI from business logic",
+    "Test BLoC logic in isolation"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "BLoC (Business Logic Component) maps a stream of input events to a stream of output states. The UI sends events; the BLoC emits immutable states; the UI rebuilds from state. It enforces strict separation of UI and logic." },
+    { "type": "code", "language": "dart", "code": "sealed class CounterEvent {}\nclass Increment extends CounterEvent {}\nclass CounterBloc extends Bloc<CounterEvent, int> {\n  CounterBloc() : super(0) {\n    on<Increment>((e, emit) => emit(state + 1));\n  }\n}\n// UI: BlocBuilder<CounterBloc,int>(builder: (c,s)=>Text('$s'))" },
+    { "type": "callout", "variant": "interview", "markdown": "BLoC's strength is explicitness and testability: every state transition is an event handler you can unit-test with bloc_test, and the unidirectional event→state flow makes complex flows predictable and debuggable (every transition is observable)." },
+    { "type": "table", "headers": ["Widget", "Purpose"], "rows": [
+      ["BlocProvider", "Create/provide a bloc"],
+      ["BlocBuilder", "Rebuild UI on state"],
+      ["BlocListener", "Side effects (snackbars, nav)"],
+      ["BlocConsumer", "Builder + Listener combined"]
+    ]},
+    { "type": "callout", "variant": "mistake", "markdown": "Putting business logic in the UI or mutating state in place. States must be immutable and emitted; logic belongs in event handlers, not widgets." },
+    { "type": "callout", "variant": "tip", "markdown": "BLoC shines on large, team-based, event-driven apps. The boilerplate is real — for simpler state, Cubit (same package, no events) is lighter." }
+  ],
+  "flashcards": [
+    { "front": "What does BLoC map?", "back": "Input events → output states, both as streams; the UI rebuilds from state." },
+    { "front": "BlocBuilder vs BlocListener?", "back": "Builder rebuilds UI on state; Listener runs one-off side effects (snackbar, navigation)." },
+    { "front": "Why is BLoC testable?", "back": "Each event→state transition is a pure handler unit-testable with bloc_test." }
+  ],
+  "quiz": [
+    { "q": "BLoC transforms…", "options": ["States into events", "Events into states", "Widgets into pixels", "JSON into widgets"], "answer": 1, "explain": "UI events flow in; immutable states flow out." },
+    { "q": "For a snackbar on a state change, use…", "options": ["BlocBuilder", "BlocListener", "BlocProvider", "Selector"], "answer": 1, "explain": "Listener handles side effects without rebuilding." },
+    { "q": "BLoC states should be…", "options": ["Mutable", "Immutable and emitted", "Global variables", "Stored in widgets"], "answer": 1, "explain": "Emit new immutable states rather than mutating." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Build a counter BLoC with Increment/Decrement events." },
+    { "level": "Medium", "text": "Model a network request with loading/success/error states." },
+    { "level": "Hard", "text": "Add debounce + cancellation to a search BLoC with transformers." },
+    { "level": "Expert", "text": "Unit-test a complex BLoC with bloc_test covering all transitions." }
+  ],
+  "interviewQuestions": [
+    "Explain the BLoC pattern and its data flow.",
+    "BlocBuilder vs BlocListener vs BlocConsumer?",
+    "Why are BLoC states immutable?",
+    "How do you test a BLoC?",
+    "BLoC vs Cubit?"
+  ],
+  "references": [
+    { "label": "bloc library", "url": "https://bloclibrary.dev" }
+  ]
+}

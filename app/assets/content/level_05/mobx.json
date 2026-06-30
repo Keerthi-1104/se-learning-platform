@@ -1,0 +1,51 @@
+{
+  "id": "sm.mobx",
+  "levelId": 5,
+  "title": "MobX",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain observables, actions and reactions",
+    "Use transparent reactive tracking",
+    "Compare MobX's auto-tracking to explicit approaches"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "MobX is a reactive state library built on three concepts: observables (tracked state), actions (mutate state), and reactions (auto-run when observed state changes). It tracks dependencies transparently." },
+    { "type": "code", "language": "dart", "code": "// (with mobx_codegen)\n@observable int count = 0;\n@action void increment() => count++;\n// UI: Observer(builder: (_) => Text('$count'))  // auto-tracks count" },
+    { "type": "callout", "variant": "interview", "markdown": "MobX's magic is transparent reactive tracking: an Observer rebuilds automatically when any observable it READ during build changes — you don't wire up listeners manually. This minimizes boilerplate but relies on code generation." },
+    { "type": "table", "headers": ["Concept", "Role"], "rows": [
+      ["Observable", "State that is tracked"],
+      ["Action", "Mutates observables"],
+      ["Computed", "Derived value, cached"],
+      ["Reaction/Observer", "Runs/rebuilds on change"]
+    ]},
+    { "type": "callout", "variant": "mistake", "markdown": "Mutating observables outside an @action (warnings/inconsistency) or expecting Observer to rebuild for state it didn't read during build. Read the observable inside the Observer's builder." },
+    { "type": "callout", "variant": "tip", "markdown": "MobX feels natural to developers from a Vue/MobX-JS background. It needs build_runner codegen; weigh that against Riverpod/BLoC which Flutter teams adopt more widely today." }
+  ],
+  "flashcards": [
+    { "front": "MobX's three core concepts?", "back": "Observables (tracked state), actions (mutations), reactions (auto-run on change)." },
+    { "front": "How does Observer know to rebuild?", "back": "It tracks which observables were read during build and rebuilds when they change." },
+    { "front": "What is a computed in MobX?", "back": "A cached derived value recomputed only when its dependencies change." }
+  ],
+  "quiz": [
+    { "q": "MobX state that is tracked is called an…", "options": ["Action", "Observable", "Reducer", "Event"], "answer": 1, "explain": "Observables are the tracked state." },
+    { "q": "An Observer rebuilds when…", "options": ["Any state changes", "An observable it read during build changes", "A timer fires", "Always"], "answer": 1, "explain": "Tracking is based on what was read during build." },
+    { "q": "You should mutate observables inside…", "options": ["build()", "@action", "a reducer", "a widget constructor"], "answer": 1, "explain": "Actions batch and validate mutations." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Counter with @observable + @action + Observer." },
+    { "level": "Medium", "text": "Add a @computed derived value and display it." },
+    { "level": "Hard", "text": "Model async loading with ObservableFuture." },
+    { "level": "Expert", "text": "Use a reaction to trigger side effects (e.g., persist on change)." }
+  ],
+  "interviewQuestions": [
+    "Explain MobX observables, actions and reactions.",
+    "How does transparent reactive tracking work?",
+    "What is a computed value?",
+    "Why mutate only inside actions?",
+    "MobX vs BLoC/Riverpod?"
+  ],
+  "references": [
+    { "label": "MobX.dart", "url": "https://mobx.netlify.app" }
+  ]
+}

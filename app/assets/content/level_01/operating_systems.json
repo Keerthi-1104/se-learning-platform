@@ -1,0 +1,55 @@
+{
+  "id": "cs.operating_systems",
+  "levelId": 1,
+  "title": "Operating Systems",
+  "xp": 50,
+  "estimatedMinutes": 30,
+  "objectives": [
+    "Distinguish processes from threads and know when to use each",
+    "Explain virtual memory, paging and the TLB",
+    "Identify and prevent race conditions and deadlocks"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "An operating system (OS) manages hardware and provides services — processes, memory, files, devices, security — to programs through system calls." },
+    { "type": "callout", "variant": "analogy", "markdown": "An OS is an **airport control tower**: many planes (processes) want the same runways (CPU/memory). The tower schedules them safely so none collide and everyone eventually takes off." },
+    { "type": "theory", "markdown": "## Process vs Thread\n- **Process**: own isolated memory; heavy to create; a crash is contained.\n- **Thread**: shares the process's memory; light; great for parallelism but needs synchronization." },
+    { "type": "table", "headers": ["Aspect", "Process", "Thread"], "rows": [
+      ["Memory", "Isolated address space", "Shared"],
+      ["Cost", "Heavy", "Light"],
+      ["Crash impact", "Contained", "Can kill whole process"],
+      ["Use case", "Isolation/security", "Parallel low-latency work"]
+    ]},
+    { "type": "theory", "markdown": "## Memory management\n- **Virtual memory**: each process sees a private contiguous address space.\n- **Paging**: memory split into fixed pages; a page table maps virtual to physical.\n- **TLB**: caches recent translations to avoid walking the page table every access." },
+    { "type": "code", "language": "text", "code": "Deadlock — each thread holds one lock, waits for the other:\n  Thread A: lock(X); lock(Y);   // waits for Y\n  Thread B: lock(Y); lock(X);   // waits for X  -> DEADLOCK\nFix: always acquire locks in a global order (X then Y)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Race condition**: two threads read-modify-write shared state without synchronization, so the result depends on timing (both read balance=100, both add 50, final is 150 not 200)." },
+    { "type": "callout", "variant": "tip", "markdown": "Prefer high-level primitives (thread pools, channels, async/await) over raw locks. The cheapest lock is the one you never take — minimize shared mutable state." }
+  ],
+  "flashcards": [
+    { "front": "Process vs thread in one line?", "back": "Processes have isolated memory; threads share memory within a process." },
+    { "front": "Four Coffman conditions for deadlock?", "back": "Mutual exclusion, hold-and-wait, no preemption, circular wait. Break any one to prevent deadlock." },
+    { "front": "What does the TLB do?", "back": "Caches recent virtual→physical address translations so the CPU avoids walking the page table each access." },
+    { "front": "What is thrashing?", "back": "Too little RAM causes constant paging to disk, so the system spends all its time swapping instead of working." }
+  ],
+  "quiz": [
+    { "q": "Which is TRUE of threads vs processes?", "options": ["Threads have isolated memory", "Threads share the process's memory", "Processes are lighter than threads", "Threads cannot run in parallel"], "answer": 1, "explain": "Threads share their process's address space, which is why they need synchronization." },
+    { "q": "Breaking which condition prevents deadlock?", "options": ["Any one of the four Coffman conditions", "Only mutual exclusion", "None — deadlock is unavoidable", "Only by adding more CPUs"], "answer": 0, "explain": "Deadlock needs all four conditions; eliminating any single one prevents it." },
+    { "q": "A race condition is caused by…", "options": ["Slow disks", "Unsynchronized access to shared mutable state", "Too much RAM", "Using async/await"], "answer": 1, "explain": "When threads read-modify-write shared state without coordination, results depend on timing." },
+    { "q": "Virtual memory primarily provides…", "options": ["Faster CPUs", "A private contiguous address space per process", "More disk space", "Encryption"], "answer": 1, "explain": "Each process sees its own virtual address space, mapped to physical pages by the MMU." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Spawn N threads incrementing a shared counter; show the wrong total, then fix it with a mutex." },
+    { "level": "Medium", "text": "Implement producer–consumer with a bounded buffer using condition variables." },
+    { "level": "Hard", "text": "Solve dining philosophers without deadlock (resource ordering or an arbitrator)." },
+    { "level": "Expert", "text": "Build a round-robin scheduler simulator reporting average wait and turnaround time." }
+  ],
+  "interviewQuestions": [
+    "Difference between a process and a thread? When choose each?",
+    "What is a context switch and why is it expensive?",
+    "Explain virtual memory, paging and the TLB.",
+    "What is a deadlock and how do you prevent it?",
+    "Mutex vs semaphore vs spinlock — when use which?"
+  ],
+  "references": [
+    { "label": "Operating Systems: Three Easy Pieces (free)", "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/" }
+  ]
+}

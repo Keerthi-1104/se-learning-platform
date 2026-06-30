@@ -1,0 +1,48 @@
+{
+  "id": "android.broadcast_receivers",
+  "levelId": 3,
+  "title": "Broadcast Receivers",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Explain broadcasts and receivers",
+    "Choose manifest vs context-registered receivers",
+    "Know the modern restrictions on implicit broadcasts"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "A BroadcastReceiver responds to system-wide or app events (connectivity changes, boot completed, battery low). It's a publish-subscribe mechanism between components and apps." },
+    { "type": "table", "headers": ["Registration", "Lifetime", "Use"], "rows": [
+      ["Manifest-declared", "Always (even app not running)", "A few allowed system events"],
+      ["Context-registered", "While registered (e.g., activity visible)", "Most runtime events"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Since Android 8, most **implicit** broadcasts can no longer be declared in the manifest (battery drain). Register them at runtime, or use explicit broadcasts/WorkManager/observers instead." },
+    { "type": "callout", "variant": "mistake", "markdown": "Doing long work in onReceive — it runs on the main thread and the receiver is killed shortly after returning. Hand off to WorkManager or a coroutine; don't block." },
+    { "type": "callout", "variant": "tip", "markdown": "For in-app events, prefer a LiveData/Flow/observer pattern over LocalBroadcastManager (deprecated). Use system broadcasts only for genuine system events." }
+  ],
+  "flashcards": [
+    { "front": "Manifest vs context-registered receiver?", "back": "Manifest receivers persist even when the app isn't running (limited events); context-registered ones live only while registered." },
+    { "front": "What changed for broadcasts in Android 8?", "back": "Most implicit broadcasts can't be registered in the manifest, to reduce wakeups/battery drain." },
+    { "front": "Why keep onReceive short?", "back": "It runs on the main thread and the receiver is killed soon after returning — offload work." }
+  ],
+  "quiz": [
+    { "q": "A BroadcastReceiver implements a…", "options": ["Singleton pattern", "Publish-subscribe pattern", "Factory pattern", "Builder pattern"], "answer": 1, "explain": "Broadcasts are a pub-sub mechanism for events." },
+    { "q": "Since Android 8, most implicit broadcasts…", "options": ["Run faster", "Can't be declared in the manifest", "Are encrypted", "Require root"], "answer": 1, "explain": "They must be registered at runtime to limit background wakeups." },
+    { "q": "Long work in onReceive should be…", "options": ["Done inline", "Handed off to WorkManager/coroutine", "Run on the UI thread forever", "Ignored"], "answer": 1, "explain": "onReceive must return quickly; defer real work." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Register a receiver for connectivity changes and log them." },
+    { "level": "Medium", "text": "Use a context-registered receiver tied to an activity's lifecycle." },
+    { "level": "Hard", "text": "Trigger work from a BOOT_COMPLETED receiver via WorkManager." },
+    { "level": "Expert", "text": "Replace a LocalBroadcastManager flow with a shared Flow/observer." }
+  ],
+  "interviewQuestions": [
+    "What is a BroadcastReceiver?",
+    "Manifest vs context-registered receivers?",
+    "What changed for broadcasts in Android 8?",
+    "Why must onReceive be fast?",
+    "Alternatives to broadcasts for in-app events?"
+  ],
+  "references": [
+    { "label": "Android — Broadcasts", "url": "https://developer.android.com/guide/components/broadcasts" }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "id": "android.content_providers",
+  "levelId": 3,
+  "title": "Content Providers",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Explain what a ContentProvider exposes and why",
+    "Read data via a content URI and resolver",
+    "Know when you actually need one"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "A ContentProvider exposes structured app data to other apps (or components) through a content:// URI, with a uniform CRUD interface and per-URI permissions." },
+    { "type": "code", "language": "kotlin", "code": "// Read contacts via the system ContentProvider\nval cursor = contentResolver.query(\n  ContactsContract.Contacts.CONTENT_URI,\n  null, null, null, null)" },
+    { "type": "callout", "variant": "interview", "markdown": "You need a ContentProvider mainly when **sharing data across apps** (or to feed system features like search suggestions, widgets, or sync adapters). For purely in-app storage, use Room directly." },
+    { "type": "callout", "variant": "note", "markdown": "FileProvider is a special ContentProvider that grants temporary, secure access to files via content URIs — required to share files with other apps since Android 7 (no more file:// URIs)." },
+    { "type": "callout", "variant": "tip", "markdown": "Don't build a ContentProvider just to abstract your own database — that's over-engineering. Reach for one when cross-app access or a platform integration genuinely requires it." }
+  ],
+  "flashcards": [
+    { "front": "What does a ContentProvider expose?", "back": "Structured data to other apps/components via content:// URIs with CRUD + permissions." },
+    { "front": "When do you actually need one?", "back": "Mainly to share data across apps or integrate with platform features (search, widgets, sync)." },
+    { "front": "What is FileProvider?", "back": "A ContentProvider that grants temporary secure access to files via content URIs (replaces file:// since Android 7)." }
+  ],
+  "quiz": [
+    { "q": "A ContentProvider is accessed via…", "options": ["A direct file path", "A content:// URI and the ContentResolver", "An Intent only", "Gradle"], "answer": 1, "explain": "Clients query content URIs through the ContentResolver." },
+    { "q": "You most need a ContentProvider when…", "options": ["Storing data only in your app", "Sharing data with other apps", "Drawing UI", "Running coroutines"], "answer": 1, "explain": "Cross-app data sharing is its primary purpose." },
+    { "q": "To share a file with another app since Android 7, use…", "options": ["file:// URI", "FileProvider (content URI)", "A broadcast", "SharedPreferences"], "answer": 1, "explain": "file:// URIs are blocked; FileProvider issues secure content URIs." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Query the contacts ContentProvider and list names." },
+    { "level": "Medium", "text": "Share an image with another app using FileProvider." },
+    { "level": "Hard", "text": "Implement a simple ContentProvider backed by Room." },
+    { "level": "Expert", "text": "Add per-URI permissions and a sync adapter feeding the provider." }
+  ],
+  "interviewQuestions": [
+    "What is a ContentProvider and why use it?",
+    "How do you query one?",
+    "When is a ContentProvider necessary vs over-engineering?",
+    "What is FileProvider and why is it required?",
+    "How are provider permissions enforced?"
+  ],
+  "references": [
+    { "label": "Android — Content providers", "url": "https://developer.android.com/guide/topics/providers/content-providers" }
+  ]
+}

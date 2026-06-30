@@ -1,0 +1,45 @@
+{
+  "id": "java.pattern_matching",
+  "levelId": 2,
+  "title": "Pattern Matching",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Use instanceof pattern matching",
+    "Switch on types and deconstruct records",
+    "Write exhaustive, guarded switches"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Pattern matching lets you test a value's shape and bind its parts in one step — for instanceof, switch, and record deconstruction (Java 16–21)." },
+    { "type": "code", "language": "java", "code": "// Old\nif (o instanceof String) { String s = (String) o; use(s); }\n// Pattern matching for instanceof\nif (o instanceof String s) { use(s); }   // s bound automatically\n\n// Switch + record deconstruction + guard\nString describe(Shape sh) => switch (sh) {\n  case Circle(double r) when r > 10 -> \"big circle\";\n  case Circle c -> \"circle\";\n  case Square s -> \"square\";\n};" },
+    { "type": "callout", "variant": "interview", "markdown": "Record deconstruction patterns (Circle(double r)) destructure data directly in a switch case. Combined with sealed types, the switch is exhaustive and needs no default." },
+    { "type": "callout", "variant": "note", "markdown": "Guards (`when condition`) refine a case. Order matters: more specific/guarded cases come before broader ones, or the compiler flags dominance." },
+    { "type": "callout", "variant": "tip", "markdown": "Pattern matching replaces verbose instanceof-and-cast chains and the visitor pattern boilerplate. It reads top-to-bottom like the data's shape." }
+  ],
+  "flashcards": [
+    { "front": "What does `o instanceof String s` do?", "back": "Tests the type AND binds o to a String variable s if it matches — no explicit cast." },
+    { "front": "What is a record deconstruction pattern?", "back": "Destructures a record's components in a switch case, e.g. case Circle(double r)." },
+    { "front": "What is a guard in a switch pattern?", "back": "A `when` condition that further constrains a case." }
+  ],
+  "quiz": [
+    { "q": "`if (o instanceof String s)`…", "options": ["Throws if not a String", "Binds s only when o is a String", "Always binds s", "Is invalid Java"], "answer": 1, "explain": "The pattern variable s is in scope only where the match holds." },
+    { "q": "Deconstructing a record in a switch is called a…", "options": ["Guard", "Record pattern", "Lambda", "Wildcard"], "answer": 1, "explain": "Record patterns destructure components directly in case labels." },
+    { "q": "A `when` clause in a switch is a…", "options": ["Loop", "Guard refining the case", "Type cast", "Comment"], "answer": 1, "explain": "Guards add a boolean condition to a pattern case." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Rewrite an instanceof-and-cast chain with pattern matching." },
+    { "level": "Medium", "text": "Switch over a sealed Shape with record deconstruction." },
+    { "level": "Hard", "text": "Add guards to classify ranges of values within one switch." },
+    { "level": "Expert", "text": "Evaluate a nested expression AST using nested record patterns." }
+  ],
+  "interviewQuestions": [
+    "What is pattern matching for instanceof?",
+    "What are record patterns / deconstruction?",
+    "How do guards work in switch patterns?",
+    "How do sealed types make switches exhaustive?",
+    "How does pattern matching replace the visitor pattern?"
+  ],
+  "references": [
+    { "label": "JEP 440/441: Record & Pattern Matching", "url": "https://openjdk.org/jeps/441" }
+  ]
+}

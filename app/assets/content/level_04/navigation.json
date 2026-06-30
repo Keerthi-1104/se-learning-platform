@@ -1,0 +1,50 @@
+{
+  "id": "flutter.navigation",
+  "levelId": 4,
+  "title": "Navigation",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Use imperative Navigator (push/pop)",
+    "Use declarative routing (go_router) and deep links",
+    "Pass and return data between routes"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Navigation moves between screens (routes). Flutter offers the imperative Navigator (a stack of routes) and declarative routers (go_router) that map URLs/state to screens." },
+    { "type": "code", "language": "dart", "code": "// Imperative\nfinal result = await Navigator.push(context,\n  MaterialPageRoute(builder: (_) => DetailPage(id: 42)));\n// Declarative (go_router)\ncontext.go('/product/42');" },
+    { "type": "table", "headers": ["", "Navigator (imperative)", "go_router (declarative)"], "rows": [
+      ["Model", "Push/pop a stack", "URL/state → screen"],
+      ["Deep links", "Manual", "Built-in"],
+      ["Web URLs", "Awkward", "First-class"],
+      ["Best for", "Simple flows", "Complex/large apps"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Navigator 2.0 made routing declarative so the back stack can be derived from app state (essential for web URLs and deep links). go_router is the recommended wrapper over its complexity." },
+    { "type": "callout", "variant": "tip", "markdown": "Use a typed router (go_router) with named routes and path/query params; avoid passing whole objects through routes — pass IDs and refetch, so deep links and restoration work." }
+  ],
+  "flashcards": [
+    { "front": "Imperative vs declarative navigation?", "back": "Navigator push/pop a stack; declarative routers map URL/state to screens (go_router)." },
+    { "front": "Why was Navigator 2.0 introduced?", "back": "To make the back stack a function of app state — needed for web URLs and deep linking." },
+    { "front": "How return data from a route?", "back": "await Navigator.push(...) returns the value passed to Navigator.pop(result)." }
+  ],
+  "quiz": [
+    { "q": "go_router is primarily…", "options": ["Imperative", "Declarative URL-based routing", "A state manager", "A database"], "answer": 1, "explain": "It maps URLs/state to screens declaratively, with deep-link support." },
+    { "q": "To return a result from a pushed route…", "options": ["Use a global", "await the push; pop(result)", "setState", "Restart the app"], "answer": 1, "explain": "push returns a Future that completes with pop's value." },
+    { "q": "Navigator 2.0 exists mainly for…", "options": ["Faster animations", "State-driven back stack (web/deep links)", "Smaller apps", "Encryption"], "answer": 1, "explain": "Declarative routing supports URLs and deep links." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Push a detail screen and pass an argument." },
+    { "level": "Medium", "text": "Return a selected value from a picker screen." },
+    { "level": "Hard", "text": "Set up go_router with nested routes and path params." },
+    { "level": "Expert", "text": "Implement deep links + auth redirect guards with go_router." }
+  ],
+  "interviewQuestions": [
+    "Imperative vs declarative navigation?",
+    "How do you pass and return data between routes?",
+    "Why was Navigator 2.0 created?",
+    "How do deep links work in Flutter?",
+    "How do you guard routes (auth redirects)?"
+  ],
+  "references": [
+    { "label": "go_router docs", "url": "https://pub.dev/packages/go_router" }
+  ]
+}

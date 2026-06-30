@@ -1,0 +1,51 @@
+{
+  "id": "cs.git",
+  "levelId": 1,
+  "title": "Git Fundamentals",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Understand Git's three areas and the commit graph",
+    "Use branches, merges and rebases correctly",
+    "Recover safely from mistakes"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Git is a distributed version control system that tracks changes as a graph of immutable commits, enabling branching, collaboration and history." },
+    { "type": "code", "language": "bash", "code": "working dir --(git add)--> staging --(git commit)--> repo\ngit status      # what changed\ngit add -p      # stage hunks\ngit commit -m   # snapshot\ngit push        # share" },
+    { "type": "table", "headers": ["Concept", "What it is"], "rows": [
+      ["Commit", "An immutable snapshot + parent pointer"],
+      ["Branch", "A movable pointer to a commit"],
+      ["HEAD", "Your current commit/branch"],
+      ["Merge", "Joins histories, creates a merge commit"],
+      ["Rebase", "Replays commits onto a new base (linear history)"]
+    ]},
+    { "type": "callout", "variant": "mistake", "markdown": "Force-pushing (`git push -f`) to a shared branch rewrites history others rely on. Rebase only your own local/unpushed work; never rewrite shared history." },
+    { "type": "callout", "variant": "tip", "markdown": "`git reflog` is your safety net — it records where HEAD has been, so you can recover 'lost' commits after a bad reset or rebase." }
+  ],
+  "flashcards": [
+    { "front": "Git's three areas?", "back": "Working directory, staging area (index), and the repository (commits)." },
+    { "front": "Merge vs rebase?", "back": "Merge preserves history with a merge commit; rebase replays commits for a linear history but rewrites them." },
+    { "front": "What is git reflog for?", "back": "It logs HEAD movements so you can recover commits after a bad reset/rebase." }
+  ],
+  "quiz": [
+    { "q": "A branch in Git is…", "options": ["A copy of all files", "A movable pointer to a commit", "A backup server", "A merge commit"], "answer": 1, "explain": "Branches are lightweight pointers to commits — cheap to create." },
+    { "q": "Which rewrites commit history?", "options": ["git merge", "git rebase", "git status", "git fetch"], "answer": 1, "explain": "Rebase replays commits onto a new base, creating new commit hashes." },
+    { "q": "Safest way to recover a lost commit after a bad reset?", "options": ["Reinstall Git", "git reflog then checkout/reset", "Delete the repo", "Force push"], "answer": 1, "explain": "reflog shows previous HEAD positions so you can restore the commit." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Create a branch, commit, and open a pull request." },
+    { "level": "Medium", "text": "Resolve a merge conflict between two branches editing the same file." },
+    { "level": "Hard", "text": "Interactively rebase to squash and reorder commits before merging." },
+    { "level": "Expert", "text": "Use git bisect to find the commit that introduced a bug." }
+  ],
+  "interviewQuestions": [
+    "Explain Git's three areas and the staging concept.",
+    "Merge vs rebase — when use each?",
+    "How do you undo the last commit (keep vs discard changes)?",
+    "What does git cherry-pick do?",
+    "How do you recover a deleted branch or lost commit?"
+  ],
+  "references": [
+    { "label": "Pro Git (free book)", "url": "https://git-scm.com/book" }
+  ]
+}

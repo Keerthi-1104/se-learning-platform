@@ -1,0 +1,44 @@
+{
+  "id": "flutter.custompainter",
+  "levelId": 4,
+  "title": "CustomPainter",
+  "xp": 50,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Draw custom graphics with Canvas and Paint",
+    "Implement shouldRepaint correctly",
+    "Know when custom painting beats widgets"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "CustomPainter lets you draw directly on a Canvas — shapes, paths, text, gradients — for visuals that would be awkward or impossible with standard widgets (charts, gauges, signatures, custom progress)." },
+    { "type": "code", "language": "dart", "code": "class RingPainter extends CustomPainter {\n  @override void paint(Canvas canvas, Size size) {\n    final p = Paint()..color = Colors.blue..strokeWidth = 8\n      ..style = PaintingStyle.stroke;\n    canvas.drawCircle(size.center(Offset.zero), size.width/2, p);\n  }\n  @override bool shouldRepaint(covariant RingPainter old) => false;\n}" },
+    { "type": "callout", "variant": "mistake", "markdown": "Returning true (or rebuilding) from shouldRepaint unnecessarily repaints every frame. Return true ONLY when the inputs that affect the drawing changed." },
+    { "type": "callout", "variant": "tip", "markdown": "Wrap a CustomPaint in a RepaintBoundary so its repaints don't affect siblings. For animated painters, pass the animation to repaint and isolate it; avoid expensive ops (large paths/blurs) per frame." }
+  ],
+  "flashcards": [
+    { "front": "What does CustomPainter give you?", "back": "Direct Canvas drawing (shapes, paths, text, gradients) for custom graphics." },
+    { "front": "When does paint repaint?", "back": "When shouldRepaint returns true (or the CustomPaint is rebuilt with a new painter)." },
+    { "front": "How to isolate painter repaints?", "back": "Wrap CustomPaint in a RepaintBoundary." }
+  ],
+  "quiz": [
+    { "q": "You draw inside…", "options": ["build()", "paint(Canvas, Size)", "initState", "dispose"], "answer": 1, "explain": "CustomPainter.paint receives the Canvas and Size." },
+    { "q": "shouldRepaint should return true…", "options": ["Always", "Only when drawing inputs change", "Never", "On dispose"], "answer": 1, "explain": "Returning true needlessly repaints every frame." },
+    { "q": "Custom painting is best for…", "options": ["A standard button", "Charts/gauges/signatures", "Navigation", "Networking"], "answer": 1, "explain": "Use it when widgets can't express the visual." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Draw a circle and a line with Canvas/Paint." },
+    { "level": "Medium", "text": "Draw a progress ring that fills based on a value." },
+    { "level": "Hard", "text": "Build a simple line chart from a list of points." },
+    { "level": "Expert", "text": "Implement a signature pad capturing and rendering strokes efficiently." }
+  ],
+  "interviewQuestions": [
+    "When use CustomPainter over widgets?",
+    "How does shouldRepaint affect performance?",
+    "How do you animate a CustomPainter?",
+    "How do you isolate a painter's repaints?",
+    "Canvas vs widget composition trade-offs?"
+  ],
+  "references": [
+    { "label": "Flutter — CustomPaint", "url": "https://api.flutter.dev/flutter/widgets/CustomPaint-class.html" }
+  ]
+}

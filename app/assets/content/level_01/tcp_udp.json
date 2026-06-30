@@ -1,0 +1,51 @@
+{
+  "id": "cs.tcp_udp",
+  "levelId": 1,
+  "title": "TCP / UDP",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain the TCP three-way handshake",
+    "Choose TCP vs UDP by workload",
+    "Understand why reliability can live above the transport layer"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "TCP is connection-oriented and reliable; UDP is connectionless and best-effort. Both are transport-layer protocols." },
+    { "type": "code", "language": "text", "code": "TCP three-way handshake:\n  Client --- SYN ------> Server   'my seq=x'\n  Client <-- SYN-ACK --- Server   'my seq=y, ack=x+1'\n  Client --- ACK ------> Server   'ack=y+1'\n  === data flows ===" },
+    { "type": "table", "headers": ["Feature", "TCP", "UDP"], "rows": [
+      ["Connection", "Yes (handshake)", "No"],
+      ["Reliability", "Guaranteed, retransmits", "Best-effort"],
+      ["Ordering", "In-order", "None"],
+      ["Overhead", "Higher", "Minimal"],
+      ["Use", "Web, email, DB", "Video, VoIP, games, DNS"]
+    ]},
+    { "type": "callout", "variant": "analogy", "markdown": "TCP is a **phone call**: you confirm you're both there and notice if the line drops. UDP is **shouting across a room**: faster, but you don't know if everyone heard you." },
+    { "type": "callout", "variant": "mistake", "markdown": "Saying 'UDP is unreliable so never use it for important things.' QUIC/HTTP-3 and real-time media build their own reliability on UDP to avoid TCP head-of-line blocking. Reliability can live above transport." }
+  ],
+  "flashcards": [
+    { "front": "Steps of the TCP handshake?", "back": "SYN → SYN-ACK → ACK, then data flows." },
+    { "front": "Why does DNS usually use UDP?", "back": "A query/response is tiny and fits one packet; a TCP handshake would dominate the cost." },
+    { "front": "What is head-of-line blocking?", "back": "One lost/slow packet stalls everything behind it; HTTP/3 over QUIC avoids it with independent streams." }
+  ],
+  "quiz": [
+    { "q": "Which is the correct TCP handshake order?", "options": ["ACK → SYN → SYN-ACK", "SYN → SYN-ACK → ACK", "SYN → ACK → FIN", "SYN-ACK → SYN → ACK"], "answer": 1, "explain": "The client SYNs, the server SYN-ACKs, the client ACKs." },
+    { "q": "Which workload best fits UDP?", "options": ["Bank transfers", "Bulk file download", "Live video / gaming", "Database writes"], "answer": 2, "explain": "Real-time media prefers speed over guaranteed delivery — a late frame is useless." },
+    { "q": "TCP provides all EXCEPT…", "options": ["Ordering", "Reliability", "Congestion control", "Encryption"], "answer": 3, "explain": "TCP does not encrypt; that's TLS's job on top of TCP." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Build a UDP echo client/server; observe packets being lost or reordered." },
+    { "level": "Medium", "text": "Build a TCP chat server handling multiple clients concurrently." },
+    { "level": "Hard", "text": "Add a simple ACK + retransmit layer on top of UDP for reliable delivery." },
+    { "level": "Expert", "text": "Implement a sliding-window protocol with cumulative ACKs over UDP." }
+  ],
+  "interviewQuestions": [
+    "Explain the TCP three-way handshake and teardown.",
+    "When would you choose UDP over TCP?",
+    "What are flow control and congestion control?",
+    "What is head-of-line blocking and how does HTTP/3 avoid it?",
+    "What is a SYN flood and how do SYN cookies help?"
+  ],
+  "references": [
+    { "label": "Beej's Guide to Network Programming", "url": "https://beej.us/guide/bgnet/" }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "id": "flutter.impeller",
+  "levelId": 4,
+  "title": "Impeller",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain why Impeller replaced Skia's runtime shader compilation",
+    "Describe how Impeller avoids shader jank",
+    "Know its platform status"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Impeller is Flutter's modern rendering engine, built to replace the Skia-based renderer. Its main goal: eliminate 'shader compilation jank' by precompiling shaders at build time instead of at runtime." },
+    { "type": "callout", "variant": "interview", "markdown": "The old problem: with Skia, shaders were compiled the first time an effect appeared, causing a one-time stutter (jank) on first run of an animation. Impeller precompiles a fixed set of shaders ahead of time, so first-run animations are smooth." },
+    { "type": "table", "headers": ["", "Skia (old)", "Impeller"], "rows": [
+      ["Shaders", "Compiled at runtime (jank)", "Precompiled at build"],
+      ["Backend", "GL/Metal/Vulkan via Skia", "Metal (iOS), Vulkan (Android)"],
+      ["Goal", "General 2D graphics", "Predictable, jank-free frames"]
+    ]},
+    { "type": "callout", "variant": "note", "markdown": "Impeller is the default on iOS and increasingly on Android (Vulkan). It's tuned specifically for Flutter's drawing patterns rather than being a general-purpose 2D library." },
+    { "type": "callout", "variant": "tip", "markdown": "If you ever saw first-run animation stutters, Impeller is the fix. For deep custom effects, test on Impeller specifically, since some Skia-era shader tricks behave differently." }
+  ],
+  "flashcards": [
+    { "front": "What problem does Impeller solve?", "back": "Shader compilation jank — the first-run stutter when Skia compiled shaders at runtime." },
+    { "front": "How does Impeller avoid it?", "back": "It precompiles shaders at build time instead of on first use." },
+    { "front": "Which backends does Impeller use?", "back": "Metal on iOS and Vulkan on Android." }
+  ],
+  "quiz": [
+    { "q": "Impeller's primary goal is to…", "options": ["Add native widgets", "Eliminate shader compilation jank", "Shrink app size", "Replace Dart"], "answer": 1, "explain": "Precompiled shaders remove first-run animation stutter." },
+    { "q": "Impeller precompiles shaders…", "options": ["At runtime", "At build time", "Never", "On the server"], "answer": 1, "explain": "Ahead-of-time shader compilation is the key idea." },
+    { "q": "On Android, Impeller targets…", "options": ["OpenGL only", "Vulkan", "DirectX", "WebGL"], "answer": 1, "explain": "Impeller uses Vulkan on Android and Metal on iOS." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Explain shader jank and how Impeller addresses it in your own words." },
+    { "level": "Medium", "text": "Toggle Impeller on/off and compare first-run animation smoothness." },
+    { "level": "Hard", "text": "Profile a complex animation on Impeller vs the legacy renderer." },
+    { "level": "Expert", "text": "Investigate a custom shader/effect that renders differently on Impeller and adapt it." }
+  ],
+  "interviewQuestions": [
+    "What is Impeller and why was it created?",
+    "What is shader compilation jank?",
+    "How does Impeller differ from Skia?",
+    "Which graphics backends does Impeller use?",
+    "What is Impeller's platform status?"
+  ],
+  "references": [
+    { "label": "Flutter — Impeller", "url": "https://docs.flutter.dev/perf/impeller" }
+  ]
+}

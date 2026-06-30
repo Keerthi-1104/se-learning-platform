@@ -1,0 +1,50 @@
+{
+  "id": "flutter.widgets",
+  "levelId": 4,
+  "title": "Widgets",
+  "xp": 40,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Explain 'everything is a widget' and immutability",
+    "Choose Stateless vs Stateful correctly",
+    "Compose UI declaratively"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "In Flutter, the UI is built from widgets — immutable configuration objects describing part of the UI. Layout, styling, and even the app itself are widgets composed into a tree." },
+    { "type": "table", "headers": ["", "StatelessWidget", "StatefulWidget"], "rows": [
+      ["State", "None (immutable)", "Mutable State object"],
+      ["Rebuilds", "When inputs change", "When setState is called"],
+      ["Use", "Static / derived UI", "UI that changes over time"]
+    ]},
+    { "type": "code", "language": "dart", "code": "class Greeting extends StatelessWidget {\n  final String name;\n  const Greeting(this.name, {super.key});\n  @override\n  Widget build(BuildContext c) => Text('Hello, $name');\n}" },
+    { "type": "callout", "variant": "analogy", "markdown": "Widgets are like a blueprint, not the building. Flutter rebuilds blueprints cheaply on every frame; the heavy, persistent objects (Elements/RenderObjects) are kept and reused behind the scenes." },
+    { "type": "callout", "variant": "mistake", "markdown": "Putting expensive work in build(). build() can run 60+ times/second — keep it pure and cheap, and hoist constant subtrees into const widgets so Flutter can skip them." },
+    { "type": "callout", "variant": "tip", "markdown": "Favor composition over deep inheritance: build small widgets and compose them. Use const constructors everywhere possible to cut rebuilds." }
+  ],
+  "flashcards": [
+    { "front": "Are widgets mutable?", "back": "No — widgets are immutable configuration; the mutable part lives in State (for StatefulWidget) and the Element tree." },
+    { "front": "Stateless vs Stateful?", "back": "Stateless has no internal mutable state; Stateful has a State object updated via setState." },
+    { "front": "Why use const widgets?", "back": "Const widgets are canonicalized and can be skipped during rebuilds, improving performance." }
+  ],
+  "quiz": [
+    { "q": "Widgets in Flutter are…", "options": ["Mutable objects", "Immutable configuration", "Native views", "Threads"], "answer": 1, "explain": "Widgets are immutable descriptions; Elements/RenderObjects hold the mutable state." },
+    { "q": "Use a StatefulWidget when…", "options": ["UI never changes", "UI changes over time via internal state", "You need a const", "You want less code"], "answer": 1, "explain": "Stateful widgets manage mutable state that triggers rebuilds." },
+    { "q": "Why prefer const widgets?", "options": ["They look different", "Flutter can skip rebuilding them", "They use more memory", "They disable layout"], "answer": 1, "explain": "Const widgets are reused and skipped during rebuilds." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Build a profile card by composing Stateless widgets." },
+    { "level": "Medium", "text": "Convert a Stateless counter to Stateful with setState." },
+    { "level": "Hard", "text": "Extract a rebuilding subtree into a const widget and verify fewer rebuilds." },
+    { "level": "Expert", "text": "Build a reusable, themable component with named constructors and slots (child builders)." }
+  ],
+  "interviewQuestions": [
+    "What does 'everything is a widget' mean?",
+    "StatelessWidget vs StatefulWidget?",
+    "Why are widgets immutable?",
+    "Why and when use const constructors?",
+    "How does composition beat inheritance in Flutter?"
+  ],
+  "references": [
+    { "label": "Flutter — Intro to widgets", "url": "https://docs.flutter.dev/ui/widgets-intro" }
+  ]
+}

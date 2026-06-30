@@ -1,0 +1,52 @@
+{
+  "id": "java.multithreading",
+  "levelId": 2,
+  "title": "Multithreading",
+  "xp": 60,
+  "estimatedMinutes": 35,
+  "objectives": [
+    "Create threads safely and use executors",
+    "Apply synchronization and the volatile keyword",
+    "Avoid deadlocks and race conditions"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Multithreading runs multiple threads concurrently within one process to use multiple cores and keep apps responsive. Threads share memory, so coordination is required." },
+    { "type": "code", "language": "java", "code": "// Prefer executors over new Thread()\nExecutorService pool = Executors.newFixedThreadPool(4);\nFuture<Integer> f = pool.submit(() -> compute());\nint result = f.get();\npool.shutdown();" },
+    { "type": "table", "headers": ["Tool", "Purpose"], "rows": [
+      ["synchronized", "Mutual exclusion on a monitor"],
+      ["volatile", "Visibility (no caching) — not atomicity"],
+      ["AtomicInteger", "Lock-free atomic updates (CAS)"],
+      ["ReentrantLock", "Flexible locking, tryLock, fairness"],
+      ["ExecutorService", "Thread pools & task submission"]
+    ]},
+    { "type": "callout", "variant": "mistake", "markdown": "Assuming `volatile` makes `count++` thread-safe. It guarantees visibility, not atomicity — read-modify-write still races. Use AtomicInteger or synchronized." },
+    { "type": "callout", "variant": "interview", "markdown": "The Java Memory Model defines happens-before: synchronized/volatile/Thread.start ensure one thread's writes are visible to another. Without it, the JVM may reorder or cache values." },
+    { "type": "callout", "variant": "best", "markdown": "Prefer high-level concurrency (ExecutorService, CompletableFuture, concurrent collections) over raw threads and locks. Minimize shared mutable state." }
+  ],
+  "flashcards": [
+    { "front": "volatile vs synchronized?", "back": "volatile guarantees visibility only; synchronized guarantees mutual exclusion + visibility." },
+    { "front": "Why use a thread pool over new Thread()?", "back": "Reuses threads, bounds concurrency, and avoids the cost of creating/destroying threads per task." },
+    { "front": "What is happens-before?", "back": "A JMM ordering guarantee ensuring one thread's writes are visible to another (via synchronized/volatile/etc.)." }
+  ],
+  "quiz": [
+    { "q": "volatile guarantees…", "options": ["Atomicity", "Visibility", "Mutual exclusion", "Ordering of unrelated writes"], "answer": 1, "explain": "volatile ensures reads see the latest write but does NOT make compound operations atomic." },
+    { "q": "Best for a lock-free counter?", "options": ["volatile int", "AtomicInteger", "plain int", "String"], "answer": 1, "explain": "AtomicInteger uses CAS for atomic increments without locks." },
+    { "q": "Preferred way to run many short tasks?", "options": ["new Thread() per task", "ExecutorService thread pool", "Busy-wait loops", "System.gc()"], "answer": 1, "explain": "A pool reuses threads and bounds resource usage." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Run 1000 increments across threads; show the race, then fix with AtomicInteger." },
+    { "level": "Medium", "text": "Use CompletableFuture to run two calls in parallel and combine results." },
+    { "level": "Hard", "text": "Implement producer-consumer with BlockingQueue." },
+    { "level": "Expert", "text": "Build a bounded thread pool from scratch with a task queue and worker threads." }
+  ],
+  "interviewQuestions": [
+    "volatile vs synchronized vs Atomic?",
+    "What is the Java Memory Model / happens-before?",
+    "Thread states and lifecycle?",
+    "How do you avoid deadlock?",
+    "Runnable vs Callable vs Future vs CompletableFuture?"
+  ],
+  "references": [
+    { "label": "Java Concurrency in Practice", "url": "https://jcip.net" }
+  ]
+}

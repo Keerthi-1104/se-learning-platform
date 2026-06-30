@@ -1,0 +1,49 @@
+{
+  "id": "java.streams",
+  "levelId": 2,
+  "title": "Streams API",
+  "xp": 50,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Build pipelines with intermediate and terminal operations",
+    "Understand laziness and short-circuiting",
+    "Use collectors and know when parallel streams help"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "The Streams API (Java 8) processes sequences of elements declaratively through a pipeline of operations — filter, map, reduce — instead of explicit loops." },
+    { "type": "code", "language": "java", "code": "List<String> names = people.stream()      // source\n    .filter(p -> p.age() >= 18)            // intermediate (lazy)\n    .map(Person::name)                     // intermediate (lazy)\n    .sorted()\n    .collect(Collectors.toList());         // terminal (triggers run)" },
+    { "type": "table", "headers": ["Kind", "Examples", "Returns"], "rows": [
+      ["Intermediate (lazy)", "filter, map, sorted, distinct", "A new stream"],
+      ["Terminal (eager)", "collect, forEach, reduce, count", "A result / side effect"],
+      ["Short-circuit", "findFirst, anyMatch, limit", "Stops early"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Streams are **lazy**: intermediate ops don't run until a terminal op is called, enabling fusion and short-circuiting (e.g., findFirst stops at the first match)." },
+    { "type": "callout", "variant": "mistake", "markdown": "Reusing a consumed stream (IllegalStateException) or using parallel streams blindly — they add overhead and can be slower for small or I/O-bound data, and break with shared mutable state." }
+  ],
+  "flashcards": [
+    { "front": "Intermediate vs terminal operation?", "back": "Intermediate ops are lazy and return a stream (filter/map); terminal ops trigger execution and return a result (collect/reduce)." },
+    { "front": "What makes streams efficient?", "back": "Laziness + operation fusion + short-circuiting — work happens only when a terminal op runs, and can stop early." },
+    { "front": "When are parallel streams risky?", "back": "Small datasets, I/O-bound work, or shared mutable state — overhead and correctness issues." }
+  ],
+  "quiz": [
+    { "q": "Which is a terminal operation?", "options": ["filter", "map", "collect", "sorted"], "answer": 2, "explain": "collect triggers the pipeline; filter/map/sorted are lazy intermediates." },
+    { "q": "Streams execute their pipeline…", "options": ["Immediately per operation", "Only when a terminal op runs (lazily)", "On a background thread always", "Never"], "answer": 1, "explain": "Intermediate ops are deferred until a terminal operation is invoked." },
+    { "q": "findFirst() can be fast because it…", "options": ["Sorts everything", "Short-circuits at the first match", "Runs in parallel", "Caches results"], "answer": 1, "explain": "Short-circuiting terminal ops stop processing once they have an answer." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Sum the even numbers in a list using a stream." },
+    { "level": "Medium", "text": "Group people by department using Collectors.groupingBy." },
+    { "level": "Hard", "text": "Build a frequency map and return the top-3 entries with streams." },
+    { "level": "Expert", "text": "Write a custom Collector and compare a parallel vs sequential stream benchmark." }
+  ],
+  "interviewQuestions": [
+    "Intermediate vs terminal operations?",
+    "Why are streams lazy and what does it enable?",
+    "map vs flatMap?",
+    "When should you NOT use parallel streams?",
+    "reduce vs collect?"
+  ],
+  "references": [
+    { "label": "Java Streams — Baeldung", "url": "https://www.baeldung.com/java-8-streams" }
+  ]
+}

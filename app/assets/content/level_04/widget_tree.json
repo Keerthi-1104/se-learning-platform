@@ -1,0 +1,44 @@
+{
+  "id": "flutter.widget_tree",
+  "levelId": 4,
+  "title": "Widget Tree",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Explain the widget tree and its role",
+    "Understand keys and tree reconciliation",
+    "See how rebuilds propagate"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "The widget tree is the hierarchy of immutable widget configuration objects you build in build() methods. It's a lightweight description that Flutter diffs against the Element tree to decide what actually changes." },
+    { "type": "code", "language": "text", "code": "MaterialApp\n  └ Scaffold\n     ├ AppBar(title: Text)\n     └ Center\n        └ Column\n           ├ Text('Hello')\n           └ ElevatedButton" },
+    { "type": "callout", "variant": "interview", "markdown": "Three trees work together: the Widget tree (config, rebuilt often & cheaply), the Element tree (the living instances + state), and the RenderObject tree (layout & paint). Flutter reconciles widgets against elements every frame." },
+    { "type": "callout", "variant": "note", "markdown": "Keys preserve identity during reconciliation. Without keys, swapping/reordering items in a list can attach the wrong state to the wrong widget. Use ValueKey/ObjectKey for stateful list items that move." }
+  ],
+  "flashcards": [
+    { "front": "What is the widget tree?", "back": "The hierarchy of immutable widget config objects produced by build(); cheap to recreate." },
+    { "front": "Why do keys matter?", "back": "They preserve element/state identity when widgets move or reorder during reconciliation." },
+    { "front": "The three trees?", "back": "Widget (config), Element (instances + state), RenderObject (layout/paint)." }
+  ],
+  "quiz": [
+    { "q": "The widget tree is…", "options": ["The painted pixels", "Immutable configuration objects", "Native views", "The GPU buffer"], "answer": 1, "explain": "Widgets are config; Elements and RenderObjects do the real work." },
+    { "q": "Keys are used to…", "options": ["Style widgets", "Preserve identity during reconciliation", "Speed up the GPU", "Encrypt data"], "answer": 1, "explain": "Keys keep the right state attached when widgets move/reorder." },
+    { "q": "Which tree holds state?", "options": ["Widget tree", "Element tree", "Render tree", "None"], "answer": 1, "explain": "State objects live with Elements, not the immutable widgets." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Print the widget tree depth for a simple screen." },
+    { "level": "Medium", "text": "Reproduce a state-mix-up reordering list items, then fix it with ValueKey." },
+    { "level": "Hard", "text": "Use a GlobalKey to access a child's state and explain the cost." },
+    { "level": "Expert", "text": "Demonstrate how identical widget types reuse elements while different types rebuild them." }
+  ],
+  "interviewQuestions": [
+    "What is the widget tree and how does it relate to the other trees?",
+    "What problem do keys solve?",
+    "ValueKey vs GlobalKey?",
+    "How does reconciliation decide to reuse vs rebuild?",
+    "Why are widgets cheap to recreate?"
+  ],
+  "references": [
+    { "label": "Flutter — Inside Flutter", "url": "https://docs.flutter.dev/resources/inside-flutter" }
+  ]
+}

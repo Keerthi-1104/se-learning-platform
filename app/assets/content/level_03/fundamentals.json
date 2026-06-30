@@ -1,0 +1,50 @@
+{
+  "id": "android.fundamentals",
+  "levelId": 3,
+  "title": "Android Fundamentals",
+  "xp": 40,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Name the four app components",
+    "Explain the role of the manifest and the build system",
+    "Understand the APK/AAB and the Android runtime"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "An Android app is a set of components (Activities, Services, BroadcastReceivers, ContentProviders) declared in a manifest, compiled to an APK/AAB, and run on the ART runtime atop a customized Linux kernel." },
+    { "type": "table", "headers": ["Component", "Purpose"], "rows": [
+      ["Activity", "A single screen / UI entry point"],
+      ["Service", "Background work without UI"],
+      ["BroadcastReceiver", "Responds to system/app events"],
+      ["ContentProvider", "Shares data across apps"]
+    ]},
+    { "type": "theory", "markdown": "## The manifest\nAndroidManifest.xml declares components, permissions, the min/target SDK, and the launcher activity. The system reads it to know what your app contains before running any code." },
+    { "type": "callout", "variant": "note", "markdown": "Apps run on **ART** (Android Runtime), which uses AOT + JIT compilation. Each app runs in its own process and sandbox (a unique Linux user ID) for isolation and security." },
+    { "type": "callout", "variant": "tip", "markdown": "Ship an **AAB** (Android App Bundle), not a raw APK — Play generates optimized per-device APKs, shrinking download size." }
+  ],
+  "flashcards": [
+    { "front": "The four Android components?", "back": "Activity, Service, BroadcastReceiver, ContentProvider." },
+    { "front": "What does AndroidManifest.xml do?", "back": "Declares components, permissions, SDK levels and the launcher activity." },
+    { "front": "APK vs AAB?", "back": "APK is the installable package; AAB is uploaded to Play, which generates optimized per-device APKs." }
+  ],
+  "quiz": [
+    { "q": "Which component has no UI?", "options": ["Activity", "Service", "Fragment", "View"], "answer": 1, "explain": "A Service performs background work without a user interface." },
+    { "q": "Where are components and permissions declared?", "options": ["build.gradle", "AndroidManifest.xml", "strings.xml", "MainActivity"], "answer": 1, "explain": "The manifest declares components, permissions and SDK levels." },
+    { "q": "Android apps run on…", "options": ["The JVM directly", "ART (Android Runtime)", "Node.js", "A browser"], "answer": 1, "explain": "ART executes app code with AOT/JIT compilation." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Create an app with one Activity and inspect its manifest entry." },
+    { "level": "Medium", "text": "Add a runtime permission request flow for the camera." },
+    { "level": "Hard", "text": "Configure product flavors and build types in Gradle." },
+    { "level": "Expert", "text": "Reduce app size: enable R8 shrinking, resource shrinking, and analyze the AAB." }
+  ],
+  "interviewQuestions": [
+    "What are the four app components?",
+    "What is the role of the manifest?",
+    "What is ART and how does it differ from the JVM/Dalvik?",
+    "APK vs AAB?",
+    "How does the Android security sandbox work?"
+  ],
+  "references": [
+    { "label": "Android Developers — App fundamentals", "url": "https://developer.android.com/guide/components/fundamentals" }
+  ]
+}

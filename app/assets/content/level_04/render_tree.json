@@ -1,0 +1,45 @@
+{
+  "id": "flutter.render_tree",
+  "levelId": 4,
+  "title": "Render Tree",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain RenderObjects and their job",
+    "Understand constraints-down, sizes-up layout",
+    "Know where painting and hit-testing happen"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "The RenderObject tree does the actual work: layout (measuring and positioning), painting, and hit-testing. Most use RenderBox, which works in a 2D Cartesian box model." },
+    { "type": "callout", "variant": "interview", "markdown": "Flutter's layout rule: **constraints go down, sizes go up, parent sets position**. A parent passes constraints (min/max width/height) to a child; the child picks its size within them and returns it; the parent positions it. This single-pass layout is why Flutter is O(n) and fast." },
+    { "type": "code", "language": "text", "code": "Parent --constraints--> Child\nChild  --size-------->  Parent\nParent --sets offset--> Child position\n(one pass, no multi-pass reflow like the web)" },
+    { "type": "callout", "variant": "mistake", "markdown": "Unbounded constraints crashes: putting a Column (wants infinite height) inside another scrollable, or a ListView with no height. Fix with Expanded/Flexible, shrinkWrap, or a SizedBox with bounds." },
+    { "type": "callout", "variant": "tip", "markdown": "RepaintBoundary isolates a subtree's painting so animating one part doesn't repaint the whole screen — a key performance tool for complex/animated UIs." }
+  ],
+  "flashcards": [
+    { "front": "What does the RenderObject tree do?", "back": "Layout (size/position), painting, and hit-testing." },
+    { "front": "Flutter's layout protocol?", "back": "Constraints go down, sizes go up, parent sets position — a single pass." },
+    { "front": "What does RepaintBoundary do?", "back": "Isolates a subtree so its repaints don't force the rest of the screen to repaint." }
+  ],
+  "quiz": [
+    { "q": "Which tree handles layout and painting?", "options": ["Widget tree", "Element tree", "RenderObject tree", "None"], "answer": 2, "explain": "RenderObjects measure, position, paint and hit-test." },
+    { "q": "Flutter layout works by…", "options": ["Sizes down, constraints up", "Constraints down, sizes up, parent positions", "Multiple reflow passes", "Random order"], "answer": 1, "explain": "Parents pass constraints; children return sizes; parents set offsets — one pass." },
+    { "q": "RepaintBoundary helps by…", "options": ["Encrypting paint", "Isolating repaints to a subtree", "Removing widgets", "Disabling layout"], "answer": 1, "explain": "It limits repaint to the bounded subtree." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Trigger and fix an 'unbounded height' error in a Column/ListView." },
+    { "level": "Medium", "text": "Use Expanded/Flexible to satisfy constraints in a Row." },
+    { "level": "Hard", "text": "Wrap an animating widget in a RepaintBoundary and confirm reduced repaints." },
+    { "level": "Expert", "text": "Write a custom RenderObject (extends RenderBox) implementing performLayout and paint." }
+  ],
+  "interviewQuestions": [
+    "What is the RenderObject tree responsible for?",
+    "Explain 'constraints down, sizes up'.",
+    "What causes unbounded-constraint errors and how to fix them?",
+    "What is RepaintBoundary and when use it?",
+    "RenderBox vs RenderSliver?"
+  ],
+  "references": [
+    { "label": "Flutter — Understanding constraints", "url": "https://docs.flutter.dev/ui/layout/constraints" }
+  ]
+}

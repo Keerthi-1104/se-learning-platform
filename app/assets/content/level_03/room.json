@@ -1,0 +1,50 @@
+{
+  "id": "android.room",
+  "levelId": 3,
+  "title": "Room Database",
+  "xp": 50,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Explain Room's three building blocks",
+    "Get compile-time-checked SQL and reactive queries",
+    "Handle migrations safely"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Room is a Jetpack persistence library — an abstraction over SQLite that gives compile-time-verified SQL, less boilerplate, and reactive queries via Flow/LiveData." },
+    { "type": "table", "headers": ["Building block", "Role"], "rows": [
+      ["@Entity", "A table (a data class)"],
+      ["@Dao", "Queries: @Insert/@Query/@Update/@Delete"],
+      ["@Database", "Ties entities + DAOs together"]
+    ]},
+    { "type": "code", "language": "kotlin", "code": "@Entity data class User(@PrimaryKey val id: Int, val name: String)\n@Dao interface UserDao {\n  @Query(\"SELECT * FROM User\") fun all(): Flow<List<User>>\n  @Insert suspend fun insert(u: User)\n}" },
+    { "type": "callout", "variant": "interview", "markdown": "Room verifies your SQL **at compile time** — a typo in a @Query fails the build, not at runtime. Returning a Flow makes queries reactive: the UI auto-updates when the table changes." },
+    { "type": "callout", "variant": "mistake", "markdown": "Shipping a schema change without a migration — Room throws IllegalStateException at runtime. Provide a Migration (or fallbackToDestructiveMigration only in dev) and bump the version." },
+    { "type": "callout", "variant": "tip", "markdown": "Keep DB work off the main thread: use suspend DAO functions or Flow. Expose Room behind a Repository so the rest of the app doesn't depend on Room types." }
+  ],
+  "flashcards": [
+    { "front": "Room's three annotations?", "back": "@Entity (table), @Dao (queries), @Database (config tying them together)." },
+    { "front": "Key advantage of Room over raw SQLite?", "back": "Compile-time SQL verification, less boilerplate, and reactive Flow/LiveData queries." },
+    { "front": "What happens if you change the schema without a migration?", "back": "Room throws at runtime; you must provide a Migration and bump the version." }
+  ],
+  "quiz": [
+    { "q": "Room verifies your SQL…", "options": ["At runtime only", "At compile time", "Never", "On the server"], "answer": 1, "explain": "Invalid @Query SQL fails the build." },
+    { "q": "Returning Flow from a DAO gives you…", "options": ["A one-time read", "Reactive auto-updating queries", "A blocking call", "Encryption"], "answer": 1, "explain": "Flow emits again whenever the underlying data changes." },
+    { "q": "A schema change requires…", "options": ["Nothing", "A Migration and a version bump", "A new app", "Root access"], "answer": 1, "explain": "Without a migration Room throws at runtime." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Define an Entity, DAO and Database and insert/read a row." },
+    { "level": "Medium", "text": "Expose a Flow query and update the UI reactively." },
+    { "level": "Hard", "text": "Write a Migration that adds a column and test it." },
+    { "level": "Expert", "text": "Model a one-to-many relation with @Relation and a transaction." }
+  ],
+  "interviewQuestions": [
+    "What is Room and why use it over raw SQLite?",
+    "Explain @Entity, @Dao, @Database.",
+    "How do reactive queries work in Room?",
+    "How do you handle migrations?",
+    "How do you keep DB access off the main thread?"
+  ],
+  "references": [
+    { "label": "Android — Room", "url": "https://developer.android.com/training/data-storage/room" }
+  ]
+}

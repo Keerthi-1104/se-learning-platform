@@ -1,0 +1,49 @@
+{
+  "id": "java.sealed",
+  "levelId": 2,
+  "title": "Sealed Classes",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Restrict which types can extend a class/interface",
+    "Combine sealed types with pattern matching for exhaustiveness",
+    "Model closed hierarchies (algebraic data types)"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "A sealed class/interface (Java 17+) explicitly lists which classes may extend or implement it, giving you a closed, known set of subtypes." },
+    { "type": "code", "language": "java", "code": "sealed interface Shape permits Circle, Square {}\nrecord Circle(double r) implements Shape {}\nrecord Square(double s) implements Shape {}\n\n// Exhaustive switch — compiler knows all cases, no default needed\ndouble area(Shape s) => switch (s) {\n  case Circle c -> Math.PI*c.r()*c.r();\n  case Square q -> q.s()*q.s();\n};" },
+    { "type": "callout", "variant": "interview", "markdown": "Sealed types + records + pattern matching give Java **algebraic data types**: a fixed set of shapes the compiler can check exhaustively, eliminating the 'forgot a case' bug." },
+    { "type": "table", "headers": ["A permitted subtype must be", "Meaning"], "rows": [
+      ["final", "No further extension"],
+      ["sealed", "Continues the restriction"],
+      ["non-sealed", "Re-opens for extension"]
+    ]},
+    { "type": "callout", "variant": "tip", "markdown": "Use sealed hierarchies when the set of subtypes is meant to be closed (results, states, AST nodes). It documents intent and unlocks exhaustive switches." }
+  ],
+  "flashcards": [
+    { "front": "What does 'sealed' do?", "back": "Restricts which classes may extend/implement a type via a permits list." },
+    { "front": "What must a permitted subtype be?", "back": "final, sealed, or non-sealed." },
+    { "front": "Why combine sealed + switch?", "back": "The compiler can check the switch is exhaustive — no default needed, no missed case." }
+  ],
+  "quiz": [
+    { "q": "A sealed type…", "options": ["Can be extended by anyone", "Lists exactly which types may extend it", "Cannot be extended at all", "Is always final"], "answer": 1, "explain": "The permits clause names the allowed subtypes." },
+    { "q": "A permitted subclass may NOT be…", "options": ["final", "sealed", "non-sealed", "public-but-unrestricted"], "answer": 3, "explain": "It must be final, sealed, or non-sealed to control the hierarchy." },
+    { "q": "Sealed + records + pattern matching enables…", "options": ["Reflection", "Exhaustive, type-safe switches (ADTs)", "Faster GC", "Multithreading"], "answer": 1, "explain": "The compiler knows all cases, enabling exhaustive matching." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Define a sealed Shape with Circle and Square records." },
+    { "level": "Medium", "text": "Write an exhaustive switch over a sealed type without a default." },
+    { "level": "Hard", "text": "Model a Result = Success | Failure sealed hierarchy and handle both." },
+    { "level": "Expert", "text": "Build an expression evaluator over a sealed AST (Num, Add, Mul)." }
+  ],
+  "interviewQuestions": [
+    "What are sealed classes and why use them?",
+    "What forms can a permitted subtype take?",
+    "How do sealed types enable exhaustive switches?",
+    "Sealed types vs enums for modeling alternatives?",
+    "What are algebraic data types in Java?"
+  ],
+  "references": [
+    { "label": "JEP 409: Sealed Classes", "url": "https://openjdk.org/jeps/409" }
+  ]
+}

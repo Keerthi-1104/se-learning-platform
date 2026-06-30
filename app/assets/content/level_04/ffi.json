@@ -1,0 +1,50 @@
+{
+  "id": "flutter.ffi",
+  "levelId": 4,
+  "title": "FFI (Foreign Function Interface)",
+  "xp": 50,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Call native C libraries directly from Dart",
+    "Contrast FFI with platform channels",
+    "Manage native memory safely"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "dart:ffi lets Dart call C functions and use C data structures directly — no message serialization. It's ideal for using existing C/C++/Rust libraries (crypto, image codecs, ML, SQLite)." },
+    { "type": "code", "language": "dart", "code": "final dylib = DynamicLibrary.open('libnative.so');\nfinal add = dylib.lookupFunction<\n  Int32 Function(Int32, Int32),       // C signature\n  int Function(int, int)>('add');     // Dart signature\nfinal sum = add(2, 3);" },
+    { "type": "table", "headers": ["", "Platform channel", "FFI"], "rows": [
+      ["Crosses to", "Native platform code (Kotlin/Swift)", "C ABI libraries"],
+      ["Cost", "Async + serialization per call", "Direct, synchronous, no serialize"],
+      ["Best for", "Platform APIs (camera, sensors)", "CPU-heavy C/C++/Rust libs"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Use FFI when you need to call a C library or move lots of data cheaply (e.g., sqflite's successors, image processing). Use platform channels when you need platform services written in Kotlin/Swift. FFI is synchronous, so still offload heavy work to an isolate." },
+    { "type": "callout", "variant": "mistake", "markdown": "Leaking native memory: memory you malloc in C (via ffi) must be freed (calloc/free from package:ffi). Forgetting to free or mismatching struct layouts causes leaks and crashes." },
+    { "type": "callout", "variant": "tip", "markdown": "Wrap FFI in a safe Dart API, run heavy calls in an isolate, and use ffigen to auto-generate bindings from C headers instead of hand-writing signatures." }
+  ],
+  "flashcards": [
+    { "front": "What is dart:ffi for?", "back": "Calling C ABI functions/structs directly from Dart without serialization." },
+    { "front": "FFI vs platform channel?", "back": "FFI calls C libraries directly (sync, no serialize); channels call platform code (Kotlin/Swift) asynchronously with serialization." },
+    { "front": "Memory risk with FFI?", "back": "Native memory you allocate must be freed; mismatched struct layouts crash." }
+  ],
+  "quiz": [
+    { "q": "FFI is best for…", "options": ["Camera/sensor platform APIs", "Calling C/C++/Rust libraries", "Routing", "Theming"], "answer": 1, "explain": "FFI binds directly to C ABI libraries." },
+    { "q": "Compared to channels, FFI calls are…", "options": ["Asynchronous + serialized", "Synchronous + no serialization", "Slower always", "GPU-only"], "answer": 1, "explain": "FFI is a direct synchronous call with no message codec." },
+    { "q": "A key FFI risk is…", "options": ["Too many widgets", "Native memory leaks / struct mismatches", "Slow networking", "Hot reload"], "answer": 1, "explain": "You manage native memory and layouts yourself." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Call a C add(int,int) from a prebuilt shared library." },
+    { "level": "Medium", "text": "Pass and read a C struct via ffi, freeing memory correctly." },
+    { "level": "Hard", "text": "Generate bindings for a small C library with ffigen." },
+    { "level": "Expert", "text": "Wrap a Rust image-processing function and run it off the main isolate." }
+  ],
+  "interviewQuestions": [
+    "What is dart:ffi and when use it?",
+    "FFI vs platform channels?",
+    "How do you manage native memory with FFI?",
+    "Is FFI synchronous? How avoid blocking the UI?",
+    "What is ffigen?"
+  ],
+  "references": [
+    { "label": "Dart — C interop (FFI)", "url": "https://dart.dev/interop/c-interop" }
+  ]
+}

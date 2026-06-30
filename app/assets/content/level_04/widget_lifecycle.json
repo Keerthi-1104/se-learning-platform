@@ -1,0 +1,50 @@
+{
+  "id": "flutter.widget_lifecycle",
+  "levelId": 4,
+  "title": "Widget Lifecycle",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Order the State lifecycle methods",
+    "Use initState/dispose to manage resources",
+    "Handle didUpdateWidget and didChangeDependencies"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "The widget (State) lifecycle is the sequence of methods Flutter calls on a StatefulWidget's State as it's created, updated and removed." },
+    { "type": "code", "language": "text", "code": "createState -> initState -> didChangeDependencies -> build\n   ... parent rebuilds with new config ...\ndidUpdateWidget -> build\n   ... dependency changes ...\ndidChangeDependencies -> build\n   ... removed ...\ndeactivate -> dispose" },
+    { "type": "table", "headers": ["Method", "Use it to"], "rows": [
+      ["initState", "One-time setup: controllers, listeners, subscriptions"],
+      ["didChangeDependencies", "React to InheritedWidget changes"],
+      ["didUpdateWidget", "Respond to new widget config"],
+      ["dispose", "Release controllers/subscriptions (prevent leaks)"]
+    ]},
+    { "type": "callout", "variant": "mistake", "markdown": "Forgetting to dispose() AnimationControllers, TextEditingControllers, StreamSubscriptions, or FocusNodes — the #1 source of memory leaks in Flutter. Every controller you create in initState, dispose in dispose()." },
+    { "type": "callout", "variant": "tip", "markdown": "Never call setState in build() (infinite loop) or after dispose() (throws). Guard async callbacks with `if (mounted)` before calling setState." }
+  ],
+  "flashcards": [
+    { "front": "First lifecycle methods of State?", "back": "createState → initState → didChangeDependencies → build." },
+    { "front": "Where do you release resources?", "back": "dispose() — controllers, subscriptions, focus nodes, listeners." },
+    { "front": "When is didUpdateWidget called?", "back": "When the parent rebuilds this widget with a new configuration." }
+  ],
+  "quiz": [
+    { "q": "One-time setup belongs in…", "options": ["build", "initState", "dispose", "didUpdateWidget"], "answer": 1, "explain": "initState runs once when the State is inserted." },
+    { "q": "Failing to dispose a controller causes…", "options": ["Faster UI", "A memory leak", "A compile error", "Nothing"], "answer": 1, "explain": "Undisposed controllers/subscriptions leak memory and resources." },
+    { "q": "Before setState in an async callback, check…", "options": ["if (mounted)", "if (context)", "if (build)", "nothing"], "answer": 0, "explain": "The widget may have been disposed; mounted guards against that." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Log every lifecycle method and trigger each transition." },
+    { "level": "Medium", "text": "Create and dispose an AnimationController correctly." },
+    { "level": "Hard", "text": "Use didUpdateWidget to react to a changed parent parameter." },
+    { "level": "Expert", "text": "Reproduce and fix a setState-after-dispose crash with a mounted guard." }
+  ],
+  "interviewQuestions": [
+    "Walk through the State lifecycle.",
+    "What goes in initState vs dispose?",
+    "When is didUpdateWidget vs didChangeDependencies called?",
+    "Why and how do you guard setState with mounted?",
+    "Common causes of Flutter memory leaks?"
+  ],
+  "references": [
+    { "label": "Flutter — State class", "url": "https://api.flutter.dev/flutter/widgets/State-class.html" }
+  ]
+}

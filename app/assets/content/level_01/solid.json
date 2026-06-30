@@ -1,0 +1,52 @@
+{
+  "id": "cs.solid",
+  "levelId": 1,
+  "title": "SOLID Principles",
+  "xp": 50,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Name all five SOLID principles",
+    "Spot a violation of each",
+    "Connect DIP to testability"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "SOLID is five OO design principles that reduce coupling and increase cohesion, making code easier to extend, test and maintain." },
+    { "type": "table", "headers": ["Letter", "Principle", "Meaning"], "rows": [
+      ["S", "Single Responsibility", "One reason to change"],
+      ["O", "Open/Closed", "Open to extend, closed to modify"],
+      ["L", "Liskov Substitution", "Subtypes usable as base type"],
+      ["I", "Interface Segregation", "Many small interfaces"],
+      ["D", "Dependency Inversion", "Depend on abstractions"]
+    ]},
+    { "type": "callout", "variant": "mistake", "markdown": "**SRP violation**: a God class that validates input, hits the DB, sends emails AND formats reports. Any change risks breaking unrelated features." },
+    { "type": "callout", "variant": "mistake", "markdown": "**LSP violation**: Square extends Rectangle, but setting width also changes height, breaking code that expected a Rectangle. If a subtype surprises callers, model it differently." },
+    { "type": "code", "language": "dart", "code": "// Dependency Inversion + injection -> testable\nclass OrderService {\n  final Repository repo;       // an interface\n  OrderService(this.repo);     // injected\n}\n// Swap SqlRepository <-> ApiRepository <-> FakeRepository (tests)" },
+    { "type": "callout", "variant": "tip", "markdown": "SOLID is the foundation of Clean Architecture. DIP + injection is what lets you unit-test business logic with fakes instead of a real database." }
+  ],
+  "flashcards": [
+    { "front": "What does the 'S' stand for?", "back": "Single Responsibility — a class should have one reason to change." },
+    { "front": "Open/Closed in one line?", "back": "Open for extension, closed for modification — add behavior by adding code, not editing existing code." },
+    { "front": "How does DIP help testing?", "back": "Depending on an injected abstraction lets you substitute a fake implementation in unit tests." }
+  ],
+  "quiz": [
+    { "q": "A class with one reason to change follows…", "options": ["Open/Closed", "Single Responsibility", "Liskov", "Interface Segregation"], "answer": 1, "explain": "SRP says each class should have a single responsibility / reason to change." },
+    { "q": "Square-extends-Rectangle breaking callers violates…", "options": ["SRP", "OCP", "LSP", "ISP"], "answer": 2, "explain": "Liskov Substitution requires subtypes to behave as their base type." },
+    { "q": "Depending on abstractions, not concretions, is…", "options": ["DIP", "ISP", "LSP", "SRP"], "answer": 0, "explain": "Dependency Inversion Principle — depend on interfaces, inject implementations." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Refactor a God class into single-responsibility classes." },
+    { "level": "Medium", "text": "Add a feature by extension only (prove OCP)." },
+    { "level": "Hard", "text": "Introduce a repository interface + DI so business logic is testable with a fake." },
+    { "level": "Expert", "text": "Redesign an LSP-violating hierarchy and write tests passing for every subtype." }
+  ],
+  "interviewQuestions": [
+    "Name the SOLID principles and a violation of each.",
+    "How does Square/Rectangle violate LSP?",
+    "How does Dependency Inversion enable unit testing?",
+    "Difference between Dependency Inversion and Dependency Injection?",
+    "How do SOLID principles relate to Clean Architecture?"
+  ],
+  "references": [
+    { "label": "Refactoring Guru — SOLID", "url": "https://refactoring.guru/design-principles" }
+  ]
+}

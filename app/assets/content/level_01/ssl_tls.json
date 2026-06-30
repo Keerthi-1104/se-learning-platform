@@ -1,0 +1,50 @@
+{
+  "id": "cs.ssl_tls",
+  "levelId": 1,
+  "title": "SSL / TLS",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain what TLS guarantees and how the handshake works",
+    "Say why TLS uses both asymmetric and symmetric crypto",
+    "Describe the certificate chain of trust"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "TLS (successor to SSL) encrypts data in transit and authenticates the server (optionally the client), giving **confidentiality, integrity and authentication**." },
+    { "type": "code", "language": "text", "code": "TLS handshake (simplified):\n  1. ClientHello -> ciphers, random, SNI (hostname)\n  2. ServerHello <- chosen cipher, certificate (public key)\n  3. Client verifies cert chain up to a trusted CA\n  4. Key exchange -> both derive a shared symmetric key (ECDHE)\n  5. Finished -> data now encrypted with AES" },
+    { "type": "callout", "variant": "analogy", "markdown": "Asymmetric crypto is a **padlock you mail open**: anyone can snap it shut (encrypt with the public key) but only you can open it (private key). TLS uses this once to agree a fast shared secret, then switches to symmetric AES." },
+    { "type": "table", "headers": ["", "Asymmetric (RSA/ECDHE)", "Symmetric (AES)"], "rows": [
+      ["Keys", "Public + private pair", "One shared secret"],
+      ["Speed", "Slow", "Very fast"],
+      ["Used for", "Authenticate + exchange key", "Encrypt the data"]
+    ]},
+    { "type": "callout", "variant": "mistake", "markdown": "Disabling certificate validation ('trust all certs') to silence an SSL error in a mobile app — this defeats TLS entirely. Fix the real cert/clock/hostname issue instead." },
+    { "type": "callout", "variant": "tip", "markdown": "Use TLS 1.3, enable HSTS, automate renewal (Let's Encrypt/ACME), and consider certificate pinning for high-security mobile apps." }
+  ],
+  "flashcards": [
+    { "front": "Why does TLS use both asymmetric and symmetric crypto?", "back": "Asymmetric authenticates + exchanges a key (slow, used once); symmetric AES encrypts the bulk data (fast)." },
+    { "front": "What three things does TLS guarantee?", "back": "Confidentiality, integrity, and authentication." },
+    { "front": "What is forward secrecy?", "back": "Ephemeral keys (ECDHE) mean a stolen long-term key can't decrypt past sessions." }
+  ],
+  "quiz": [
+    { "q": "TLS bulk data encryption uses…", "options": ["RSA", "Symmetric AES", "Base64", "SHA-256"], "answer": 1, "explain": "After the handshake, fast symmetric AES encrypts the actual traffic." },
+    { "q": "Trust in a certificate comes from…", "options": ["Its file size", "A chain up to a trusted Certificate Authority", "The domain length", "The TTL"], "answer": 1, "explain": "Browsers walk the chain from server cert → intermediate → trusted root CA." },
+    { "q": "Disabling cert validation to fix an SSL error…", "options": ["Is a safe shortcut", "Improves performance", "Defeats TLS and is a critical security hole", "Is required on Android"], "answer": 2, "explain": "It removes authentication, enabling man-in-the-middle attacks." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Use openssl s_client to fetch and print a site's certificate and expiry." },
+    { "level": "Medium", "text": "Flag certificates expiring within 30 days for a list of domains." },
+    { "level": "Hard", "text": "Implement a toy Diffie-Hellman exchange; show both sides derive the same secret." },
+    { "level": "Expert", "text": "Build a tiny HTTPS server with a self-signed cert and add hostname verification on the client." }
+  ],
+  "interviewQuestions": [
+    "Walk through the TLS handshake.",
+    "Why does TLS use both asymmetric and symmetric encryption?",
+    "How does the certificate chain of trust work?",
+    "What is a man-in-the-middle attack and how does TLS prevent it?",
+    "What is certificate pinning and when is it worth it?"
+  ],
+  "references": [
+    { "label": "Let's Encrypt — How it works", "url": "https://letsencrypt.org/how-it-works/" }
+  ]
+}

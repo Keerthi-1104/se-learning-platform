@@ -1,0 +1,56 @@
+{
+  "id": "cs.design_patterns",
+  "levelId": 1,
+  "title": "Design Patterns",
+  "xp": 60,
+  "estimatedMinutes": 35,
+  "objectives": [
+    "Group patterns into creational, structural, behavioral",
+    "Recognize Singleton, Factory, Observer, Strategy, Decorator",
+    "Apply a pattern only when it removes real pain"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Design patterns are reusable, named solutions to recurring design problems (Gang of Four). They're a shared vocabulary — 'use a Factory here' communicates a whole design in two words." },
+    { "type": "table", "headers": ["Family", "Solves", "Patterns"], "rows": [
+      ["Creational", "How objects are created", "Singleton, Factory, Builder"],
+      ["Structural", "How objects compose", "Adapter, Decorator, Facade, Proxy"],
+      ["Behavioral", "How objects interact", "Observer, Strategy, Command, State"]
+    ]},
+    { "type": "code", "language": "dart", "code": "// Factory: callers ask for a button; factory picks the concrete type\nWidget buildButton(Platform p) {\n  switch (p) {\n    case ios:     return CupertinoButton();\n    case android: return MaterialButton();\n  }\n}" },
+    { "type": "table", "headers": ["Pattern", "Use when", "Real example"], "rows": [
+      ["Singleton", "Exactly one shared instance", "Logger, AppConfig"],
+      ["Factory", "Hide which subclass to create", "Platform widgets"],
+      ["Observer", "Notify many on change", "Streams, BLoC, ChangeNotifier"],
+      ["Strategy", "Swap algorithms at runtime", "Pricing/sorting policies"],
+      ["Decorator", "Add behavior dynamically", "Padding/Container; BufferedReader"]
+    ]},
+    { "type": "callout", "variant": "mistake", "markdown": "Overusing Singletons — they're global state in disguise, hurt testability, and cause threading bugs. Prefer injecting one instance over a hard Singleton." },
+    { "type": "callout", "variant": "tip", "markdown": "Patterns are tools, not goals. Reach for one only when it removes real duplication or coupling. Name the pattern after recognizing the problem, not before." }
+  ],
+  "flashcards": [
+    { "front": "Three pattern families?", "back": "Creational (creation), Structural (composition), Behavioral (interaction)." },
+    { "front": "Which pattern powers reactive UI?", "back": "Observer — a subject notifies many observers (Streams, BLoC, ChangeNotifier, RxJS)." },
+    { "front": "Strategy pattern in one line?", "back": "Encapsulate interchangeable algorithms behind a common interface and swap them at runtime." }
+  ],
+  "quiz": [
+    { "q": "Observer pattern is the basis of…", "options": ["Sorting", "Reactive UI / state management", "Encryption", "Garbage collection"], "answer": 1, "explain": "Streams, BLoC and ChangeNotifier all notify observers of state changes." },
+    { "q": "Singleton's main downside is…", "options": ["It's too fast", "Global state that hurts testability", "It can't be created", "It needs a database"], "answer": 1, "explain": "Singletons are hidden global state and make tests harder; prefer DI." },
+    { "q": "Which family does Factory belong to?", "options": ["Structural", "Behavioral", "Creational", "Concurrency"], "answer": 2, "explain": "Factory is a creational pattern — it's about how objects are created." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Implement a thread-safe Singleton logger." },
+    { "level": "Medium", "text": "Build a notification Factory returning Email/SMS/Push senders." },
+    { "level": "Hard", "text": "Implement Observer from scratch and drive a UI counter." },
+    { "level": "Expert", "text": "Design a payment pipeline combining Strategy + Decorator + Factory." }
+  ],
+  "interviewQuestions": [
+    "What problem does Singleton solve and what are its downsides?",
+    "Factory vs Abstract Factory vs Builder?",
+    "How is Observer used in state management?",
+    "Strategy vs State pattern?",
+    "Where have you used the Repository pattern?"
+  ],
+  "references": [
+    { "label": "Refactoring Guru — Design Patterns", "url": "https://refactoring.guru/design-patterns" }
+  ]
+}

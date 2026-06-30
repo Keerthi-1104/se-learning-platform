@@ -1,0 +1,54 @@
+{
+  "id": "cs.data_structures",
+  "levelId": 1,
+  "title": "Data Structures",
+  "xp": 60,
+  "estimatedMinutes": 40,
+  "objectives": [
+    "Pick a structure by its dominant operation",
+    "Explain how a hash table achieves O(1) average",
+    "Know when trees, heaps and tries win"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "A data structure organizes data so specific operations (insert, search, delete, traverse) are efficient. Choosing the right one often decides pass vs fail." },
+    { "type": "table", "headers": ["Structure", "Search", "Insert", "Strength"], "rows": [
+      ["Array", "O(n)", "O(n)", "Index, cache-friendly"],
+      ["Linked list", "O(n)", "O(1) ends", "Cheap end insert"],
+      ["Hash table", "O(1)*", "O(1)*", "Fast key lookup"],
+      ["Balanced BST", "O(log n)", "O(log n)", "Sorted + fast"],
+      ["Heap", "O(n)", "O(log n)", "Priority queue"],
+      ["Trie", "O(L)", "O(L)", "Prefix search"]
+    ]},
+    { "type": "code", "language": "text", "code": "Hash table:\n  index = hash(key) % capacity\n  collisions -> chaining (list per bucket) or open addressing\n  high load factor -> resize & rehash (keeps O(1) average)" },
+    { "type": "callout", "variant": "interview", "markdown": "Hash tables are the most-used structure in interviews — they turn many O(n²) brute forces into O(n). When you think 'have I seen this?' or 'count occurrences', reach for a map/set." },
+    { "type": "callout", "variant": "mistake", "markdown": "Using a linked list when you need random access, or an array when you do many middle insertions. Match the structure to the dominant operation, not habit." }
+  ],
+  "flashcards": [
+    { "front": "How does a hash table get O(1)?", "back": "It maps a key to a bucket via a hash; collisions are chained or probed, and it resizes to keep the load factor low." },
+    { "front": "Array vs linked list?", "back": "Array: O(1) index, cache-friendly. Linked list: O(1) insert at ends, O(n) access." },
+    { "front": "When use a trie?", "back": "Prefix queries — autocomplete, spell-check — keyed by characters." },
+    { "front": "When use a heap?", "back": "When you repeatedly need the min/max — priority queues, Dijkstra, top-k." }
+  ],
+  "quiz": [
+    { "q": "Best average-case lookup belongs to…", "options": ["Array", "Linked list", "Hash table", "Stack"], "answer": 2, "explain": "Hash tables give O(1) average lookup; arrays/lists are O(n) for search." },
+    { "q": "A balanced BST keeps operations at…", "options": ["O(1)", "O(log n)", "O(n)", "O(n log n)"], "answer": 1, "explain": "Balancing (AVL/Red-Black) keeps height ~log n, so search/insert/delete are O(log n)." },
+    { "q": "Which structure powers autocomplete?", "options": ["Heap", "Trie", "Stack", "Queue"], "answer": 1, "explain": "A trie is keyed by characters, making prefix search natural." },
+    { "q": "Arrays beat linked lists in practice mainly due to…", "options": ["Simpler syntax", "Cache-friendly contiguous memory", "Lower Big-O", "Encryption"], "answer": 1, "explain": "Contiguous storage gives spatial locality, so the CPU cache helps." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Two Sum using a hash map in O(n)." },
+    { "level": "Medium", "text": "Implement a min-heap (insert, extract-min, heapify)." },
+    { "level": "Hard", "text": "Design an LRU cache with O(1) get/put (hash map + doubly linked list)." },
+    { "level": "Expert", "text": "Implement a trie with insert/search/startsWith and wildcard search." }
+  ],
+  "interviewQuestions": [
+    "Array vs linked list — when use each?",
+    "How does a hash table handle collisions?",
+    "What is a balanced BST and why does balance matter?",
+    "How would you implement an LRU cache in O(1)?",
+    "Adjacency list vs matrix for graphs?"
+  ],
+  "references": [
+    { "label": "VisuAlgo — data structure visualizations", "url": "https://visualgo.net" }
+  ]
+}

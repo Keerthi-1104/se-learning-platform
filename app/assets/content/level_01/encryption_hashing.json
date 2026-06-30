@@ -1,0 +1,51 @@
+{
+  "id": "cs.encryption_hashing",
+  "levelId": 1,
+  "title": "Encryption & Hashing",
+  "xp": 50,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Separate encoding, hashing and encryption by purpose",
+    "Pick the right tool for passwords, integrity and confidentiality",
+    "Explain why salts matter"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "mistake", "markdown": "The most common security confusion: treating **encoding, hashing and encryption** as interchangeable. They solve completely different problems." },
+    { "type": "table", "headers": ["", "Encoding", "Hashing", "Encryption"], "rows": [
+      ["Goal", "Format/transport", "Integrity / passwords", "Confidentiality"],
+      ["Reversible?", "Yes (no key)", "No (one-way)", "Yes (with key)"],
+      ["Examples", "Base64, UTF-8", "SHA-256, bcrypt", "AES, RSA"]
+    ]},
+    { "type": "callout", "variant": "analogy", "markdown": "Encoding is **Morse code** — anyone with the chart reads it back. Encryption is writing in a language only you and your friend share a key for." },
+    { "type": "theory", "markdown": "## Hashing\n- **One-way**: can't reverse it.\n- **Deterministic**: same input → same hash; tiny change → totally different (avalanche).\n- **Fixed length** regardless of input size." },
+    { "type": "callout", "variant": "mistake", "markdown": "Using fast hashes (MD5, SHA-1, plain SHA-256) for passwords — attackers brute-force billions/sec. Use slow, salted hashes: bcrypt, scrypt, argon2." },
+    { "type": "callout", "variant": "note", "markdown": "**Salt** = random per-password value added before hashing so identical passwords get different hashes and rainbow tables fail." },
+    { "type": "callout", "variant": "perf", "markdown": "Hybrid/envelope encryption: use slow asymmetric crypto once to share a fast symmetric key, then AES for the data — exactly what TLS and KMS do." }
+  ],
+  "flashcards": [
+    { "front": "Encoding vs hashing vs encryption?", "back": "Encoding = reversible formatting (no key). Hashing = one-way digest. Encryption = reversible with a key." },
+    { "front": "Why salt password hashes?", "back": "So identical passwords hash differently, defeating rainbow tables and precomputation." },
+    { "front": "Symmetric vs asymmetric?", "back": "Symmetric (AES) = one shared key, fast. Asymmetric (RSA/ECC) = public/private pair, enables key exchange + signatures." }
+  ],
+  "quiz": [
+    { "q": "Base64 is…", "options": ["Encryption", "Hashing", "Encoding (reversible, no key)", "A signature"], "answer": 2, "explain": "Base64 just reformats bytes to ASCII — anyone can decode it. It is not security." },
+    { "q": "Best choice for storing passwords?", "options": ["Plain text", "MD5", "Salted bcrypt/argon2", "Base64"], "answer": 2, "explain": "Slow, salted hashes resist brute force; fast hashes and encoding do not." },
+    { "q": "Which is one-way (not reversible)?", "options": ["AES", "Hashing", "Base64", "RSA"], "answer": 1, "explain": "Hashing cannot be reversed to the original input; encryption can with a key." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Encode/decode a string to Base64 and URL-encoding; show round-trip equality." },
+    { "level": "Medium", "text": "Hash passwords with a salt using bcrypt; verify correct and reject wrong ones." },
+    { "level": "Hard", "text": "Encrypt and decrypt a file with AES-256-GCM, handling IV and auth tag." },
+    { "level": "Expert", "text": "Sign a message with RSA/ECDSA and verify with the public key." }
+  ],
+  "interviewQuestions": [
+    "Difference between encoding, hashing and encryption?",
+    "Why is Base64 not encryption?",
+    "Why salt password hashes? What attack does it stop?",
+    "Why bcrypt/argon2 instead of SHA-256 for passwords?",
+    "What is a digital signature?"
+  ],
+  "references": [
+    { "label": "OWASP Password Storage Cheat Sheet", "url": "https://cheatsheetseries.owasp.org" }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "id": "java.jvm",
+  "levelId": 2,
+  "title": "JVM Internals",
+  "xp": 50,
+  "estimatedMinutes": 30,
+  "objectives": [
+    "Describe the JVM runtime memory areas",
+    "Explain class loading and JIT compilation",
+    "Read a stack trace and OutOfMemoryError types"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "The JVM is the virtual machine that loads, verifies and executes Java bytecode, manages memory, and JIT-compiles hot code to native instructions." },
+    { "type": "code", "language": "text", "code": "JVM memory:\n  Heap        -> objects (GC-managed): Young (Eden+Survivor) + Old\n  Metaspace   -> class metadata (native memory, replaced PermGen in Java 8)\n  Stack       -> one per thread: frames, locals, partial results\n  PC register -> current instruction per thread\n  Native stack-> JNI calls" },
+    { "type": "theory", "markdown": "## Class loading\n- **Loading** → **Linking** (verify, prepare, resolve) → **Initialization**.\n- Loaders are hierarchical: Bootstrap → Platform → Application, using parent-delegation." },
+    { "type": "callout", "variant": "interview", "markdown": "JIT: the JVM starts interpreting bytecode, profiles 'hot' methods, then compiles them to optimized native code (C1/C2 tiers). This is why a long-running JVM gets faster over time (warm-up)." },
+    { "type": "callout", "variant": "note", "markdown": "OutOfMemoryError flavors: 'Java heap space' (too many live objects), 'Metaspace' (too many classes), 'unable to create native thread' (thread/OS limit). The message tells you where to look." }
+  ],
+  "flashcards": [
+    { "front": "Heap vs stack in the JVM?", "back": "Heap holds objects (shared, GC-managed); each thread has its own stack of frames with locals and call info." },
+    { "front": "What replaced PermGen in Java 8?", "back": "Metaspace, which stores class metadata in native memory and grows dynamically." },
+    { "front": "What does the JIT do?", "back": "Profiles hot methods and compiles them from bytecode to optimized native code at runtime." }
+  ],
+  "quiz": [
+    { "q": "Where do Java objects live?", "options": ["The stack", "The heap", "The PC register", "Metaspace"], "answer": 1, "explain": "Objects are allocated on the GC-managed heap; locals/refs live on the stack." },
+    { "q": "Class metadata in Java 8+ is stored in…", "options": ["PermGen", "Metaspace", "The Eden space", "The stack"], "answer": 1, "explain": "Metaspace (native memory) replaced PermGen in Java 8." },
+    { "q": "Why does a JVM app speed up after warm-up?", "options": ["GC stops running", "JIT compiles hot code to native", "The heap shrinks", "Threads merge"], "answer": 1, "explain": "Tiered JIT compilation optimizes frequently executed methods." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Trigger and read a StackOverflowError via deep recursion." },
+    { "level": "Medium", "text": "Use -Xmx to force and diagnose a Java heap space OOM." },
+    { "level": "Hard", "text": "Inspect a running JVM with jcmd/jstack/jmap and summarize threads and heap." },
+    { "level": "Expert", "text": "Write a custom ClassLoader that loads a class from bytes at runtime." }
+  ],
+  "interviewQuestions": [
+    "Describe the JVM memory areas.",
+    "Stack vs heap — what lives where?",
+    "Explain class loading and parent delegation.",
+    "What is the JIT compiler and tiered compilation?",
+    "Types of OutOfMemoryError and how you'd debug each?"
+  ],
+  "references": [
+    { "label": "The JVM Specification", "url": "https://docs.oracle.com/javase/specs/" }
+  ]
+}

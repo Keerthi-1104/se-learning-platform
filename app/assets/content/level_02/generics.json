@@ -1,0 +1,45 @@
+{
+  "id": "java.generics",
+  "levelId": 2,
+  "title": "Generics",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Use generic types and methods for type safety",
+    "Apply bounded wildcards (PECS)",
+    "Understand type erasure and its limits"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Generics let you write classes and methods parameterized over types, giving compile-time type safety and removing casts." },
+    { "type": "code", "language": "java", "code": "class Box<T> { T value; T get() { return value; } }\n// Bounded + wildcards (PECS: Producer Extends, Consumer Super)\nvoid copy(List<? extends Number> src, List<? super Number> dst) { ... }" },
+    { "type": "callout", "variant": "interview", "markdown": "**PECS** — Producer Extends, Consumer Super. Use `? extends T` when you only read from a structure, `? super T` when you only write to it." },
+    { "type": "callout", "variant": "note", "markdown": "Generics use **type erasure**: type parameters exist at compile time and are erased at runtime. So you can't do `new T()` or `instanceof List<String>`." },
+    { "type": "callout", "variant": "mistake", "markdown": "Using raw types (`List` instead of `List<String>`) — it disables generic checks and invites ClassCastException at runtime. Always parameterize." }
+  ],
+  "flashcards": [
+    { "front": "What does PECS mean?", "back": "Producer Extends, Consumer Super: read with ? extends T, write with ? super T." },
+    { "front": "What is type erasure?", "back": "Generic type info is removed at runtime; the JVM sees raw types, so no new T() or generic instanceof." },
+    { "front": "Why avoid raw types?", "back": "They bypass compile-time checks and reintroduce ClassCastException risk." }
+  ],
+  "quiz": [
+    { "q": "`List<? extends Number>` lets you…", "options": ["Add any Number", "Only read elements as Number", "Only add Integers", "Nothing"], "answer": 1, "explain": "An upper-bounded wildcard is a producer — you read, you can't safely add." },
+    { "q": "Generics in Java are implemented via…", "options": ["Reified types", "Type erasure", "Macros", "Reflection only"], "answer": 1, "explain": "Type parameters are erased at runtime (unlike C# reified generics)." },
+    { "q": "Why can't you write `new T()`?", "options": ["T is final", "T is erased at runtime", "It's too slow", "T must be abstract"], "answer": 1, "explain": "Erasure means the runtime doesn't know T's actual type." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Write a generic max(List<T extends Comparable<T>>) method." },
+    { "level": "Medium", "text": "Implement a generic Stack<T> with push/pop/peek." },
+    { "level": "Hard", "text": "Write a copy method using PECS bounded wildcards correctly." },
+    { "level": "Expert", "text": "Build a type-safe heterogeneous container using Class<T> as keys." }
+  ],
+  "interviewQuestions": [
+    "What problem do generics solve?",
+    "Explain PECS with an example.",
+    "What is type erasure and its consequences?",
+    "Why are raw types discouraged?",
+    "Can you create a generic array? Why or why not?"
+  ],
+  "references": [
+    { "label": "Java Generics — Baeldung", "url": "https://www.baeldung.com/java-generics" }
+  ]
+}

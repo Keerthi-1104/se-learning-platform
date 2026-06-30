@@ -1,0 +1,50 @@
+{
+  "id": "android.performance",
+  "levelId": 3,
+  "title": "Performance Optimization",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Avoid jank by keeping the main thread free",
+    "Diagnose memory leaks and overdraw",
+    "Use the right profiling tools"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Android performance is about rendering each frame within ~16ms (60fps), using memory efficiently, and starting fast. Dropped frames ('jank') usually mean the main thread is doing too much." },
+    { "type": "table", "headers": ["Problem", "Cause", "Fix"], "rows": [
+      ["Jank / dropped frames", "Work on main thread", "Move to coroutine/background"],
+      ["Memory leak", "Long-lived refs to Context/View", "Use App context, clear refs"],
+      ["Overdraw", "Stacked opaque backgrounds", "Flatten layout, remove bg"],
+      ["Slow startup", "Heavy work in onCreate/App", "Defer, lazy-init, App Startup"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "The classic Android leak: holding an Activity Context in a static field or a long-lived singleton. The Activity can't be GC'd after it's destroyed. Use the application Context for long-lived needs and detect leaks with LeakCanary." },
+    { "type": "callout", "variant": "mistake", "markdown": "Loading full-resolution bitmaps into small ImageViews — a leading cause of OOM. Downsample (inSampleSize) or use an image library (Glide/Coil) that handles sizing and caching." },
+    { "type": "callout", "variant": "tip", "markdown": "Measure before optimizing. Use Android Studio Profiler (CPU/Memory/Network), Layout Inspector for overdraw, Macrobenchmark for startup, and LeakCanary for leaks." }
+  ],
+  "flashcards": [
+    { "front": "Frame budget for 60fps?", "back": "~16ms per frame; exceeding it drops frames (jank)." },
+    { "front": "Most common Android memory leak?", "back": "Holding an Activity Context/View in a static or long-lived object." },
+    { "front": "Why downsample bitmaps?", "back": "Full-res images in small views waste memory and cause OOM; downsample or use Glide/Coil." }
+  ],
+  "quiz": [
+    { "q": "Jank is usually caused by…", "options": ["Too much RAM", "Heavy work on the main thread", "Fast networking", "Dark mode"], "answer": 1, "explain": "Blocking the UI thread misses the frame deadline." },
+    { "q": "A common leak source is…", "options": ["Application context", "Static reference to an Activity/View", "Local variables", "Coroutines in viewModelScope"], "answer": 1, "explain": "Static Activity refs prevent garbage collection." },
+    { "q": "Best first step to optimize?", "options": ["Guess and rewrite", "Measure with the Profiler", "Add more threads", "Disable GC"], "answer": 1, "explain": "Profile to find the real bottleneck before changing code." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Find a janky screen with the Profiler and move work off the main thread." },
+    { "level": "Medium", "text": "Add LeakCanary, reproduce a leak, and fix it." },
+    { "level": "Hard", "text": "Reduce overdraw on a screen using the Layout Inspector." },
+    { "level": "Expert", "text": "Measure and cut app startup time with Macrobenchmark and lazy init." }
+  ],
+  "interviewQuestions": [
+    "What causes jank and how do you fix it?",
+    "How do Android memory leaks happen?",
+    "How do you handle large images efficiently?",
+    "What tools do you use to profile an app?",
+    "How do you improve app startup time?"
+  ],
+  "references": [
+    { "label": "Android — App performance", "url": "https://developer.android.com/topic/performance" }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "id": "java.functional",
+  "levelId": 2,
+  "title": "Functional Programming",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Apply pure functions and immutability",
+    "Use Optional to model absence",
+    "Compose behavior with higher-order functions"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Functional programming treats computation as the evaluation of pure functions, favoring immutability, no side effects, and functions as first-class values." },
+    { "type": "theory", "markdown": "## Core ideas\n- **Pure function**: same input → same output, no side effects.\n- **Immutability**: data isn't modified in place.\n- **Higher-order functions**: take/return functions.\n- **Declarative**: say what, not how (streams over loops)." },
+    { "type": "code", "language": "java", "code": "// Optional models 'maybe absent' without nulls\nOptional<User> u = repo.findById(id);\nString name = u.map(User::name).orElse(\"guest\");" },
+    { "type": "callout", "variant": "mistake", "markdown": "Calling Optional.get() without checking presence — it throws NoSuchElementException, recreating the NPE you tried to avoid. Use map/filter/orElse instead." },
+    { "type": "callout", "variant": "tip", "markdown": "Don't use Optional for fields or method parameters — it's designed for return types signaling 'may be absent'. Keep functions pure where practical for easy testing and concurrency." }
+  ],
+  "flashcards": [
+    { "front": "What is a pure function?", "back": "Same input always gives the same output, with no side effects." },
+    { "front": "What is Optional for?", "back": "A return type expressing 'value may be absent', avoiding null checks via map/orElse." },
+    { "front": "Higher-order function?", "back": "A function that takes or returns other functions (map, filter, compose)." }
+  ],
+  "quiz": [
+    { "q": "A pure function must…", "options": ["Print logs", "Have no side effects and be deterministic", "Mutate globals", "Use threads"], "answer": 1, "explain": "Purity means deterministic output and no observable side effects." },
+    { "q": "Optional is best used as a…", "options": ["Field type", "Method parameter", "Return type for maybe-absent values", "Replacement for all variables"], "answer": 2, "explain": "Optional is designed for return values signaling possible absence." },
+    { "q": "Calling get() on an empty Optional…", "options": ["Returns null", "Throws NoSuchElementException", "Returns 0", "Blocks"], "answer": 1, "explain": "It throws — defeating the point. Use orElse/map." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Rewrite a null-check chain using Optional.map/orElse." },
+    { "level": "Medium", "text": "Implement a pure function pipeline that transforms a list without mutation." },
+    { "level": "Hard", "text": "Build a small Result<T> type for error handling without exceptions." },
+    { "level": "Expert", "text": "Implement function memoization for a pure expensive function." }
+  ],
+  "interviewQuestions": [
+    "What is a pure function and why does it help?",
+    "How does Optional improve on null?",
+    "What is a higher-order function?",
+    "Why does immutability simplify concurrency?",
+    "Imperative vs declarative style?"
+  ],
+  "references": [
+    { "label": "Optional — Baeldung", "url": "https://www.baeldung.com/java-optional" }
+  ]
+}

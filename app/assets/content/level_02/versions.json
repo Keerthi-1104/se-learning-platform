@@ -1,0 +1,59 @@
+{
+  "id": "java.versions",
+  "levelId": 2,
+  "title": "Java 8 → Latest LTS",
+  "xp": 50,
+  "estimatedMinutes": 30,
+  "objectives": [
+    "Know the headline features of each major release",
+    "Identify the LTS versions and why they matter",
+    "Plan a migration from Java 8"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Since Java 9, a new feature release ships every 6 months, with a Long-Term Support (LTS) release roughly every 2–3 years (8, 11, 17, 21). Most companies target LTS versions." },
+    { "type": "table", "headers": ["Version", "Year", "Headline features"], "rows": [
+      ["8 (LTS)", "2014", "Lambdas, Streams, Optional, default methods"],
+      ["11 (LTS)", "2018", "var in lambdas, HttpClient, single-file run"],
+      ["17 (LTS)", "2021", "Sealed classes, records (16), pattern switch (preview)"],
+      ["21 (LTS)", "2023", "Virtual threads, record patterns, sequenced collections"]
+    ]},
+    { "type": "table", "headers": ["Feature", "Introduced"], "rows": [
+      ["Lambdas & Streams", "Java 8"],
+      ["Modules (JPMS)", "Java 9"],
+      ["var (local inference)", "Java 10"],
+      ["Switch expressions", "Java 14"],
+      ["Text blocks", "Java 15"],
+      ["Records", "Java 16"],
+      ["Sealed classes", "Java 17"],
+      ["Virtual threads", "Java 21"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Know which version introduced what — a classic question. Anchor it: 8 = functional Java; 11 = first modern LTS; 17 = records/sealed; 21 = virtual threads." },
+    { "type": "callout", "variant": "mistake", "markdown": "Migrating off Java 8 and hitting removed/internal APIs (sun.misc.Unsafe, JAXB/Java EE modules removed in 11) and the module system. Plan dependency upgrades and run jdeps first." }
+  ],
+  "flashcards": [
+    { "front": "Which Java versions are LTS?", "back": "8, 11, 17, 21 (a new LTS roughly every 2–3 years)." },
+    { "front": "What landed in Java 8?", "back": "Lambdas, the Streams API, Optional, default methods — functional Java." },
+    { "front": "What landed in Java 21?", "back": "Virtual threads, record patterns, sequenced collections (all final)." }
+  ],
+  "quiz": [
+    { "q": "Which versions are LTS?", "options": ["9, 10, 12", "8, 11, 17, 21", "All of them", "Only 8"], "answer": 1, "explain": "8, 11, 17 and 21 are the LTS releases most teams target." },
+    { "q": "Records were introduced in…", "options": ["Java 8", "Java 11", "Java 16", "Java 21"], "answer": 2, "explain": "Records arrived as a standard feature in Java 16." },
+    { "q": "Virtual threads were finalized in…", "options": ["Java 11", "Java 17", "Java 21", "Java 8"], "answer": 2, "explain": "Project Loom's virtual threads were finalized in Java 21." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Convert anonymous classes to lambdas across a Java 8 codebase." },
+    { "level": "Medium", "text": "Replace verbose switches with Java 14 switch expressions and text blocks." },
+    { "level": "Hard", "text": "Refactor a DTO + visitor design to records + sealed + pattern matching (17+)." },
+    { "level": "Expert", "text": "Plan and execute a Java 8 → 17 migration: run jdeps, fix removed APIs, update build." }
+  ],
+  "interviewQuestions": [
+    "Which Java versions are LTS and why does that matter?",
+    "Name key features added in 8, 11, 17 and 21.",
+    "What challenges arise migrating off Java 8?",
+    "What is the Java module system (JPMS)?",
+    "Switch statement vs switch expression?"
+  ],
+  "references": [
+    { "label": "OpenJDK releases", "url": "https://openjdk.org/projects/jdk/" }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "id": "flutter.packages",
+  "levelId": 4,
+  "title": "Package Development",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Distinguish a Dart package, Flutter plugin and FFI plugin",
+    "Structure and publish a reusable package",
+    "Apply versioning and good API design"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "A package is reusable code published to pub.dev (or used locally). A pure Dart package has no platform code; a plugin adds native (platform-channel or FFI) implementations per platform." },
+    { "type": "table", "headers": ["Type", "Contains", "Example"], "rows": [
+      ["Dart package", "Pure Dart", "intl, collection"],
+      ["Plugin (federated)", "Dart + native per platform", "camera, geolocator"],
+      ["FFI plugin", "Dart + C/C++", "sqlite3, crypto libs"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Modern plugins are 'federated': a platform-interface package defines the contract, and each platform (android/ios/web) provides its own implementation package. This lets third parties add platform support without touching the core." },
+    { "type": "callout", "variant": "note", "markdown": "Use semantic versioning (MAJOR.MINOR.PATCH): breaking changes bump MAJOR. A clear CHANGELOG, example app, tests, and good doc comments earn pub.dev points and adoption." },
+    { "type": "callout", "variant": "tip", "markdown": "Design a small, stable public API; keep internals in src/ (not exported). Add example/, write tests, and run `dart pub publish --dry-run` before releasing." }
+  ],
+  "flashcards": [
+    { "front": "Package vs plugin?", "back": "A package is pure Dart; a plugin adds native platform implementations (channels or FFI)." },
+    { "front": "What is a federated plugin?", "back": "A platform-interface + separate per-platform implementation packages, so support can be added independently." },
+    { "front": "What is semantic versioning?", "back": "MAJOR.MINOR.PATCH — MAJOR for breaking changes, MINOR for features, PATCH for fixes." }
+  ],
+  "quiz": [
+    { "q": "A pure Dart package contains…", "options": ["Native code per platform", "Only Dart code", "C++ only", "Just assets"], "answer": 1, "explain": "Plugins add native code; pure packages are Dart-only." },
+    { "q": "Federated plugins split into…", "options": ["One giant file", "Platform-interface + per-platform implementations", "Only Android", "Only Dart"], "answer": 1, "explain": "An interface package plus implementation packages per platform." },
+    { "q": "A breaking change bumps the…", "options": ["PATCH", "MINOR", "MAJOR", "Build number"], "answer": 2, "explain": "Semantic versioning increments MAJOR for breaking changes." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Create a pure Dart package with a tested utility function." },
+    { "level": "Medium", "text": "Build a Flutter plugin exposing one native method via a channel." },
+    { "level": "Hard", "text": "Make the plugin federated with a platform interface + Android/iOS impls." },
+    { "level": "Expert", "text": "Publish a package to pub.dev with example, tests, CI, and semantic versioning." }
+  ],
+  "interviewQuestions": [
+    "Package vs plugin vs FFI plugin?",
+    "What is a federated plugin and why?",
+    "How do you version and publish a package?",
+    "How do you design a good public API?",
+    "What earns pub.dev points?"
+  ],
+  "references": [
+    { "label": "Flutter — Developing packages & plugins", "url": "https://docs.flutter.dev/packages-and-plugins/developing-packages" }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "id": "android.intents",
+  "levelId": 3,
+  "title": "Intents",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Distinguish explicit from implicit intents",
+    "Pass data with extras and get results",
+    "Understand intent filters and pending intents"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "An Intent is a messaging object used to request an action from a component — start an Activity/Service, deliver a broadcast, or ask another app to handle something (share, dial, open a URL)." },
+    { "type": "table", "headers": ["Type", "Target", "Example"], "rows": [
+      ["Explicit", "A named component", "Open MainActivity"],
+      ["Implicit", "Any app that can handle it", "ACTION_VIEW a URL, share text"]
+    ]},
+    { "type": "code", "language": "kotlin", "code": "// Explicit\nstartActivity(Intent(this, DetailActivity::class.java).putExtra(\"id\", 42))\n// Implicit\nstartActivity(Intent(Intent.ACTION_VIEW, Uri.parse(\"https://gs1.org\")))" },
+    { "type": "callout", "variant": "note", "markdown": "Implicit intents are matched against **intent filters** declared in other apps' manifests. A **PendingIntent** wraps an intent so another app/system (notifications, alarms) can run it later with your permissions." },
+    { "type": "callout", "variant": "tip", "markdown": "Use the Activity Result APIs (registerForActivityResult) instead of the deprecated startActivityForResult for cleaner, type-safe results." }
+  ],
+  "flashcards": [
+    { "front": "Explicit vs implicit intent?", "back": "Explicit names a specific component; implicit declares an action and lets any capable app handle it." },
+    { "front": "What is an intent filter?", "back": "A manifest declaration saying which implicit intents a component can handle." },
+    { "front": "What is a PendingIntent?", "back": "A token wrapping an intent so another app/system can execute it later with your app's identity." }
+  ],
+  "quiz": [
+    { "q": "To open a specific Activity in your app, use…", "options": ["Implicit intent", "Explicit intent", "Broadcast", "ContentProvider"], "answer": 1, "explain": "Explicit intents name the exact target component." },
+    { "q": "Implicit intents are resolved via…", "options": ["Intent filters", "Gradle", "ViewModels", "Coroutines"], "answer": 0, "explain": "The system matches the action/data against declared intent filters." },
+    { "q": "A notification action should use a…", "options": ["Direct startActivity", "PendingIntent", "BroadcastReceiver only", "Service only"], "answer": 1, "explain": "Notifications run later/in another process, so they need a PendingIntent." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Start a second activity and pass an extra; read it on the other side." },
+    { "level": "Medium", "text": "Use an implicit ACTION_SEND intent to share text/an image." },
+    { "level": "Hard", "text": "Return a result using registerForActivityResult." },
+    { "level": "Expert", "text": "Declare an intent filter so your app appears in the share sheet for a custom type." }
+  ],
+  "interviewQuestions": [
+    "Explicit vs implicit intents?",
+    "What is an intent filter?",
+    "What is a PendingIntent and when is it needed?",
+    "How do you pass data between components?",
+    "How do you get a result back from an activity (modern API)?"
+  ],
+  "references": [
+    { "label": "Android — Intents", "url": "https://developer.android.com/guide/components/intents-filters" }
+  ]
+}

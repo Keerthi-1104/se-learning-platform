@@ -1,0 +1,50 @@
+{
+  "id": "flutter.platform_channels",
+  "levelId": 4,
+  "title": "Platform Channels",
+  "xp": 50,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Call native code from Dart and back",
+    "Choose Method/Event/Basic message channels",
+    "Handle threading and serialization correctly"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Platform channels are the bridge between Dart and native (Kotlin/Java, Swift/Obj-C) code. Messages are serialized and passed asynchronously across the channel by name." },
+    { "type": "table", "headers": ["Channel", "Use"], "rows": [
+      ["MethodChannel", "Call a native method, get a result"],
+      ["EventChannel", "Stream events from native to Dart (sensors, location)"],
+      ["BasicMessageChannel", "Send arbitrary messages both ways"]
+    ]},
+    { "type": "code", "language": "dart", "code": "const ch = MethodChannel('app/battery');\nfinal level = await ch.invokeMethod<int>('getBatteryLevel');" },
+    { "type": "callout", "variant": "interview", "markdown": "Channels are asynchronous and use a standard message codec (numbers, strings, lists, maps, bytes). Heavy/synchronous data (lots of bytes) is better moved via FFI or shared memory than serialized over a channel each call." },
+    { "type": "callout", "variant": "mistake", "markdown": "Doing long native work on the platform main thread (blocks the UI), or assuming channel calls are synchronous — they're always async. Use a background thread/dispatcher natively and return via the result callback." },
+    { "type": "callout", "variant": "tip", "markdown": "Wrap channels in a typed Dart API (a plugin) so the rest of the app doesn't touch raw invokeMethod. Match method names and argument shapes exactly on both sides." }
+  ],
+  "flashcards": [
+    { "front": "What are platform channels for?", "back": "Calling native platform code from Dart (and streaming back), via named, serialized async messages." },
+    { "front": "MethodChannel vs EventChannel?", "back": "MethodChannel for request/response calls; EventChannel for a stream of native events." },
+    { "front": "Are channel calls sync or async?", "back": "Always asynchronous; results come back via Futures/streams." }
+  ],
+  "quiz": [
+    { "q": "To stream sensor events from native to Dart, use…", "options": ["MethodChannel", "EventChannel", "FFI only", "A Future"], "answer": 1, "explain": "EventChannel exposes a native stream to Dart." },
+    { "q": "Platform channel calls are…", "options": ["Synchronous", "Asynchronous", "GPU calls", "Database queries"], "answer": 1, "explain": "Messages cross the boundary asynchronously." },
+    { "q": "For large byte transfers prefer…", "options": ["More MethodChannel calls", "FFI / shared memory", "JSON strings", "EventChannel"], "answer": 1, "explain": "FFI avoids per-call serialization overhead for heavy data." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Call a native method that returns the battery level." },
+    { "level": "Medium", "text": "Stream accelerometer events to Dart via EventChannel." },
+    { "level": "Hard", "text": "Run heavy native work off the main thread and return a result." },
+    { "level": "Expert", "text": "Wrap a native SDK in a typed Flutter plugin with method + event channels." }
+  ],
+  "interviewQuestions": [
+    "What are platform channels and how do they work?",
+    "MethodChannel vs EventChannel vs BasicMessageChannel?",
+    "Are channel calls sync or async?",
+    "How do you avoid blocking the UI from native work?",
+    "When use FFI instead of a channel?"
+  ],
+  "references": [
+    { "label": "Flutter — Platform channels", "url": "https://docs.flutter.dev/platform-integration/platform-channels" }
+  ]
+}

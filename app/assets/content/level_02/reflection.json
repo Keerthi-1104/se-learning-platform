@@ -1,0 +1,45 @@
+{
+  "id": "java.reflection",
+  "levelId": 2,
+  "title": "Reflection",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Inspect and invoke members at runtime",
+    "Understand annotations + reflection powering frameworks",
+    "Weigh reflection's costs and risks"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Reflection lets a program inspect and manipulate classes, methods and fields at runtime — even private ones — without knowing them at compile time." },
+    { "type": "code", "language": "java", "code": "Class<?> c = Class.forName(\"com.app.User\");\nObject u = c.getDeclaredConstructor().newInstance();\nMethod m = c.getMethod(\"setName\", String.class);\nm.invoke(u, \"Ada\");\nField f = c.getDeclaredField(\"id\");\nf.setAccessible(true); // bypass private" },
+    { "type": "callout", "variant": "interview", "markdown": "Reflection + annotations power frameworks: Spring's @Autowired/@Component, JUnit discovering @Test methods, Jackson mapping JSON to fields, Hibernate mapping entities. Understanding it demystifies 'magic'." },
+    { "type": "callout", "variant": "mistake", "markdown": "Overusing reflection in app code — it's slower, breaks compile-time safety, bypasses encapsulation, and can fail under the module system / security managers. Prefer interfaces and direct calls." },
+    { "type": "callout", "variant": "perf", "markdown": "Reflective calls are much slower than direct calls (no inlining). Cache Method/Field lookups, or use MethodHandles/code generation in hot paths." }
+  ],
+  "flashcards": [
+    { "front": "What is reflection?", "back": "Runtime inspection and invocation of classes/methods/fields, including private members." },
+    { "front": "Which frameworks rely on reflection?", "back": "Spring (DI), JUnit (test discovery), Jackson/Gson (JSON), Hibernate (ORM)." },
+    { "front": "Downsides of reflection?", "back": "Slower, no compile-time checks, breaks encapsulation, fragile under modules/security." }
+  ],
+  "quiz": [
+    { "q": "Reflection lets you…", "options": ["Only read public fields", "Inspect/invoke members at runtime, including private", "Compile code faster", "Avoid the JVM"], "answer": 1, "explain": "It accesses classes/methods/fields dynamically, even private ones via setAccessible." },
+    { "q": "Spring's @Autowired is powered mainly by…", "options": ["Macros", "Reflection + annotations", "Bytecode interpretation only", "Threads"], "answer": 1, "explain": "Frameworks scan annotations and use reflection to wire dependencies." },
+    { "q": "A key downside of reflection is…", "options": ["It's always faster", "It loses compile-time type safety", "It can't read fields", "It requires the GPU"], "answer": 1, "explain": "Errors surface at runtime instead of compile time, and it's slower." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Print all methods and fields of a class at runtime." },
+    { "level": "Medium", "text": "Instantiate a class by name and invoke a setter via reflection." },
+    { "level": "Hard", "text": "Build a tiny dependency injector that wires @Inject fields via reflection." },
+    { "level": "Expert", "text": "Write a mini JSON serializer that maps object fields using reflection." }
+  ],
+  "interviewQuestions": [
+    "What is reflection and when is it used?",
+    "How do frameworks like Spring/JUnit use reflection?",
+    "What are the downsides of reflection?",
+    "What does setAccessible(true) do and why is it risky?",
+    "Reflection vs MethodHandles?"
+  ],
+  "references": [
+    { "label": "Java Reflection — Baeldung", "url": "https://www.baeldung.com/java-reflection" }
+  ]
+}

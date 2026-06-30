@@ -1,0 +1,45 @@
+{
+  "id": "flutter.slivers",
+  "levelId": 4,
+  "title": "Slivers",
+  "xp": 50,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Explain what a sliver is",
+    "Build complex scroll effects with CustomScrollView",
+    "Use lazy slivers for performance"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "A sliver is a scrollable area that knows how to render itself given a viewport's scroll position. Slivers compose inside a CustomScrollView to build advanced scroll effects (collapsing headers, mixed lists/grids)." },
+    { "type": "code", "language": "dart", "code": "CustomScrollView(slivers: [\n  SliverAppBar(expandedHeight: 200, floating: true, pinned: true),\n  SliverList(delegate: SliverChildBuilderDelegate(\n     (c, i) => ListTile(title: Text('Item $i')), childCount: 100)),\n  SliverGrid.count(crossAxisCount: 2, children: [...]),\n]);" },
+    { "type": "callout", "variant": "interview", "markdown": "ListView is actually a CustomScrollView with one SliverList under the hood. Slivers give you lazy building (only visible items are built) plus effects like collapsing/pinned headers that you can't do by nesting normal widgets." },
+    { "type": "callout", "variant": "mistake", "markdown": "Nesting scrollables badly (a ListView inside a Column inside another scroll) instead of composing slivers — causes unbounded-height errors or double scrollbars. Use one CustomScrollView with multiple slivers." },
+    { "type": "callout", "variant": "tip", "markdown": "Use SliverChildBuilderDelegate (lazy) for long lists; reserve the children: [] form for short, known lists. Combine SliverPersistentHeader for sticky sections." }
+  ],
+  "flashcards": [
+    { "front": "What is a sliver?", "back": "A scrollable region that renders itself based on the viewport's scroll offset; composed in a CustomScrollView." },
+    { "front": "What is ListView under the hood?", "back": "A CustomScrollView with a single lazy SliverList." },
+    { "front": "Why use a builder delegate?", "back": "It builds only visible items (lazy), saving memory and time for long lists." }
+  ],
+  "quiz": [
+    { "q": "Slivers are composed inside a…", "options": ["Column", "CustomScrollView", "Stack", "Form"], "answer": 1, "explain": "CustomScrollView hosts a list of slivers in one viewport." },
+    { "q": "A collapsing app bar uses…", "options": ["AppBar", "SliverAppBar", "Container", "ListTile"], "answer": 1, "explain": "SliverAppBar provides expand/collapse/pinned/floating behavior." },
+    { "q": "Lazy building of list items uses…", "options": ["children: []", "SliverChildBuilderDelegate", "a Column", "setState"], "answer": 1, "explain": "The builder delegate creates only visible children." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Build a CustomScrollView with a SliverAppBar + SliverList." },
+    { "level": "Medium", "text": "Mix a SliverGrid and SliverList in one scroll view." },
+    { "level": "Hard", "text": "Create a pinned sticky header with SliverPersistentHeader." },
+    { "level": "Expert", "text": "Build a collapsing parallax header with custom scroll behavior." }
+  ],
+  "interviewQuestions": [
+    "What is a sliver and why use it?",
+    "How does ListView relate to slivers?",
+    "How do you build a collapsing app bar?",
+    "Lazy vs eager sliver children?",
+    "How do you avoid nested-scroll problems?"
+  ],
+  "references": [
+    { "label": "Flutter — Slivers", "url": "https://docs.flutter.dev/ui/layout/scrolling/slivers" }
+  ]
+}

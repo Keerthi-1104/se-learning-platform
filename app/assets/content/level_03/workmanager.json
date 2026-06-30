@@ -1,0 +1,50 @@
+{
+  "id": "android.workmanager",
+  "levelId": 3,
+  "title": "WorkManager",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Schedule guaranteed deferrable background work",
+    "Apply constraints, retries and chaining",
+    "Know when WorkManager is and isn't the right tool"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "WorkManager is the recommended API for persistent, deferrable background work that must run even across app restarts and device reboots — it chooses the best underlying scheduler for the OS version." },
+    { "type": "code", "language": "kotlin", "code": "val work = OneTimeWorkRequestBuilder<UploadWorker>()\n  .setConstraints(Constraints.Builder()\n      .setRequiredNetworkType(NetworkType.CONNECTED).build())\n  .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)\n  .build()\nWorkManager.getInstance(ctx).enqueue(work)" },
+    { "type": "table", "headers": ["Feature", "What it gives"], "rows": [
+      ["Constraints", "Run only on network/charging/idle"],
+      ["Retries + backoff", "Automatic, configurable"],
+      ["Chaining", "Sequence/parallel work with then()"],
+      ["Persistence", "Survives reboots and app death"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Use WorkManager for **guaranteed, deferrable** work (upload logs, sync, backups). Do NOT use it for immediate, exact-time, or in-process tasks — use coroutines for those, AlarmManager for exact alarms, and foreground services for ongoing user-visible work." },
+    { "type": "callout", "variant": "mistake", "markdown": "Expecting WorkManager to run at an exact instant. It's deferrable — the system batches work for battery efficiency. For exact timing use AlarmManager (sparingly)." }
+  ],
+  "flashcards": [
+    { "front": "When use WorkManager?", "back": "Guaranteed, deferrable background work that must survive app restarts/reboots (sync, upload, backup)." },
+    { "front": "What can constraints require?", "back": "Network connectivity, charging, device idle, sufficient battery/storage." },
+    { "front": "WorkManager vs AlarmManager?", "back": "WorkManager = deferrable guaranteed work; AlarmManager = exact-time alarms (use sparingly)." }
+  ],
+  "quiz": [
+    { "q": "WorkManager is best for…", "options": ["Exact-time alarms", "Guaranteed deferrable background work", "Drawing UI", "Immediate in-process tasks"], "answer": 1, "explain": "It guarantees deferrable work runs, even after reboot." },
+    { "q": "Which is a WorkManager feature?", "options": ["Exact scheduling", "Constraints + retries + chaining", "UI rendering", "Direct DB access only"], "answer": 1, "explain": "Constraints, backoff retries and work chaining are core features." },
+    { "q": "For an immediate one-off task while the app is open, prefer…", "options": ["WorkManager", "A coroutine", "AlarmManager", "A BroadcastReceiver"], "answer": 1, "explain": "Coroutines handle immediate in-process async work; WorkManager is for deferrable/guaranteed work." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Create a Worker that logs and run it once with enqueue()." },
+    { "level": "Medium", "text": "Add a network constraint and exponential backoff to an upload worker." },
+    { "level": "Hard", "text": "Chain compress → upload → notify workers and pass data between them." },
+    { "level": "Expert", "text": "Implement periodic sync with unique work and observe state via WorkInfo LiveData." }
+  ],
+  "interviewQuestions": [
+    "What problem does WorkManager solve?",
+    "When use WorkManager vs coroutine vs AlarmManager vs foreground service?",
+    "How do constraints and backoff work?",
+    "How do you chain and pass data between workers?",
+    "Does WorkManager guarantee exact timing?"
+  ],
+  "references": [
+    { "label": "Android — WorkManager", "url": "https://developer.android.com/topic/libraries/architecture/workmanager" }
+  ]
+}

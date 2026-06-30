@@ -1,0 +1,49 @@
+{
+  "id": "android.services",
+  "levelId": 3,
+  "title": "Services",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Differentiate foreground, background and bound services",
+    "Know modern background-work restrictions",
+    "Choose the right tool for long-running work"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "A Service is an app component for work without a UI. It does NOT create its own thread — long work must run on a background thread or it blocks the main thread." },
+    { "type": "table", "headers": ["Type", "Use", "Notes"], "rows": [
+      ["Foreground", "User-visible ongoing work", "Requires a persistent notification"],
+      ["Background", "Short work, no UI", "Heavily restricted since Android 8"],
+      ["Bound", "Client-server within/between apps", "Lives while clients are bound"]
+    ]},
+    { "type": "callout", "variant": "mistake", "markdown": "Assuming a Service runs on a background thread. It runs on the main thread by default — do heavy work on a worker thread/coroutine, or you'll get ANRs." },
+    { "type": "callout", "variant": "interview", "markdown": "Since Android 8 (Oreo), background services are restricted to save battery. For deferrable/guaranteed work use **WorkManager**; for ongoing user-visible work use a **foreground service** with a notification." },
+    { "type": "callout", "variant": "tip", "markdown": "Don't reach for a Service by default. For most background tasks, WorkManager or coroutines are the right answer; reserve services for truly ongoing work (music, navigation, location)." }
+  ],
+  "flashcards": [
+    { "front": "Does a Service run on a background thread?", "back": "No — it runs on the main thread by default; you must offload heavy work yourself." },
+    { "front": "Foreground vs background service?", "back": "Foreground shows a persistent notification for user-visible work; background is short and restricted since Android 8." },
+    { "front": "Modern choice for guaranteed deferrable work?", "back": "WorkManager." }
+  ],
+  "quiz": [
+    { "q": "A Service by default runs on…", "options": ["A new background thread", "The main thread", "A coroutine", "The GPU"], "answer": 1, "explain": "Services share the main thread; offload heavy work explicitly." },
+    { "q": "A foreground service requires…", "options": ["Nothing special", "A persistent notification", "Root access", "A WebView"], "answer": 1, "explain": "Foreground services must show an ongoing notification." },
+    { "q": "For guaranteed deferrable background work, use…", "options": ["A background Service", "WorkManager", "A BroadcastReceiver", "onResume"], "answer": 1, "explain": "WorkManager handles constraints, retries and survives reboots." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Create a foreground service that shows a notification while running." },
+    { "level": "Medium", "text": "Implement a bound service exposing a method to an activity." },
+    { "level": "Hard", "text": "Move heavy work in a service onto a coroutine/worker thread to avoid ANR." },
+    { "level": "Expert", "text": "Build a location-tracking foreground service that handles process death gracefully." }
+  ],
+  "interviewQuestions": [
+    "Types of services and when use each?",
+    "Does a Service run on its own thread?",
+    "Why were background services restricted in Android 8?",
+    "Service vs WorkManager vs coroutine?",
+    "How does a bound service work?"
+  ],
+  "references": [
+    { "label": "Android — Services overview", "url": "https://developer.android.com/guide/components/services" }
+  ]
+}

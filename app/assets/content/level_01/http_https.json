@@ -1,0 +1,58 @@
+{
+  "id": "cs.http_https",
+  "levelId": 1,
+  "title": "HTTP / HTTPS",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Read an HTTP request/response and its status codes",
+    "Explain safe vs idempotent methods",
+    "Describe what HTTP/2 and HTTP/3 improve"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "HTTP is a stateless request/response protocol at the application layer. HTTPS is HTTP carried inside a TLS-encrypted channel." },
+    { "type": "code", "language": "http", "code": "GET /api/products?id=42 HTTP/1.1\nHost: api.example.com\nAuthorization: Bearer eyJhbGci...\nAccept: application/json\n\nHTTP/1.1 200 OK\nContent-Type: application/json\n\n{ \"id\": 42, \"name\": \"GS1 Widget\" }" },
+    { "type": "table", "headers": ["Method", "Purpose", "Safe?", "Idempotent?"], "rows": [
+      ["GET", "Read", "Yes", "Yes"],
+      ["POST", "Create", "No", "No"],
+      ["PUT", "Replace", "No", "Yes"],
+      ["DELETE", "Remove", "No", "Yes"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**Safe** = no server state change. **Idempotent** = N calls == 1 call. Is POST idempotent? No. Is DELETE? Yes — deleting twice leaves it deleted." },
+    { "type": "table", "headers": ["Class", "Meaning", "Examples"], "rows": [
+      ["2xx", "Success", "200, 201, 204"],
+      ["3xx", "Redirect", "301, 304"],
+      ["4xx", "Client error", "400, 401, 403, 404, 429"],
+      ["5xx", "Server error", "500, 502, 503"]
+    ]},
+    { "type": "theory", "markdown": "## HTTP versions\n- **HTTP/1.1**: persistent connections, one request at a time per connection.\n- **HTTP/2**: multiplexed streams + header compression — no app-layer head-of-line blocking.\n- **HTTP/3**: runs over QUIC (UDP) to remove TCP head-of-line blocking." },
+    { "type": "callout", "variant": "mistake", "markdown": "Putting auth tokens or secrets in the URL query string — URLs leak into logs, history and Referer headers. Use headers or the body." }
+  ],
+  "flashcards": [
+    { "front": "Safe vs idempotent?", "back": "Safe = no state change (GET). Idempotent = N calls equal 1 call (GET, PUT, DELETE — not POST)." },
+    { "front": "401 vs 403?", "back": "401 = not authenticated (who are you?). 403 = authenticated but not allowed (you can't do this)." },
+    { "front": "What does HTTP/2 multiplexing fix?", "back": "It lets many requests share one connection without waiting in line (app-layer head-of-line blocking)." }
+  ],
+  "quiz": [
+    { "q": "Which method is NOT idempotent?", "options": ["GET", "PUT", "DELETE", "POST"], "answer": 3, "explain": "POST typically creates a new resource each time, so repeating it has additional effects." },
+    { "q": "What does status 401 mean?", "options": ["Server crashed", "Not authenticated", "Forbidden even when authenticated", "Resource not found"], "answer": 1, "explain": "401 Unauthorized means authentication is required/failed; 403 is authenticated-but-forbidden." },
+    { "q": "HTTP/3 runs on top of…", "options": ["TCP", "UDP (via QUIC)", "ICMP", "SMTP"], "answer": 1, "explain": "HTTP/3 uses QUIC over UDP to avoid TCP head-of-line blocking and speed up handshakes." },
+    { "q": "Which is a 5xx error?", "options": ["404 Not Found", "301 Moved", "503 Service Unavailable", "429 Too Many Requests"], "answer": 2, "explain": "5xx are server errors; 503 means the server is temporarily unavailable." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Write a client that GETs a URL and prints the status code and selected headers." },
+    { "level": "Medium", "text": "Implement conditional GET using ETag / If-None-Match and handle 304." },
+    { "level": "Hard", "text": "Build a tiny REST API for a TODO list with correct verbs and status codes." },
+    { "level": "Expert", "text": "Add a token-bucket rate limiter returning 429 with a Retry-After header." }
+  ],
+  "interviewQuestions": [
+    "Is PUT idempotent? Is POST? Explain.",
+    "Difference between 401 and 403?",
+    "What problem does HTTP/2 multiplexing solve?",
+    "How do ETag and 304 Not Modified save bandwidth?",
+    "What makes an API RESTful?"
+  ],
+  "references": [
+    { "label": "MDN HTTP docs", "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP" }
+  ]
+}

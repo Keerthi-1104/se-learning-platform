@@ -1,0 +1,49 @@
+{
+  "id": "sm.provider",
+  "levelId": 5,
+  "title": "Provider",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain Provider as an InheritedWidget wrapper",
+    "Use ChangeNotifier + Consumer/Selector",
+    "Avoid unnecessary rebuilds"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Provider is a lightweight wrapper around InheritedWidget that makes dependency injection and state propagation simple. It exposes objects down the tree and rebuilds listeners when they change." },
+    { "type": "code", "language": "dart", "code": "class Counter extends ChangeNotifier {\n  int value = 0;\n  void inc() { value++; notifyListeners(); }\n}\n// provide:  ChangeNotifierProvider(create: (_) => Counter())\n// read:     context.watch<Counter>().value   // rebuilds\n//           context.read<Counter>().inc()     // no rebuild" },
+    { "type": "table", "headers": ["API", "Rebuilds?", "Use"], "rows": [
+      ["watch<T>() / Consumer", "Yes", "Read + rebuild on change"],
+      ["read<T>()", "No", "Call methods / one-off read"],
+      ["Selector<T,S>", "Only when S changes", "Granular rebuilds"]
+    ]},
+    { "type": "callout", "variant": "mistake", "markdown": "Calling context.watch in callbacks (rebuild loops) or wrapping a huge subtree in Consumer so everything rebuilds. Use read() in callbacks and Selector for granular rebuilds." },
+    { "type": "callout", "variant": "tip", "markdown": "Provider is great for small-to-medium apps and is the official baseline. For larger apps many teams move to Riverpod (its spiritual successor) for compile-time safety." }
+  ],
+  "flashcards": [
+    { "front": "What is Provider built on?", "back": "InheritedWidget — it wraps it to simplify DI and state propagation." },
+    { "front": "watch vs read?", "back": "watch() subscribes and rebuilds on change; read() is a one-off access (use in callbacks)." },
+    { "front": "How to rebuild granularly?", "back": "Use Selector<T,S> so only widgets depending on S rebuild." }
+  ],
+  "quiz": [
+    { "q": "Provider is essentially a wrapper around…", "options": ["A database", "InheritedWidget", "A Stream", "Isolates"], "answer": 1, "explain": "Provider simplifies InheritedWidget for DI + state." },
+    { "q": "In a button callback you should use…", "options": ["context.watch", "context.read", "Consumer", "Selector"], "answer": 1, "explain": "read() accesses without subscribing/rebuilding." },
+    { "q": "To minimize rebuilds, use…", "options": ["Consumer on the whole screen", "Selector", "watch everywhere", "setState"], "answer": 1, "explain": "Selector rebuilds only when the selected value changes." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Build a counter with ChangeNotifier + Provider." },
+    { "level": "Medium", "text": "Use Selector to rebuild only one label of many." },
+    { "level": "Hard", "text": "Compose multiple providers and a ProxyProvider dependency." },
+    { "level": "Expert", "text": "Profile and eliminate over-rebuilds in a Provider-based list screen." }
+  ],
+  "interviewQuestions": [
+    "What is Provider and what is it built on?",
+    "watch vs read vs Selector?",
+    "How does Provider avoid prop drilling?",
+    "When does a Consumer rebuild?",
+    "Provider vs Riverpod?"
+  ],
+  "references": [
+    { "label": "provider package", "url": "https://pub.dev/packages/provider" }
+  ]
+}

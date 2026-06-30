@@ -1,0 +1,51 @@
+{
+  "id": "cs.oop",
+  "levelId": 1,
+  "title": "OOP",
+  "xp": 50,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Explain the four pillars with examples",
+    "Choose composition over inheritance",
+    "Distinguish overloading from overriding"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "OOP organizes software as objects — bundles of data and behavior — interacting through well-defined interfaces. Dominant in Java, Kotlin, C# and Dart." },
+    { "type": "table", "headers": ["Pillar", "Meaning", "Benefit"], "rows": [
+      ["Encapsulation", "Hide state behind methods", "Safe, controlled change"],
+      ["Abstraction", "Expose what, hide how", "Simpler mental model"],
+      ["Inheritance", "Reuse via 'is-a'", "Share behavior"],
+      ["Polymorphism", "One interface, many impls", "Extensible code"]
+    ]},
+    { "type": "callout", "variant": "analogy", "markdown": "A **car**: you use the wheel and pedals (public interface) without knowing the engine internals (encapsulation). A sports car and a truck are both Vehicles (inheritance) and both drive() differently (polymorphism)." },
+    { "type": "code", "language": "dart", "code": "abstract class Shape { double area(); }\nclass Circle extends Shape { double area() => 3.14*r*r; }\nclass Square extends Shape { double area() => s*s; }\ndouble total(List<Shape> shapes) =>\n  shapes.fold(0, (sum, s) => sum + s.area()); // works for ANY Shape" },
+    { "type": "callout", "variant": "mistake", "markdown": "Overusing inheritance. Deep hierarchies are fragile (you wanted a banana but inherited the whole jungle). Prefer **composition over inheritance**." },
+    { "type": "callout", "variant": "tip", "markdown": "'Program to an interface, not an implementation.' Depend on abstractions so you can swap a SQL repository for an API one without touching callers." }
+  ],
+  "flashcards": [
+    { "front": "The four pillars of OOP?", "back": "Encapsulation, Abstraction, Inheritance, Polymorphism." },
+    { "front": "Overloading vs overriding?", "back": "Overloading = same name, different params, resolved at compile time. Overriding = subclass redefines a method, resolved at runtime." },
+    { "front": "Composition vs inheritance?", "back": "Composition (has-a) is more flexible and less fragile than deep inheritance (is-a). Prefer composition." }
+  ],
+  "quiz": [
+    { "q": "Hiding internal state behind methods is…", "options": ["Inheritance", "Encapsulation", "Polymorphism", "Overloading"], "answer": 1, "explain": "Encapsulation controls access to an object's internal state." },
+    { "q": "Which is runtime polymorphism?", "options": ["Overloading", "Overriding", "Generics", "Encapsulation"], "answer": 1, "explain": "Overriding is resolved at runtime via dynamic dispatch; overloading is compile-time." },
+    { "q": "Best general advice on reuse?", "options": ["Always inherit deeply", "Prefer composition over inheritance", "Avoid interfaces", "Use global variables"], "answer": 1, "explain": "Composition avoids fragile deep hierarchies and is easier to change." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Model a Shape hierarchy with area() and compute total area polymorphically." },
+    { "level": "Medium", "text": "Design a payment system with a PaymentMethod interface (Card, UPI, Wallet)." },
+    { "level": "Hard", "text": "Refactor a deep inheritance tree into composition with injected behaviors." },
+    { "level": "Expert", "text": "Build a plugin system where new types register at runtime via a common interface." }
+  ],
+  "interviewQuestions": [
+    "Explain the four pillars with examples.",
+    "Composition vs inheritance — why prefer composition?",
+    "Overloading vs overriding? Which is runtime polymorphism?",
+    "Abstract class vs interface — when use which?",
+    "What does 'program to an interface' mean?"
+  ],
+  "references": [
+    { "label": "Refactoring Guru — OOP", "url": "https://refactoring.guru" }
+  ]
+}

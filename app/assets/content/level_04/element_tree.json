@@ -1,0 +1,45 @@
+{
+  "id": "flutter.element_tree",
+  "levelId": 4,
+  "title": "Element Tree",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain what Elements are and why they exist",
+    "Describe how Elements bridge widgets and render objects",
+    "Understand element reuse and updateChild"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "An Element is the long-lived instance of a widget at a position in the tree. Elements hold state, manage the lifecycle, and bridge the immutable widget config to the mutable RenderObject." },
+    { "type": "callout", "variant": "analogy", "markdown": "If widgets are blueprints, Elements are the actual constructed rooms that persist between renovations. You redraw the blueprint (widget) often, but the room (element) is kept and merely updated when possible." },
+    { "type": "callout", "variant": "interview", "markdown": "On rebuild, Flutter calls Element.updateChild: if the new widget has the same runtimeType and key as the old one, the existing Element (and its State + RenderObject) is REUSED and just updated. Otherwise the old element is unmounted and a new one created. This is why type/key stability matters for performance." },
+    { "type": "code", "language": "text", "code": "Widget (config)  --inflate-->  Element (instance, holds State)\n                                   |\n                                   creates/updates\n                                   v\n                               RenderObject (layout + paint)" },
+    { "type": "callout", "variant": "note", "markdown": "Element types mirror widget types: StatelessElement, StatefulElement (owns the State), and many RenderObjectElements. BuildContext is just the Element seen through a narrower interface." }
+  ],
+  "flashcards": [
+    { "front": "What is an Element?", "back": "The long-lived instance of a widget in the tree; it holds State and links the widget to its RenderObject." },
+    { "front": "When is an Element reused?", "back": "When the new widget has the same runtimeType and key as the old one — its State/RenderObject are kept and updated." },
+    { "front": "Relationship to BuildContext?", "back": "BuildContext IS the Element, exposed through a narrower interface." }
+  ],
+  "quiz": [
+    { "q": "Elements are…", "options": ["Immutable config", "Long-lived instances holding state", "GPU buffers", "Native views"], "answer": 1, "explain": "Elements persist across rebuilds and hold State." },
+    { "q": "An element is reused when the new widget has the same…", "options": ["Color", "runtimeType and key", "Size", "Parent only"], "answer": 1, "explain": "Matching type + key lets Flutter update in place instead of rebuilding." },
+    { "q": "Where does a StatefulWidget's State live?", "options": ["In the widget", "In the StatefulElement", "In the RenderObject", "On disk"], "answer": 1, "explain": "The StatefulElement owns and persists the State object." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Add debug prints to observe element reuse vs recreation on rebuild." },
+    { "level": "Medium", "text": "Change a widget's type between rebuilds and show the State resets." },
+    { "level": "Hard", "text": "Use keys to force element reuse where it would otherwise rebuild." },
+    { "level": "Expert", "text": "Trace updateChild behavior with the Flutter inspector for a reordering list." }
+  ],
+  "interviewQuestions": [
+    "What is the Element tree and why does it exist?",
+    "How do Elements bridge widgets and render objects?",
+    "When does Flutter reuse vs recreate an Element?",
+    "Where is State stored?",
+    "How does BuildContext relate to Element?"
+  ],
+  "references": [
+    { "label": "Flutter — Inside Flutter", "url": "https://docs.flutter.dev/resources/inside-flutter" }
+  ]
+}

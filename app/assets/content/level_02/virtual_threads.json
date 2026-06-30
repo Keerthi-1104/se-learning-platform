@@ -1,0 +1,50 @@
+{
+  "id": "java.virtual_threads",
+  "levelId": 2,
+  "title": "Virtual Threads",
+  "xp": 50,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Explain what virtual threads are and the problem they solve",
+    "Contrast platform threads with virtual threads",
+    "Know what 'pinning' is and how to avoid it"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Virtual threads (Project Loom, finalized in Java 21) are lightweight threads managed by the JVM, not the OS. Millions can run concurrently, making blocking I/O code scale like async — without callbacks." },
+    { "type": "table", "headers": ["", "Platform thread", "Virtual thread"], "rows": [
+      ["Backed by", "An OS thread", "JVM-scheduled, mounts on a carrier"],
+      ["Cost", "~1 MB stack, ~thousands max", "~few KB, millions possible"],
+      ["Blocking I/O", "Wastes an OS thread", "Unmounts the carrier — cheap"],
+      ["Use", "CPU-bound work", "High-concurrency I/O servers"]
+    ]},
+    { "type": "code", "language": "java", "code": "// One virtual thread per task — no pool needed\ntry (var exec = Executors.newVirtualThreadPerTaskExecutor()) {\n    for (var req : requests)\n        exec.submit(() -> handle(req)); // blocking code is fine\n}" },
+    { "type": "callout", "variant": "interview", "markdown": "Virtual threads make the classic 'thread-per-request' model scale to millions of connections, ending the need for reactive/callback code purely for concurrency. Write simple blocking code; the JVM handles scheduling." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Pinning**: blocking inside a synchronized block (or native call) pins the virtual thread to its carrier OS thread, killing the benefit. Prefer ReentrantLock over synchronized in hot I/O paths." }
+  ],
+  "flashcards": [
+    { "front": "What problem do virtual threads solve?", "back": "They let simple blocking code scale to millions of concurrent tasks without OS-thread limits or reactive callbacks." },
+    { "front": "Platform vs virtual thread?", "back": "Platform = 1:1 with an OS thread (heavy). Virtual = many-to-few, JVM-scheduled, cheap, unmounts on blocking I/O." },
+    { "front": "What is pinning?", "back": "When a virtual thread can't unmount (e.g., blocking in a synchronized block), holding its carrier thread — avoid in hot paths." }
+  ],
+  "quiz": [
+    { "q": "Virtual threads are scheduled by…", "options": ["The OS kernel", "The JVM", "The GPU", "The network card"], "answer": 1, "explain": "The JVM multiplexes many virtual threads onto a few carrier OS threads." },
+    { "q": "Virtual threads shine for…", "options": ["CPU-bound math", "High-concurrency blocking I/O", "Graphics rendering", "GC tuning"], "answer": 1, "explain": "Blocking I/O unmounts the carrier, so millions of I/O tasks scale cheaply." },
+    { "q": "Pinning is caused by…", "options": ["Using ReentrantLock", "Blocking inside synchronized / native calls", "Async code", "Small heaps"], "answer": 1, "explain": "synchronized blocks (and some native calls) prevent unmounting, pinning the virtual thread." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Launch 1,000,000 virtual threads that sleep, and observe memory vs platform threads." },
+    { "level": "Medium", "text": "Rewrite a fixed thread pool server to one-virtual-thread-per-request." },
+    { "level": "Hard", "text": "Detect pinning with -Djdk.tracePinnedThreads and fix it." },
+    { "level": "Expert", "text": "Benchmark throughput of reactive vs virtual-thread blocking style under load." }
+  ],
+  "interviewQuestions": [
+    "What are virtual threads and what problem do they solve?",
+    "Platform threads vs virtual threads?",
+    "What is pinning and how do you avoid it?",
+    "Do virtual threads help CPU-bound work? Why or why not?",
+    "How do virtual threads change the thread-per-request model?"
+  ],
+  "references": [
+    { "label": "JEP 444: Virtual Threads", "url": "https://openjdk.org/jeps/444" }
+  ]
+}

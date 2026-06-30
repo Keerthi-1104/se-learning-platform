@@ -1,0 +1,49 @@
+{
+  "id": "java.gc",
+  "levelId": 2,
+  "title": "Garbage Collection",
+  "xp": 50,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Explain generational GC and the weak generational hypothesis",
+    "Compare the main collectors (G1, ZGC, Parallel)",
+    "Recognize and fix memory leaks in a GC language"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Garbage Collection automatically reclaims memory held by objects that are no longer reachable, freeing developers from manual free()." },
+    { "type": "theory", "markdown": "## Generational GC\nMost objects die young (weak generational hypothesis). The heap is split:\n- **Young gen** (Eden + 2 Survivors): fast, frequent **minor GC**.\n- **Old gen**: long-lived objects; slower **major/full GC**.\nObjects surviving enough minor GCs are promoted to old gen." },
+    { "type": "table", "headers": ["Collector", "Optimized for", "Notes"], "rows": [
+      ["Parallel", "Throughput", "Stop-the-world, batch jobs"],
+      ["G1 (default)", "Balanced, predictable pauses", "Region-based, since Java 9"],
+      ["ZGC / Shenandoah", "Ultra-low pause (<1ms)", "Large heaps, concurrent"]
+    ]},
+    { "type": "callout", "variant": "mistake", "markdown": "Thinking GC means 'no memory leaks.' You still leak by keeping references alive — static collections, unremoved listeners, caches without eviction. Reachable ≠ needed." },
+    { "type": "callout", "variant": "tip", "markdown": "Don't call System.gc() in production — it forces full GCs and hurts performance. Tune the collector and heap sizes, and profile with tools before guessing." }
+  ],
+  "flashcards": [
+    { "front": "Weak generational hypothesis?", "back": "Most objects die young, so collecting the young generation frequently and cheaply reclaims most garbage." },
+    { "front": "Minor vs major GC?", "back": "Minor GC collects the young gen (fast, frequent); major/full GC collects old gen (slower)." },
+    { "front": "Can a GC language leak memory?", "back": "Yes — if you keep references alive (static maps, listeners, unbounded caches). Reachable but unneeded objects aren't collected." }
+  ],
+  "quiz": [
+    { "q": "Generational GC is based on the idea that…", "options": ["Objects never die", "Most objects die young", "GC is impossible", "Old objects die first"], "answer": 1, "explain": "The weak generational hypothesis: most allocations become garbage quickly." },
+    { "q": "The default collector since Java 9 is…", "options": ["Serial", "Parallel", "G1", "CMS"], "answer": 2, "explain": "G1 (Garbage-First) is the default, balancing throughput and pause times." },
+    { "q": "A common cause of leaks in Java is…", "options": ["Calling free()", "Static collections that grow unbounded", "Using local variables", "Short-lived objects"], "answer": 1, "explain": "Long-lived references (static maps, listeners) keep objects reachable forever." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Observe minor GCs with -verbose:gc while allocating short-lived objects." },
+    { "level": "Medium", "text": "Create a memory leak via a static List and find it in a heap dump." },
+    { "level": "Hard", "text": "Compare pause times of Parallel vs G1 on the same workload." },
+    { "level": "Expert", "text": "Tune heap and collector flags to keep p99 GC pause under a target on a load test." }
+  ],
+  "interviewQuestions": [
+    "How does generational GC work?",
+    "Minor vs major vs full GC?",
+    "Compare G1, ZGC and Parallel collectors.",
+    "Can Java have memory leaks? Give examples.",
+    "Why shouldn't you call System.gc()?"
+  ],
+  "references": [
+    { "label": "Java GC Tuning Guide", "url": "https://docs.oracle.com/en/java/javase/17/gctuning/" }
+  ]
+}

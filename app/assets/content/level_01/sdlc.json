@@ -1,0 +1,50 @@
+{
+  "id": "cs.sdlc",
+  "levelId": 1,
+  "title": "SDLC",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "List the phases of the software development lifecycle",
+    "Compare Waterfall with Agile",
+    "Explain where testing and CI/CD fit"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "The Software Development Lifecycle (SDLC) is the structured process teams use to plan, build, test, deploy and maintain software." },
+    { "type": "code", "language": "text", "code": "Requirements -> Design -> Implementation -> Testing\n   -> Deployment -> Maintenance  (and loop back)" },
+    { "type": "table", "headers": ["Model", "Idea", "Best for"], "rows": [
+      ["Waterfall", "Sequential phases", "Fixed, well-understood scope"],
+      ["Agile/Scrum", "Short iterations (sprints)", "Changing requirements"],
+      ["Kanban", "Continuous flow, WIP limits", "Steady operational work"],
+      ["DevOps", "Build + run together, automation", "Fast, reliable delivery"]
+    ]},
+    { "type": "callout", "variant": "analogy", "markdown": "Waterfall is building a house from a fixed blueprint; Agile is sculpting — you shape, get feedback, and adjust each iteration." },
+    { "type": "callout", "variant": "best", "markdown": "Shift testing left (write tests early), automate with CI/CD, and ship small increments. Small, frequent releases are safer than big-bang launches." }
+  ],
+  "flashcards": [
+    { "front": "Phases of the SDLC?", "back": "Requirements, Design, Implementation, Testing, Deployment, Maintenance." },
+    { "front": "Waterfall vs Agile?", "back": "Waterfall = sequential, fixed plan. Agile = iterative sprints adapting to change." },
+    { "front": "What is 'shift left' testing?", "back": "Testing early in the lifecycle to catch defects when they're cheap to fix." }
+  ],
+  "quiz": [
+    { "q": "Which model suits rapidly changing requirements?", "options": ["Waterfall", "Agile/Scrum", "Big-bang", "None"], "answer": 1, "explain": "Agile's short iterations absorb change better than sequential Waterfall." },
+    { "q": "CI/CD primarily provides…", "options": ["Manual deploys", "Automated build, test and delivery", "A database", "Encryption"], "answer": 1, "explain": "Continuous Integration/Delivery automates building, testing and shipping." },
+    { "q": "'Shift left' means…", "options": ["Deploy on Mondays", "Test early in the lifecycle", "Write less code", "Skip design"], "answer": 1, "explain": "Catch defects early when they're cheapest to fix." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Write user stories and acceptance criteria for a login feature." },
+    { "level": "Medium", "text": "Draft a sprint plan with estimates for a small feature." },
+    { "level": "Hard", "text": "Design a branching + release strategy for a mobile team." },
+    { "level": "Expert", "text": "Define a CI/CD pipeline (lint, test, build, deploy) with gates and rollbacks." }
+  ],
+  "interviewQuestions": [
+    "What are the phases of the SDLC?",
+    "Waterfall vs Agile — when use each?",
+    "What is a sprint and what are its ceremonies?",
+    "Where do testing and code review fit?",
+    "What is CI/CD and why does it matter?"
+  ],
+  "references": [
+    { "label": "Atlassian Agile Coach", "url": "https://www.atlassian.com/agile" }
+  ]
+}

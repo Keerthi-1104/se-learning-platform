@@ -1,0 +1,51 @@
+{
+  "id": "sm.redux",
+  "levelId": 5,
+  "title": "Redux",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain the single-store, action, reducer model",
+    "Understand pure reducers and unidirectional flow",
+    "Know when Redux's structure pays off"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Redux is a predictable state container with a single immutable store. The UI dispatches actions; pure reducers compute the next state from (currentState, action); the UI rebuilds from the new state." },
+    { "type": "code", "language": "dart", "code": "// action -> reducer -> new state -> UI\nint reducer(int state, dynamic action) =>\n  action is Increment ? state + 1 : state;\nfinal store = Store<int>(reducer, initialState: 0);\nstore.dispatch(Increment());" },
+    { "type": "callout", "variant": "interview", "markdown": "Redux's three principles: a single source of truth (one store), state is read-only (change only by dispatching actions), and changes are made by pure reducers. This makes state changes predictable, traceable and time-travel-debuggable." },
+    { "type": "table", "headers": ["Piece", "Role"], "rows": [
+      ["Store", "Holds the single state tree"],
+      ["Action", "Describes what happened"],
+      ["Reducer", "Pure (state, action) → new state"],
+      ["Middleware", "Side effects (async, logging)"]
+    ]},
+    { "type": "callout", "variant": "mistake", "markdown": "Putting side effects or mutations in reducers — reducers must be pure (no API calls, no mutation). Side effects belong in middleware (e.g., thunk/epics)." },
+    { "type": "callout", "variant": "tip", "markdown": "Redux brings the most ceremony. It shines for very large apps needing strict, auditable, time-travelable state. For most Flutter apps, BLoC/Riverpod give similar predictability with less boilerplate." }
+  ],
+  "flashcards": [
+    { "front": "Redux's three principles?", "back": "Single source of truth, read-only state, changes via pure reducers." },
+    { "front": "What must a reducer be?", "back": "Pure — (state, action) → new state, no side effects or mutation." },
+    { "front": "Where do side effects go?", "back": "In middleware (thunks/epics), not reducers." }
+  ],
+  "quiz": [
+    { "q": "Redux state changes only via…", "options": ["Direct mutation", "Dispatching actions to pure reducers", "setState", "Global variables"], "answer": 1, "explain": "Read-only state changes through dispatched actions + reducers." },
+    { "q": "A reducer must be…", "options": ["Async", "Pure", "A widget", "A Stream"], "answer": 1, "explain": "Reducers are pure functions; side effects go to middleware." },
+    { "q": "Async/side effects in Redux live in…", "options": ["Reducers", "Middleware", "The store", "Actions"], "answer": 1, "explain": "Middleware handles async and side effects." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Counter with a store, action and reducer." },
+    { "level": "Medium", "text": "Add async data loading via middleware (thunk)." },
+    { "level": "Hard", "text": "Combine reducers for a multi-feature state tree." },
+    { "level": "Expert", "text": "Implement time-travel debugging by replaying actions." }
+  ],
+  "interviewQuestions": [
+    "Explain the Redux data flow.",
+    "What are the three Redux principles?",
+    "Why must reducers be pure?",
+    "Where do side effects go?",
+    "When is Redux worth its boilerplate?"
+  ],
+  "references": [
+    { "label": "flutter_redux", "url": "https://pub.dev/packages/flutter_redux" }
+  ]
+}

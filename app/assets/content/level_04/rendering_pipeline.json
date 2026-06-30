@@ -1,0 +1,51 @@
+{
+  "id": "flutter.rendering_pipeline",
+  "levelId": 4,
+  "title": "Rendering Pipeline",
+  "xp": 50,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "List the phases of a frame",
+    "Explain how a frame is scheduled and drawn",
+    "Connect rebuilds to layout, paint and raster"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "The rendering pipeline is the sequence of phases Flutter runs each frame to turn your widget tree into pixels, driven by the vsync signal from the device's display." },
+    { "type": "code", "language": "text", "code": "vsync -> Animations/build -> LAYOUT -> PAINT -> COMPOSITE\n      -> RASTERIZE (GPU) -> on screen\nUI thread builds layers; Raster thread turns them into pixels." },
+    { "type": "table", "headers": ["Phase", "What happens"], "rows": [
+      ["Build", "Rebuild dirty widgets"],
+      ["Layout", "Size & position render objects"],
+      ["Paint", "Record paint commands into layers"],
+      ["Composite", "Assemble the layer tree"],
+      ["Rasterize", "GPU converts layers to pixels (raster thread)"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Flutter targets one frame every ~16ms (60fps) or ~8ms (120fps). Work splits across the UI thread (build/layout/paint) and the raster thread (GPU). Jank happens when either thread overruns the frame budget." },
+    { "type": "callout", "variant": "tip", "markdown": "Reduce per-frame work: minimize rebuilt subtrees (const, granular setState/selectors), use RepaintBoundary for animations, and avoid expensive paint (large blurs/shadows, saveLayer) in hot paths." }
+  ],
+  "flashcards": [
+    { "front": "Phases of a frame?", "back": "Build → Layout → Paint → Composite → Rasterize, driven by vsync." },
+    { "front": "UI thread vs raster thread?", "back": "UI thread builds/layouts/paints (records layers); raster thread rasterizes layers to pixels on the GPU." },
+    { "front": "Frame budget at 60fps?", "back": "~16ms; exceed it on either thread and you get jank." }
+  ],
+  "quiz": [
+    { "q": "What drives each frame?", "options": ["A timer", "The vsync signal", "User taps only", "The network"], "answer": 1, "explain": "Vsync from the display schedules frames." },
+    { "q": "Rasterization happens on the…", "options": ["UI thread", "Raster (GPU) thread", "Platform thread", "Isolate"], "answer": 1, "explain": "The raster thread converts recorded layers into pixels via the GPU." },
+    { "q": "The order of phases is…", "options": ["Paint → Layout → Build", "Build → Layout → Paint → Composite → Raster", "Layout → Build → Raster", "Raster → Build → Paint"], "answer": 1, "explain": "Build, then layout, then paint, composite, and rasterize." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Use the performance overlay to view UI vs raster thread timings." },
+    { "level": "Medium", "text": "Find a jank source with DevTools timeline and fix it." },
+    { "level": "Hard", "text": "Reduce rebuilds with const + a granular state selector and measure the difference." },
+    { "level": "Expert", "text": "Profile and eliminate a costly saveLayer/shadow in a scrolling list." }
+  ],
+  "interviewQuestions": [
+    "Walk through the rendering pipeline phases.",
+    "UI thread vs raster thread — what runs where?",
+    "What causes jank and how do you diagnose it?",
+    "How does vsync relate to frames?",
+    "How do you reduce per-frame work?"
+  ],
+  "references": [
+    { "label": "Flutter — Rendering pipeline (Inside Flutter)", "url": "https://docs.flutter.dev/resources/inside-flutter" }
+  ]
+}

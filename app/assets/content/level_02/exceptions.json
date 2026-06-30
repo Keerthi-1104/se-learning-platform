@@ -1,0 +1,50 @@
+{
+  "id": "java.exceptions",
+  "levelId": 2,
+  "title": "Exception Handling",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Distinguish checked from unchecked exceptions",
+    "Use try-with-resources correctly",
+    "Follow exception best practices"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Exceptions are objects representing abnormal conditions. The hierarchy: Throwable → Error (fatal, don't catch) and Exception → RuntimeException (unchecked) vs checked exceptions." },
+    { "type": "table", "headers": ["", "Checked", "Unchecked"], "rows": [
+      ["Base", "Exception (not Runtime)", "RuntimeException"],
+      ["Compiler", "Must catch or declare", "Not enforced"],
+      ["Examples", "IOException, SQLException", "NullPointer, IllegalArgument"],
+      ["Means", "Recoverable, expected", "Programming bug"]
+    ]},
+    { "type": "code", "language": "java", "code": "// try-with-resources auto-closes (AutoCloseable)\ntry (var in = new FileInputStream(\"f\")) {\n    return in.read();\n} catch (IOException e) {\n    throw new AppException(\"read failed\", e); // wrap, keep cause\n}" },
+    { "type": "callout", "variant": "mistake", "markdown": "Swallowing exceptions: `catch (Exception e) {}` hides bugs. Never catch-and-ignore; at minimum log with context, and never catch Throwable/Error." },
+    { "type": "callout", "variant": "best", "markdown": "Catch the most specific exception, fail fast, wrap-and-rethrow preserving the cause, and use try-with-resources for anything closeable. Throw early, catch late." }
+  ],
+  "flashcards": [
+    { "front": "Checked vs unchecked?", "back": "Checked must be caught/declared (IOException); unchecked (RuntimeException) need not be — usually programming bugs." },
+    { "front": "What does try-with-resources do?", "back": "Automatically closes resources implementing AutoCloseable, even on exception." },
+    { "front": "Error vs Exception?", "back": "Error = serious, unrecoverable (OutOfMemory) — don't catch. Exception = conditions an app may handle." }
+  ],
+  "quiz": [
+    { "q": "Which is a checked exception?", "options": ["NullPointerException", "IOException", "IllegalArgumentException", "ArithmeticException"], "answer": 1, "explain": "IOException is checked; the others are RuntimeExceptions (unchecked)." },
+    { "q": "try-with-resources requires the resource to implement…", "options": ["Serializable", "AutoCloseable", "Comparable", "Runnable"], "answer": 1, "explain": "Only AutoCloseable resources are auto-closed." },
+    { "q": "Best practice when re-throwing?", "options": ["Drop the original exception", "Wrap it preserving the cause", "Catch Throwable", "Print and continue silently"], "answer": 1, "explain": "Preserving the cause keeps the stack trace for debugging." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Create a custom checked exception and a custom unchecked exception." },
+    { "level": "Medium", "text": "Refactor manual close() in finally blocks to try-with-resources." },
+    { "level": "Hard", "text": "Implement a retry wrapper that retries on specific exceptions with backoff." },
+    { "level": "Expert", "text": "Demonstrate suppressed exceptions from try-with-resources and read them." }
+  ],
+  "interviewQuestions": [
+    "Checked vs unchecked exceptions — when use each?",
+    "What is try-with-resources and what problem does it solve?",
+    "finally vs finalize() vs final?",
+    "Why is catching and ignoring exceptions bad?",
+    "How do you create and use custom exceptions?"
+  ],
+  "references": [
+    { "label": "Effective Java — Exceptions", "url": "https://www.oreilly.com/library/view/effective-java/9780134686097/" }
+  ]
+}

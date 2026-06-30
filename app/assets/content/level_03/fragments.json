@@ -1,0 +1,45 @@
+{
+  "id": "android.fragments",
+  "levelId": 3,
+  "title": "Fragments",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain what fragments are and why they exist",
+    "Use the fragment lifecycle and viewLifecycleOwner",
+    "Avoid the classic fragment view-leak bug"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "A Fragment is a reusable, modular portion of UI hosted inside an Activity (or another Fragment). Fragments enable adaptive layouts (e.g., list + detail on tablets) and modern single-activity navigation." },
+    { "type": "callout", "variant": "analogy", "markdown": "If an Activity is a window, fragments are interchangeable panes inside it — you can swap, combine, or reuse them without changing the window." },
+    { "type": "theory", "markdown": "## Two lifecycles\nA fragment has its own lifecycle AND a separate **view** lifecycle. The view can be destroyed (e.g., on the back stack) while the fragment instance lives on." },
+    { "type": "callout", "variant": "mistake", "markdown": "Observing LiveData with the fragment's lifecycle instead of **viewLifecycleOwner** — when the view is recreated you get duplicate observers and crashes/leaks. Always use viewLifecycleOwner in onViewCreated." },
+    { "type": "callout", "variant": "tip", "markdown": "Modern apps favor a single Activity + many fragments with the Navigation component, and communicate via a shared ViewModel scoped to the activity or nav graph." }
+  ],
+  "flashcards": [
+    { "front": "Why do fragments have two lifecycles?", "back": "The fragment instance can outlive its view (e.g., on the back stack), so the view has its own lifecycle." },
+    { "front": "Which owner for LiveData in a fragment?", "back": "viewLifecycleOwner — so observers are tied to the view, not the longer-lived fragment." },
+    { "front": "How do fragments share data?", "back": "Through a ViewModel scoped to the activity or nav graph." }
+  ],
+  "quiz": [
+    { "q": "A fragment must be hosted by…", "options": ["Nothing — it runs alone", "An Activity or another Fragment", "A Service", "A BroadcastReceiver"], "answer": 1, "explain": "Fragments live inside a host (Activity or parent Fragment)." },
+    { "q": "To observe LiveData in a fragment, use…", "options": ["this (the fragment)", "viewLifecycleOwner", "the application", "a new thread"], "answer": 1, "explain": "viewLifecycleOwner prevents duplicate observers when the view is recreated." },
+    { "q": "Modern navigation prefers…", "options": ["Many activities", "Single activity + fragments + Navigation component", "Only dialogs", "WebViews"], "answer": 1, "explain": "Single-activity architecture with the Navigation component is the recommended pattern." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Host two fragments in one activity and swap them with a FragmentTransaction." },
+    { "level": "Medium", "text": "Share state between fragments via an activity-scoped ViewModel." },
+    { "level": "Hard", "text": "Build a master-detail layout that adapts between phone and tablet." },
+    { "level": "Expert", "text": "Reproduce and fix a fragment view leak by switching to viewLifecycleOwner." }
+  ],
+  "interviewQuestions": [
+    "What is a Fragment and why use it?",
+    "Explain the fragment vs view lifecycle.",
+    "Why use viewLifecycleOwner for LiveData?",
+    "How do fragments communicate?",
+    "Single-activity vs multi-activity architecture?"
+  ],
+  "references": [
+    { "label": "Android — Fragments", "url": "https://developer.android.com/guide/fragments" }
+  ]
+}

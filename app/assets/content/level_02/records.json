@@ -1,0 +1,50 @@
+{
+  "id": "java.records",
+  "levelId": 2,
+  "title": "Records",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Use records for immutable data carriers",
+    "Know what the compiler generates",
+    "Add validation with compact constructors"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "A record (Java 16+) is a concise, immutable data carrier. The compiler generates the constructor, private final fields, accessors, equals, hashCode and toString for you." },
+    { "type": "code", "language": "java", "code": "record Point(int x, int y) {}\n// auto: constructor, x(), y(), equals, hashCode, toString\n\nrecord Range(int lo, int hi) {\n  Range {                       // compact constructor: validation\n    if (lo > hi) throw new IllegalArgumentException(\"lo>hi\");\n  }\n}" },
+    { "type": "table", "headers": ["Record gives", "You skip writing"], "rows": [
+      ["Final fields + accessors", "Boilerplate getters"],
+      ["equals + hashCode", "Manual value equality"],
+      ["toString", "Debug formatting"],
+      ["Canonical constructor", "Field assignment code"]
+    ]},
+    { "type": "callout", "variant": "mistake", "markdown": "Expecting to mutate a record or extend it — records are final and their fields are final. Use them for immutable values (DTOs, keys), not entities you mutate." },
+    { "type": "callout", "variant": "tip", "markdown": "Records pair beautifully with sealed types + pattern matching for modeling closed data hierarchies — the basis of algebraic data types in Java." }
+  ],
+  "flashcards": [
+    { "front": "What does a record generate?", "back": "Constructor, private final fields, accessors, equals, hashCode, and toString." },
+    { "front": "Can a record be mutable or extended?", "back": "No — records are final with final fields; designed for immutable data." },
+    { "front": "What is a compact constructor?", "back": "A record constructor body for validation/normalization without listing parameters." }
+  ],
+  "quiz": [
+    { "q": "Records are primarily for…", "options": ["Mutable entities", "Immutable data carriers", "Threading", "Reflection"], "answer": 1, "explain": "Records concisely model immutable data with value semantics." },
+    { "q": "A record automatically provides all EXCEPT…", "options": ["equals/hashCode", "toString", "Setters", "Accessors"], "answer": 2, "explain": "Records are immutable — no setters are generated." },
+    { "q": "Where do you validate a record's inputs?", "options": ["A setter", "The compact constructor", "A static block", "You can't"], "answer": 1, "explain": "The compact constructor runs validation before fields are assigned." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Replace a boilerplate DTO class with a record." },
+    { "level": "Medium", "text": "Add validation to a record via a compact constructor." },
+    { "level": "Hard", "text": "Use a record as a HashMap key and verify value-based equality." },
+    { "level": "Expert", "text": "Model an expression tree with sealed interface + record implementations." }
+  ],
+  "interviewQuestions": [
+    "What is a record and what does it generate?",
+    "Can records be extended or mutated?",
+    "Record vs Lombok @Data vs a normal class?",
+    "How do you validate record fields?",
+    "How do records support immutability?"
+  ],
+  "references": [
+    { "label": "JEP 395: Records", "url": "https://openjdk.org/jeps/395" }
+  ]
+}

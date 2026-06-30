@@ -1,0 +1,318 @@
+{
+  "version": 1,
+  "title": "Software Engineer Learning Roadmap",
+  "levels": [
+    {
+      "id": 1, "title": "Computer Science Fundamentals", "icon": "memory", "color": "1F3A5F",
+      "summary": "The bedrock: how machines, networks and security actually work.",
+      "topics": [
+        { "id": "cs.computer_architecture", "title": "Computer Architecture", "xp": 50, "minutes": 25 },
+        { "id": "cs.operating_systems", "title": "Operating Systems", "xp": 50, "minutes": 30 },
+        { "id": "cs.networking", "title": "Networking", "xp": 40, "minutes": 25 },
+        { "id": "cs.http_https", "title": "HTTP / HTTPS", "xp": 40, "minutes": 20 },
+        { "id": "cs.dns", "title": "DNS", "xp": 30, "minutes": 15 },
+        { "id": "cs.tcp_udp", "title": "TCP / UDP", "xp": 40, "minutes": 20 },
+        { "id": "cs.ssl_tls", "title": "SSL / TLS", "xp": 40, "minutes": 20 },
+        { "id": "cs.auth", "title": "Authentication & Authorization", "xp": 50, "minutes": 25 },
+        { "id": "cs.jwt_oauth", "title": "JWT & OAuth", "xp": 50, "minutes": 25 },
+        { "id": "cs.encryption_hashing", "title": "Encryption & Hashing", "xp": 50, "minutes": 25 },
+        { "id": "cs.data_structures", "title": "Data Structures", "xp": 60, "minutes": 40 },
+        { "id": "cs.algorithms", "title": "Algorithms", "xp": 60, "minutes": 40 },
+        { "id": "cs.complexity", "title": "Time & Space Complexity", "xp": 40, "minutes": 20 },
+        { "id": "cs.oop", "title": "OOP", "xp": 50, "minutes": 25 },
+        { "id": "cs.solid", "title": "SOLID Principles", "xp": 50, "minutes": 25 },
+        { "id": "cs.design_patterns", "title": "Design Patterns", "xp": 60, "minutes": 35 },
+        { "id": "cs.sdlc", "title": "SDLC", "xp": 30, "minutes": 15 },
+        { "id": "cs.git", "title": "Git Fundamentals", "xp": 40, "minutes": 20 }
+      ]
+    },
+    {
+      "id": 2, "title": "Java", "icon": "coffee", "color": "B7791F",
+      "summary": "Core to modern Java: JVM, concurrency, streams, records, virtual threads.",
+      "topics": [
+        { "id": "java.core", "title": "Core Java", "xp": 50, "minutes": 30 },
+        { "id": "java.collections", "title": "Java Collections", "xp": 50, "minutes": 30 },
+        { "id": "java.exceptions", "title": "Exception Handling", "xp": 30, "minutes": 15 },
+        { "id": "java.multithreading", "title": "Multithreading", "xp": 60, "minutes": 35 },
+        { "id": "java.jvm", "title": "JVM Internals", "xp": 50, "minutes": 30 },
+        { "id": "java.gc", "title": "Garbage Collection", "xp": 50, "minutes": 25 },
+        { "id": "java.streams", "title": "Streams API", "xp": 50, "minutes": 25 },
+        { "id": "java.lambdas", "title": "Lambda Expressions", "xp": 30, "minutes": 15 },
+        { "id": "java.functional", "title": "Functional Programming", "xp": 40, "minutes": 20 },
+        { "id": "java.generics", "title": "Generics", "xp": 40, "minutes": 20 },
+        { "id": "java.reflection", "title": "Reflection", "xp": 40, "minutes": 20 },
+        { "id": "java.records", "title": "Records", "xp": 30, "minutes": 15 },
+        { "id": "java.sealed", "title": "Sealed Classes", "xp": 30, "minutes": 15 },
+        { "id": "java.virtual_threads", "title": "Virtual Threads", "xp": 50, "minutes": 25 },
+        { "id": "java.pattern_matching", "title": "Pattern Matching", "xp": 40, "minutes": 20 },
+        { "id": "java.versions", "title": "Java 8 → Latest LTS", "xp": 50, "minutes": 30 }
+      ]
+    },
+    {
+      "id": 3, "title": "Android Development", "icon": "android", "color": "1E8449",
+      "summary": "Native Android: lifecycle, Jetpack, Room, Hilt, Coroutines.",
+      "topics": [
+        { "id": "android.fundamentals", "title": "Android Fundamentals", "xp": 40, "minutes": 25 },
+        { "id": "android.activity_lifecycle", "title": "Activity Lifecycle", "xp": 40, "minutes": 20 },
+        { "id": "android.fragments", "title": "Fragments", "xp": 40, "minutes": 20 },
+        { "id": "android.intents", "title": "Intents", "xp": 30, "minutes": 15 },
+        { "id": "android.services", "title": "Services", "xp": 40, "minutes": 20 },
+        { "id": "android.broadcast_receivers", "title": "Broadcast Receivers", "xp": 30, "minutes": 15 },
+        { "id": "android.content_providers", "title": "Content Providers", "xp": 30, "minutes": 15 },
+        { "id": "android.jetpack", "title": "Jetpack Components", "xp": 50, "minutes": 30 },
+        { "id": "android.workmanager", "title": "WorkManager", "xp": 40, "minutes": 20 },
+        { "id": "android.room", "title": "Room Database", "xp": 50, "minutes": 25 },
+        { "id": "android.hilt", "title": "Hilt", "xp": 40, "minutes": 20 },
+        { "id": "android.coroutines", "title": "Coroutines", "xp": 50, "minutes": 30 },
+        { "id": "android.kotlin", "title": "Native Java & Kotlin", "xp": 50, "minutes": 30 },
+        { "id": "android.performance", "title": "Performance Optimization", "xp": 40, "minutes": 20 }
+      ]
+    },
+    {
+      "id": 4, "title": "Flutter & Dart", "icon": "flutter_dash", "color": "2E75B6",
+      "summary": "From Dart to the engine: widget/element/render trees, Impeller, FFI.",
+      "topics": [
+        { "id": "flutter.dart", "title": "Dart Fundamentals", "xp": 50, "minutes": 30 },
+        { "id": "flutter.widgets", "title": "Widgets", "xp": 40, "minutes": 25 },
+        { "id": "flutter.widget_lifecycle", "title": "Widget Lifecycle", "xp": 40, "minutes": 20 },
+        { "id": "flutter.buildcontext", "title": "BuildContext", "xp": 30, "minutes": 15 },
+        { "id": "flutter.widget_tree", "title": "Widget Tree", "xp": 30, "minutes": 15 },
+        { "id": "flutter.element_tree", "title": "Element Tree", "xp": 40, "minutes": 20 },
+        { "id": "flutter.render_tree", "title": "Render Tree", "xp": 40, "minutes": 20 },
+        { "id": "flutter.rendering_pipeline", "title": "Rendering Pipeline", "xp": 50, "minutes": 25 },
+        { "id": "flutter.navigation", "title": "Navigation", "xp": 40, "minutes": 20 },
+        { "id": "flutter.forms", "title": "Forms & Validation", "xp": 30, "minutes": 15 },
+        { "id": "flutter.state", "title": "State Management", "xp": 50, "minutes": 30 },
+        { "id": "flutter.animations", "title": "Animations", "xp": 50, "minutes": 30 },
+        { "id": "flutter.slivers", "title": "Slivers", "xp": 50, "minutes": 25 },
+        { "id": "flutter.custompainter", "title": "CustomPainter", "xp": 50, "minutes": 25 },
+        { "id": "flutter.platform_channels", "title": "Platform Channels", "xp": 50, "minutes": 25 },
+        { "id": "flutter.engine", "title": "Flutter Engine", "xp": 50, "minutes": 30 },
+        { "id": "flutter.impeller", "title": "Impeller", "xp": 40, "minutes": 20 },
+        { "id": "flutter.ffi", "title": "FFI", "xp": 50, "minutes": 25 },
+        { "id": "flutter.packages", "title": "Package Development", "xp": 40, "minutes": 20 }
+      ]
+    },
+    {
+      "id": 5, "title": "State Management", "icon": "account_tree", "color": "6C3483",
+      "summary": "Provider, BLoC, Cubit, Riverpod, GetX, Redux, MobX — and when to use each.",
+      "topics": [
+        { "id": "sm.provider", "title": "Provider", "xp": 40, "minutes": 20 },
+        { "id": "sm.bloc", "title": "BLoC", "xp": 50, "minutes": 30 },
+        { "id": "sm.cubit", "title": "Cubit", "xp": 40, "minutes": 20 },
+        { "id": "sm.riverpod", "title": "Riverpod", "xp": 50, "minutes": 30 },
+        { "id": "sm.getx", "title": "GetX", "xp": 40, "minutes": 20 },
+        { "id": "sm.redux", "title": "Redux", "xp": 40, "minutes": 20 },
+        { "id": "sm.mobx", "title": "MobX", "xp": 40, "minutes": 20 },
+        { "id": "sm.comparison", "title": "Comparison & Best Practices", "xp": 40, "minutes": 20 }
+      ]
+    },
+    {
+      "id": 6, "title": "Mobile Architecture", "icon": "architecture", "color": "0E7C7B",
+      "summary": "Clean Architecture, MVVM, repositories, DI, modular & offline-first, SDUI.",
+      "topics": [
+        { "id": "arch.clean", "title": "Clean Architecture", "xp": 60, "minutes": 35 },
+        { "id": "arch.mvvm", "title": "MVVM", "xp": 40, "minutes": 20 },
+        { "id": "arch.mvc", "title": "MVC", "xp": 30, "minutes": 15 },
+        { "id": "arch.repository", "title": "Repository Pattern", "xp": 40, "minutes": 20 },
+        { "id": "arch.service_layer", "title": "Service Layer", "xp": 30, "minutes": 15 },
+        { "id": "arch.di", "title": "Dependency Injection", "xp": 40, "minutes": 20 },
+        { "id": "arch.feature_first", "title": "Feature-first Architecture", "xp": 40, "minutes": 20 },
+        { "id": "arch.modular", "title": "Modular Architecture", "xp": 40, "minutes": 20 },
+        { "id": "arch.foundation", "title": "Foundation Layer", "xp": 30, "minutes": 15 },
+        { "id": "arch.offline_first", "title": "Offline-first Architecture", "xp": 50, "minutes": 25 },
+        { "id": "arch.sdui", "title": "Server-Driven UI", "xp": 50, "minutes": 25 },
+        { "id": "arch.design_systems", "title": "Design Systems", "xp": 40, "minutes": 20 }
+      ]
+    },
+    {
+      "id": 7, "title": "Backend Development", "icon": "dns", "color": "C0392B",
+      "summary": "REST, GraphQL, gRPC, Spring Boot, microservices, Docker, Kafka, Redis.",
+      "topics": [
+        { "id": "be.rest", "title": "REST APIs", "xp": 50, "minutes": 30 },
+        { "id": "be.graphql", "title": "GraphQL", "xp": 40, "minutes": 25 },
+        { "id": "be.grpc", "title": "gRPC", "xp": 40, "minutes": 25 },
+        { "id": "be.spring_boot", "title": "Spring Boot", "xp": 60, "minutes": 40 },
+        { "id": "be.spring_security", "title": "Spring Security", "xp": 50, "minutes": 30 },
+        { "id": "be.jwt", "title": "JWT", "xp": 30, "minutes": 15 },
+        { "id": "be.oauth2", "title": "OAuth2", "xp": 40, "minutes": 20 },
+        { "id": "be.microservices", "title": "Microservices", "xp": 60, "minutes": 35 },
+        { "id": "be.docker", "title": "Docker", "xp": 50, "minutes": 30 },
+        { "id": "be.kubernetes", "title": "Kubernetes", "xp": 60, "minutes": 40 },
+        { "id": "be.kafka", "title": "Kafka", "xp": 50, "minutes": 30 },
+        { "id": "be.rabbitmq", "title": "RabbitMQ", "xp": 40, "minutes": 20 },
+        { "id": "be.redis", "title": "Redis", "xp": 40, "minutes": 20 },
+        { "id": "be.api_security", "title": "API Security", "xp": 50, "minutes": 25 }
+      ]
+    },
+    {
+      "id": 8, "title": "Databases", "icon": "storage", "color": "1F3A5F",
+      "summary": "SQL & NoSQL & on-device: MySQL, Postgres, Mongo, SQLite, Hive, Drift, Isar.",
+      "topics": [
+        { "id": "db.mysql", "title": "MySQL", "xp": 40, "minutes": 25 },
+        { "id": "db.postgresql", "title": "PostgreSQL", "xp": 50, "minutes": 30 },
+        { "id": "db.mongodb", "title": "MongoDB", "xp": 40, "minutes": 25 },
+        { "id": "db.sqlite", "title": "SQLite", "xp": 40, "minutes": 20 },
+        { "id": "db.hive", "title": "Hive", "xp": 30, "minutes": 15 },
+        { "id": "db.drift", "title": "Drift", "xp": 40, "minutes": 20 },
+        { "id": "db.isar", "title": "Isar", "xp": 40, "minutes": 20 },
+        { "id": "db.objectbox", "title": "ObjectBox", "xp": 40, "minutes": 20 },
+        { "id": "db.realm", "title": "Realm", "xp": 40, "minutes": 20 },
+        { "id": "db.indexing", "title": "Indexing", "xp": 40, "minutes": 20 },
+        { "id": "db.query_optimization", "title": "Query Optimization", "xp": 50, "minutes": 25 },
+        { "id": "db.transactions", "title": "Transactions", "xp": 40, "minutes": 20 }
+      ]
+    },
+    {
+      "id": 9, "title": "Firebase", "icon": "local_fire_department", "color": "B7791F",
+      "summary": "Auth, Firestore, Storage, Crashlytics, Analytics, Remote Config, FCM.",
+      "topics": [
+        { "id": "fb.auth", "title": "Authentication", "xp": 40, "minutes": 20 },
+        { "id": "fb.firestore", "title": "Firestore", "xp": 50, "minutes": 30 },
+        { "id": "fb.realtime_db", "title": "Realtime Database", "xp": 40, "minutes": 20 },
+        { "id": "fb.storage", "title": "Storage", "xp": 30, "minutes": 15 },
+        { "id": "fb.crashlytics", "title": "Crashlytics", "xp": 30, "minutes": 15 },
+        { "id": "fb.analytics", "title": "Analytics", "xp": 30, "minutes": 15 },
+        { "id": "fb.remote_config", "title": "Remote Config", "xp": 40, "minutes": 20 },
+        { "id": "fb.fcm", "title": "Cloud Messaging", "xp": 40, "minutes": 25 },
+        { "id": "fb.app_distribution", "title": "App Distribution", "xp": 30, "minutes": 15 },
+        { "id": "fb.performance", "title": "Performance Monitoring", "xp": 30, "minutes": 15 }
+      ]
+    },
+    {
+      "id": 10, "title": "Flutter Plugins", "icon": "extension", "color": "2E75B6",
+      "summary": "Every key plugin: why, internals, native impl, best practices, pitfalls.",
+      "topics": [
+        { "id": "plg.dio", "title": "Dio", "xp": 40, "minutes": 20 },
+        { "id": "plg.http", "title": "HTTP", "xp": 30, "minutes": 15 },
+        { "id": "plg.retrofit", "title": "Retrofit", "xp": 40, "minutes": 20 },
+        { "id": "plg.provider", "title": "Provider", "xp": 30, "minutes": 15 },
+        { "id": "plg.flutter_bloc", "title": "flutter_bloc", "xp": 40, "minutes": 20 },
+        { "id": "plg.riverpod", "title": "Riverpod", "xp": 40, "minutes": 20 },
+        { "id": "plg.hive", "title": "Hive", "xp": 30, "minutes": 15 },
+        { "id": "plg.secure_storage", "title": "Flutter Secure Storage", "xp": 30, "minutes": 15 },
+        { "id": "plg.shared_preferences", "title": "Shared Preferences", "xp": 20, "minutes": 10 },
+        { "id": "plg.drift", "title": "Drift", "xp": 40, "minutes": 20 },
+        { "id": "plg.isar", "title": "Isar", "xp": 40, "minutes": 20 },
+        { "id": "plg.firebase", "title": "Firebase packages", "xp": 40, "minutes": 20 },
+        { "id": "plg.google_maps", "title": "Google Maps", "xp": 40, "minutes": 25 },
+        { "id": "plg.geolocator", "title": "Geolocator", "xp": 30, "minutes": 15 },
+        { "id": "plg.camera", "title": "Camera", "xp": 40, "minutes": 20 },
+        { "id": "plg.image_picker", "title": "Image Picker", "xp": 20, "minutes": 10 },
+        { "id": "plg.permission_handler", "title": "Permission Handler", "xp": 30, "minutes": 15 },
+        { "id": "plg.cached_network_image", "title": "Cached Network Image", "xp": 20, "minutes": 10 },
+        { "id": "plg.webview", "title": "WebView", "xp": 30, "minutes": 15 },
+        { "id": "plg.video_player", "title": "Video Player", "xp": 30, "minutes": 15 },
+        { "id": "plg.local_auth", "title": "Local Auth", "xp": 30, "minutes": 15 },
+        { "id": "plg.local_notifications", "title": "Flutter Local Notifications", "xp": 40, "minutes": 20 },
+        { "id": "plg.workmanager", "title": "WorkManager", "xp": 40, "minutes": 20 },
+        { "id": "plg.file_picker", "title": "File Picker", "xp": 20, "minutes": 10 },
+        { "id": "plg.mobile_scanner", "title": "Mobile Scanner", "xp": 40, "minutes": 20 },
+        { "id": "plg.ml_kit", "title": "Google ML Kit", "xp": 50, "minutes": 25 },
+        { "id": "plg.scandit", "title": "Scandit SDK", "xp": 50, "minutes": 25 }
+      ]
+    },
+    {
+      "id": 11, "title": "GS1 & Barcode Technologies", "icon": "qr_code_2", "color": "1E8449",
+      "summary": "GTIN, GLN, GCP, SSCC, GS1 Digital Link, DataMatrix, EPCIS, traceability.",
+      "topics": [
+        { "id": "gs1.gtin", "title": "GTIN", "xp": 40, "minutes": 20 },
+        { "id": "gs1.gln", "title": "GLN", "xp": 30, "minutes": 15 },
+        { "id": "gs1.gcp", "title": "GCP", "xp": 30, "minutes": 15 },
+        { "id": "gs1.sscc", "title": "SSCC", "xp": 30, "minutes": 15 },
+        { "id": "gs1.digital_link", "title": "GS1 Digital Link", "xp": 50, "minutes": 25 },
+        { "id": "gs1.datamatrix", "title": "DataMatrix", "xp": 40, "minutes": 20 },
+        { "id": "gs1.qr", "title": "QR Code", "xp": 30, "minutes": 15 },
+        { "id": "gs1.standards", "title": "Barcode Standards", "xp": 40, "minutes": 20 },
+        { "id": "gs1.authentication", "title": "Product Authentication", "xp": 40, "minutes": 20 },
+        { "id": "gs1.traceability", "title": "Product Traceability", "xp": 40, "minutes": 20 },
+        { "id": "gs1.epcis", "title": "EPCIS", "xp": 50, "minutes": 25 },
+        { "id": "gs1.serialization", "title": "Serialization", "xp": 40, "minutes": 20 }
+      ]
+    },
+    {
+      "id": 12, "title": "DevOps & Cloud", "icon": "cloud", "color": "6C3483",
+      "summary": "Git flow, CI/CD, GitHub Actions, Codemagic, Fastlane, store delivery.",
+      "topics": [
+        { "id": "devops.git", "title": "Git & GitHub", "xp": 40, "minutes": 20 },
+        { "id": "devops.git_flow", "title": "Git Flow", "xp": 30, "minutes": 15 },
+        { "id": "devops.cicd", "title": "CI/CD", "xp": 50, "minutes": 25 },
+        { "id": "devops.github_actions", "title": "GitHub Actions", "xp": 40, "minutes": 20 },
+        { "id": "devops.codemagic", "title": "Codemagic", "xp": 30, "minutes": 15 },
+        { "id": "devops.fastlane", "title": "Fastlane", "xp": 40, "minutes": 20 },
+        { "id": "devops.docker", "title": "Docker", "xp": 50, "minutes": 25 },
+        { "id": "devops.kubernetes", "title": "Kubernetes", "xp": 60, "minutes": 35 },
+        { "id": "devops.app_distribution", "title": "Firebase App Distribution", "xp": 30, "minutes": 15 },
+        { "id": "devops.play_console", "title": "Play Console", "xp": 30, "minutes": 15 },
+        { "id": "devops.app_store_connect", "title": "App Store Connect", "xp": 30, "minutes": 15 },
+        { "id": "devops.testflight", "title": "TestFlight", "xp": 30, "minutes": 15 }
+      ]
+    },
+    {
+      "id": 13, "title": "UI / UX", "icon": "palette", "color": "C0392B",
+      "summary": "Figma, Material 3, responsive/adaptive UI, accessibility, motion design.",
+      "topics": [
+        { "id": "ux.figma", "title": "Figma", "xp": 40, "minutes": 20 },
+        { "id": "ux.stitch", "title": "Google Stitch", "xp": 30, "minutes": 15 },
+        { "id": "ux.material3", "title": "Material Design 3", "xp": 40, "minutes": 20 },
+        { "id": "ux.responsive", "title": "Responsive UI", "xp": 40, "minutes": 20 },
+        { "id": "ux.adaptive", "title": "Adaptive UI", "xp": 40, "minutes": 20 },
+        { "id": "ux.accessibility", "title": "Accessibility", "xp": 40, "minutes": 20 },
+        { "id": "ux.typography", "title": "Typography", "xp": 30, "minutes": 15 },
+        { "id": "ux.color_theory", "title": "Color Theory", "xp": 30, "minutes": 15 },
+        { "id": "ux.design_systems", "title": "Design Systems", "xp": 40, "minutes": 20 },
+        { "id": "ux.motion", "title": "Motion Design", "xp": 40, "minutes": 20 }
+      ]
+    },
+    {
+      "id": 14, "title": "AI for Developers", "icon": "smart_toy", "color": "0E7C7B",
+      "summary": "Claude Code, MCP, Copilot, prompt engineering, AI agents & code review.",
+      "topics": [
+        { "id": "ai.claude_code", "title": "Claude Code", "xp": 40, "minutes": 20 },
+        { "id": "ai.mcp", "title": "Claude MCP", "xp": 50, "minutes": 25 },
+        { "id": "ai.copilot", "title": "GitHub Copilot", "xp": 30, "minutes": 15 },
+        { "id": "ai.openai", "title": "OpenAI APIs", "xp": 40, "minutes": 20 },
+        { "id": "ai.gemini", "title": "Gemini APIs", "xp": 40, "minutes": 20 },
+        { "id": "ai.prompt_engineering", "title": "Prompt Engineering", "xp": 50, "minutes": 25 },
+        { "id": "ai.agents", "title": "AI Agents", "xp": 50, "minutes": 25 },
+        { "id": "ai.mcp_servers", "title": "MCP Servers", "xp": 50, "minutes": 25 },
+        { "id": "ai.debugging", "title": "AI-assisted Debugging", "xp": 30, "minutes": 15 },
+        { "id": "ai.code_review", "title": "AI-assisted Code Reviews", "xp": 30, "minutes": 15 }
+      ]
+    },
+    {
+      "id": 15, "title": "System Design", "icon": "schema", "color": "1F3A5F",
+      "summary": "Mobile system design, offline sync, caching, LLD & HLD, real systems.",
+      "topics": [
+        { "id": "sd.mobile", "title": "Mobile System Design", "xp": 60, "minutes": 35 },
+        { "id": "sd.offline_sync", "title": "Offline Sync", "xp": 50, "minutes": 30 },
+        { "id": "sd.caching", "title": "Caching", "xp": 50, "minutes": 25 },
+        { "id": "sd.pagination", "title": "Pagination", "xp": 30, "minutes": 15 },
+        { "id": "sd.push", "title": "Push Notifications", "xp": 30, "minutes": 15 },
+        { "id": "sd.feature_flags", "title": "Feature Flags", "xp": 30, "minutes": 15 },
+        { "id": "sd.auth_systems", "title": "Authentication Systems", "xp": 50, "minutes": 25 },
+        { "id": "sd.payments", "title": "Payment Systems", "xp": 60, "minutes": 30 },
+        { "id": "sd.messaging", "title": "Messaging Systems", "xp": 60, "minutes": 30 },
+        { "id": "sd.ecommerce", "title": "E-commerce Architecture", "xp": 60, "minutes": 35 },
+        { "id": "sd.lld", "title": "Low-Level Design (LLD)", "xp": 60, "minutes": 35 },
+        { "id": "sd.hld", "title": "High-Level Design (HLD)", "xp": 60, "minutes": 35 }
+      ]
+    },
+    {
+      "id": 16, "title": "Interview Preparation", "icon": "workspace_premium", "color": "B7791F",
+      "summary": "Company-wise question banks, DSA, system design, HR & live coding.",
+      "topics": [
+        { "id": "iv.flutter", "title": "Flutter Interview Questions", "xp": 50, "minutes": 30 },
+        { "id": "iv.java", "title": "Java Interview Questions", "xp": 50, "minutes": 30 },
+        { "id": "iv.android", "title": "Android Interview Questions", "xp": 50, "minutes": 30 },
+        { "id": "iv.spring_boot", "title": "Spring Boot Interview Questions", "xp": 50, "minutes": 30 },
+        { "id": "iv.system_design", "title": "System Design", "xp": 60, "minutes": 40 },
+        { "id": "iv.hr", "title": "HR Questions", "xp": 30, "minutes": 15 },
+        { "id": "iv.live_coding", "title": "Live Coding", "xp": 60, "minutes": 40 },
+        { "id": "iv.debugging", "title": "Debugging Challenges", "xp": 50, "minutes": 25 },
+        { "id": "iv.dsa", "title": "DSA Problems", "xp": 60, "minutes": 45 },
+        { "id": "iv.company_sets", "title": "Company-specific Sets", "xp": 60, "minutes": 40 }
+      ]
+    }
+  ]
+}

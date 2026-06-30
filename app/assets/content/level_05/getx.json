@@ -1,0 +1,45 @@
+{
+  "id": "sm.getx",
+  "levelId": 5,
+  "title": "GetX",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain GetX's all-in-one approach",
+    "Use reactive .obs state and Obx",
+    "Weigh GetX's convenience against its trade-offs"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "GetX is an all-in-one package combining state management, dependency injection, and routing with minimal boilerplate. Reactive state uses .obs variables and the Obx widget rebuilds automatically." },
+    { "type": "code", "language": "dart", "code": "class CounterController extends GetxController {\n  var count = 0.obs;\n  void inc() => count++;\n}\nfinal c = Get.put(CounterController());\nObx(() => Text('${c.count}'));   // auto-rebuilds\nGet.to(NextPage());              // routing w/o context" },
+    { "type": "callout", "variant": "interview", "markdown": "GetX's appeal is speed of development: reactive state, DI and navigation without BuildContext, in very little code. Its criticism: it encourages tight coupling/global singletons, hides magic, and can make large apps harder to test and reason about." },
+    { "type": "callout", "variant": "mistake", "markdown": "Using Get.to/Get.find as global access everywhere creates hidden dependencies that hurt testability. If you use GetX, still keep logic in controllers and inject them deliberately." },
+    { "type": "callout", "variant": "tip", "markdown": "GetX is great for prototypes and small apps where velocity matters. For large, team-maintained codebases, many teams prefer Riverpod/BLoC for explicitness and testability." }
+  ],
+  "flashcards": [
+    { "front": "What three things does GetX combine?", "back": "State management, dependency injection, and routing." },
+    { "front": "How does reactive GetX state work?", "back": "Mark variables .obs and wrap UI in Obx(); it rebuilds when they change." },
+    { "front": "Main criticism of GetX?", "back": "Encourages global singletons/tight coupling and 'magic', hurting testability at scale." }
+  ],
+  "quiz": [
+    { "q": "GetX is best described as…", "options": ["Only state management", "An all-in-one state + DI + routing package", "A database", "A test framework"], "answer": 1, "explain": "It bundles several concerns into one package." },
+    { "q": "Reactive GetX UI uses…", "options": ["BlocBuilder", "Obx with .obs variables", "Selector", "setState"], "answer": 1, "explain": "Obx rebuilds when observed .obs values change." },
+    { "q": "A common GetX criticism is…", "options": ["Too much boilerplate", "Hidden global coupling / testability", "No routing", "No state"], "answer": 1, "explain": "Global access patterns reduce testability and clarity." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Build a reactive counter with GetxController + Obx." },
+    { "level": "Medium", "text": "Use GetX routing and DI (Get.put/Get.find) for two screens." },
+    { "level": "Hard", "text": "Refactor a GetX app to inject controllers explicitly for testability." },
+    { "level": "Expert", "text": "Compare a GetX feature vs the same feature in Riverpod and discuss trade-offs." }
+  ],
+  "interviewQuestions": [
+    "What does GetX combine and how?",
+    "How does reactive GetX state work?",
+    "What are the criticisms of GetX?",
+    "When is GetX a good fit?",
+    "GetX vs Riverpod/BLoC?"
+  ],
+  "references": [
+    { "label": "GetX package", "url": "https://pub.dev/packages/get" }
+  ]
+}

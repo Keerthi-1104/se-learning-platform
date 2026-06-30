@@ -1,0 +1,51 @@
+{
+  "id": "android.hilt",
+  "levelId": 3,
+  "title": "Hilt (Dependency Injection)",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain dependency injection and why it helps",
+    "Use Hilt's core annotations",
+    "Understand component scopes"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Hilt is a dependency-injection library built on Dagger that generates the wiring for you. DI means objects receive their dependencies instead of creating them, improving testability and decoupling." },
+    { "type": "code", "language": "kotlin", "code": "@HiltAndroidApp class App : Application()\n@AndroidEntryPoint class HomeActivity : AppCompatActivity() {\n  @Inject lateinit var repo: UserRepository\n}\nclass UserRepository @Inject constructor(private val api: Api)" },
+    { "type": "table", "headers": ["Annotation", "Meaning"], "rows": [
+      ["@HiltAndroidApp", "Generates the app-level component"],
+      ["@AndroidEntryPoint", "Enables injection in Activity/Fragment/etc."],
+      ["@Inject", "Constructor or field to inject"],
+      ["@Module + @Provides", "Tell Hilt how to build a type"],
+      ["@Singleton / @ViewModelScoped", "Lifetime/scope of a binding"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "DI inverts control: instead of `UserRepository()` creating an `Api`, the Api is injected. In tests you inject a fake Api — no real network. This is the Dependency Inversion Principle in practice." },
+    { "type": "callout", "variant": "tip", "markdown": "Scope deliberately: @Singleton for app-wide singletons, @ViewModelScoped for per-ViewModel. Over-scoping to @Singleton everywhere causes leaks and stale state." }
+  ],
+  "flashcards": [
+    { "front": "What is dependency injection?", "back": "Objects receive their dependencies from outside instead of creating them — improving testability and decoupling." },
+    { "front": "What does @AndroidEntryPoint do?", "back": "Allows Hilt to inject dependencies into Android classes like Activities and Fragments." },
+    { "front": "When use @Provides in a @Module?", "back": "When you can't @Inject a constructor (interfaces, third-party types) and must tell Hilt how to build it." }
+  ],
+  "quiz": [
+    { "q": "Dependency injection improves…", "options": ["Battery life", "Testability and decoupling", "Image quality", "Network speed"], "answer": 1, "explain": "Injecting dependencies lets you swap fakes in tests and reduces coupling." },
+    { "q": "Hilt is built on top of…", "options": ["Room", "Dagger", "Retrofit", "Coroutines"], "answer": 1, "explain": "Hilt simplifies Dagger with Android-specific components." },
+    { "q": "To inject into an Activity you annotate it with…", "options": ["@HiltAndroidApp", "@AndroidEntryPoint", "@Module", "@Singleton"], "answer": 1, "explain": "@AndroidEntryPoint enables member injection in Android classes." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Inject a repository into an Activity with @Inject + @AndroidEntryPoint." },
+    { "level": "Medium", "text": "Provide a Retrofit Api via a @Module/@Provides." },
+    { "level": "Hard", "text": "Bind an interface to an implementation with @Binds and scope it." },
+    { "level": "Expert", "text": "Swap a real dependency for a fake in an instrumented test using Hilt test rules." }
+  ],
+  "interviewQuestions": [
+    "What is dependency injection and why use it?",
+    "How does Hilt relate to Dagger?",
+    "Explain @Inject, @Module, @Provides, @Binds.",
+    "What are Hilt scopes and why do they matter?",
+    "How does DI improve testing?"
+  ],
+  "references": [
+    { "label": "Android — Hilt", "url": "https://developer.android.com/training/dependency-injection/hilt-android" }
+  ]
+}

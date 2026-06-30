@@ -1,0 +1,51 @@
+{
+  "id": "flutter.state",
+  "levelId": 4,
+  "title": "State Management",
+  "xp": 50,
+  "estimatedMinutes": 30,
+  "objectives": [
+    "Distinguish ephemeral from app state",
+    "Know the main approaches and trade-offs",
+    "Pick the right tool for a screen"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "State management is how you store, update and share data that affects the UI. The key split: ephemeral (local widget) state via setState, and app/shared state via a state-management solution." },
+    { "type": "table", "headers": ["Approach", "Style", "Best for"], "rows": [
+      ["setState", "Built-in, local", "Single-widget state"],
+      ["Provider", "InheritedWidget wrapper", "Simple shared state"],
+      ["Riverpod", "Compile-safe providers", "Most apps; testable DI"],
+      ["BLoC/Cubit", "Events → states (streams)", "Complex, event-driven flows"],
+      ["GetX", "All-in-one", "Rapid prototyping"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "There's no single 'best' — the question is fit. setState for local UI; Provider/Riverpod for most shared state; BLoC when you want explicit, testable event→state flows and clear separation. Volume 5 compares them in depth." },
+    { "type": "callout", "variant": "mistake", "markdown": "Lifting all state to one giant global store, or rebuilding the whole screen on every change. Scope state to where it's used and rebuild granularly (Consumer/Selector/select)." },
+    { "type": "callout", "variant": "tip", "markdown": "Keep business logic out of widgets. Whatever tool you choose, separate UI from logic (ViewModel/Notifier/BLoC) so it's testable and the UI stays dumb." }
+  ],
+  "flashcards": [
+    { "front": "Ephemeral vs app state?", "back": "Ephemeral = local to one widget (setState); app state = shared across the app (Provider/Riverpod/BLoC)." },
+    { "front": "Why prefer granular rebuilds?", "back": "Rebuilding only what changed (Consumer/Selector) avoids wasteful whole-screen rebuilds." },
+    { "front": "Where should business logic live?", "back": "Outside widgets — in a Notifier/BLoC/ViewModel — for testability." }
+  ],
+  "quiz": [
+    { "q": "setState is best for…", "options": ["App-wide state", "Local single-widget state", "Networking", "Routing"], "answer": 1, "explain": "Ephemeral UI state local to one widget." },
+    { "q": "BLoC models UI as…", "options": ["Events transformed into states", "A single global variable", "Direct DB writes", "Pixels"], "answer": 0, "explain": "BLoC maps input events to output states via streams." },
+    { "q": "A common anti-pattern is…", "options": ["Scoping state locally", "Rebuilding the whole screen on every change", "Using Selector", "Separating logic from UI"], "answer": 1, "explain": "Rebuild granularly; don't rebuild everything." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Build a counter with setState, then with Provider." },
+    { "level": "Medium", "text": "Share auth state across screens with Riverpod." },
+    { "level": "Hard", "text": "Implement a search feature as a Cubit/BLoC with loading/error/data states." },
+    { "level": "Expert", "text": "Refactor a screen to rebuild only changed parts using Selector/select and measure rebuilds." }
+  ],
+  "interviewQuestions": [
+    "Ephemeral vs app state?",
+    "Compare setState, Provider, Riverpod, BLoC.",
+    "How do you avoid unnecessary rebuilds?",
+    "Where should business logic live?",
+    "How do you test state logic?"
+  ],
+  "references": [
+    { "label": "Flutter — State management", "url": "https://docs.flutter.dev/data-and-backend/state-mgmt/intro" }
+  ]
+}
