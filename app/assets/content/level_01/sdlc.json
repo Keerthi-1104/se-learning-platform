@@ -1,50 +1,114 @@
 {
   "id": "cs.sdlc",
   "levelId": 1,
-  "title": "SDLC",
+  "title": "SDLC — Software Development Life Cycle",
   "xp": 30,
-  "estimatedMinutes": 15,
+  "estimatedMinutes": 25,
   "objectives": [
-    "List the phases of the software development lifecycle",
-    "Compare Waterfall with Agile",
-    "Explain where testing and CI/CD fit"
+    "Understand what SDLC is and why teams follow one",
+    "Know the 6 phases with real-life analogies",
+    "Distinguish Waterfall vs Agile vs Scrum vs Kanban vs DevOps",
+    "Understand where testing, CI/CD, and shift-left fit in",
+    "Answer SDLC interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "The Software Development Lifecycle (SDLC) is the structured process teams use to plan, build, test, deploy and maintain software." },
-    { "type": "code", "language": "text", "code": "Requirements -> Design -> Implementation -> Testing\n   -> Deployment -> Maintenance  (and loop back)" },
-    { "type": "table", "headers": ["Model", "Idea", "Best for"], "rows": [
-      ["Waterfall", "Sequential phases", "Fixed, well-understood scope"],
-      ["Agile/Scrum", "Short iterations (sprints)", "Changing requirements"],
-      ["Kanban", "Continuous flow, WIP limits", "Steady operational work"],
-      ["DevOps", "Build + run together, automation", "Fast, reliable delivery"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Imagine building a restaurant.**\n\n1. **Planning** — figure out what kind of restaurant, budget, location.\n2. **Requirements** — decide the menu, cuisine, capacity, ambiance.\n3. **Design** — architect draws blueprints; interior designer plans decor.\n4. **Build** — contractors put up walls, install kitchen, arrange tables.\n5. **Test** — soft launch for friends; check food quality, service flow, POS system.\n6. **Deploy + Maintain** — grand opening; keep fixing menu items, retraining staff, replacing broken equipment.\n\nYou wouldn't start pouring foundation before knowing what kind of restaurant. And you don't stop after opening — restaurants live and evolve for years.\n\n**Software works the same way.** The SDLC is just the discipline of doing these phases with intention." },
+    { "type": "callout", "variant": "definition", "markdown": "**SDLC (Software Development Life Cycle)** is the structured process teams use to plan, build, test, deploy, and maintain software. It's the discipline of turning 'we should build X' into 'X is running in production' — safely, repeatably, and improving over time." },
+    { "type": "theory", "markdown": "## The 6 phases of any SDLC" },
+    { "type": "table", "headers": ["Phase", "What happens", "Real-world example"], "rows": [
+      ["1. Requirements", "Understand WHAT users need", "Interviews, user stories, PRDs"],
+      ["2. Design", "Architecture, data model, UI mockups", "System diagrams, Figma files"],
+      ["3. Implementation", "Write the actual code", "Days-to-months of coding"],
+      ["4. Testing", "Verify it works, catch bugs", "Unit + integration + manual QA"],
+      ["5. Deployment", "Get it into users' hands", "Play Store submission, prod deploy"],
+      ["6. Maintenance", "Fix, improve, respond to feedback", "Bug fixes, new features, updates"]
     ]},
-    { "type": "callout", "variant": "analogy", "markdown": "Waterfall is building a house from a fixed blueprint; Agile is sculpting — you shape, get feedback, and adjust each iteration." },
-    { "type": "callout", "variant": "best", "markdown": "Shift testing left (write tests early), automate with CI/CD, and ship small increments. Small, frequent releases are safer than big-bang launches." }
+    { "type": "callout", "variant": "note", "markdown": "**These phases always exist**, whether you're in Waterfall (do each phase once, in order) or Agile (do all six in a two-week loop for a small feature). The disagreement is about *cadence*, not existence." },
+    { "type": "theory", "markdown": "## The 5 SDLC models — with when to use each" },
+    { "type": "table", "headers": ["Model", "Idea", "Best for", "Weakness"], "rows": [
+      ["Waterfall", "Do each phase once, in order", "Fixed requirements (hardware, contracts, regulated)", "Can't adapt to change"],
+      ["Iterative", "Repeat mini-cycles", "Learning as you go", "Needs discipline"],
+      ["Agile", "Adapt continuously via feedback", "Most modern software", "Requires good product owner + team maturity"],
+      ["Scrum (Agile)", "2-week sprints + ceremonies", "Team-based product work", "Meetings can pile up"],
+      ["Kanban", "Continuous flow, WIP limits", "Ops, support, steady work", "Less deadline-driven"],
+      ["DevOps", "Automation + build/run together", "Continuous delivery, cloud services", "Cultural change is hard"]
+    ]},
+    { "type": "theory", "markdown": "## Waterfall vs Agile — the interview question\n\nUnderstanding this contrast covers 90% of SDLC interview questions." },
+    { "type": "code", "language": "text", "code": "  WATERFALL — sequential, plan-driven, phase-gated\n\n  Requirements ── Design ── Build ── Test ── Deploy ── Maintain\n     ~2 mo        ~2 mo    ~6 mo    ~2 mo    ~1 mo      ongoing\n\n  Pros: predictable, documented, contractable\n  Cons: 6 months in you realize the requirement was wrong — too late.\n\n\n  AGILE — iterative, feedback-driven, value-first\n\n  Sprint 1  Sprint 2  Sprint 3  ...\n  ─────►    ─────►    ─────►\n  R D B T D R D B T D R D B T D\n  (do all six phases, small slice, every 2 weeks)\n\n  Pros: adapt fast, ship value early, correct course cheaply\n  Cons: needs disciplined team + product owner. 'Winging it' ≠ Agile." },
+    { "type": "theory", "markdown": "## Scrum in one screen\n\nScrum is a specific way to do Agile. If you interview at any product company, you'll hear these terms." },
+    { "type": "table", "headers": ["Term", "What it is"], "rows": [
+      ["Product backlog", "Prioritized list of everything that could be built"],
+      ["Sprint", "Fixed 2-week (usually) iteration of shipping small value"],
+      ["Sprint backlog", "What THIS sprint commits to"],
+      ["Daily standup", "15 min: what I did yesterday / today / any blockers"],
+      ["Sprint review", "Demo what shipped this sprint"],
+      ["Retro", "What went well, what didn't, what to improve"],
+      ["Scrum Master", "Removes blockers, protects the team"],
+      ["Product Owner", "Owns the backlog and priorities"]
+    ]},
+    { "type": "callout", "variant": "tip", "markdown": "**Kanban vs Scrum in one line:**\n\n- **Scrum** is time-boxed: sprint of fixed length, commit at start, review at end.\n- **Kanban** is flow-based: continuous pull from backlog, WIP limits, no fixed sprints. Great for ops/support teams." },
+    { "type": "theory", "markdown": "## Where CI/CD + testing fit — 'shift left'\n\n**Traditional:** test at the end. Wait for QA. Slow.\n\n**Modern:** test everywhere. Unit tests run in seconds on every commit. Integration tests run on every push. E2E tests run before deploy. Any failure blocks the pipeline. That's **shift left** — moving quality earlier in the SDLC." },
+    { "type": "code", "language": "text", "code": "  Modern CI/CD pipeline for a mobile app:\n\n  git push\n     │\n     ▼\n  Automated pipeline:\n  ┌────────────────┐\n  │  Lint + format │  ~5 sec\n  │  Unit tests    │  ~30 sec  ← runs on every commit\n  │  Widget tests  │  ~1 min\n  │  Build APK/AAB │  ~3 min\n  │  Integration   │  ~5 min\n  └────────────────┘\n     │\n     ▼\n  If green → deploy to internal testing (Firebase App Distribution)\n     │\n     ▼\n  QA + team dogfood for a day\n     │\n     ▼\n  Promote to Play Store staged rollout (5% → 25% → 100%)" },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Thinking 'Agile' means 'no plan.'**\n\nAgile is *disciplined* iteration with tight feedback loops. It has stronger requirements for continuous prioritization and communication than Waterfall. 'We're Agile' has never justified skipping architecture." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Treating testing as a phase, not a habit.**\n\nOn modern teams, tests are written *alongside* code (TDD or shortly after). Unit tests run on every commit. Integration tests run on every deploy. Testing is not something you do 'at the end.'" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Big-bang releases.**\n\nShipping 3 months of work at once means a huge blast radius when something breaks. Modern teams ship small changes often — staged rollouts (5% → 25% → 100%), feature flags, canary deploys. Small ships are safer ships." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Write tests early (shift left).** They're cheaper to write than to fix a bug in production." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Automate CI/CD from day one.** Every project. It's a superpower." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Small, frequent releases beat big rare ones.** Feature flags, staged rollouts, canary deploys are how professional teams ship safely." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Retro every 2 weeks.** What went well / not well / try next. Applied consistently, it's the single most valuable habit for a team." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Write a user story with acceptance criteria.** For a 'login' feature. Format: 'As a <role>, I want <goal>, so that <benefit>.' Then list acceptance criteria.\n\n**Why:** Product-thinking is a career-long skill." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Sprint plan.** Take a feature (say, adding profile pictures). Break into stories, estimate them, arrange a 2-week sprint plan.\n\n**Why:** Every Scrum team does this every 2 weeks." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — Design a branching + release strategy.** For a Flutter team of 5. main/dev branches? Feature flags? Release cadence?\n\n**Why:** This is a real senior discussion at every company." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Expert) — Design a CI/CD pipeline.** For a Flutter app. Lint → tests → build → distribute → deploy. With gates and rollback. Draw the diagram.\n\n**Why:** Prove you can move from 'we ship manually' to 'ships itself.'" },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What are the phases of the SDLC?**\n\n**A:** Six phases: **Requirements** (what to build), **Design** (architecture and UI), **Implementation** (code it), **Testing** (verify), **Deployment** (ship to users), and **Maintenance** (fix, extend, respond to feedback). These phases exist in every methodology — the disagreement is how tightly they cycle. Waterfall runs each once, sequentially. Agile runs all six in a small loop for each feature, every 2 weeks. Either way, no phase can be skipped safely — you can only shrink it." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What's the difference between Waterfall and Agile?**\n\n**A:** **Waterfall** is sequential and plan-driven. You do requirements for months, then design for months, then build for months, and eventually test and ship. It works for fixed scopes — government contracts, hardware, regulated software — where changes are expensive. Its weakness: if the requirement was wrong, you learn 6 months too late. **Agile** is iterative and feedback-driven. Every 2 weeks you ship something small and get feedback. You can pivot based on what users actually do. It requires stronger product ownership and communication than Waterfall. Most modern software is Agile — the world moves too fast for the alternative. Neither is universally 'better' — pick by how well you can predict requirements up front." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: Walk me through a Scrum sprint.**\n\n**A:** At the start of the sprint, the team does **sprint planning** — pulling top-priority items from the product backlog into the sprint backlog, agreeing what's committed. Every day for two weeks, the team has a **15-minute standup** — each person says what they did yesterday, will do today, and any blockers. During the sprint, engineers code, review each other's PRs, and stay in touch on Slack. At the end of the sprint, there's a **review** — demo what shipped to stakeholders. Then a **retrospective** — what worked, what didn't, what to change. Rinse and repeat. The **Product Owner** owns the backlog priorities; the **Scrum Master** removes blockers and protects the team from mid-sprint scope changes." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: Where do testing and code review fit in the SDLC?**\n\n**A:** In modern SDLC they're not phases at all — they're continuous. **Unit tests** are written alongside code (or before, if you TDD) and run on every commit via CI. **Code review** happens on every pull request before merge — usually 1-2 reviewers, catching bugs, suggesting improvements, and spreading knowledge. **Integration tests** and **E2E tests** run before deploy. **Manual QA** happens in staged environments before production. **Post-deploy monitoring** and **user feedback** feed back into the next sprint's backlog. Shift-left is the mantra — catch problems as early as possible, when they're cheapest to fix." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What is CI/CD and why does it matter?**\n\n**A:** **CI (Continuous Integration)** — every commit triggers automated build + test. Bugs are caught within minutes, not weeks. **CD (Continuous Delivery)** — every successful build is automatically deployable to staging; a single click promotes to production. **CD (Continuous Deployment)** — every green build goes to production automatically, with no human gate. Together CI/CD compresses the feedback loop from 'weeks' to 'minutes' — engineers see immediately whether their code broke something. Combined with **feature flags** and **staged rollouts**, teams ship 10× faster with 10× fewer incidents. It's the single most impactful practice a team can adopt." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What is 'shift left' testing, and why is it important?**\n\n**A:** Shift left means moving quality practices — testing, security review, performance analysis — as *early* in the SDLC as possible. Traditionally, testing was a phase at the end; if a bug was found, it required rework of everything downstream. Shift left says: write unit tests alongside code, run them on every commit; do security scans in CI; catch performance issues in staging, not production. **Why it matters:** cost of fixing a bug rises dramatically the later it's found — a bug caught in the developer's IDE costs seconds; one caught in production can cost millions. Shifting quality left is how professional teams move fast without breaking things." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: How would you handle a bug found in production?**\n\n**A:** Step 1: **assess the impact** — how many users affected, is data at risk, is money involved? Step 2: **stop the bleeding** — if severe, roll back the deploy or turn off a feature flag. Step 3: **communicate** — post an incident channel, tell customer success. Step 4: **fix and deploy** — write the fix with a regression test so it doesn't return. Step 5: **postmortem** — blameless review of what happened, what we learned, what to change. This process turns every incident into a learning event and steadily reduces recurrence. On mature teams the postmortem is more important than the fix — process fixes prevent classes of bugs, not just one." },
+    { "type": "theory", "markdown": "## Real-world examples\n\n- **Netflix** deploys thousands of times per day. Every deploy is automatic; canary releases catch problems in seconds. Chaos engineering intentionally breaks things to test resilience.\n- **Google** has a strict code review culture — every commit is reviewed by an area expert. Weeks of process compressed by tools and discipline.\n- **Startups** typically do 2-week sprints with a Product Manager, running standups on Slack, deploying multiple times per week. If you're joining one, this is what your day will look like.\n- **Banks and healthcare** have longer SDLCs — often quarterly releases with heavy compliance review. Still iterative internally, but slower external cadence." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **DORA metrics** (deployment frequency, lead time, MTTR, change failure rate) measure DevOps performance. Read the annual State of DevOps Report — it's revealing.\n- **Trunk-based development** vs feature branches — modern high-performing teams increasingly use trunk-based with feature flags to reduce merge hell.\n- **Feature flags (LaunchDarkly, ConfigCat)** let you deploy code but not activate it until you flip a switch. Combined with staged rollouts they make releases boring.\n- **SLOs (Service Level Objectives)** and error budgets — a data-driven way to balance shipping features with reliability.\n- **Blameless postmortems** — the culture piece that makes learning from incidents actually work." }
   ],
   "flashcards": [
-    { "front": "Phases of the SDLC?", "back": "Requirements, Design, Implementation, Testing, Deployment, Maintenance." },
-    { "front": "Waterfall vs Agile?", "back": "Waterfall = sequential, fixed plan. Agile = iterative sprints adapting to change." },
-    { "front": "What is 'shift left' testing?", "back": "Testing early in the lifecycle to catch defects when they're cheap to fix." }
+    { "front": "The 6 SDLC phases?", "back": "Requirements → Design → Implementation → Testing → Deployment → Maintenance." },
+    { "front": "Waterfall vs Agile in one sentence?", "back": "Waterfall runs the 6 phases once sequentially. Agile runs all 6 in a small loop every 2 weeks." },
+    { "front": "Kanban vs Scrum?", "back": "Scrum: time-boxed sprints. Kanban: continuous flow with WIP limits." },
+    { "front": "Shift left in one line?", "back": "Move testing/security/quality earlier in the SDLC — catch bugs when they're cheapest." },
+    { "front": "CI vs CD vs CD?", "back": "CI: build + test on every commit. Continuous Delivery: every green build is deployable. Continuous Deployment: green builds auto-deploy." }
   ],
   "quiz": [
-    { "q": "Which model suits rapidly changing requirements?", "options": ["Waterfall", "Agile/Scrum", "Big-bang", "None"], "answer": 1, "explain": "Agile's short iterations absorb change better than sequential Waterfall." },
-    { "q": "CI/CD primarily provides…", "options": ["Manual deploys", "Automated build, test and delivery", "A database", "Encryption"], "answer": 1, "explain": "Continuous Integration/Delivery automates building, testing and shipping." },
-    { "q": "'Shift left' means…", "options": ["Deploy on Mondays", "Test early in the lifecycle", "Write less code", "Skip design"], "answer": 1, "explain": "Catch defects early when they're cheapest to fix." }
+    { "q": "Which model best suits rapidly changing requirements?", "options": ["Waterfall", "Agile/Scrum", "Big-bang", "None"], "answer": 1, "explain": "Agile's short iterations absorb change better than Waterfall." },
+    { "q": "CI/CD's biggest benefit is…", "options": ["Cheaper hosting", "Faster feedback + automated deploy", "Larger apps", "More meetings"], "answer": 1, "explain": "Automated build, test, and delivery on every commit." },
+    { "q": "'Shift left' means…", "options": ["Deploy on Mondays", "Test earlier in the SDLC", "Write less code", "Skip design"], "answer": 1, "explain": "Catch defects when they're cheapest." },
+    { "q": "In Scrum, the person who removes blockers is…", "options": ["Product Owner", "Scrum Master", "Developer", "QA"], "answer": 1, "explain": "Scrum Master facilitates and protects the team." },
+    { "q": "Kanban is best for…", "options": ["Fixed 2-week deadlines", "Continuous flow (support, ops, steady work)", "Waterfall projects", "Solo developers only"], "answer": 1, "explain": "Kanban is flow-based with WIP limits." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Write user stories and acceptance criteria for a login feature." },
-    { "level": "Medium", "text": "Draft a sprint plan with estimates for a small feature." },
-    { "level": "Hard", "text": "Design a branching + release strategy for a mobile team." },
-    { "level": "Expert", "text": "Define a CI/CD pipeline (lint, test, build, deploy) with gates and rollbacks." }
+    { "level": "Easy", "text": "Write user stories with acceptance criteria for a login feature." },
+    { "level": "Easy", "text": "Sketch a Kanban board for a small team's work. Include WIP limits." },
+    { "level": "Medium", "text": "Draft a sprint plan for a 2-week sprint. Story-point estimates for 5-7 stories." },
+    { "level": "Medium", "text": "Write a mock retrospective for a sprint that had 1 shipped feature but 3 bugs in production." },
+    { "level": "Hard", "text": "Design a branching + release strategy for a mobile team (main/dev/feature? feature flags? release cadence?)." },
+    { "level": "Hard", "text": "Design an incident postmortem template. Include impact, timeline, root cause, action items." },
+    { "level": "Expert", "text": "Design a CI/CD pipeline for a Flutter app: lint, tests, build, distribute, deploy, with gates and rollback plan." }
   ],
   "interviewQuestions": [
     "What are the phases of the SDLC?",
-    "Waterfall vs Agile — when use each?",
-    "What is a sprint and what are its ceremonies?",
-    "Where do testing and code review fit?",
-    "What is CI/CD and why does it matter?"
+    "What's the difference between Waterfall and Agile?",
+    "Walk me through a Scrum sprint.",
+    "Where do testing and code review fit in the SDLC?",
+    "What is CI/CD and why does it matter?",
+    "What is 'shift left' testing, and why is it important?",
+    "How would you handle a bug found in production?",
+    "Scrum vs Kanban — when use each?"
   ],
   "references": [
-    { "label": "Atlassian Agile Coach", "url": "https://www.atlassian.com/agile" }
+    { "label": "Atlassian Agile Coach", "url": "https://www.atlassian.com/agile" },
+    { "label": "State of DevOps (DORA) report", "url": "https://dora.dev" }
   ]
 }

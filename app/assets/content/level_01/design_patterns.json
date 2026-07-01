@@ -3,54 +3,109 @@
   "levelId": 1,
   "title": "Design Patterns",
   "xp": 60,
-  "estimatedMinutes": 35,
+  "estimatedMinutes": 45,
   "objectives": [
-    "Group patterns into creational, structural, behavioral",
-    "Recognize Singleton, Factory, Observer, Strategy, Decorator",
-    "Apply a pattern only when it removes real pain"
+    "Understand what design patterns are — with a real-life analogy",
+    "Know the three families (Creational, Structural, Behavioral) and their most common patterns",
+    "Recognize when each pattern helps — and when it hurts",
+    "Implement Singleton, Factory, Observer, Strategy, and Decorator in real code",
+    "Answer design-patterns interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Design patterns are reusable, named solutions to recurring design problems (Gang of Four). They're a shared vocabulary — 'use a Factory here' communicates a whole design in two words." },
-    { "type": "table", "headers": ["Family", "Solves", "Patterns"], "rows": [
-      ["Creational", "How objects are created", "Singleton, Factory, Builder"],
-      ["Structural", "How objects compose", "Adapter, Decorator, Facade, Proxy"],
-      ["Behavioral", "How objects interact", "Observer, Strategy, Command, State"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Imagine architects sharing house blueprints.**\n\nDifferent architects have solved 'how to design a good kitchen' or 'how to handle two entrances' many times. Instead of everyone starting from scratch, they gave those solutions names — 'the U-shaped kitchen,' 'the split-level entrance' — so any two architects can talk about design decisions in seconds.\n\n**That's a design pattern.** A pattern is a name for a solution that has worked many times for a specific recurring problem. When you say 'let's use the Observer pattern,' the whole team knows exactly what shape the code will take — without you drawing it up." },
+    { "type": "callout", "variant": "definition", "markdown": "**Design patterns** are reusable, named solutions to recurring problems in software design. They give teams a **shared vocabulary** — 'let's use a Factory here' communicates a full design in three words. The most influential set is the 'Gang of Four' (GoF) patterns from 1994." },
+    { "type": "theory", "markdown": "## The three families — what each solves\n\nPatterns cluster by what they solve." },
+    { "type": "table", "headers": ["Family", "Solves", "Common patterns"], "rows": [
+      ["Creational", "HOW objects are created", "Singleton, Factory, Builder, Prototype, Abstract Factory"],
+      ["Structural", "HOW objects are composed", "Adapter, Decorator, Facade, Proxy, Composite, Bridge"],
+      ["Behavioral", "HOW objects INTERACT", "Observer, Strategy, Command, State, Template, Iterator, Chain of Responsibility"]
     ]},
-    { "type": "code", "language": "dart", "code": "// Factory: callers ask for a button; factory picks the concrete type\nWidget buildButton(Platform p) {\n  switch (p) {\n    case ios:     return CupertinoButton();\n    case android: return MaterialButton();\n  }\n}" },
-    { "type": "table", "headers": ["Pattern", "Use when", "Real example"], "rows": [
-      ["Singleton", "Exactly one shared instance", "Logger, AppConfig"],
-      ["Factory", "Hide which subclass to create", "Platform widgets"],
-      ["Observer", "Notify many on change", "Streams, BLoC, ChangeNotifier"],
-      ["Strategy", "Swap algorithms at runtime", "Pricing/sorting policies"],
-      ["Decorator", "Add behavior dynamically", "Padding/Container; BufferedReader"]
+    { "type": "theory", "markdown": "## The 5 patterns interviewers actually ask about\n\nYou could learn all 23 GoF patterns. In practice these 5 cover 95% of interviews and daily work." },
+    { "type": "theory", "markdown": "### 1. Singleton — 'exactly one instance'\n\nOne shared instance with a global access point. Common for loggers, config, DB connection pools." },
+    { "type": "code", "language": "dart", "code": "class Logger {\n  Logger._();                              // private constructor\n  static final Logger _instance = Logger._();\n  static Logger get instance => _instance;\n\n  void info(String msg) => print('[INFO] $msg');\n}\n\nvoid main() {\n  Logger.instance.info('app started');\n  final a = Logger.instance;\n  final b = Logger.instance;\n  print(identical(a, b));   // true — same instance\n}" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Singleton is a code smell in disguise.** It's global state. It makes testing hard (can't swap for a fake) and hides dependencies (a class using `Logger.instance` doesn't declare it needs a logger). **Modern preferred alternative:** create one instance at app start and inject it (dependency injection). Same benefit; no global." },
+    { "type": "theory", "markdown": "### 2. Factory — 'let a helper decide which subclass'\n\nHide the decision of which concrete class to instantiate behind a function or class." },
+    { "type": "code", "language": "dart", "code": "abstract class Notification { void show(String msg); }\nclass EmailNotification    extends Notification { @override show(m) => print('email: $m'); }\nclass SmsNotification      extends Notification { @override show(m) => print('sms: $m'); }\nclass WhatsAppNotification extends Notification { @override show(m) => print('wa: $m'); }\n\n// FACTORY\nNotification notifyFor(String channel) {\n  switch (channel) {\n    case 'email':    return EmailNotification();\n    case 'sms':      return SmsNotification();\n    case 'whatsapp': return WhatsAppNotification();\n    default: throw 'unknown';\n  }\n}\n\nvoid main() {\n  notifyFor('sms').show('OTP is 1234');   // caller doesn't know the class\n}" },
+    { "type": "theory", "markdown": "### 3. Observer — 'notify me when something changes'\n\nOne subject; many observers. When the subject changes, it notifies everyone.\n\n**Every reactive UI framework** (Flutter's `ChangeNotifier`, RxJS, BLoC, ChangeNotifier, Riverpod, React) is Observer under a different name." },
+    { "type": "code", "language": "dart", "code": "class Counter {\n  int _value = 0;\n  final _observers = <void Function(int)>[];\n\n  void listen(void Function(int) f) => _observers.add(f);\n  void unlisten(void Function(int) f) => _observers.remove(f);\n\n  int get value => _value;\n\n  void increment() {\n    _value++;\n    for (final f in _observers) f(_value);      // notify\n  }\n}\n\nvoid main() {\n  final counter = Counter();\n  counter.listen((v) => print('Screen 1: $v'));\n  counter.listen((v) => print('Analytics: user reached $v'));\n\n  counter.increment();   // both observers fire\n  counter.increment();\n  // Screen 1: 1\n  // Analytics: user reached 1\n  // Screen 1: 2\n  // Analytics: user reached 2\n}" },
+    { "type": "theory", "markdown": "### 4. Strategy — 'plug in an algorithm at runtime'\n\nSame interface, swappable implementations. Chosen at runtime by the caller.\n\n**Example:** a pricing engine with different discount strategies. Same call, different math." },
+    { "type": "code", "language": "dart", "code": "// Strategy interface\nabstract class PricingStrategy { double apply(double price); }\n\nclass NoDiscount     extends PricingStrategy { @override apply(p) => p; }\nclass PercentOff     extends PricingStrategy {\n  final double pct;\n  PercentOff(this.pct);\n  @override apply(p) => p * (1 - pct/100);\n}\nclass BuyOneGetOne   extends PricingStrategy { @override apply(p) => p / 2; }\n\nclass Cart {\n  PricingStrategy strategy;\n  Cart(this.strategy);\n  double total(double price) => strategy.apply(price);\n}\n\nvoid main() {\n  final cart = Cart(NoDiscount());\n  print(cart.total(100));                       // 100\n  cart.strategy = PercentOff(20);\n  print(cart.total(100));                       // 80\n  cart.strategy = BuyOneGetOne();\n  print(cart.total(100));                       // 50\n}" },
+    { "type": "theory", "markdown": "### 5. Decorator — 'wrap and add behavior without editing the original'\n\nWraps an object to add responsibilities dynamically. Classic use: adding logging or caching to a method call without modifying the class." },
+    { "type": "code", "language": "dart", "code": "abstract class Coffee { double cost(); String description(); }\n\nclass SimpleCoffee extends Coffee {\n  @override cost() => 5.0;\n  @override description() => 'Coffee';\n}\n\n// DECORATOR — wraps a Coffee and adds behavior\nabstract class CoffeeDecorator extends Coffee {\n  final Coffee _wrapped;\n  CoffeeDecorator(this._wrapped);\n}\n\nclass Milk extends CoffeeDecorator {\n  Milk(super.wrapped);\n  @override cost() => _wrapped.cost() + 1.5;\n  @override description() => '${_wrapped.description()}, milk';\n}\n\nclass Sugar extends CoffeeDecorator {\n  Sugar(super.wrapped);\n  @override cost() => _wrapped.cost() + 0.5;\n  @override description() => '${_wrapped.description()}, sugar';\n}\n\nvoid main() {\n  final drink = Sugar(Milk(Milk(SimpleCoffee())));\n  print(drink.description());   // Coffee, milk, milk, sugar\n  print(drink.cost());          // 8.5\n}" },
+    { "type": "callout", "variant": "note", "markdown": "**Flutter's widget wrapping is Decorator** — `Padding(child: Container(child: Text('Hi')))` adds behavior (padding, background) without modifying `Text`. Every wrapper is a Decorator." },
+    { "type": "theory", "markdown": "## Complete quick-reference — when to reach for which pattern" },
+    { "type": "table", "headers": ["Pattern", "Use when…", "Flutter/Real-world example"], "rows": [
+      ["Singleton", "Exactly one shared instance needed", "Logger, AppConfig"],
+      ["Factory", "Hide the choice of which subclass to create", "Platform-specific widgets, TCP connection based on scheme"],
+      ["Builder", "Construct complex object step-by-step", "Flutter widget builders, Stripe request objects"],
+      ["Adapter", "Make an incompatible API work with your code", "Wrapping a 3rd-party SDK"],
+      ["Decorator", "Add behavior dynamically without modification", "Flutter's Padding/Container; Java's BufferedReader"],
+      ["Observer", "Notify many on a change", "Streams, BLoC, ChangeNotifier, Riverpod"],
+      ["Strategy", "Swap algorithms at runtime", "Sorting comparators, discount rules"],
+      ["Command", "Wrap an action as an object (undo/redo, queues)", "Redux actions, task queues"],
+      ["Repository", "Abstract data sources behind a domain interface", "Clean Architecture data layer"]
     ]},
-    { "type": "callout", "variant": "mistake", "markdown": "Overusing Singletons — they're global state in disguise, hurt testability, and cause threading bugs. Prefer injecting one instance over a hard Singleton." },
-    { "type": "callout", "variant": "tip", "markdown": "Patterns are tools, not goals. Reach for one only when it removes real duplication or coupling. Name the pattern after recognizing the problem, not before." }
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Force-fitting a pattern to look clever.**\n\nYou don't earn points for using patterns. You earn points for solving problems. If a `switch` statement is clearer than a Strategy, use the switch. Patterns are tools, not goals." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Overusing Singleton.**\n\nIt's globally accessible state. It hides dependencies. It's hard to test. Prefer creating one instance at startup and injecting it — the same 'one instance' benefit without the drawbacks." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Confusing Factory Method with Abstract Factory.**\n\n**Factory Method** = one function that creates one product. **Abstract Factory** = an interface with multiple factory methods that create *families* of related products. Different levels of complexity." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Recognize the problem first, name the pattern second.** 'I keep needing to swap sort orders' → 'that's a Strategy.' Not the other way around." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Prefer composition-based patterns (Strategy, Decorator, Observer) over inheritance-heavy ones.**" },
+    { "type": "callout", "variant": "best", "markdown": "**3. Modern DI containers replace many creational patterns.** Spring's IoC, Riverpod's providers — you rarely hand-roll Singletons or Factories." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Reactive frameworks (Flutter, RxJS, LiveData) replace hand-rolled Observer.** Don't reinvent the wheel — use the framework's version." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Thread-safe Singleton Logger.** Implement in your language. Confirm two calls return the same instance.\n\n**Why:** Baseline pattern; catches whether you understand static initialization." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Notification Factory.** Interface `Notification` with `Email`, `Sms`, `WhatsApp` implementations. Factory function returns the right one.\n\n**Why:** Factory is used everywhere. Building it once cements it." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — Observer from scratch.** Build a Subject that notifies observers on state changes. Then rewire it to use `Stream` and see how the framework version compares.\n\n**Why:** The classic pattern that underlies BLoC, Redux, and every state management." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Expert) — Coffee shop combining Factory + Decorator + Strategy.** `DrinkFactory` produces base drinks. `Decorator`s add milk/sugar/toppings. `Strategy` picks payment method. Ring up an order.\n\n**Why:** Real design has multiple patterns interacting; practicing them together is critical." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What problem does Singleton solve, and what are its downsides?**\n\n**A:** Singleton ensures exactly one instance of a class exists, with a global point of access. Useful for shared resources — a logger, an app config, a connection pool — where creating multiples would be wasteful or wrong. **Downsides**: it's global state, which makes testing harder (you can't swap it for a fake), hides dependencies (classes using `Logger.instance` don't declare they need a Logger), and can cause thread-safety issues if initialized lazily without care. The modern preferred alternative is **dependency injection**: create the single instance at app startup and pass it into whatever needs it. Same 'one shared instance' benefit, no global." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: Factory vs Abstract Factory vs Builder — how are they different?**\n\n**A:** **Factory Method** hides which concrete class to instantiate behind a function. `Notification factoryFor(channel)` returns the right subclass without callers knowing which. **Abstract Factory** is bigger — it's an interface with *several* factory methods that create *families* of related products (e.g., a `UiKitFactory` with `createButton()`, `createDialog()`, `createSlider()`; there's a MaterialUiFactory and a CupertinoUiFactory). **Builder** is different in shape — it constructs a complex object step by step, letting the caller chain configuration methods. Great for objects with many optional parameters (Flutter widget builders, SQL query builders, StringBuilder). Rule of thumb: Factory for one thing, Abstract Factory for a family, Builder for step-by-step construction." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How is the Observer pattern used in reactive UI / state management?**\n\n**A:** In reactive UI, the UI is an observer of application state. The state (Subject) exposes a way to subscribe; when it changes, subscribers re-render. **Flutter** — `ChangeNotifier` calls `notifyListeners()`; widgets listening via `AnimatedBuilder` or `Provider` rebuild. **BLoC** — the Bloc emits new states through a Stream; `BlocBuilder` subscribes and rebuilds. **Riverpod** — `ref.watch(provider)` subscribes; UI rebuilds on emissions. **Redux/MobX** — same shape. Observer is such a natural fit for UI that every major framework builds it in. Recognizing this means you can pick up any state-management library in an afternoon." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: Strategy vs State pattern — how are they different?**\n\n**A:** They look almost identical structurally — both have an interface with implementations, and a context holds a reference to one. The difference is *intent*. **Strategy** — the caller *chooses* which algorithm to plug in, and it doesn't change on its own. Sorting by name vs date. Payment via card vs UPI. The strategy is stable for the operation. **State** — the object *transitions* between states based on its own logic. A traffic light goes Red → Green → Yellow → Red. A media player goes Stopped → Playing → Paused → Stopped. The state changes itself. If it's caller-selected, it's Strategy; if it's the object managing its own transitions, it's State." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: Decorator vs inheritance for adding behavior — when use each?**\n\n**A:** Both add behavior. **Inheritance** does it at compile time via a subclass — `LoggingUserService extends UserService`. It's fine when you know the combinations you'll need. **Decorator** does it at runtime by wrapping — `Logging(Caching(Retrying(baseService)))`. It shines when you have many combinations (with logging, without caching, with retries, etc.) or when adding behavior *dynamically*. Java's I/O streams are a textbook example: `new BufferedReader(new InputStreamReader(new FileInputStream(f)))` stacks decorators. Flutter widgets are also decorators — `Padding(Container(Text(...)))` stacks visual/layout behaviors. Prefer Decorator when you value flexibility over 'baked in at compile time.'" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: Where have you used the Repository pattern?**\n\n**A:** Repository sits between the domain layer and the data source, exposing a clean interface like `getUserById(id)`, `updateUser(user)`, and hiding whether the data comes from a REST API, a SQL DB, or a cache. In a Flutter app I built, the ViewModel called `orderRepository.recentOrders()` — the ViewModel didn't know or care that the repository fetched from HTTP and cached in Hive. If we later migrated the API, only the repository changed. Repository is Dependency Inversion in action — the domain depends on an abstract repository interface, and infrastructure provides the concrete implementation. Every Clean Architecture codebase relies on this pattern." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: How would you approach applying multiple patterns in one design?**\n\n**A:** Start by identifying which problems you actually have. Different patterns solve different problems and can compose freely: **Factory** creates the right thing; **Strategy** varies behavior at runtime; **Decorator** stacks features; **Observer** notifies interested parties; **Repository** hides data-source details. In a checkout system, for example, `PaymentFactory` creates the right `PaymentMethod`; a `DiscountStrategy` computes the discount; `LoggingDecorator` wraps the payment method to log every attempt; an `OrderObserver` fires analytics events. Each pattern solves its own problem cleanly, and they compose. The mistake is picking a pattern before you have the problem." },
+    { "type": "theory", "markdown": "## Real-world examples\n\n- **Flutter** is a pattern catalog: **Composite** (widget trees), **Decorator** (Container/Padding), **Observer** (Streams, ChangeNotifier, BLoC), **Command** (navigation), **Repository** (data layer), **Singleton-via-DI** (via get_it/Riverpod).\n- **Java's `Collections.sort(list, comparator)`** is Strategy — the comparator is the plugged-in algorithm.\n- **Every payment integration** (Stripe, Razorpay) uses Factory + Adapter — a factory picks the right provider, adapters translate their API to your domain.\n- **Every logging library** (log4j, logback) uses Chain of Responsibility for filters and Decorator for handlers.\n- **Recognizing these patterns in production code makes senior engineers efficient** — they can navigate large codebases quickly because 'oh, that's just Observer' takes seconds to understand." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Anti-patterns:** God object, spaghetti code, golden hammer ('one pattern for everything'), premature optimization. Learn to name these too.\n- **Architectural patterns** are meta-patterns for whole apps: MVC, MVVM, MVI, Clean Architecture, Hexagonal. Different scale from GoF patterns.\n- **Concurrency patterns** — producer/consumer, thread pool, future/promise, actor model, reactor. Each solves a threading problem.\n- **Modern DI containers** (Spring, Hilt, get_it, Riverpod) automate Factory, Singleton, and Dependency Injection — reducing hand-rolled patterns.\n- **Functional programming challenges the necessity of many patterns** — first-class functions replace Strategy and Command; immutable data replaces some Observer needs. Not either/or, but worth knowing." }
   ],
   "flashcards": [
-    { "front": "Three pattern families?", "back": "Creational (creation), Structural (composition), Behavioral (interaction)." },
-    { "front": "Which pattern powers reactive UI?", "back": "Observer — a subject notifies many observers (Streams, BLoC, ChangeNotifier, RxJS)." },
-    { "front": "Strategy pattern in one line?", "back": "Encapsulate interchangeable algorithms behind a common interface and swap them at runtime." }
+    { "front": "The three pattern families?", "back": "Creational (how objects are created), Structural (how composed), Behavioral (how they interact)." },
+    { "front": "Singleton in one line — and its main downside?", "back": "Ensures exactly one instance with global access. Downside: it's global state, hard to test." },
+    { "front": "Factory vs Abstract Factory?", "back": "Factory Method creates one product. Abstract Factory creates families of related products." },
+    { "front": "Observer in one line?", "back": "One subject, many observers; subject notifies observers on change. Basis of every reactive UI." },
+    { "front": "Strategy vs State?", "back": "Strategy: caller picks the algorithm. State: object transitions between states on its own." },
+    { "front": "Repository in one line?", "back": "Interface hiding data-source details from the domain. Domain sees `getUser(id)`; doesn't know it's HTTP + cache." }
   ],
   "quiz": [
-    { "q": "Observer pattern is the basis of…", "options": ["Sorting", "Reactive UI / state management", "Encryption", "Garbage collection"], "answer": 1, "explain": "Streams, BLoC and ChangeNotifier all notify observers of state changes." },
-    { "q": "Singleton's main downside is…", "options": ["It's too fast", "Global state that hurts testability", "It can't be created", "It needs a database"], "answer": 1, "explain": "Singletons are hidden global state and make tests harder; prefer DI." },
-    { "q": "Which family does Factory belong to?", "options": ["Structural", "Behavioral", "Creational", "Concurrency"], "answer": 2, "explain": "Factory is a creational pattern — it's about how objects are created." }
+    { "q": "Observer is the basis of…", "options": ["Sorting", "Reactive UI / state management", "Encryption", "GC"], "answer": 1, "explain": "Streams, ChangeNotifier, BLoC — all Observer." },
+    { "q": "Singleton's main downside is…", "options": ["Slower", "Global state hurts testability", "Uses more memory", "Can't be extended"], "answer": 1, "explain": "It's global state. Prefer DI." },
+    { "q": "Which family does Factory belong to?", "options": ["Structural", "Behavioral", "Creational", "Concurrency"], "answer": 2, "explain": "It creates objects." },
+    { "q": "Wrapping an object to add behavior at runtime is…", "options": ["Adapter", "Decorator", "Facade", "Proxy"], "answer": 1, "explain": "Decorator adds behavior; Adapter makes incompatible APIs work together." },
+    { "q": "Repository sits between…", "options": ["UI and network", "Domain and data sources", "OS and CPU", "React and Vue"], "answer": 1, "explain": "It exposes domain-shaped methods and hides data-source details." }
   ],
   "challenges": [
     { "level": "Easy", "text": "Implement a thread-safe Singleton logger." },
-    { "level": "Medium", "text": "Build a notification Factory returning Email/SMS/Push senders." },
-    { "level": "Hard", "text": "Implement Observer from scratch and drive a UI counter." },
-    { "level": "Expert", "text": "Design a payment pipeline combining Strategy + Decorator + Factory." }
+    { "level": "Easy", "text": "Implement a Factory that returns Email/SMS/WhatsApp notifications based on input." },
+    { "level": "Medium", "text": "Build Observer from scratch — Subject + observers + notify. Then rewrite using `Stream` and compare." },
+    { "level": "Medium", "text": "Build a Strategy pattern for pricing: NoDiscount, PercentOff, BuyOneGetOne." },
+    { "level": "Hard", "text": "Build a Decorator chain for a coffee shop — SimpleCoffee wrapped by Milk, Sugar, Vanilla decorators." },
+    { "level": "Hard", "text": "Build a small plugin system (Command pattern) — plugins register named commands; a dispatcher runs them by name." },
+    { "level": "Expert", "text": "Design a checkout system that combines Factory (payment method), Strategy (discount), Decorator (logging), and Observer (analytics) — showing how patterns compose." }
   ],
   "interviewQuestions": [
-    "What problem does Singleton solve and what are its downsides?",
-    "Factory vs Abstract Factory vs Builder?",
-    "How is Observer used in state management?",
-    "Strategy vs State pattern?",
-    "Where have you used the Repository pattern?"
+    "What problem does Singleton solve, and what are its downsides?",
+    "Factory vs Abstract Factory vs Builder — how are they different?",
+    "How is the Observer pattern used in reactive UI / state management?",
+    "Strategy vs State pattern — how are they different?",
+    "Decorator vs inheritance for adding behavior — when use each?",
+    "Where have you used the Repository pattern?",
+    "How would you approach applying multiple patterns in one design?",
+    "What is Adapter pattern and give a real example?"
   ],
   "references": [
-    { "label": "Refactoring Guru — Design Patterns", "url": "https://refactoring.guru/design-patterns" }
+    { "label": "Refactoring Guru — Design Patterns", "url": "https://refactoring.guru/design-patterns" },
+    { "label": "Design Patterns: Elements of Reusable OO Software (Gang of Four)", "url": "https://en.wikipedia.org/wiki/Design_Patterns" }
   ]
 }

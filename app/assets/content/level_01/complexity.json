@@ -1,53 +1,110 @@
 {
   "id": "cs.complexity",
   "levelId": 1,
-  "title": "Time & Space Complexity",
+  "title": "Time & Space Complexity (Big-O)",
   "xp": 40,
-  "estimatedMinutes": 20,
+  "estimatedMinutes": 35,
   "objectives": [
-    "Order the Big-O growth ladder",
-    "Analyze loops to a Big-O bound",
-    "Always report both time and space"
+    "Understand Big-O with a real-life analogy — not a math formula",
+    "Order the growth-rate ladder from best to worst",
+    "Analyze real code and give its Big-O in seconds",
+    "Distinguish time complexity from space complexity",
+    "Answer Big-O interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Big-O describes how an algorithm's time or memory grows as input size n grows, ignoring constants and lower-order terms. It is the language of efficiency." },
-    { "type": "table", "headers": ["Big-O", "Name", "Example"], "rows": [
-      ["O(1)", "Constant", "Hash lookup"],
-      ["O(log n)", "Logarithmic", "Binary search"],
-      ["O(n)", "Linear", "Scan an array"],
-      ["O(n log n)", "Linearithmic", "Merge/Quick sort"],
-      ["O(n^2)", "Quadratic", "Nested loops"],
-      ["O(2^n)", "Exponential", "Naive recursion"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Imagine you're catering a party.**\n\n- A recipe that takes **the same time whether you cook for 5 or 500 people** — that's O(1). Constant.\n- A recipe that takes **twice as long for twice as many guests** — that's O(n). Linear.\n- A recipe where **doubling the guests quadruples the work** (you have to introduce every guest to every other guest) — that's O(n²). Quadratic.\n- A recipe that **only adds a little work every time you double** — that's O(log n). Logarithmic.\n\nBig-O is a way to talk about **how a recipe scales**, ignoring things like 'how fast your stove is.' Two O(n) recipes might differ by a factor of 3 in real time — but as guests grow, both grow at the same *rate*. And a fast stove can't save an O(n²) recipe once you have 10,000 guests." },
+    { "type": "callout", "variant": "definition", "markdown": "**Big-O notation** describes how an algorithm's running time or memory grows as the input size **n** grows, ignoring constants and lower-order terms. It's the vocabulary engineers use to reason about efficiency at scale." },
+    { "type": "theory", "markdown": "## The growth-rate ladder — memorize this once, use it forever" },
+    { "type": "table", "headers": ["Big-O", "Name", "For n=1,000", "Example"], "rows": [
+      ["O(1)", "Constant", "1 op", "Look up in a hash map"],
+      ["O(log n)", "Logarithmic", "~10 ops", "Binary search"],
+      ["O(n)", "Linear", "1,000 ops", "Scan an array"],
+      ["O(n log n)", "Linearithmic", "~10,000 ops", "Merge sort, Quick sort avg"],
+      ["O(n²)", "Quadratic", "1,000,000 ops", "Two nested loops"],
+      ["O(2ⁿ)", "Exponential", "10³⁰⁰ ops", "Naive recursive Fibonacci"],
+      ["O(n!)", "Factorial", "impossible", "Brute-force all permutations"]
     ]},
-    { "type": "callout", "variant": "analogy", "markdown": "Big-O is about how a **recipe scales**, not how fast your stove is. O(n²) means doubling guests quadruples the work — regardless of how fast any single step runs." },
-    { "type": "code", "language": "text", "code": "for i in 0..n:        # O(n)\n  for j in 0..n:      # nested -> O(n^2)\n    work()            # O(1)\nRules: drop constants; drop lower terms;\n       nested loops multiply, sequential loops add." },
-    { "type": "callout", "variant": "mistake", "markdown": "Forgetting space complexity. A recursive solution may be O(n) time but O(n) stack space. Always state both." },
-    { "type": "callout", "variant": "interview", "markdown": "Give complexity unprompted: 'This is O(n) time, O(1) space.' Then note worst vs average and whether a better bound exists." }
+    { "type": "callout", "variant": "tip", "markdown": "**Rule of thumb for input size limits (competitive-programming folklore):**\n\n- n ≤ 10   → O(n!) or O(2ⁿ) OK\n- n ≤ 20   → O(2ⁿ) or bitmask DP\n- n ≤ 500  → O(n³) OK\n- n ≤ 10⁴  → O(n²) OK\n- n ≤ 10⁶  → O(n) or O(n log n) required\n- n ≤ 10⁹  → O(log n) or O(1)" },
+    { "type": "theory", "markdown": "## O, Ω, Θ — three symbols that confuse everyone at first" },
+    { "type": "table", "headers": ["Symbol", "Meaning", "Plain English"], "rows": [
+      ["O(f)", "Upper bound", "The algorithm is no *slower* than f (worst case)"],
+      ["Ω(f)", "Lower bound", "The algorithm is no *faster* than f (best case)"],
+      ["Θ(f)", "Tight bound", "It's exactly f — both an upper and lower bound"]
+    ]},
+    { "type": "callout", "variant": "note", "markdown": "In everyday engineering talk, 'Big-O' almost always means 'worst-case time complexity.' Interviews rarely ask about Ω or Θ formally — but knowing what they mean makes you sound precise." },
+    { "type": "theory", "markdown": "## How to analyze code quickly — three rules\n\n1. **Nested loops multiply.** A loop inside a loop over the same n is O(n²).\n2. **Sequential loops add** — but you drop lower-order terms, so O(n) + O(n) = O(n).\n3. **Drop constants.** O(2n + 5) is O(n). O(3n²) is O(n²). Big-O is about *shape*, not exact count." },
+    { "type": "code", "language": "dart", "code": "// Example: what's the Big-O?\nfor (var i = 0; i < n; i++) {          // O(n)\n  for (var j = 0; j < n; j++) {        // O(n)  nested\n    work();                            // O(1)\n  }\n}\n// Total: O(n) * O(n) * O(1) = O(n²)\n\n// Sequential loops:\nfor (var i = 0; i < n; i++) work();    // O(n)\nfor (var j = 0; j < n; j++) work();    // O(n)\n// Total: O(n) + O(n) = O(2n) = O(n)   (drop constants)\n\n// Nested but different sizes:\nfor (var i = 0; i < n; i++) {          // O(n)\n  for (var j = 0; j < m; j++) work();  // O(m)\n}\n// Total: O(n * m). If m is a small constant, effectively O(n)." },
+    { "type": "theory", "markdown": "## Space complexity — the equally important twin\n\nEvery Big-O question has TWO answers: **time** (how long?) and **space** (how much extra memory?). Interviewers *love* asking 'can you do it in O(1) extra space?' Always report both." },
+    { "type": "table", "headers": ["Algorithm", "Time", "Space"], "rows": [
+      ["Binary search (iterative)", "O(log n)", "O(1)"],
+      ["Binary search (recursive)", "O(log n)", "O(log n) stack"],
+      ["Merge sort", "O(n log n)", "O(n)"],
+      ["Quick sort", "O(n log n) avg", "O(log n) stack"],
+      ["Hash map lookup", "O(1) avg", "O(n) to store"],
+      ["Reverse array in place", "O(n)", "O(1)"]
+    ]},
+    { "type": "theory", "markdown": "## A complete sample program — feel the difference\n\nThe SAME 'find duplicates' problem in O(n²) vs O(n) — measure it on real inputs. The gap grows with n." },
+    { "type": "code", "language": "dart", "code": "// File: complexity_demo.dart\n// Run: dart complexity_demo.dart\nimport 'dart:math';\n\nvoid main() {\n  for (final n in [1000, 5000, 10000, 20000]) {\n    final list = List.generate(n, (i) => Random(42).nextInt(n));\n\n    // O(n²) — check every pair.\n    var t = DateTime.now();\n    var dups1 = 0;\n    for (var i = 0; i < list.length; i++) {\n      for (var j = i + 1; j < list.length; j++) {\n        if (list[i] == list[j]) { dups1++; break; }\n      }\n    }\n    final ms1 = DateTime.now().difference(t).inMilliseconds;\n\n    // O(n) — hash set.\n    t = DateTime.now();\n    var dups2 = 0; final seen = <int>{};\n    for (final x in list) {\n      if (!seen.add(x)) dups2++;\n    }\n    final ms2 = DateTime.now().difference(t).inMilliseconds;\n\n    print('n=$n | O(n²): $ms1 ms | O(n): $ms2 ms | ratio: ${max(ms2,1)==0?'∞':(ms1 / max(ms2,1)).toStringAsFixed(0)}x');\n  }\n}\n\n// Typical output (laptop):\n// n=1000  | O(n²): 4 ms    | O(n): 1 ms | ratio: 4x\n// n=5000  | O(n²): 60 ms   | O(n): 1 ms | ratio: 60x\n// n=10000 | O(n²): 240 ms  | O(n): 2 ms | ratio: 120x\n// n=20000 | O(n²): 1050 ms | O(n): 3 ms | ratio: 350x\n// \n// Notice: as n doubles, O(n²) time roughly QUADRUPLES.\n// As n doubles, O(n) time roughly DOUBLES.\n// That's Big-O made real.\"" },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Forgetting to report space complexity.**\n\nA recursive solution may be O(n) time and *also* O(n) stack space. An interviewer will always ask 'can you do it in O(1) space?' — state both up front." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Confusing 'looks slow' with 'is slow.'**\n\nCode with lots of statements may actually be O(n). Code with one line may be O(n²) (like `list.contains(x)` inside a loop). Look at *what the operations touch*, not line count." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Ignoring the hidden cost of built-in operations.**\n\n`list.contains(x)` is O(n). `set.contains(x)` is O(1). `list.insert(0, x)` is O(n). These small choices flip your algorithm's Big-O without changing the visible logic." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Report BOTH time and space** every time. 'This is O(n) time, O(1) space.'" },
+    { "type": "callout", "variant": "best", "markdown": "**2. Also mention worst / average / amortized.** A hash map is O(1) *average* but O(n) worst case. A dynamic-array push is O(1) *amortized* but O(n) on resize." },
+    { "type": "callout", "variant": "best", "markdown": "**3. When you can, sketch what dominates.** 'The hash-map lookup is O(1) so the loop is O(n).' Naming which step dominates shows senior thinking." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Big-O is not a substitute for benchmarking.** For real code, measure. Constants matter in production even if they don't in theory." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Big-O of common ops.** Write down the time complexity of: `list.contains`, `set.contains`, `list[i]`, `list.insert(0, x)`, `map[key]`. No cheating.\n\n**Why:** These are the operations you'll analyze a hundred times a week." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Improve an O(n²) function.** Take any 'find duplicates' or 'has common element' function and rewrite it to be O(n) using a hash set. Measure the speedup.\n\n**Why:** This is the single most common interview transformation." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — Quickselect: find the k-th largest in O(n) average.** Instead of sorting (O(n log n)), use partitioning.\n\n**Why:** A gorgeous example of beating the 'obvious' complexity by picking a smarter algorithm." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Expert) — Floyd cycle detection.** Detect a cycle in a linked list in **O(n) time, O(1) space**. Compare to the naive hash-set version which is O(n) space.\n\n**Why:** A masterclass in reducing space complexity by using clever pointer math." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is Big-O and why do we use it?**\n\n**A:** Big-O describes how an algorithm's running time or memory grows as the input size n grows, ignoring constants and lower-order terms. We use it because raw wall-clock times depend on the machine — a fast laptop can hide a bad algorithm on small inputs. Big-O gives us a machine-independent way to compare algorithms and predict what happens as inputs get larger. It's the language engineers use to reason about whether an approach will scale from 100 users to 100 million." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What's the difference between O, Ω, and Θ?**\n\n**A:** **O(f)** is an upper bound — the algorithm runs *no slower* than f (worst case). **Ω(f)** is a lower bound — *no faster* than f (best case). **Θ(f)** is both — the algorithm is exactly f, up to constants. In practice, engineers say 'Big-O' to mean 'worst-case time.' Formally though, saying 'quicksort is O(n²)' is correct (upper bound), but 'quicksort is Θ(n log n)' is only true for the average case. Precision matters in academic contexts; in interviews, 'O(worst case)' is usually what's meant." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do you compute the Big-O of nested loops?**\n\n**A:** Nested loops multiply their complexities. A loop of length n containing a loop of length m is O(n × m). If both are n, it's O(n²). Sequential loops add — but you drop lower-order terms, so O(n) + O(n²) = O(n²). Also **drop constants** — O(3n²) is O(n²). The rule of thumb: identify which step runs the most times, and count how many times it runs relative to the input." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What is amortized complexity?**\n\n**A:** Amortized complexity is the *average cost per operation across a long sequence*, even if individual operations occasionally take longer. Classic example: dynamic array (`ArrayList`, `List`) `push_back`. Most calls are O(1) — you write into the next slot. But when the array is full, it has to allocate a new bigger buffer and copy everything over — an O(n) operation. Because that expensive operation happens *rarely* (every doubling), the *average* cost per push is still O(1). So we say push is 'O(1) amortized.' Amortized analysis is why dynamic arrays are fast in practice despite occasionally paying a big price." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: A hash map is 'O(1) average.' What could make it slower?**\n\n**A:** Three main things. **Hash collisions** — if too many keys hash to the same bucket, lookup degrades to O(n) walking that bucket's chain. Adversarial input can cause this deliberately (hash DoS). **Load factor too high** — if the table is nearly full, collisions become more common; good implementations resize when the load factor crosses a threshold like 0.75, which is an O(n) operation. **Bad hash function** — a hash that doesn't spread keys uniformly causes clustering. Java's HashMap since v8 mitigates worst-case by converting a chain to a red-black tree when it exceeds 8 entries, bounding worst-case at O(log n). But you'll still hear 'O(1) average' as the standard answer." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: Can you reduce an O(n²) solution to O(n)?**\n\n**A:** Yes — most of the time, by using a hash map or set. The classic transformation: a nested loop that asks 'have I seen this before?' becomes one loop with a hash set. `for (i) for (j) if (a[i] == a[j])` becomes `for (i) if (!seen.add(a[i])) ...`. Another common transformation: sort first, then use two pointers — sorting is O(n log n), the two-pointer scan is O(n), better than O(n²). When you can't reduce it, at least reduce the *constant* — cache locality, batching, early exit. But 'wrap it in a hash structure' is the single most common way to get from n² to n." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: Why do we ignore constants in Big-O, and when do they actually matter?**\n\n**A:** We ignore constants because at scale they're overwhelmed by the growth rate — O(1000n) grows the same shape as O(n), and once n is big enough, both are dwarfed by O(n²). So Big-O captures *how the shape scales*, which is what matters when comparing algorithms. **But constants matter in production.** A O(n) algorithm with a 1000× constant might lose to an O(n²) algorithm on inputs of 100. Cache-friendly linear scans often beat pointer-chasing structures with the same Big-O. Interviewers care about Big-O first; production engineers care about both — Big-O to prevent catastrophes, constants for the last 20% of speed." },
+    { "type": "theory", "markdown": "## Real-world examples\n\n- **The reason Instagram loads fast on 100,000 followers** — feed generation is designed to be O(log n) or O(1) per user, never O(n) over the friend list.\n- **The reason your Flutter app scrolls smoothly** — `ListView.builder` is O(1) per frame regardless of list size (only visible items render), instead of building everything up front.\n- **Database indexes turn O(n) full-table scans into O(log n) B-tree lookups** — the difference between a 10 ms query and a 30 second query on a large table.\n- **Google Search** couldn't work if it was O(n) over the whole web on every query — inverted indexes make it O(log n) per matching term." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Master theorem** — a shortcut for the Big-O of divide-and-conquer recurrences like `T(n) = a·T(n/b) + f(n)`.\n- **Amortized analysis techniques** — aggregate, accounting, potential methods. Doorbell-and-cookies analogies help.\n- **Space-time trade-offs** — memoization uses O(n) memory to save O(n) or O(2ⁿ) time. Precomputation is buying speed with memory.\n- **Cache-aware complexity** — two O(n) loops can differ 10× because of memory access patterns. Big-O doesn't capture this — measure.\n- **NP-completeness** — problems for which no polynomial algorithm is known. Recognize them (TSP, subset-sum, graph coloring) so you don't hunt for one." }
   ],
   "flashcards": [
-    { "front": "The Big-O ladder, best to worst?", "back": "O(1) < O(log n) < O(n) < O(n log n) < O(n²) < O(2ⁿ) < O(n!)." },
-    { "front": "O vs Ω vs Θ?", "back": "O = upper bound (worst), Ω = lower bound (best), Θ = tight bound (both)." },
-    { "front": "How do nested vs sequential loops combine?", "back": "Nested loops multiply their costs; sequential loops add." }
+    { "front": "The growth ladder, best to worst?", "back": "O(1) < O(log n) < O(n) < O(n log n) < O(n²) < O(2ⁿ) < O(n!)." },
+    { "front": "Two nested loops over n?", "back": "O(n²) — nested loops multiply." },
+    { "front": "Drop constants and lower terms?", "back": "Yes. O(3n² + 5n + 100) = O(n²)." },
+    { "front": "What are the two dimensions of complexity?", "back": "Time (how long?) and space (how much extra memory?). Report both." },
+    { "front": "What is amortized O(1)?", "back": "Average cost per op is constant across a long sequence, even if occasional ops are more expensive (e.g., dynamic-array push)." }
   ],
   "quiz": [
-    { "q": "Two nested loops over n give…", "options": ["O(n)", "O(log n)", "O(n^2)", "O(2^n)"], "answer": 2, "explain": "Each level multiplies: n × n = n²." },
-    { "q": "Which is fastest-growing (worst) for large n?", "options": ["O(n log n)", "O(n^2)", "O(2^n)", "O(n)"], "answer": 2, "explain": "Exponential growth dwarfs polynomial growth as n increases." },
-    { "q": "O(2n + 5) simplifies to…", "options": ["O(2n)", "O(n)", "O(5)", "O(n^2)"], "answer": 1, "explain": "Drop constants and lower terms: O(n)." }
+    { "q": "Big-O of a single loop from 0 to n?", "options": ["O(1)", "O(log n)", "O(n)", "O(n²)"], "answer": 2, "explain": "Linear in n." },
+    { "q": "The fastest-growing (worst) for large n is…", "options": ["O(n log n)", "O(n²)", "O(2ⁿ)", "O(n)"], "answer": 2, "explain": "Exponential dominates polynomial." },
+    { "q": "O(2n + 5) simplifies to…", "options": ["O(n)", "O(2n)", "O(5)", "O(n²)"], "answer": 0, "explain": "Drop constants and lower terms." },
+    { "q": "Binary search complexity?", "options": ["O(1)", "O(log n)", "O(n)", "O(n log n)"], "answer": 1, "explain": "Halves the search space each step." },
+    { "q": "Dynamic-array `push` is…", "options": ["Always O(n)", "Always O(1)", "O(1) amortized, occasional O(n) resize", "O(log n)"], "answer": 2, "explain": "Occasional resize costs O(n); most pushes are O(1)." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Given snippets, state the time and space complexity of each." },
-    { "level": "Medium", "text": "Rewrite an O(n²) duplicate-finder as O(n) with a hash set." },
-    { "level": "Hard", "text": "Find the k-th largest element in O(n) average with quickselect." },
-    { "level": "Expert", "text": "Solve a problem in O(1) extra space you first solved in O(n) (e.g. Floyd cycle detection)." }
+    { "level": "Easy", "text": "For each snippet, state the time and space complexity. Test yourself before checking." },
+    { "level": "Easy", "text": "State the Big-O of: `list.contains`, `set.contains`, `list[i]`, `list.insert(0, x)`, `map[k]`." },
+    { "level": "Medium", "text": "Rewrite an O(n²) duplicate-finder as O(n) using a hash set. Measure both." },
+    { "level": "Medium", "text": "Given a sorted list, find any pair that sums to a target in O(n) with two pointers." },
+    { "level": "Hard", "text": "Quickselect: find the k-th largest element in O(n) average." },
+    { "level": "Hard", "text": "Detect a cycle in a linked list in O(n) time AND O(1) space (Floyd's tortoise and hare)." },
+    { "level": "Expert", "text": "Given an O(n) solution to a problem, reduce it to O(log n) using binary search + a monotonic property. (Example: 'find the smallest capacity that finishes in D days.')" }
   ],
   "interviewQuestions": [
-    "Difference between O, Ω and Θ?",
-    "What's the complexity of binary search and why?",
-    "Average vs worst case for quicksort and hash lookups?",
+    "What is Big-O and why do we use it?",
+    "What's the difference between O, Ω, and Θ?",
+    "How do you compute the Big-O of nested loops?",
     "What is amortized complexity?",
-    "Reduce a given O(n²) solution to O(n log n) or O(n)."
+    "A hash map is 'O(1) average.' What could make it slower?",
+    "Can you reduce an O(n²) solution to O(n)?",
+    "Why do we ignore constants in Big-O, and when do they actually matter?",
+    "What's the difference between time and space complexity?"
   ],
   "references": [
-    { "label": "Big-O Cheat Sheet", "url": "https://www.bigocheatsheet.com" }
+    { "label": "Big-O Cheat Sheet", "url": "https://www.bigocheatsheet.com" },
+    { "label": "MIT OpenCourseWare — Intro to Algorithms", "url": "https://ocw.mit.edu/courses/6-006-introduction-to-algorithms-spring-2020/" }
   ]
 }

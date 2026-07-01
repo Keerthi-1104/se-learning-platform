@@ -3,49 +3,106 @@
   "levelId": 1,
   "title": "Git Fundamentals",
   "xp": 40,
-  "estimatedMinutes": 20,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Understand Git's three areas and the commit graph",
-    "Use branches, merges and rebases correctly",
-    "Recover safely from mistakes"
+    "Understand Git via a real-life analogy",
+    "Know the 3 areas (working dir, staging, repo) and the daily commands",
+    "Understand branches, merges, and rebases without confusion",
+    "Recover from mistakes safely (reflog, revert, reset)",
+    "Answer Git interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Git is a distributed version control system that tracks changes as a graph of immutable commits, enabling branching, collaboration and history." },
-    { "type": "code", "language": "bash", "code": "working dir --(git add)--> staging --(git commit)--> repo\ngit status      # what changed\ngit add -p      # stage hunks\ngit commit -m   # snapshot\ngit push        # share" },
-    { "type": "table", "headers": ["Concept", "What it is"], "rows": [
-      ["Commit", "An immutable snapshot + parent pointer"],
-      ["Branch", "A movable pointer to a commit"],
-      ["HEAD", "Your current commit/branch"],
-      ["Merge", "Joins histories, creates a merge commit"],
-      ["Rebase", "Replays commits onto a new base (linear history)"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Imagine writing a novel with your friends across a shared Google Doc.**\n\n- **Your local copy** is the manuscript on your desk. You can scribble freely.\n- The **shared Doc** is the central version everyone builds on.\n- Every time you finish a chapter, you **save a snapshot** with a note — 'Chapter 3: introduced villain.' Every snapshot is a **commit**.\n- If your friend and you edited the same paragraph, you have to **merge** — decide which version wins.\n- If you regret a chapter, you can **jump back** to any snapshot.\n\n**Git is that but disciplined**: every save is deliberate, every change traceable to a person, every mistake reversible. It's the tool humanity built for versioning source code — and it turned out to be the tool for versioning anything." },
+    { "type": "callout", "variant": "definition", "markdown": "**Git** is a distributed version-control system that tracks changes as a graph of immutable **commits** — snapshots of your project at a moment in time. It lets many developers work on the same code without stepping on each other, and lets anyone see, compare, or revert any moment in the project's history." },
+    { "type": "theory", "markdown": "## The 3 areas — the mental model everyone needs" },
+    { "type": "code", "language": "text", "code": "  ┌─────────────────┐  git add    ┌──────────────┐  git commit   ┌──────────────┐\n  │  Working dir    │ ──────────► │   Staging    │ ─────────────► │  Repository  │\n  │  (your edits)   │             │   (index)    │                │  (history)    │\n  └─────────────────┘             └──────────────┘                └──────────────┘\n         ▲                                                                │\n         │                          git checkout                          │\n         └────────────────────────────────────────────────────────────────┘\n\n  Working directory: files you can edit right now.\n  Staging area:      the changes you're preparing to commit.\n  Repository:        the permanent history of commits (in `.git/`).\n\n  Rule of thumb:\n     git add  = 'I want THIS change in the next commit.'\n     git commit = 'take a snapshot with a message.'\n     git push = 'send my snapshots to the shared server (GitHub/GitLab).'" },
+    { "type": "theory", "markdown": "## The 10 commands that cover 95% of daily use" },
+    { "type": "table", "headers": ["Command", "What it does"], "rows": [
+      ["git clone <url>", "Download a project"],
+      ["git status", "What's changed / staged?"],
+      ["git add <file>", "Stage changes for the next commit"],
+      ["git commit -m 'msg'", "Save a snapshot"],
+      ["git push", "Send your commits to the remote"],
+      ["git pull", "Fetch + merge remote changes"],
+      ["git checkout -b <branch>", "Create + switch to a new branch"],
+      ["git switch <branch>", "Just switch branches (modern replacement for `checkout`)"],
+      ["git log --oneline", "See the history"],
+      ["git diff", "See what changed"]
     ]},
-    { "type": "callout", "variant": "mistake", "markdown": "Force-pushing (`git push -f`) to a shared branch rewrites history others rely on. Rebase only your own local/unpushed work; never rewrite shared history." },
-    { "type": "callout", "variant": "tip", "markdown": "`git reflog` is your safety net — it records where HEAD has been, so you can recover 'lost' commits after a bad reset or rebase." }
+    { "type": "theory", "markdown": "## Branches — how many developers work in parallel\n\nA **branch** is a pointer to a commit. When you start a new feature, you create a branch — your work doesn't touch the main line until you merge it in.\n\nThe common convention:" },
+    { "type": "code", "language": "text", "code": "  main                    ○──○──○──────○──○──── (production; protected)\n                              │           │\n                              │           │ merge\n  feat/auth-flow              └○──○──○───┘        (developer's feature branch)\n\n  1. git switch -c feat/auth-flow    (create branch off main)\n  2. write code, commit, push\n  3. open a Pull Request on GitHub\n  4. teammate reviews, requests changes, approves\n  5. merge into main → CI/CD deploys" },
+    { "type": "theory", "markdown": "## Merge vs Rebase — the daily choice" },
+    { "type": "table", "headers": ["", "Merge", "Rebase"], "rows": [
+      ["What it does", "Combines branches with a merge commit", "Replays your commits on top of the target branch"],
+      ["History", "Preserves the branch shape", "Linear, cleaner history"],
+      ["Safe to use?", "Yes — for shared branches", "Only on YOUR branch (never on shared main)"],
+      ["When to use", "Team-shared feature branches", "Clean up local commits before pushing"]
+    ]},
+    { "type": "callout", "variant": "mistake", "markdown": "**The GOLDEN RULE of rebase:** *never rebase commits that have been pushed to a shared branch.* You'd rewrite history teammates were building on, forcing them into merge hell. Rebase your own local commits — never their commits or shared history." },
+    { "type": "theory", "markdown": "## A complete sample program — a realistic feature flow\n\nHere's what your day looks like using Git for a real feature:" },
+    { "type": "code", "language": "bash", "code": "# --- Monday: Start a new feature ---\ngit switch main\ngit pull                                    # get the latest\ngit switch -c feat/login-form               # new branch\n\n# ... edit files, run tests locally ...\n\ngit add lib/features/auth/login_screen.dart\ngit status                                  # see what's staged\ngit commit -m 'feat(auth): add login screen skeleton'\ngit push -u origin feat/login-form          # push, set upstream\n\n\n# --- Tuesday: You realize your last commit was bad ---\n# Option A: Undo the last commit but KEEP the changes staged (most common)\ngit reset --soft HEAD~1\n\n# Option B: Undo the last commit AND discard the changes (careful!)\n# git reset --hard HEAD~1\n\n# Now edit more, re-commit\ngit commit -am 'feat(auth): add login screen with validation'\n\n\n# --- Wednesday: Sync with main before your PR ---\ngit switch main\ngit pull\ngit switch feat/login-form\ngit rebase main                             # replay your work on top of latest main\n# (resolve any conflicts, then git rebase --continue)\ngit push --force-with-lease                 # safe force-push YOUR branch\n\n\n# --- Thursday: Open PR, get review, merge on GitHub ---\n# (usually via GitHub UI — 'Squash and merge')\n\n\n# --- Friday: Delete the branch (locally + remote) ---\ngit switch main\ngit pull\ngit branch -d feat/login-form               # local\ngit push origin --delete feat/login-form    # remote\n\n\n# --- OOPS: I made a bad reset yesterday and lost work! ---\ngit reflog                                  # shows every HEAD move — your safety net\n# find the SHA you want; then:\ngit checkout <sha>                          # look at it\ngit reset --hard <sha>                      # restore (if you're sure)" },
+    { "type": "callout", "variant": "tip", "markdown": "**`git reflog` is your safety net.** Almost nothing in git is truly lost for the first 30 days — reflog remembers every HEAD position. If you accidentally reset, force-push, or delete a branch, `git reflog` finds the SHA you can restore. Every git user should know this exists." },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Committing everything at once with a 'wip' message.**\n\nGood commits are focused (one logical change) and messaged like a mini email — subject line describing WHY. `git commit -m 'wip'` tells future you nothing when debugging in six months." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Force-pushing to a shared branch.**\n\nRewrites history teammates were building on. If you must fix a public branch, use `git revert` (creates a new commit undoing changes) — not reset + force-push." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Committing secrets or huge files.**\n\nAPI keys, `.env`, node_modules, build artifacts — none of these belong in git. Use `.gitignore`. Once a secret is committed and pushed, it's *forever* in history unless you rewrite (painful). Rotate the key instead." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Small, focused commits with imperative subject lines.** `add login form` not `added login form and fixed some bugs and also did the css`." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Never commit to main directly on team projects.** Always branches + PRs + review. Enforce with GitHub branch protection." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Learn `git rebase -i` for cleaning up your own commits.** Before opening a PR, squash the 'wip', 'fix', 'oops' commits into meaningful ones." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Use `git stash` when you need to switch branches with uncommitted work.** `stash` = 'set this aside for now', `stash pop` = 'put it back'." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Configure `.gitignore` from day one.** For Flutter: `build/`, `.dart_tool/`, `.idea/`, `*.iml`, `pubspec.lock` (arguable). GitHub provides templates." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Full round trip.** Init a repo. Add a file. Commit. Branch. Change. Commit. Merge back. Delete the branch.\n\n**Why:** Build muscle memory." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Resolve a merge conflict.** Create two branches that edit the same line. Merge one, then try to merge the other. See the conflict markers. Resolve. Commit.\n\n**Why:** Everyone hits conflicts; being calm about them is a real skill." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — Interactive rebase to clean up.** Make 5 messy commits (`wip`, `fix typo`, `wip 2`, etc.). Use `git rebase -i HEAD~5` to squash and reword into 1-2 meaningful commits.\n\n**Why:** This is how you polish PRs before review." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Expert) — `git bisect` to find a bug.** Have a working commit and a broken commit far apart. Use `git bisect start` / `bad` / `good` to binary-search which commit introduced the bug.\n\n**Why:** For hard-to-reproduce regressions, bisect is a superpower." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Explain Git's three areas.**\n\n**A:** Git tracks changes through three areas. The **working directory** is your files as you're editing them — everything is fair game. The **staging area** (or 'index') is where you place specific changes you want to include in the next commit — `git add` moves changes from working to staging. The **repository** is the permanent history of commits, stored under `.git/` — `git commit` snapshots the staged changes as a commit. The reason for three areas: you can craft a focused commit even when your working directory has lots of unrelated changes. `git add -p` (interactive) lets you stage specific hunks. This staging step is what separates Git from simpler tools like RCS or SVN." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: Merge vs rebase — when do you use each?**\n\n**A:** **Merge** combines two branches with a merge commit that has two parents — preserving the branch structure in history. Safe to use on shared branches because it doesn't rewrite anything. **Rebase** replays your commits on top of another branch, creating brand-new commits (different SHAs). This gives a clean, linear history — no merge commits — but it rewrites history, so it's dangerous if others were building on your original commits. The golden rule: **rebase your own local branches to keep them clean; merge for combining shared branches**. Never rebase commits you've already pushed to a shared branch." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do you undo the last commit (both keeping and discarding changes)?**\n\n**A:** Three flavors of `git reset`:\n\n- **Keep changes in the working directory and staging**: `git reset --soft HEAD~1`. The commit is gone; all its changes are still staged. Great when the commit was fine but you want to add more.\n- **Keep changes only in the working directory**: `git reset HEAD~1` (or `--mixed`, the default). The commit is gone, changes are unstaged.\n- **Discard the changes entirely**: `git reset --hard HEAD~1`. Deletes the commit AND all its changes. **Use with care** — this is the one people regret. `git reflog` can recover if you act within 30 days.\n\nIf the commit was already pushed to a shared branch, don't reset — use `git revert HEAD` to create a new commit that undoes it, preserving history." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What's the difference between `git revert` and `git reset`?**\n\n**A:** **`git reset`** rewrites history — it moves the branch pointer backward and (depending on `--soft/--mixed/--hard`) may erase commits. Safe for private local branches; catastrophic on shared branches because it rewrites history teammates depend on. **`git revert`** creates a *new commit* that undoes the changes of a previous commit — history is *preserved and extended*. Safe on shared branches because nothing is rewritten. If you find a bad commit in main that others already pulled: `git revert <sha>` and push. If you regret a commit you just made locally and haven't pushed: `git reset` is fine. The distinction: reset erases, revert appends-an-undo." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you recover a deleted branch or a lost commit?**\n\n**A:** Use `git reflog`. Unlike `git log` which shows the current branch's history, **reflog shows every position HEAD has ever been** in your local repo — every checkout, commit, reset, merge, rebase. Almost nothing is truly lost for 30 days (the default reflog expiry). If you accidentally deleted a branch, `git reflog` will show a commit like `abc123 HEAD@{5}: checkout: moving from feat/x to main` — the SHA `abc123` is still valid; `git branch feat/x abc123` restores it. If you did a bad `reset --hard`, reflog shows the SHA before the reset — `git reset --hard <sha>` restores. **Reflog is your safety net; every Git user should know it exists.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What does `git cherry-pick` do, and when would you use it?**\n\n**A:** `git cherry-pick <sha>` takes an existing commit from anywhere and applies it as a new commit on your current branch. The most common use case: a hotfix. Say a critical bug was fixed on `main`, and you also need the fix on the `release-1.2` branch. Instead of merging all of main into release (which would bring unrelated changes), you cherry-pick just that one fix commit. Another use: pulling one commit from a colleague's branch without merging their whole branch. Downside: cherry-pick creates a new commit with a new SHA, so the same 'logical' change now exists at two SHAs — merges between the branches later can get confusing. Use sparingly, primarily for hotfixes." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What is `.gitignore` and what belongs there?**\n\n**A:** `.gitignore` is a file at the repo root listing patterns of files Git should NOT track. Anything generated or environment-specific belongs there: **build artifacts** (`build/`, `dist/`, `target/`), **dependency directories** (`node_modules/`, `.dart_tool/`), **IDE settings** (`.idea/`, `.vscode/`), **OS files** (`.DS_Store`, `Thumbs.db`), and — most importantly — **secrets and env-specific config** (`.env`, credentials JSON files, API keys). Never commit secrets. Once pushed, they're in history forever unless you rewrite (`git filter-repo`) — practically, rotate the secret and move on. GitHub provides `.gitignore` templates for every language framework. Add one to every new project on day one." },
+    { "type": "theory", "markdown": "## Real-world examples\n\n- **Every open-source project on GitHub** uses this exact flow: fork → branch → PR → review → merge. If you can navigate this, you can contribute to any of them.\n- **Trunk-based development** (Google, Facebook, Netflix) — everyone commits to main behind feature flags; branches are short-lived (hours to days).\n- **Git-Flow** (older enterprise convention) — main, develop, feature/*, release/*, hotfix/* branches. Heavy but explicit. Being replaced by trunk-based in most modern teams.\n- **Deploy-from-main** — every merge to main triggers CI/CD to production. Common in high-velocity teams; requires disciplined tests and staged rollouts." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`git bisect`** — automated binary search through history to find the commit that introduced a bug. Genuinely magical for hard-to-find regressions.\n- **`git rebase --interactive`** (`-i`) — squash, reorder, edit, drop commits before pushing. Essential for polishing PRs.\n- **`git worktree`** — check out multiple branches simultaneously in separate directories. Useful for reviewing PRs while you keep your work.\n- **`git submodule`** vs **`git subtree`** — two ways to embed another repo inside yours. Both are hard; monorepo tools often replace them.\n- **`git filter-repo`** — rewrites history to remove sensitive data or huge files. Nuclear option.\n- **Signed commits (GPG or SSH)** — cryptographically verify who authored a commit. Enforced in many enterprises.\n- **Conventional Commits** (`feat:`, `fix:`, `chore:`) — a standard commit-message format that enables automated changelog generation and semantic versioning." }
   ],
   "flashcards": [
-    { "front": "Git's three areas?", "back": "Working directory, staging area (index), and the repository (commits)." },
-    { "front": "Merge vs rebase?", "back": "Merge preserves history with a merge commit; rebase replays commits for a linear history but rewrites them." },
-    { "front": "What is git reflog for?", "back": "It logs HEAD movements so you can recover commits after a bad reset/rebase." }
+    { "front": "Git's 3 areas?", "back": "Working directory (your edits) → staging area (`git add`) → repository (`git commit`)." },
+    { "front": "Merge vs rebase — the golden rule?", "back": "Merge combines with a merge commit (safe on shared branches). Rebase replays commits (never on shared branches — rewrites history)." },
+    { "front": "How to recover a lost commit?", "back": "`git reflog` — it shows every HEAD move; find the SHA, then `git reset --hard <sha>` or `git checkout <sha>`." },
+    { "front": "Revert vs reset?", "back": "Revert appends a new commit that undoes changes (safe on shared history). Reset erases the commit (dangerous on shared history)." },
+    { "front": "What is `git bisect`?", "back": "Automated binary search through history to find which commit introduced a bug." }
   ],
   "quiz": [
-    { "q": "A branch in Git is…", "options": ["A copy of all files", "A movable pointer to a commit", "A backup server", "A merge commit"], "answer": 1, "explain": "Branches are lightweight pointers to commits — cheap to create." },
-    { "q": "Which rewrites commit history?", "options": ["git merge", "git rebase", "git status", "git fetch"], "answer": 1, "explain": "Rebase replays commits onto a new base, creating new commit hashes." },
-    { "q": "Safest way to recover a lost commit after a bad reset?", "options": ["Reinstall Git", "git reflog then checkout/reset", "Delete the repo", "Force push"], "answer": 1, "explain": "reflog shows previous HEAD positions so you can restore the commit." }
+    { "q": "A branch in Git is…", "options": ["A full copy of files", "A movable pointer to a commit", "A snapshot", "A backup"], "answer": 1, "explain": "Just a pointer to a commit." },
+    { "q": "Which rewrites commit history?", "options": ["git merge", "git rebase", "git status", "git pull"], "answer": 1, "explain": "Rebase creates new commits with new SHAs." },
+    { "q": "Safest way to undo a commit that's already been pushed to shared main?", "options": ["git reset --hard", "git revert", "delete the branch", "git force-push"], "answer": 1, "explain": "Revert appends an undo commit; safe on shared history." },
+    { "q": "The safety net for lost work is…", "options": ["git status", "git log", "git reflog", "git diff"], "answer": 2, "explain": "reflog shows every HEAD position, letting you recover." },
+    { "q": "`.gitignore` should NOT contain…", "options": [".env", "node_modules/", "build/", "src/"], "answer": 3, "explain": "src/ is your code — track it. The others are generated or secret." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Create a branch, commit, and open a pull request." },
-    { "level": "Medium", "text": "Resolve a merge conflict between two branches editing the same file." },
-    { "level": "Hard", "text": "Interactively rebase to squash and reorder commits before merging." },
-    { "level": "Expert", "text": "Use git bisect to find the commit that introduced a bug." }
+    { "level": "Easy", "text": "Init a repo, add a file, commit, branch, edit, commit, merge back. Full round trip." },
+    { "level": "Easy", "text": "Create a `.gitignore` for a Flutter project. Include `build/`, `.dart_tool/`, IDE folders, `.env`." },
+    { "level": "Medium", "text": "Resolve a merge conflict — create two branches that edit the same line, merge, resolve, commit." },
+    { "level": "Medium", "text": "Use `git rebase -i HEAD~5` to squash 5 messy commits into 1-2 meaningful ones." },
+    { "level": "Hard", "text": "Recover a 'lost' branch: make some commits, do a hard reset, then use `git reflog` to restore." },
+    { "level": "Hard", "text": "Use `git bisect` to find the commit that introduced a bug in a repo you've deliberately broken." },
+    { "level": "Expert", "text": "Set up branch protection on a GitHub repo: require PR reviews, passing CI, no force-push to main. Verify by trying to push directly." }
   ],
   "interviewQuestions": [
-    "Explain Git's three areas and the staging concept.",
-    "Merge vs rebase — when use each?",
-    "How do you undo the last commit (keep vs discard changes)?",
-    "What does git cherry-pick do?",
-    "How do you recover a deleted branch or lost commit?"
+    "Explain Git's three areas.",
+    "Merge vs rebase — when do you use each?",
+    "How do you undo the last commit (both keeping and discarding changes)?",
+    "What's the difference between `git revert` and `git reset`?",
+    "How do you recover a deleted branch or a lost commit?",
+    "What does `git cherry-pick` do, and when would you use it?",
+    "What is `.gitignore` and what belongs there?",
+    "What is `git rebase -i` used for?"
   ],
   "references": [
-    { "label": "Pro Git (free book)", "url": "https://git-scm.com/book" }
+    { "label": "Pro Git (free book)", "url": "https://git-scm.com/book" },
+    { "label": "Oh Sh*t, Git?! (rescue guide)", "url": "https://ohshitgit.com" }
   ]
 }

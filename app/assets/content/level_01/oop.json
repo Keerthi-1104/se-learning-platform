@@ -1,51 +1,105 @@
 {
   "id": "cs.oop",
   "levelId": 1,
-  "title": "OOP",
+  "title": "Object-Oriented Programming",
   "xp": 50,
-  "estimatedMinutes": 25,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Explain the four pillars with examples",
-    "Choose composition over inheritance",
-    "Distinguish overloading from overriding"
+    "Understand OOP through a real-life analogy",
+    "Know the four pillars (Encapsulation, Abstraction, Inheritance, Polymorphism) — with examples you can quote",
+    "Distinguish 'is-a' from 'has-a' relationships",
+    "Know when composition beats inheritance in real code",
+    "Answer OOP interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "OOP organizes software as objects — bundles of data and behavior — interacting through well-defined interfaces. Dominant in Java, Kotlin, C# and Dart." },
-    { "type": "table", "headers": ["Pillar", "Meaning", "Benefit"], "rows": [
-      ["Encapsulation", "Hide state behind methods", "Safe, controlled change"],
-      ["Abstraction", "Expose what, hide how", "Simpler mental model"],
-      ["Inheritance", "Reuse via 'is-a'", "Share behavior"],
-      ["Polymorphism", "One interface, many impls", "Extensible code"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Imagine designing a car.**\n\n- The **blueprint** on paper is a **class** — it describes what any car looks like.\n- A specific car parked in your driveway is an **object** (an instance of the class).\n- The **steering wheel and pedals** are how you drive — the *public interface*.\n- The **engine internals** are hidden from you — you don't need to know how combustion works to press the accelerator. That's **encapsulation**.\n- A **sports car** and a **truck** are both *kinds of* Vehicle. They inherit basic 'has wheels, has engine' from Vehicle but override it — that's **inheritance and polymorphism**.\n\n**OOP is a way to model software the way we already think about the world.** Cars, users, orders, invoices — you model them as objects with behaviors and state, and let one object type stand in for another." },
+    { "type": "callout", "variant": "definition", "markdown": "**OOP (Object-Oriented Programming)** organizes software as **objects** — bundles of data (fields) and behavior (methods) — that interact through well-defined **interfaces**. It's the dominant paradigm in Java, Kotlin, C#, Dart, Swift, and Python." },
+    { "type": "theory", "markdown": "## The four pillars — the mnemonic every interview asks about\n\nIf you can nail these four with examples, you've passed 80% of 'explain OOP' questions." },
+    { "type": "table", "headers": ["Pillar", "Plain-English meaning", "Real-life example", "Benefit"], "rows": [
+      ["Encapsulation", "Hide internals behind methods", "Car's engine is behind a hood; you use the pedals", "Change internals safely"],
+      ["Abstraction", "Expose *what* it does, hide *how*", "'Send email' — you don't care about SMTP", "Simpler mental model"],
+      ["Inheritance", "Reuse via 'is-a' relationship", "SportsCar is-a Car", "Share behavior across related types"],
+      ["Polymorphism", "One interface, many implementations", "'drive()' behaves differently on Car vs Truck", "Extensible, flexible code"]
     ]},
-    { "type": "callout", "variant": "analogy", "markdown": "A **car**: you use the wheel and pedals (public interface) without knowing the engine internals (encapsulation). A sports car and a truck are both Vehicles (inheritance) and both drive() differently (polymorphism)." },
-    { "type": "code", "language": "dart", "code": "abstract class Shape { double area(); }\nclass Circle extends Shape { double area() => 3.14*r*r; }\nclass Square extends Shape { double area() => s*s; }\ndouble total(List<Shape> shapes) =>\n  shapes.fold(0, (sum, s) => sum + s.area()); // works for ANY Shape" },
-    { "type": "callout", "variant": "mistake", "markdown": "Overusing inheritance. Deep hierarchies are fragile (you wanted a banana but inherited the whole jungle). Prefer **composition over inheritance**." },
-    { "type": "callout", "variant": "tip", "markdown": "'Program to an interface, not an implementation.' Depend on abstractions so you can swap a SQL repository for an API one without touching callers." }
+    { "type": "theory", "markdown": "## Polymorphism — the pillar most misunderstood\n\nPolymorphism means: same call, different behavior depending on the object's actual type at runtime. It's what lets you write generic code that works on any subclass." },
+    { "type": "code", "language": "dart", "code": "// A single interface\nabstract class Shape {\n  double area();\n}\n\n// Many implementations\nclass Circle extends Shape {\n  final double r;\n  Circle(this.r);\n  @override double area() => 3.14159 * r * r;\n}\n\nclass Square extends Shape {\n  final double s;\n  Square(this.s);\n  @override double area() => s * s;\n}\n\n// One function works on ALL shapes — present AND future\ndouble totalArea(List<Shape> shapes) {\n  double total = 0;\n  for (final s in shapes) total += s.area();     // polymorphic call!\n  return total;\n}\n\nvoid main() {\n  print(totalArea([Circle(5), Square(3), Circle(2)])); // 100.53125\n  // If tomorrow you add a Triangle, totalArea() doesn't change.\n  // THAT is the win — 'open for extension, closed for modification.'\n}" },
+    { "type": "theory", "markdown": "## 'is-a' vs 'has-a' — the relationship you must get right" },
+    { "type": "table", "headers": ["Relationship", "Meaning", "Example", "Mechanism"], "rows": [
+      ["is-a", "One kind of another", "A Dog *is a* Animal", "Inheritance (`extends`)"],
+      ["has-a", "Contains, uses, or owns", "A Car *has* an Engine", "Composition (field)"],
+      ["uses-a", "Interacts with, doesn't own", "A Driver *uses* a Car", "Method parameter"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**The senior wisdom: prefer composition over inheritance.**\n\nDeep inheritance hierarchies are fragile. The classic joke: 'You wanted a banana, but you got a gorilla holding the banana — plus the jungle it lives in.' A subclass inherits *everything* including things you didn't want.\n\n**Composition** (has-a) is more flexible: build classes by *combining* smaller pieces you actually need. Every senior codebase you'll ever touch prefers composition. Design patterns are largely 'how to compose instead of inherit.'" },
+    { "type": "theory", "markdown": "## Overloading vs overriding — the trap question" },
+    { "type": "table", "headers": ["", "Overloading", "Overriding"], "rows": [
+      ["What", "Same method name, DIFFERENT parameters", "Subclass REDEFINES a parent method"],
+      ["When resolved", "Compile time (static)", "Runtime (dynamic dispatch)"],
+      ["Language support", "Java, C++, Kotlin. Dart does NOT support method overloading", "Every OOP language"],
+      ["Polymorphism type", "Compile-time (aka static)", "Runtime (aka dynamic)"]
+    ]},
+    { "type": "code", "language": "dart", "code": "// Overriding (Dart & every OOP language):\nclass Animal { void speak() => print('...'); }\nclass Dog extends Animal {\n  @override void speak() => print('Woof!');      // REDEFINES\n}\nfinal a = Dog();\na.speak();  // Woof! — runtime dispatch to Dog's version\n\n// Overloading — Dart does NOT support it. In Java:\n// class Print {\n//   void log(String s) { ... }\n//   void log(int n)    { ... }    // same name, different signature\n// }\n// Which one runs? Decided at COMPILE time based on the argument type." },
+    { "type": "theory", "markdown": "## A complete sample program — a tiny payment system using all four pillars\n\nOne interface (`PaymentMethod`), three implementations, polymorphic use, encapsulated internals." },
+    { "type": "code", "language": "dart", "code": "// File: oop_demo.dart\n// Run: dart oop_demo.dart\nabstract class PaymentMethod {                    // ABSTRACTION\n  bool pay(double amount);\n  String get displayName;\n}\n\nclass CreditCard extends PaymentMethod {\n  final String _number;                           // ENCAPSULATION\n  double _availableCredit;\n\n  CreditCard(this._number, this._availableCredit);\n\n  @override String get displayName =>              // POLYMORPHISM\n      'Card ending ${_number.substring(_number.length - 4)}';\n\n  @override bool pay(double amount) {\n    if (amount > _availableCredit) return false;\n    _availableCredit -= amount;\n    return true;\n  }\n}\n\nclass Wallet extends PaymentMethod {              // INHERITANCE\n  double _balance;\n  Wallet(this._balance);\n  @override String get displayName => 'Wallet';\n  @override bool pay(double amount) {\n    if (amount > _balance) return false;\n    _balance -= amount;\n    return true;\n  }\n}\n\nclass UPI extends PaymentMethod {\n  final String _vpa;\n  UPI(this._vpa);\n  @override String get displayName => 'UPI ($_vpa)';\n  @override bool pay(double amount) => true;      // assume server-side ok\n}\n\n// Client code doesn't know or care which one is being used:\nvoid checkout(double amount, PaymentMethod method) {\n  print('Charging ₹$amount via ${method.displayName}...');\n  print(method.pay(amount) ? '  ✅ Paid' : '  ❌ Insufficient');\n}\n\nvoid main() {\n  final methods = <PaymentMethod>[\n    CreditCard('4111111111111234', 500),\n    Wallet(1200),\n    UPI('ada@bank'),\n  ];\n  for (final m in methods) checkout(299, m);\n  print('');\n  checkout(999, methods[0]);  // credit card — insufficient (only ₹201 left)\n}\n\n// Output:\n// Charging ₹299 via Card ending 1234...\n//   ✅ Paid\n// Charging ₹299 via Wallet...\n//   ✅ Paid\n// Charging ₹299 via UPI (ada@bank)...\n//   ✅ Paid\n// \n// Charging ₹999 via Card ending 1234...\n//   ❌ Insufficient\n//\n// Notice: `checkout()` doesn't know or care WHICH payment method.\n// Adding a new type (e.g. NetBanking) requires ZERO changes to checkout().\n// THAT is polymorphism paying off." },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Overusing inheritance ('deep hierarchies').**\n\nOnce you have `SportsCar extends LuxuryCar extends Car extends Vehicle extends Thing`, every small change ripples through five levels. **Prefer composition** — one class *contains* an engine, a transmission, and wheels, rather than *inheriting* from Vehicle." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Exposing internal state as public fields.**\n\n`class User { String email; }` — anyone can set `user.email = 'garbage'`. Wrap in a method or use `late final` + getter, and validate before storing. Encapsulation is what makes future changes safe." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Confusing abstract class with interface.**\n\nAn **abstract class** can have some implemented methods. An **interface** (or 'pure' abstract class) has none — it's just a contract. Use interface for 'what this can do'; use abstract class when you want to share partial implementation across subclasses." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Program to interfaces, not implementations.** Depend on `Repository`, not `SqlRepository`. It lets you swap implementations for testing or evolution." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Prefer composition over inheritance.** Deep hierarchies are the #1 cause of unmaintainable OOP code." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Keep classes small and focused (Single Responsibility Principle).** A class that does two things should be two classes." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Make fields `final` / `readonly` when possible.** Immutability eliminates whole classes of bugs — no one can accidentally mutate a shared object." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Shape hierarchy.** Create an abstract `Shape` with `area()` and `perimeter()`. Add `Circle`, `Rectangle`, `Triangle`. Write a `Canvas` class that stores a list of shapes and prints their totals.\n\n**Why:** Classic OOP exercise — you'll internalize polymorphism." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Payment system (extend the sample).** Add a `NetBanking` payment method WITHOUT touching `checkout()`. Prove that polymorphism means adding new types is free.\n\n**Why:** This is the Open/Closed Principle in action." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — Refactor inheritance to composition.** Take a class `Dog extends Animal extends LivingThing`. Rebuild with composition: `Dog` has a `Breathing` component, an `Eating` component, and a `Barking` component. Compare readability.\n\n**Why:** You'll internalize when composition wins." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Expert) — Plugin registry.** Design a small plugin system where third parties can add new `Command` types at runtime by implementing an interface. The core code should never need to change to add a new command.\n\n**Why:** This is how VS Code, IntelliJ, and every browser handle extensions." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Explain the four pillars of OOP with examples.**\n\n**A:** **Encapsulation** — bundling data and the methods that operate on it, and hiding internal state behind an interface. A `BankAccount` class exposes `deposit()` and `withdraw()` but hides the balance field so no one can bypass the withdrawal-limit check. **Abstraction** — exposing *what* a class does while hiding *how*. A `send(email)` method — you don't care whether it uses SMTP, SendGrid, or a message queue. **Inheritance** — a subclass reuses and extends a parent's behavior via an 'is-a' relationship. `SportsCar` is a `Car`, so it inherits basic driving; it overrides top speed. **Polymorphism** — the same method call behaves differently at runtime depending on the actual object type. `shape.area()` returns different results on `Circle` vs `Square`, and a function taking any `Shape` doesn't need to know which. Together these four make code reusable, extensible, and understandable." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: Composition vs inheritance — why prefer composition?**\n\n**A:** Inheritance is 'is-a' — a subclass inherits everything from its parent, including things it might not want. That creates tight coupling: if the parent changes, subclasses may break unexpectedly. Deep hierarchies become fragile. **Composition** ('has-a') is more flexible — a class contains references to smaller components, uses their behavior via delegation, and can swap components at runtime. It also gives you multiple 'inheritance-like' behaviors without diamond problems. The rule of thumb: use inheritance when there's a genuine, stable 'is-a' relationship (like `IntegerList extends List<Integer>`); use composition otherwise. Every large real codebase — Flutter, Spring, most SDKs — heavily prefers composition." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: Overloading vs overriding — what's the difference?**\n\n**A:** **Overloading** is having multiple methods with the *same name but different parameter lists* in the same class. The compiler picks which one to call based on the arguments at compile time — this is compile-time (static) polymorphism. Java, C++, and Kotlin support overloading; Dart does NOT. **Overriding** is when a *subclass redefines a method* inherited from its parent. The runtime picks which version to call based on the actual object type — runtime (dynamic) polymorphism. Overloading is about compile-time convenience; overriding is where the real power of OOP lives, letting you write generic code that behaves correctly for any subclass." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What is polymorphism, and can you give a real example?**\n\n**A:** Polymorphism means one interface can have many implementations, and a function using the interface will do the right thing at runtime for whichever concrete object it gets. Classic example: I write `double totalArea(List<Shape> shapes)` that calls `shape.area()` on each shape. Whether the list contains circles, squares, or triangles, the right `area()` implementation runs. Add a new `Triangle` class tomorrow, and `totalArea()` needs no changes. This is the Open/Closed Principle in action — code is open for *extension* (new types) but closed for *modification* (existing code). It's what makes OOP genuinely useful." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What's the difference between an abstract class and an interface?**\n\n**A:** An **interface** is a pure contract — a list of method signatures with no implementation. It says 'anything claiming to be a `Comparable` must have a `compareTo` method' — nothing about how. Multiple interfaces can be implemented by one class. An **abstract class** can have some implemented methods and some abstract ones. It's useful when several subclasses share partial implementation. Rule of thumb: **prefer interfaces** for defining capabilities ('what you can do'), and use **abstract classes** only when subclasses need to share concrete state or code. In Dart, every class is implicitly an interface — so 'implements Foo' works even if Foo isn't marked abstract." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What is the 'is-a' vs 'has-a' distinction, and why does it matter?**\n\n**A:** **Is-a** is a *type* relationship — 'a `Manager` *is a* `Employee`.' It's expressed through inheritance (extends). It means every Manager can be used anywhere Employee is expected — a polymorphism thing. **Has-a** is a *containment* relationship — 'a `Car` *has an* `Engine`.' It's expressed through composition — the Car class has an Engine as a field. Getting this wrong is the classic modeling mistake. If you make `SquareTire extends Tire` when actually a square tire is just 'a tire with a broken property,' you'll end up with subclasses that violate the parent's contract. **Ask 'is this object really a specialized version of the parent, or does it merely contain / use the parent?'** If unsure, prefer composition." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What does 'program to an interface, not an implementation' mean?**\n\n**A:** It means your code should depend on abstractions (interfaces or abstract classes) rather than concrete classes. Instead of `SqlUserRepository userRepo;` write `UserRepository userRepo;`. Any code using `userRepo` calls interface methods only, so tomorrow you can swap in a `MemoryUserRepository` for tests, or a `HttpUserRepository` for a remote backend, without touching callers. This is one of the SOLID principles (Dependency Inversion) and it's the practical basis for dependency injection, testing with fakes, and Clean Architecture. In interviews, showing you *automatically* code this way signals seniority." },
+    { "type": "theory", "markdown": "## Real-world examples\n\n- **Every Flutter widget** is polymorphism in action — `Widget.build()` is called by the framework without it knowing whether you wrote `MyButton` or `MyImage`.\n- **Every database driver** (JDBC, Prisma, sqflite) exposes a common interface (`Connection`, `Statement`) so your business code doesn't care whether it's talking to Postgres or MySQL.\n- **Java's Collections framework** is programmed to interfaces (`List`, `Map`, `Set`) — you use `ArrayList` today, swap in `LinkedList` tomorrow, and nothing else changes.\n- **The Strategy pattern** — used everywhere from pricing engines to sort algorithms — is just polymorphism given a name." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **The Liskov Substitution Principle (LSP)** — the L in SOLID — formalizes 'correct' inheritance: subtypes must be substitutable for their base type without surprises.\n- **Mixins (Dart, Kotlin, Ruby)** — a form of horizontal reuse that avoids deep inheritance chains.\n- **Traits and protocols (Rust, Swift)** — modern languages have alternatives to classic OOP that are worth studying.\n- **Immutability and value objects** — treat many classes as unchangeable data; eliminates whole categories of bugs.\n- **The Law of Demeter** ('don't talk to strangers') — a method should only interact with its immediate collaborators, not their internals. Reduces coupling.\n- **The 'diamond problem'** — when two parents provide the same method to a class. Java forbids multiple class inheritance for this reason; Dart uses linearization." }
   ],
   "flashcards": [
     { "front": "The four pillars of OOP?", "back": "Encapsulation, Abstraction, Inheritance, Polymorphism." },
-    { "front": "Overloading vs overriding?", "back": "Overloading = same name, different params, resolved at compile time. Overriding = subclass redefines a method, resolved at runtime." },
-    { "front": "Composition vs inheritance?", "back": "Composition (has-a) is more flexible and less fragile than deep inheritance (is-a). Prefer composition." }
+    { "front": "Composition vs inheritance?", "back": "Composition is 'has-a' (a Car has an Engine). Inheritance is 'is-a' (a SportsCar is a Car). Prefer composition." },
+    { "front": "Overloading vs overriding?", "back": "Overloading: same name, different params, resolved at compile time. Overriding: subclass redefines a parent method, resolved at runtime." },
+    { "front": "Program to an interface — what does that mean?", "back": "Depend on abstractions (`UserRepository`), not concrete classes (`SqlUserRepository`). Lets you swap implementations freely." },
+    { "front": "Interface vs abstract class?", "back": "Interface: pure contract, no implementation. Abstract class: can have some implemented methods. Prefer interfaces unless sharing partial implementation." }
   ],
   "quiz": [
-    { "q": "Hiding internal state behind methods is…", "options": ["Inheritance", "Encapsulation", "Polymorphism", "Overloading"], "answer": 1, "explain": "Encapsulation controls access to an object's internal state." },
-    { "q": "Which is runtime polymorphism?", "options": ["Overloading", "Overriding", "Generics", "Encapsulation"], "answer": 1, "explain": "Overriding is resolved at runtime via dynamic dispatch; overloading is compile-time." },
-    { "q": "Best general advice on reuse?", "options": ["Always inherit deeply", "Prefer composition over inheritance", "Avoid interfaces", "Use global variables"], "answer": 1, "explain": "Composition avoids fragile deep hierarchies and is easier to change." }
+    { "q": "Hiding internal state behind methods is…", "options": ["Inheritance", "Encapsulation", "Polymorphism", "Overloading"], "answer": 1, "explain": "Encapsulation controls access to internals." },
+    { "q": "'Same call, different behavior at runtime' is…", "options": ["Overloading", "Overriding / polymorphism", "Encapsulation", "Composition"], "answer": 1, "explain": "Runtime dispatch of an overridden method." },
+    { "q": "Best general advice on reuse?", "options": ["Always inherit", "Prefer composition", "Avoid classes", "Use globals"], "answer": 1, "explain": "Composition is more flexible and less fragile." },
+    { "q": "'A Car has-a Engine' models via…", "options": ["Inheritance", "Composition (field)", "Overloading", "Encapsulation"], "answer": 1, "explain": "'has-a' = composition." },
+    { "q": "Dart does NOT support…", "options": ["Overriding", "Method overloading", "Polymorphism", "Encapsulation"], "answer": 1, "explain": "Dart lacks method overloading; use named parameters instead." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Model a Shape hierarchy with area() and compute total area polymorphically." },
-    { "level": "Medium", "text": "Design a payment system with a PaymentMethod interface (Card, UPI, Wallet)." },
-    { "level": "Hard", "text": "Refactor a deep inheritance tree into composition with injected behaviors." },
-    { "level": "Expert", "text": "Build a plugin system where new types register at runtime via a common interface." }
+    { "level": "Easy", "text": "Build a Shape hierarchy: abstract Shape, concrete Circle/Square/Triangle. Write `totalArea(List<Shape>)`." },
+    { "level": "Easy", "text": "Encapsulate a BankAccount: no direct access to balance, only `deposit()` and `withdraw()` that reject invalid amounts." },
+    { "level": "Medium", "text": "Payment-methods sample: add NetBanking WITHOUT touching the `checkout()` function." },
+    { "level": "Medium", "text": "Rewrite an inheritance hierarchy of three levels into a composition-based design." },
+    { "level": "Hard", "text": "Design a small plugin system where third parties add new `Command` classes at runtime by implementing an interface." },
+    { "level": "Hard", "text": "Model a Vehicle system with composition (Engine, Transmission, Wheels are separate components) instead of inheritance." },
+    { "level": "Expert", "text": "Redesign an LSP-violating class (Square-extends-Rectangle is the classic example) so subtypes fully honor the parent's contract." }
   ],
   "interviewQuestions": [
-    "Explain the four pillars with examples.",
+    "Explain the four pillars of OOP with examples.",
     "Composition vs inheritance — why prefer composition?",
-    "Overloading vs overriding? Which is runtime polymorphism?",
-    "Abstract class vs interface — when use which?",
-    "What does 'program to an interface' mean?"
+    "Overloading vs overriding — what's the difference?",
+    "What is polymorphism, and can you give a real example?",
+    "What's the difference between an abstract class and an interface?",
+    "What is the 'is-a' vs 'has-a' distinction, and why does it matter?",
+    "What does 'program to an interface, not an implementation' mean?",
+    "What is the Liskov Substitution Principle?"
   ],
   "references": [
-    { "label": "Refactoring Guru — OOP", "url": "https://refactoring.guru" }
+    { "label": "Refactoring Guru — OOP", "url": "https://refactoring.guru/design-patterns" },
+    { "label": "Effective Java (Josh Bloch)", "url": "https://www.oreilly.com/library/view/effective-java/9780134686097/" }
   ]
 }
