@@ -1,51 +1,97 @@
 {
   "id": "cs.tcp_udp",
   "levelId": 1,
-  "title": "TCP / UDP",
+  "title": "TCP vs UDP",
   "xp": 40,
-  "estimatedMinutes": 20,
+  "estimatedMinutes": 35,
   "objectives": [
-    "Explain the TCP three-way handshake",
-    "Choose TCP vs UDP by workload",
-    "Understand why reliability can live above the transport layer"
+    "Understand TCP and UDP with clear real-world analogies",
+    "Walk through the TCP three-way handshake step by step",
+    "Know when to choose TCP vs UDP for real workloads",
+    "Explain head-of-line blocking and why HTTP/3 exists",
+    "Answer TCP/UDP interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "TCP is connection-oriented and reliable; UDP is connectionless and best-effort. Both are transport-layer protocols." },
-    { "type": "code", "language": "text", "code": "TCP three-way handshake:\n  Client --- SYN ------> Server   'my seq=x'\n  Client <-- SYN-ACK --- Server   'my seq=y, ack=x+1'\n  Client --- ACK ------> Server   'ack=y+1'\n  === data flows ===" },
+    { "type": "callout", "variant": "analogy", "markdown": "**Two ways to send a message to a friend across the room.**\n\n**TCP is a phone call.** You dial, they pick up: *'Hi, are you there?'* — *'Yes, I'm here'* — *'OK, I'm going to talk.'* Now every sentence is confirmed. If they say *'huh, didn't catch that'* you repeat. If the line drops, both of you notice. Reliable but ceremonious.\n\n**UDP is shouting across the room.** You just yell your message and hope they heard. Maybe they did, maybe not — you'll never know unless they yell back. Fast, no setup, no confirmation. Perfect for 'the score just changed' but terrible for 'here's your bank statement.'\n\n**The internet lets you pick which style you want for each conversation.**" },
+    { "type": "callout", "variant": "definition", "markdown": "**TCP** (Transmission Control Protocol) is **connection-oriented and reliable** — it guarantees ordered, error-free delivery.\n\n**UDP** (User Datagram Protocol) is **connectionless and best-effort** — it just fires packets and hopes." },
+    { "type": "theory", "markdown": "## Side-by-side comparison" },
     { "type": "table", "headers": ["Feature", "TCP", "UDP"], "rows": [
-      ["Connection", "Yes (handshake)", "No"],
-      ["Reliability", "Guaranteed, retransmits", "Best-effort"],
-      ["Ordering", "In-order", "None"],
-      ["Overhead", "Higher", "Minimal"],
-      ["Use", "Web, email, DB", "Video, VoIP, games, DNS"]
+      ["Connection?", "Yes — three-way handshake", "No"],
+      ["Reliable?", "Yes — retransmits lost packets", "No — a lost packet is gone"],
+      ["Ordered?", "Yes — bytes arrive in order", "No — packets may arrive out of order"],
+      ["Flow control (don't overrun receiver)?", "Yes — sliding window", "No"],
+      ["Congestion control (be nice to network)?", "Yes — slow start, AIMD", "No"],
+      ["Header size", "20 bytes minimum", "8 bytes"],
+      ["Speed / overhead", "Slower, more overhead", "Very fast, minimal"],
+      ["Use cases", "Web, email, DB, SSH — everything correctness-critical", "Video, VoIP, games, DNS, IoT — real-time"]
     ]},
-    { "type": "callout", "variant": "analogy", "markdown": "TCP is a **phone call**: you confirm you're both there and notice if the line drops. UDP is **shouting across a room**: faster, but you don't know if everyone heard you." },
-    { "type": "callout", "variant": "mistake", "markdown": "Saying 'UDP is unreliable so never use it for important things.' QUIC/HTTP-3 and real-time media build their own reliability on UDP to avoid TCP head-of-line blocking. Reliability can live above transport." }
+    { "type": "theory", "markdown": "## The TCP three-way handshake\n\nBefore TCP sends any data, both sides must agree they're ready. This dance takes exactly three messages:" },
+    { "type": "code", "language": "text", "code": "  Client                                 Server\n    │                                       │\n    │ ── SYN (seq=x) ──────────────────────►│   1. 'I want to talk. My starting number is x.'\n    │                                       │\n    │ ◄──── SYN-ACK (seq=y, ack=x+1) ───────│   2. 'OK. My starting number is y. I got your x.'\n    │                                       │\n    │ ── ACK (ack=y+1) ────────────────────►│   3. 'Great. I got your y.'\n    │                                       │\n    │ ═══════════ data flows ══════════════ │   Now they exchange bytes freely.\n    │                                       │\n    │ ── FIN ─────────────────────────────► │   Later, teardown is FIN/ACK from each side.\n    │ ◄── ACK ─────────────────────────── │\n    │ ◄── FIN ─────────────────────────── │\n    │ ── ACK ─────────────────────────────► │" },
+    { "type": "callout", "variant": "interview", "markdown": "**Why three messages, not two?** Two would be enough for the *client* to know the server is alive, but not for the *server* to know the client got its reply. All three messages confirm both directions of the connection work. This detail comes up in interviews." },
+    { "type": "theory", "markdown": "## Reliability — how TCP recovers from lost packets\n\nEvery TCP byte has a **sequence number**. The receiver sends back **ACKs** confirming what it got. If an ACK doesn't come back in time (retransmission timeout), the sender re-sends. If packets arrive out of order, the receiver buffers them and delivers them in order.\n\nThat's the mental model. In practice there are sliding windows, selective ACKs, fast retransmit, and congestion control (slow start, AIMD, BBR) — but the *idea* is: numbered bytes + acknowledgments + retransmission." },
+    { "type": "theory", "markdown": "## Head-of-line blocking — the reason HTTP/3 exists\n\nTCP guarantees **in-order delivery**. That's a feature — but also a curse:\n\nIf you're sending 100 files over one TCP connection and packet 50 is lost, packets 51–100 sit in the receive buffer, unusable, until packet 50 is retransmitted. Even though 51 and 52 are complete files, TCP won't hand them to your app because they're 'out of order.' This is **head-of-line blocking**.\n\nHTTP/3 moves to **QUIC** (over UDP) precisely to avoid this. Each stream is independent — a lost packet in stream 5 doesn't block streams 1–4." },
+    { "type": "theory", "markdown": "## A complete sample program — TCP + UDP side by side\n\nThis Dart program starts both a TCP server and a UDP server locally and sends 'hello' to each — showing you the setup ceremony (or lack of it) yourself:" },
+    { "type": "code", "language": "dart", "code": "// File: tcp_vs_udp_demo.dart\n// Run: dart tcp_vs_udp_demo.dart\nimport 'dart:io';\nimport 'dart:typed_data';\nimport 'dart:async';\n\nvoid main() async {\n  // ─────────────── TCP ───────────────\n  final tcpServer = await ServerSocket.bind('127.0.0.1', 0);\n  print('TCP server listening on port ${tcpServer.port}');\n  tcpServer.listen((sock) async {\n    sock.write('You said: ' + String.fromCharCodes(await sock.first));\n    await sock.close();\n  });\n\n  final t0 = DateTime.now();\n  final client = await Socket.connect('127.0.0.1', tcpServer.port);\n  client.write('hello');\n  await client.close();\n  final reply = String.fromCharCodes(await client.fold<List<int>>([], (a,b)=>a..addAll(b)));\n  final tcpMs = DateTime.now().difference(t0).inMilliseconds;\n  print('TCP: took $tcpMs ms; reply: \"$reply\"');\n  print('  (that time includes SYN, SYN-ACK, ACK, data, FIN/ACK...)');\n\n  // ─────────────── UDP ───────────────\n  final udpServer = await RawDatagramSocket.bind('127.0.0.1', 0);\n  print('\\nUDP server listening on port ${udpServer.port}');\n  udpServer.listen((_) {\n    final dg = udpServer.receive();\n    if (dg != null) {\n      print('UDP server got: \"${String.fromCharCodes(dg.data)}\" from ${dg.address}:${dg.port}');\n    }\n  });\n\n  final u = await RawDatagramSocket.bind('127.0.0.1', 0);\n  final t1 = DateTime.now();\n  u.send(Uint8List.fromList('hello'.codeUnits), InternetAddress('127.0.0.1'), udpServer.port);\n  final udpMs = DateTime.now().difference(t1).inMilliseconds;\n  print('UDP send returned in $udpMs ms');\n  print('  (no handshake, no ACK — we don\\'t even know if it arrived)');\n\n  await Future.delayed(Duration(milliseconds: 100));\n  udpServer.close(); u.close(); tcpServer.close();\n}\n\n// Typical output:\n// TCP server listening on port 54321\n// TCP: took 3 ms; reply: \"You said: hello\"\n//   (that time includes SYN, SYN-ACK, ACK, data, FIN/ACK...)\n// UDP server listening on port 54322\n// UDP send returned in 0 ms\n//   (no handshake, no ACK — we don't even know if it arrived)\n// UDP server got: \"hello\" from 127.0.0.1:54323" },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: 'UDP is unreliable, so it's for toy things.'**\n\nModern real-time video (Zoom, YouTube Live, WebRTC), VoIP, online games, DNS, and HTTP/3 all use UDP. They build their *own* reliability layer on top — often smarter than TCP's, because it can be tuned for the specific workload. UDP is a foundation, not a toy." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Assuming TCP means 'instant.'**\n\nEvery TCP connection needs one round-trip (RTT) to set up. On a 200 ms mobile network that's 200 ms of dead air before you send a single byte. TLS on top adds more. This is why HTTP/2 keeps connections open and HTTP/3 does 0-RTT resumption." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Ignoring the receive buffer.**\n\nA TCP connection where the reader is too slow fills the receive buffer; TCP flow-control kicks in and *pauses the sender*. This looks like 'the server got slow' when actually the *client* is bottlenecking. Real cause: something on the reader thread is blocked." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Reuse TCP connections.** Every fresh connection costs ~1 RTT. Use keep-alive, connection pools, HTTP/2 multiplexing." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Set timeouts on TCP reads and writes.** A hung peer with a full buffer will block you forever otherwise." },
+    { "type": "callout", "variant": "best", "markdown": "**3. When you use UDP, design your protocol for loss.** Number every packet. Have the receiver ACK or NACK. Add forward-error-correction if latency matters more than bandwidth." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Prefer TCP unless real-time is the whole point.** For 95% of app work, TCP is right. UDP is for the last 5% where a late packet is worse than a lost one." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — UDP echo.** Write a UDP server that echoes back whatever it receives, and a client that sends 10 packets and prints how many replies came back. Sometimes not all will — because UDP.\n\n**Why:** Watching real UDP packets get lost teaches you fear + respect for reliability." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — TCP multi-client chat.** Server accepts multiple clients; each message from any client goes to all others. Use one thread/isolate per client (or `async` I/O).\n\n**Why:** You'll get the shape of every real chat/messaging server." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — Reliable-UDP file transfer.** Split a file into 1000-byte packets, number them, send over UDP. Receiver ACKs each. Sender re-sends lost ones. Compare throughput to plain TCP.\n\n**Why:** You just built the core idea of QUIC. Painful, enlightening." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Expert) — Sliding-window protocol.** Extend Practice 3 to send 10 packets 'in flight' at once and buffer out-of-order arrivals. Add cumulative ACKs.\n\n**Why:** This is a huge chunk of what TCP does. Building it once makes TCP no longer mysterious." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Explain the TCP three-way handshake.**\n\n**A:** Before any data flows, the client and server exchange three messages. The **client** sends a **SYN** (synchronize) packet with a random initial sequence number `x`. The **server** replies with a **SYN-ACK**: its own random sequence number `y` and an acknowledgment `x+1`. The **client** confirms with an **ACK** carrying `y+1`. Now both sides have agreed on starting sequence numbers and confirmed the connection works in both directions. Only then does data flow. Teardown mirrors this with FIN/ACK pairs from each side. The whole handshake takes one round-trip time — which is why TCP feels slow on high-latency networks." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: When would you choose UDP over TCP?**\n\n**A:** UDP wins whenever **a late packet is worse than a lost packet**. Real-time voice and video: it's better to drop a stale frame than wait 200 ms for a retransmit — you'd hear a stall in the audio. Online games: 'the player's position at t=0.5s' is useless once you're at t=0.6s. DNS queries: they fit in one packet, and a fresh query is cheaper than TCP's handshake. Also anything where you build your *own* reliability layer that's smarter than TCP's — QUIC, WebRTC, custom sync protocols. But for most application work — REST APIs, databases, file transfer — TCP is the right choice." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What is head-of-line blocking, and how does HTTP/3 solve it?**\n\n**A:** TCP delivers bytes in order. If packet 50 is lost, packets 51+ sit in the receiver's buffer and can't be delivered to the app until 50 is retransmitted — *even if they belong to completely different requests*. This is head-of-line blocking. Web browsers hit it badly because HTTP/2 multiplexes many requests over one TCP connection: one packet loss stalls all of them. HTTP/3 fixes it by running over **QUIC** on UDP. QUIC has its own streams that are independent — a lost packet in stream A doesn't block stream B. Each stream retransmits and reorders on its own." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What are flow control and congestion control?**\n\n**A:** **Flow control** protects the *receiver* — if the receiver's buffer is filling up, it tells the sender to slow down (the 'receive window' shrinks). **Congestion control** protects the *network* — when TCP detects loss, it assumes the network is congested and reduces its send rate. Classic algorithm: **slow start** (start with 1 packet, double every RTT) until you hit a threshold or lose a packet, then **AIMD** (additive increase, multiplicative decrease). Modern algorithms like **BBR** (Google) model bandwidth and RTT more directly. Both mechanisms coexist — flow control is peer-to-peer, congestion control is peer-to-network." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What is a SYN flood, and how do SYN cookies help?**\n\n**A:** A SYN flood is a DoS attack where an attacker sends many SYN packets but never completes the handshake. Normally the server allocates memory to track each half-open connection; the attacker fills that memory and the server can no longer accept real connections. **SYN cookies** are a defense: instead of allocating memory for half-open connections, the server encodes the connection state into the initial sequence number itself. Only when the client's ACK comes back does the server actually allocate state — because a real client will echo the encoded value back correctly." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: Why is DNS usually UDP but sometimes falls back to TCP?**\n\n**A:** A typical DNS query fits in one packet (under 512 bytes classically, or 4 KB with EDNS0). A TCP handshake would cost more than the actual query. So UDP is used for speed. Large responses — like DNSSEC-signed answers, or zone transfers (AXFR) — exceed the packet size, and clients fall back to TCP so the response can be split across multiple segments." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: Where does TLS fit — TCP or UDP?**\n\n**A:** Classic TLS 1.2/1.3 rides on TCP. HTTPS is TCP → TLS → HTTP. HTTP/3 rides on QUIC, which is UDP. QUIC bakes TLS 1.3 directly into its handshake, so 'QUIC over UDP' includes encryption from the start — you can't separate them the way you can with classic TCP+TLS. There's also **DTLS** (Datagram TLS) — TLS designed for UDP-friendly delivery — used by WebRTC and some VPNs." },
+    { "type": "theory", "markdown": "## Real-world examples\n\n- **Zoom and Google Meet** send video over UDP with FEC (forward error correction) and selective retransmit. A late frame is useless, so drop it and show the next one.\n- **Online games** send position updates over UDP many times a second. If one update is lost, the next one arrives in 16 ms anyway — no need to retransmit stale data.\n- **HTTP/3 + QUIC** — now the default for youtube.com, google.com, cloudflare.com. On mobile networks it's noticeably faster than HTTP/2 because it handles packet loss better.\n- **Every SQL database, SSH connection, and REST API you use** is TCP. Correctness matters more than raw speed." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Nagle's algorithm** delays small writes to batch them — helps throughput, hurts latency. `TCP_NODELAY` disables it. Interactive apps (SSH, gaming) want it off; bulk transfer wants it on.\n- **Selective ACK (SACK)** — receiver can tell sender 'I got 1-100, 150-200 but not 101-149'. Speeds up recovery from spread-out loss.\n- **TCP Fast Open (TFO)** — send data with the first SYN, saving a round trip.\n- **BBR** — Google's congestion-control algorithm that models bandwidth+RTT instead of reacting to loss. Often twice as fast as CUBIC on lossy links.\n- **UDP for internal microservices** — sometimes used for metrics (statsd) because 'if we lose one metric it's fine, don't slow down the app'." }
   ],
   "flashcards": [
-    { "front": "Steps of the TCP handshake?", "back": "SYN → SYN-ACK → ACK, then data flows." },
-    { "front": "Why does DNS usually use UDP?", "back": "A query/response is tiny and fits one packet; a TCP handshake would dominate the cost." },
-    { "front": "What is head-of-line blocking?", "back": "One lost/slow packet stalls everything behind it; HTTP/3 over QUIC avoids it with independent streams." }
+    { "front": "TCP handshake in one line?", "back": "SYN → SYN-ACK → ACK. Now both sides agree they're connected and know starting sequence numbers." },
+    { "front": "TCP vs UDP in one sentence?", "back": "TCP: reliable, ordered, connection-oriented, with flow + congestion control. UDP: fire-and-forget, no guarantees." },
+    { "front": "Why is DNS usually UDP?", "back": "Query/response fit in one packet; a TCP handshake would cost more than the query." },
+    { "front": "What is head-of-line blocking?", "back": "A lost TCP packet stalls all packets after it until it's retransmitted, even across unrelated logical streams." },
+    { "front": "How does HTTP/3 avoid HoL blocking?", "back": "It uses QUIC over UDP with independent streams — a loss in one doesn't block others." }
   ],
   "quiz": [
-    { "q": "Which is the correct TCP handshake order?", "options": ["ACK → SYN → SYN-ACK", "SYN → SYN-ACK → ACK", "SYN → ACK → FIN", "SYN-ACK → SYN → ACK"], "answer": 1, "explain": "The client SYNs, the server SYN-ACKs, the client ACKs." },
-    { "q": "Which workload best fits UDP?", "options": ["Bank transfers", "Bulk file download", "Live video / gaming", "Database writes"], "answer": 2, "explain": "Real-time media prefers speed over guaranteed delivery — a late frame is useless." },
-    { "q": "TCP provides all EXCEPT…", "options": ["Ordering", "Reliability", "Congestion control", "Encryption"], "answer": 3, "explain": "TCP does not encrypt; that's TLS's job on top of TCP." }
+    { "q": "The correct handshake order is…", "options": ["ACK → SYN → SYN-ACK", "SYN → SYN-ACK → ACK", "SYN → ACK → FIN", "SYN-ACK → ACK → SYN"], "answer": 1, "explain": "Client SYN, server SYN-ACK, client ACK." },
+    { "q": "UDP is a strong choice for…", "options": ["Bank transfers", "Bulk file downloads", "Live video / voice / gaming", "Database writes"], "answer": 2, "explain": "Real-time — late packets are useless." },
+    { "q": "Which is NOT provided by TCP?", "options": ["Ordering", "Reliability", "Congestion control", "Encryption"], "answer": 3, "explain": "TLS provides encryption; TCP doesn't." },
+    { "q": "Head-of-line blocking is caused by…", "options": ["TCP's in-order guarantee interacting with packet loss", "Slow CPUs", "Small UDP buffers", "DNS caching"], "answer": 0, "explain": "TCP won't deliver later packets until the missing one arrives." },
+    { "q": "HTTP/3 runs over…", "options": ["Plain TCP", "TLS 1.2 only", "QUIC / UDP", "SCTP"], "answer": 2, "explain": "QUIC is a UDP-based transport with independent streams." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Build a UDP echo client/server; observe packets being lost or reordered." },
-    { "level": "Medium", "text": "Build a TCP chat server handling multiple clients concurrently." },
-    { "level": "Hard", "text": "Add a simple ACK + retransmit layer on top of UDP for reliable delivery." },
-    { "level": "Expert", "text": "Implement a sliding-window protocol with cumulative ACKs over UDP." }
+    { "level": "Easy", "text": "UDP echo server + client. Send 20 packets from client; server echoes. Print how many replies came back (usually all 20 on loopback, sometimes fewer on real networks)." },
+    { "level": "Easy", "text": "TCP echo server + client. Measure and print the round-trip time." },
+    { "level": "Medium", "text": "Multi-client TCP chat server: any message from one client goes to all others." },
+    { "level": "Medium", "text": "Measure how long a TCP connection takes to establish vs how long the first byte takes vs how long a whole 1 MB transfer takes." },
+    { "level": "Hard", "text": "Reliable UDP file transfer: number packets, ACK each, retransmit lost. Compare throughput to a plain TCP transfer of the same file." },
+    { "level": "Hard", "text": "Add a sliding window of 10 in-flight packets to your reliable-UDP transfer. Measure the throughput improvement." },
+    { "level": "Expert", "text": "Implement selective ACK: receiver can tell sender exactly which packets it's missing." }
   ],
   "interviewQuestions": [
-    "Explain the TCP three-way handshake and teardown.",
+    "Explain the TCP three-way handshake.",
     "When would you choose UDP over TCP?",
+    "What is head-of-line blocking, and how does HTTP/3 solve it?",
     "What are flow control and congestion control?",
-    "What is head-of-line blocking and how does HTTP/3 avoid it?",
-    "What is a SYN flood and how do SYN cookies help?"
+    "What is a SYN flood, and how do SYN cookies help?",
+    "Why is DNS usually UDP but sometimes falls back to TCP?",
+    "Where does TLS fit — TCP or UDP?",
+    "What does Nagle's algorithm do, and when would you disable it?"
   ],
   "references": [
-    { "label": "Beej's Guide to Network Programming", "url": "https://beej.us/guide/bgnet/" }
+    { "label": "Beej's Guide to Network Programming", "url": "https://beej.us/guide/bgnet/" },
+    { "label": "QUIC and HTTP/3 — Cloudflare", "url": "https://blog.cloudflare.com/http3-the-past-present-and-future/" }
   ]
 }

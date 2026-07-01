@@ -1,51 +1,97 @@
 {
   "id": "cs.dns",
   "levelId": 1,
-  "title": "DNS",
+  "title": "DNS — The Internet's Phonebook",
   "xp": 30,
-  "estimatedMinutes": 15,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Trace a DNS resolution from cold cache to authoritative server",
-    "Recognize the common record types",
-    "Reason about TTL and failover trade-offs"
+    "Understand what DNS is, in plain English",
+    "Trace a DNS lookup from cold cache to authoritative server",
+    "Recognize the common record types (A, AAAA, CNAME, MX, TXT, NS)",
+    "Reason about TTL, caching, and failover trade-offs",
+    "Answer DNS questions confidently in interviews"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "DNS (Domain Name System) is a distributed, hierarchical database that translates domain names (api.example.com) into IP addresses (93.184.216.34)." },
-    { "type": "callout", "variant": "analogy", "markdown": "DNS is your phone's **contacts app**: you remember 'Mom', not her number. DNS lets you remember 'google.com', not an IP that can change anytime." },
-    { "type": "code", "language": "text", "code": "browser cache -> OS cache -> recursive resolver\n  Root server      -> 'ask the .com TLD server'\n  .com TLD server  -> 'ask example.com's nameserver'\n  Authoritative NS -> 'api.example.com is 93.184.216.34'\n  resolver caches the answer for TTL seconds" },
-    { "type": "table", "headers": ["Record", "Maps", "Use"], "rows": [
-      ["A / AAAA", "name → IPv4 / IPv6", "Basic resolution"],
-      ["CNAME", "name → another name", "Alias"],
-      ["MX", "name → mail server", "Email routing"],
-      ["TXT", "name → text", "SPF, verification"],
-      ["NS", "zone → nameserver", "Delegation"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Imagine calling a friend in a new city.**\n\nYou don't remember their phone number — you just know their name. So you:\n\n1. Look them up in your **phone's contacts** — that's your local cache.\n2. If they're not saved, you ask a friend who might know — that's your **ISP's recursive resolver**.\n3. If that friend doesn't know, they call **directory enquiries** — the root and TLD servers.\n4. Directory enquiries points them to the authoritative source — your friend's employer, say.\n5. Finally you get a number and call.\n\nThe *next* time you call, you already have the number saved. Fast.\n\n**That's DNS.** You know `google.com`; the internet needs `142.250.190.14`. DNS is the phonebook that translates one to the other." },
+    { "type": "callout", "variant": "definition", "markdown": "**DNS (Domain Name System)** is a distributed, hierarchical database that translates human-friendly domain names (`api.example.com`) into IP addresses (`93.184.216.34`) that computers actually use to talk to each other." },
+    { "type": "theory", "markdown": "## Why DNS exists\n\nYou can memorize a few phone numbers, but not thousands. The internet has billions of hosts — nobody can remember `2606:4700:4700::1111`. DNS gives us readable names instead. It also lets you:\n\n- **Change your server** (new IP) without changing your domain name.\n- **Have many servers behind one name** — DNS can return different IPs for different users, or a list of IPs for load-balancing.\n- **Delegate ownership** — `.com`, `.in`, `.org` are each managed independently, and `example.com` is managed by its owner, without one central authority controlling everything.\n\nDNS is what makes the internet *usable* by humans." },
+    { "type": "theory", "markdown": "## The resolution flow — what actually happens when you visit a site\n\nWhen your browser needs to reach `www.example.com`, this is the sequence — with typical timing on the right:" },
+    { "type": "code", "language": "text", "code": "  ┌──────────────────────────────────────┐\n  │  1. Browser cache       (0 ms — hit)  │  ← already resolved recently?\n  └──────────────────────────────────────┘\n                    │ miss\n                    ▼\n  ┌──────────────────────────────────────┐\n  │  2. OS cache            (0 ms — hit)  │  ← /etc/hosts + system cache\n  └──────────────────────────────────────┘\n                    │ miss\n                    ▼\n  ┌──────────────────────────────────────┐\n  │  3. Recursive resolver  (1–20 ms)     │  ← your ISP or 8.8.8.8 or 1.1.1.1\n  └──────────────────────────────────────┘\n                    │ miss\n                    ▼\n         ┌───────────────────────┐\n         │  Root server          │  'ask the .com people'\n         └───────────────────────┘\n                    │\n                    ▼\n         ┌───────────────────────┐\n         │  .com TLD server      │  'ask example.com's nameservers'\n         └───────────────────────┘\n                    │\n                    ▼\n         ┌───────────────────────┐\n         │  Authoritative NS     │  'www.example.com is 93.184.216.34'\n         └───────────────────────┘\n\n  The resolver caches every answer for TTL seconds and returns it.\n  Total time from cold cache: ~20-100 ms.\n  Total time from warm cache: 0 ms." },
+    { "type": "callout", "variant": "tip", "markdown": "**Recursive vs authoritative — the classic interview trap.**\n\n- A **recursive resolver** does the *walking* for you (ISPs, 8.8.8.8, 1.1.1.1). You ask it, it hunts down the answer.\n- An **authoritative nameserver** is where the actual truth lives — the owner of `example.com` configured it there.\n\nA recursive resolver is your travel agent. An authoritative server is the hotel itself." },
+    { "type": "theory", "markdown": "## DNS record types you must know" },
+    { "type": "table", "headers": ["Record", "Maps", "Example", "Use"], "rows": [
+      ["A", "Name → IPv4", "example.com → 93.184.216.34", "The 'default' record"],
+      ["AAAA", "Name → IPv6", "example.com → 2606:2800::123", "For IPv6 hosts"],
+      ["CNAME", "Name → another name", "www → example.com", "Alias one name to another"],
+      ["MX", "Name → mail server", "example.com → mail.example.com (priority 10)", "Email routing"],
+      ["TXT", "Name → text", "SPF, DKIM, domain-verification tokens", "Metadata & proof of ownership"],
+      ["NS", "Zone → nameserver", "example.com → ns1.example.com", "Delegation"],
+      ["SOA", "Zone → 'Start of Authority' info", "serial, TTLs, admin email", "One per zone (bookkeeping)"]
     ]},
-    { "type": "callout", "variant": "tip", "markdown": "TTL is a trade-off: low TTL = faster failover but more DNS traffic; high TTL = better caching but slower changes. Lower TTL hours before a migration so the cutover is fast." }
+    { "type": "callout", "variant": "note", "markdown": "**Common gotcha: you can't put a CNAME at the 'apex'** (the bare domain like `example.com`). That's why big brands use `www.example.com` for the site and set up an ALIAS/ANAME record at the apex through their DNS provider." },
+    { "type": "theory", "markdown": "## TTL — the knob that controls everything\n\n**TTL (Time To Live)** tells resolvers how long they may cache a record before re-checking. It's a trade-off:\n\n- **Low TTL (60 seconds)** — changes propagate fast (great for failover), but resolvers query your authoritative server constantly (extra load, extra cost).\n- **High TTL (24 hours)** — cheap and cache-friendly, but a change takes a whole day to reach everyone.\n\n**The professional pattern:** normally run with a comfortable TTL (say 1 hour). *Before* a planned migration, drop it to 60 seconds hours in advance. Do the migration. Bump it back up." },
+    { "type": "theory", "markdown": "## A complete sample program — see DNS in action\n\nThis Dart script resolves a domain, prints all its A/AAAA records, and times how long each lookup takes with warm vs cold cache:" },
+    { "type": "code", "language": "dart", "code": "// File: dns_demo.dart\n// Run: dart dns_demo.dart github.com\nimport 'dart:io';\n\nvoid main(List<String> args) async {\n  final host = args.isNotEmpty ? args[0] : 'example.com';\n\n  print('--- Cold cache lookup ---');\n  final t0 = DateTime.now();\n  final addrs = await InternetAddress.lookup(host);\n  final coldMs = DateTime.now().difference(t0).inMilliseconds;\n  print('${addrs.length} address(es) returned in $coldMs ms');\n  for (final a in addrs) {\n    final kind = a.type == InternetAddressType.IPv4 ? 'A (IPv4)' : 'AAAA (IPv6)';\n    print('  $kind : ${a.address}');\n  }\n\n  print('\\n--- Warm cache lookup ---');\n  final t1 = DateTime.now();\n  await InternetAddress.lookup(host);\n  final warmMs = DateTime.now().difference(t1).inMilliseconds;\n  print('Took $warmMs ms  ${warmMs < coldMs ? \"(cache hit!)\" : \"\"}');\n\n  print('\\n--- Non-existent domain ---');\n  try {\n    await InternetAddress.lookup('this-does-not-exist-xyz-987.io');\n  } on SocketException catch (e) {\n    print('Got a SocketException: ${e.message}');\n    print('That was NXDOMAIN — DNS said \"no such name.\"');\n  }\n}\n\n// Typical output:\n// --- Cold cache lookup ---\n// 4 address(es) returned in 34 ms\n//   A (IPv4)    : 140.82.114.4\n//   A (IPv4)    : 140.82.113.4\n//   AAAA (IPv6) : 2606:50c0:8000::154\n//   AAAA (IPv6) : 2606:50c0:8001::154\n// --- Warm cache lookup ---\n// Took 0 ms  (cache hit!)\n// --- Non-existent domain ---\n// Got a SocketException: Failed host lookup ...\n// That was NXDOMAIN — DNS said \"no such name.\"" },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: 'I updated my DNS and it still shows the old IP!'**\n\nOld records are cached at every level: browser, OS, ISP resolver, corporate proxies. Even if you set TTL to 60 seconds, some resolvers *ignore* it and cache longer. Expect propagation to take up to a day even for 'instant' changes." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Trying to put a CNAME on the apex.**\n\n`example.com → some-other-name` breaks other records (MX, TXT). DNS RFCs don't allow it. Use A / AAAA at the apex, or your provider's ALIAS/ANAME feature." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Believing 'DNS round-robin = load balancing.'**\n\nReturning multiple A records makes clients pick one — but they don't distribute traffic evenly, don't detect a dead server, and don't consider load. Use a real load balancer (or GeoDNS + health checks) for anything serious." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Keep DNS in version control.** Terraform, cdktf, or a CI-driven script — never edit records in a web panel and hope you remember what you did." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Set up monitoring for record health + expiry.** DNS zone expiry is a real cause of company-wide outages. Alert 30 and 7 days before." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Use two independent DNS providers for critical domains.** If one has an outage (it happens), the other still answers. Google, Cloudflare, Route 53, NS1 — pick any two." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Enable DNSSEC where possible.** It signs your records so no one can poison a resolver's cache with fake answers." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Multi-record printer.** Look up A + AAAA + (using a package like `dart_dns` or `dnspython`) MX + TXT for a domain. Print each. Notice that most sites have 4+ records.\n\n**Why:** You'll internalize that a domain isn't 'one IP' — it's a bag of typed records." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Poor-man's dig CLI.** Build a CLI: `dnsx example.com A` or `dnsx example.com MX`. Support the record types above.\n\n**Why:** Teaches you to speak the resolver API directly instead of relying on frameworks." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — TTL-respecting cache.** Wrap DNS lookups in an in-memory cache that stores the answer and its expiry. Return cached hits until TTL expires, then re-lookup.\n\n**Why:** You just built a mini recursive resolver — the same shape used by 8.8.8.8." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Expert) — Parse a raw DNS response.** Send a UDP packet to `8.8.8.8:53` with a proper DNS query header + question, then parse the binary response back into a list of records. No libraries.\n\n**Why:** Nothing demystifies DNS like decoding it byte by byte once." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Walk me through a DNS lookup from a cold cache.**\n\n**A:** Say the browser wants `www.example.com`. First it checks its own cache; miss. Then the OS's local cache (`/etc/hosts`, `nscd`); miss. Then it asks its configured **recursive resolver** — usually the ISP or a public one like 8.8.8.8. If the resolver doesn't know either, it walks the hierarchy: it asks a **root server** which knows about `.com`; the root points it to the `.com` TLD servers. The TLD server points it to `example.com`'s **authoritative nameservers**. Those authoritative servers return the actual `A` record — say `93.184.216.34`. The resolver caches this for the TTL and returns it to the browser. Total cold-cache time is usually 20–100 ms." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What's the difference between a recursive resolver and an authoritative nameserver?**\n\n**A:** The **recursive resolver** is the DNS server your device configures (from DHCP, or Cloudflare's 1.1.1.1, or Google's 8.8.8.8). Its job is to *do the walking* — it hunts down the answer by asking other servers on your behalf. The **authoritative nameserver** is where the ground truth actually lives — the servers the domain owner configured to hold the real records. When a resolver asks 'what's the IP of example.com?' the authoritative server is the one that answers. Analogy: the recursive resolver is your travel agent; the authoritative server is the hotel front desk." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: A vs CNAME — when can you not use a CNAME?**\n\n**A:** An **A** record maps a name directly to an IPv4 address. A **CNAME** maps one name to *another name* — useful for aliasing (e.g., `www.example.com → example.com`). The catch: DNS rules say a CNAME cannot coexist with other records for the same name. You cannot put a CNAME at the **zone apex** (the bare domain like `example.com`) because that name already has SOA and NS records. That's why big sites use `www` for the site and have their DNS provider offer an 'ALIAS' or 'ANAME' pseudo-record for apex flattening." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What is TTL and how does it affect failover?**\n\n**A:** TTL (Time To Live) is a value on each DNS record telling resolvers how long they may cache the answer before re-checking. Low TTL means changes propagate quickly — great for failover, but every resolver hits your authoritative servers frequently. High TTL is efficient but slow to change. The professional pattern is to run at a comfortable TTL day-to-day (5 minutes to 1 hour), and preemptively drop it to 60 seconds hours before a planned migration. Note: some resolvers ignore very low TTLs and cache longer anyway, so always test." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What is DNS round-robin, and why is it not really load balancing?**\n\n**A:** DNS round-robin returns multiple A records for a name in a rotating order — clients see something like `IP1, IP2, IP3`. Most clients pick the first, so 'load' spreads across servers over time. But it has real limitations: no health checking (a dead IP keeps getting handed out until TTL expires), clients can cache their pick indefinitely, no traffic-aware routing, and no session affinity. For real load balancing you use a proper load balancer (L4 or L7) or GeoDNS with health-checked pools." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What is DNSSEC and what problem does it solve?**\n\n**A:** DNSSEC (DNS Security Extensions) is a set of records (RRSIG, DNSKEY, DS) that let a resolver verify DNS answers were *actually signed by the domain owner* and haven't been tampered with in transit. The problem it solves is **cache poisoning** — an attacker injecting fake DNS responses so users go to malicious IPs. Without DNSSEC, DNS is unauthenticated. It's not universal because it's tricky to deploy correctly and requires cooperation up the chain (registrar, TLD, resolver). DoH and DoT (DNS over HTTPS / TLS) are complementary — they encrypt the transport but don't authenticate the record itself." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What is anycast and how do public DNS servers use it?**\n\n**A:** Anycast is a networking trick where multiple servers around the world share the *same IP address*. When you send a packet to that IP, the network routes it to the *nearest* server (by BGP distance). Cloudflare's `1.1.1.1` and Google's `8.8.8.8` use anycast — there are dozens of physical machines behind each, one in every major city, all responding on the same IP. That's why DNS lookups to them are typically single-digit milliseconds no matter where you are. Root DNS servers use the same trick." },
+    { "type": "theory", "markdown": "## Real-world examples\n\n- **The 2021 Facebook outage** — a bad BGP change made Facebook's own DNS servers unreachable from the outside, taking down Facebook, WhatsApp, and Instagram for hours. The lesson: never depend only on your own DNS for critical services.\n- **Cloudflare's 1.1.1.1 and Google's 8.8.8.8** are anycast recursive resolvers. Millions of devices around the world share the same IP; the network routes each to its closest instance.\n- **GeoDNS** — Netflix and Spotify use it to send Indian users to servers in Mumbai, US users to servers in the US, etc. Same domain, different IPs based on where you are.\n- **Every certificate issuance** (Let's Encrypt, etc.) validates domain ownership by looking up specific DNS records you set — TXT records for DNS-01 validation." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **DNS over HTTPS (DoH) and DNS over TLS (DoT)** encrypt lookups so your ISP can't see what you're browsing.\n- **EDNS Client Subnet (ECS)** — resolvers can pass a partial client IP to authoritative servers so GeoDNS can pick a geographically-appropriate answer.\n- **DNSSEC + RPKI** together make BGP + DNS harder to hijack.\n- **CNAME chains** — you can chain CNAMEs (a → b → c → real A), but each hop adds latency; keep them short.\n- **Reverse DNS (PTR records)** map an IP back to a name; used for email deliverability and logging.\n- **Zone transfers (AXFR/IXFR)** — how secondary nameservers stay in sync with the primary. AXFR should be restricted to trusted IPs." }
   ],
   "flashcards": [
-    { "front": "Recursive vs authoritative DNS server?", "back": "Recursive does the lookup work on your behalf; authoritative holds the actual records for a zone." },
-    { "front": "When can't you use a CNAME?", "back": "At the zone apex (root domain) — use A/ALIAS there instead." },
-    { "front": "What is TTL in DNS?", "back": "How long a record may be cached before re-querying; controls failover speed vs traffic." }
+    { "front": "Recursive vs authoritative DNS server?", "back": "Recursive does the hunting (ISP, 8.8.8.8). Authoritative is the source of truth (owned by the domain owner)." },
+    { "front": "Common DNS record types?", "back": "A (IPv4), AAAA (IPv6), CNAME (alias), MX (mail), TXT (text metadata), NS (nameserver), SOA (zone info)." },
+    { "front": "When can't you use a CNAME?", "back": "At the zone apex (bare domain). Use A/AAAA or a provider's ALIAS/ANAME there." },
+    { "front": "What is TTL for?", "back": "How long resolvers may cache a record. Lower = faster changes but more load; higher = cheaper but slower to change." },
+    { "front": "Is DNS round-robin real load balancing?", "back": "No — no health checks, no traffic awareness, no session affinity. Use a real load balancer for that." }
   ],
   "quiz": [
-    { "q": "Which server gives the final answer for a domain?", "options": ["The root server", "The recursive resolver", "The authoritative nameserver", "The browser cache"], "answer": 2, "explain": "The authoritative nameserver holds the zone's actual records." },
-    { "q": "Which record maps a name to an IPv4 address?", "options": ["MX", "CNAME", "A", "TXT"], "answer": 2, "explain": "A records map a hostname to an IPv4 address (AAAA for IPv6)." },
-    { "q": "A very low TTL gives you…", "options": ["Slower failover", "Faster failover but more DNS traffic", "Encryption", "Larger packets"], "answer": 1, "explain": "Short TTLs let changes propagate quickly at the cost of more frequent lookups." }
+    { "q": "Which server gives the FINAL answer for a domain?", "options": ["Root", "Recursive resolver", "Authoritative nameserver", "Browser cache"], "answer": 2, "explain": "The domain owner configures records on their authoritative NS." },
+    { "q": "Which record maps a name to another name?", "options": ["A", "MX", "CNAME", "TXT"], "answer": 2, "explain": "CNAME is a name-to-name alias." },
+    { "q": "Very low TTL means…", "options": ["Slower failover", "Faster failover but more DNS traffic", "Encrypted queries", "Bigger packets"], "answer": 1, "explain": "Shorter cache = quicker changes but more queries." },
+    { "q": "You cannot put a CNAME at…", "options": ["A subdomain", "The zone apex", "A .com domain", "A record with high TTL"], "answer": 1, "explain": "Apex records must be A/AAAA (or the provider's ALIAS)." },
+    { "q": "Anycast lets multiple servers share…", "options": ["A hostname", "A single IP address", "A TTL", "A CNAME"], "answer": 1, "explain": "The network routes you to the closest one." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Resolve a domain to all its A records using the resolver API." },
-    { "level": "Medium", "text": "Write a CLI that prints A, MX and TXT records for a domain (a mini 'dig')." },
-    { "level": "Hard", "text": "Implement an in-memory DNS cache that respects TTL expiry." },
-    { "level": "Expert", "text": "Parse a raw DNS response packet into structured records." }
+    { "level": "Easy", "text": "Look up A + AAAA records for `github.com`; print the number of each." },
+    { "level": "Easy", "text": "Print all MX records for `gmail.com`; note the priorities." },
+    { "level": "Medium", "text": "Build a mini `dig` CLI supporting A / AAAA / MX / TXT queries." },
+    { "level": "Medium", "text": "Measure cold-cache vs warm-cache lookup times for 10 popular domains." },
+    { "level": "Hard", "text": "In-memory TTL-respecting DNS cache — cache each answer for its TTL, evict when expired." },
+    { "level": "Hard", "text": "Build a health checker — every minute, resolve a domain and TCP-connect to each IP; alert on failure." },
+    { "level": "Expert", "text": "Parse a raw DNS response packet by hand: parse the header, question, and answer sections from bytes." }
   ],
   "interviewQuestions": [
-    "Walk through a DNS lookup for a cold cache.",
-    "Recursive vs authoritative DNS server?",
-    "A vs CNAME record — when can't you use a CNAME?",
+    "Walk me through a DNS lookup from a cold cache.",
+    "What's the difference between a recursive resolver and an authoritative nameserver?",
+    "A vs CNAME — when can you not use a CNAME?",
     "What is TTL and how does it affect failover?",
-    "What is DNS round-robin and its limitation?"
+    "What is DNS round-robin, and why is it not really load balancing?",
+    "What is DNSSEC and what problem does it solve?",
+    "What is anycast and how do public DNS servers use it?",
+    "How does DoH/DoT relate to DNSSEC?"
   ],
   "references": [
-    { "label": "Cloudflare: What is DNS?", "url": "https://www.cloudflare.com/learning/dns/what-is-dns/" }
+    { "label": "Cloudflare: What is DNS?", "url": "https://www.cloudflare.com/learning/dns/what-is-dns/" },
+    { "label": "How DNS actually works (Julia Evans)", "url": "https://jvns.ca/blog/2022/01/17/hosting-a-website-with-no-dedicated-server/" }
   ]
 }
