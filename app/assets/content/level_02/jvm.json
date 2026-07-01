@@ -3,43 +3,113 @@
   "levelId": 2,
   "title": "JVM Internals",
   "xp": 50,
-  "estimatedMinutes": 30,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Describe the JVM runtime memory areas",
-    "Explain class loading and JIT compilation",
-    "Read a stack trace and OutOfMemoryError types"
+    "Understand the JVM through a real-life analogy",
+    "Know the memory areas — heap, stack, metaspace, PC register, native stack",
+    "Explain class loading and parent delegation",
+    "Understand JIT compilation (C1/C2 tiers) and why warm JVMs are fast",
+    "Debug the flavors of OutOfMemoryError"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "The JVM is the virtual machine that loads, verifies and executes Java bytecode, manages memory, and JIT-compiles hot code to native instructions." },
-    { "type": "code", "language": "text", "code": "JVM memory:\n  Heap        -> objects (GC-managed): Young (Eden+Survivor) + Old\n  Metaspace   -> class metadata (native memory, replaced PermGen in Java 8)\n  Stack       -> one per thread: frames, locals, partial results\n  PC register -> current instruction per thread\n  Native stack-> JNI calls" },
-    { "type": "theory", "markdown": "## Class loading\n- **Loading** → **Linking** (verify, prepare, resolve) → **Initialization**.\n- Loaders are hierarchical: Bootstrap → Platform → Application, using parent-delegation." },
-    { "type": "callout", "variant": "interview", "markdown": "JIT: the JVM starts interpreting bytecode, profiles 'hot' methods, then compiles them to optimized native code (C1/C2 tiers). This is why a long-running JVM gets faster over time (warm-up)." },
-    { "type": "callout", "variant": "note", "markdown": "OutOfMemoryError flavors: 'Java heap space' (too many live objects), 'Metaspace' (too many classes), 'unable to create native thread' (thread/OS limit). The message tells you where to look." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Imagine a smart translator running a play in a foreign language.**\n\n- The **actors' script** is your compiled bytecode (`.class`).\n- The **translator** is the JVM — it reads the script line by line and produces the performance.\n- The translator has different **rooms in the building**: a warehouse of props (the **heap**), a personal notebook for each actor (each thread's **stack**), a shelf of scripts (**metaspace**), and a bookmark showing which line they're on (the **program counter**).\n- After doing a scene 100 times, the translator memorizes it in native language — no more line-by-line translation. That's the **JIT compiler**.\n\n**The JVM is the layer between your bytecode and the CPU.** Understanding what it does explains why Java is slow at startup, fast after warm-up, and hits `OutOfMemoryError` in surprising places." },
+    { "type": "callout", "variant": "definition", "markdown": "**The JVM (Java Virtual Machine)** is a specification and a runtime. It loads bytecode, verifies it's safe, executes it (interpreting or JIT-compiling to native code), and manages memory via the garbage collector. OpenJDK's HotSpot is the reference implementation." },
+    { "type": "theory", "markdown": "## JVM memory areas — the map you must know" },
+    { "type": "code", "language": "text", "code": "  ┌────────────────────────── SHARED across threads ──────────────────────────┐\n  │                                                                            │\n  │   HEAP (managed by GC)                                                     │\n  │   ┌──────────────────┐  ┌──────────────────┐                              │\n  │   │  YOUNG generation │  │   OLD generation │                              │\n  │   │  ┌─Eden─┐ ┌─S0─┐  │  │  (survives many  │  ← objects that lived long   │\n  │   │  │      │ │─S1─│  │  │   GC cycles)     │                              │\n  │   │  └──────┘ └────┘  │  └──────────────────┘                              │\n  │   └──────────────────┘                                                    │\n  │                                                                            │\n  │   METASPACE (class metadata — replaced PermGen in Java 8, in native mem)   │\n  │                                                                            │\n  └────────────────────────────────────────────────────────────────────────────┘\n\n  ┌────────────────────────── PER THREAD ─────────────────────────────────────┐\n  │   STACK          — one per thread. Holds call frames, locals, refs.       │\n  │   PC REGISTER    — current bytecode instruction pointer.                  │\n  │   NATIVE STACK   — for JNI (calling C/C++ code).                          │\n  └────────────────────────────────────────────────────────────────────────────┘" },
+    { "type": "table", "headers": ["Area", "What lives there", "Sized by"], "rows": [
+      ["Heap", "All objects, arrays", "-Xms (initial), -Xmx (max)"],
+      ["Young generation", "New objects (die young mostly)", "Part of heap"],
+      ["Old generation", "Long-lived objects", "Rest of heap"],
+      ["Metaspace", "Class metadata, method info", "-XX:MaxMetaspaceSize (native mem)"],
+      ["Stack (per thread)", "Locals, method call frames", "-Xss (usually 512 KB — 1 MB)"],
+      ["PC register (per thread)", "Current bytecode instruction", "Constant, small"],
+      ["Native stack (per thread)", "C/C++ JNI code", "OS-controlled"]
+    ]},
+    { "type": "callout", "variant": "tip", "markdown": "**PermGen is gone.** Java 8 removed the Permanent Generation and moved class metadata to **Metaspace** (native memory, dynamically resized). If you've seen `OutOfMemoryError: PermGen` in old logs — that's pre-Java 8. Modern equivalent: `OutOfMemoryError: Metaspace`, usually caused by classloader leaks in app-servers." },
+    { "type": "theory", "markdown": "## Class loading — the three phases" },
+    { "type": "table", "headers": ["Phase", "What happens"], "rows": [
+      ["Load", "Read the .class bytes from disk / network / JAR / a byte array"],
+      ["Link", "Verify (bytecode is valid), prepare (allocate static fields), resolve (symbolic refs)"],
+      ["Initialize", "Run static initializers and static field assignments"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**Parent delegation:** class loaders form a chain — Bootstrap → Platform → Application. When you ask for a class, the loader first asks its parent; only if the parent can't find it does it try to load. This means core classes (`java.lang.String`) always load from the bootstrap loader, and a rogue jar can't hijack them. A common source of bugs: two class loaders each load the 'same' class independently — they're actually different classes to the JVM." },
+    { "type": "theory", "markdown": "## JIT compilation — why warm JVMs are fast\n\nThe JVM starts by **interpreting** bytecode — slow but portable. It watches for **hot methods** (called often). Hot methods get compiled to native machine code at runtime by the **JIT (Just-In-Time compiler)**, using two tiers:" },
+    { "type": "table", "headers": ["Tier", "Compiler", "Speed", "Optimization"], "rows": [
+      ["Interpreter", "None — reads bytecode directly", "Slowest", "None"],
+      ["C1 (client)", "Fast compile", "Faster", "Basic optimizations"],
+      ["C2 (server)", "Slow compile, aggressive", "Fastest", "Inlining, escape analysis, loop unrolling"]
+    ]},
+    { "type": "callout", "variant": "note", "markdown": "**This is why:** long-running JVMs (servers) get faster over the first few minutes. Short-running JVMs (CLIs) never benefit. GraalVM Native Image (AOT compilation) exists to give you the fast native code from the very first millisecond." },
+    { "type": "theory", "markdown": "## OutOfMemoryError — the flavors and their meaning" },
+    { "type": "table", "headers": ["Error message", "Cause", "First fix to try"], "rows": [
+      ["Java heap space", "Too many live objects", "Bigger -Xmx, or find the leak"],
+      ["GC overhead limit exceeded", "GC running constantly, freeing almost nothing", "Same as above — memory leak somewhere"],
+      ["Metaspace", "Too many classes loaded", "-XX:MaxMetaspaceSize, or fix classloader leak"],
+      ["Unable to create native thread", "OS thread limit hit", "Fewer threads / bigger ulimit / use virtual threads"],
+      ["Direct buffer memory", "NIO direct buffers exhausted", "-XX:MaxDirectMemorySize or check for leaks"]
+    ]},
+    { "type": "theory", "markdown": "## A complete sample program — inspect a running JVM from Java" },
+    { "type": "code", "language": "java", "code": "// File: JvmDemo.java\n// Compile: javac JvmDemo.java && java -Xmx256m JvmDemo\nimport java.lang.management.*;\nimport java.util.*;\n\npublic class JvmDemo {\n  public static void main(String[] args) {\n    // 1. Runtime memory\n    Runtime rt = Runtime.getRuntime();\n    System.out.println(\"available cores: \" + rt.availableProcessors());\n    System.out.println(\"max heap       : \" + rt.maxMemory() / (1024*1024) + \" MB\");\n    System.out.println(\"total heap     : \" + rt.totalMemory() / (1024*1024) + \" MB\");\n    System.out.println(\"free heap      : \" + rt.freeMemory() / (1024*1024) + \" MB\");\n\n    // 2. Memory management beans — richer view\n    for (MemoryPoolMXBean p : ManagementFactory.getMemoryPoolMXBeans()) {\n      MemoryUsage u = p.getUsage();\n      System.out.printf(\"pool: %-30s  used=%d MB  max=%d MB%n\",\n          p.getName(), u.getUsed()/(1024*1024), u.getMax()/(1024*1024));\n    }\n\n    // 3. GC info\n    for (GarbageCollectorMXBean gc : ManagementFactory.getGarbageCollectorMXBeans()) {\n      System.out.println(\"gc: \" + gc.getName() +\n          \"  runs=\" + gc.getCollectionCount() + \"  totalMs=\" + gc.getCollectionTime());\n    }\n\n    // 4. Force a heap-space OOM (comment out to skip)\n    System.out.println(\"\\nallocating a lot to force GC...\");\n    List<byte[]> waste = new ArrayList<>();\n    try {\n      for (int i = 0; i < 100_000; i++) waste.add(new byte[1024 * 1024]);   // 1 MB each\n    } catch (OutOfMemoryError e) {\n      System.out.println(\"got OOM after allocating \" + waste.size() + \" MB\");\n    }\n\n    // 5. Show current thread's stack trace\n    System.out.println(\"\\nmy call stack:\");\n    for (StackTraceElement el : Thread.currentThread().getStackTrace()) {\n      System.out.println(\"  \" + el);\n    }\n  }\n}\n\n// Sample output (with -Xmx256m):\n//   available cores: 8\n//   max heap       : 256 MB\n//   total heap     : 64 MB\n//   ...\n//   pool: G1 Eden Space              used=32 MB  max=-1 MB\n//   pool: Metaspace                  used=6 MB   max=-1 MB\n//   gc: G1 Young Generation  runs=1  totalMs=8\n//   allocating a lot to force GC...\n//   got OOM after allocating 245 MB" },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Setting `-Xmx` to a huge value 'to be safe.'**\n\nA huge heap = huge GC pauses. Sizing the heap tightly enough to see pressure is often better than 'give it 32 GB and hope.' Monitor and right-size." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Ignoring class-loader leaks in app servers.**\n\nHot-redeploying a webapp in Tomcat can leave the old classloader alive — pinned by ThreadLocals, static caches, or listeners. Eventually you exhaust Metaspace. `jstat -gc` and heap dumps identify this." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Confusing `Runtime.freeMemory()` with 'free heap.'**\n\n`freeMemory()` returns the free part of the *currently committed* heap — not the max. If total < max, more room can be committed. Use `MemoryPoolMXBean` for accurate views." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Enable GC logs in production.** `-Xlog:gc*:file=gc.log:time,uptime,level,tags` on Java 9+. Priceless during incident triage." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Take a heap dump on OOM automatically.** `-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp`. You get the smoking gun the moment things break." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Use `jstack`, `jstat`, `jcmd` when you need to debug.** They ship with the JDK. Every senior Java engineer knows them." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Consider GraalVM Native Image for CLIs and short-lived processes.** AOT compilation → fast startup (~10 ms), low memory." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — StackOverflowError.** Write a recursive method that calls itself infinitely. Catch the error and print the recursion depth reached.\n\n**Why:** Concrete feel for the stack." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Force a heap OOM.** Allocate 1 MB byte arrays in a list until OOM. Then run with `-XX:+HeapDumpOnOutOfMemoryError` and open the dump in VisualVM.\n\n**Why:** Real production skill." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — jcmd + jstack + jstat.** Start a long-running Java process, use `jcmd <pid> Thread.print`, `jstat -gc <pid> 1s`, `jmap -heap <pid>`.\n\n**Why:** These are the tools you'll actually reach for during an incident." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Expert) — Custom classloader.** Load a `.class` file from a byte array via `ClassLoader.defineClass`. Instantiate and call a method.\n\n**Why:** Every framework doing dynamic reload (Tomcat, Spring DevTools) does this." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Describe the JVM memory areas.**\n\n**A:** The **heap** is shared across threads and holds all objects and arrays — the GC manages it. It's split into **young generation** (Eden + two Survivor spaces) where new objects live and die young, and **old generation** for objects that survive multiple minor GCs. **Metaspace** (Java 8+, replacing PermGen) holds class metadata in native memory. Each thread has its own **stack** (call frames + locals + references), **program counter** (current bytecode instruction), and **native stack** (for JNI). Object references live on the stack; the objects themselves live on the heap. That's why local primitives are fast (stack-allocated) but object allocations pressure the heap and eventually trigger GC." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What's on the stack vs the heap?**\n\n**A:** **Stack**: each thread's own memory for method call frames. It stores primitive locals (`int x = 5;` — the 5 is on the stack), references to objects (the reference `String s` is on the stack; the String object is on the heap), and the return address. Fast because it's just moving the stack pointer up/down. Bounded — deep recursion causes `StackOverflowError`. **Heap**: shared across all threads. Every object (including arrays and Strings) is on the heap. Managed by the garbage collector. Slower to allocate than stack. Lives as long as something references it, then becomes eligible for GC. Understanding this split is the foundation of JVM performance intuition." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How does class loading work, and what is parent delegation?**\n\n**A:** Class loading has three phases: **loading** (read the .class bytes from disk/network/JAR), **linking** (verify bytecode is valid, allocate static fields, resolve references), and **initialization** (run static initializers). Java uses a hierarchy of class loaders — **Bootstrap** (core classes like java.lang.String), **Platform** (JDK platform classes), and **Application** (your app's classes). Parent delegation means when a loader is asked for a class, it first asks its parent; only if the parent fails does it try to load itself. This ensures core classes always come from Bootstrap and can't be replaced by a malicious jar. It also creates a subtle bug: two different classloaders can load the 'same' class and the JVM treats them as distinct — a common source of `ClassCastException` in app servers." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What is the JIT compiler and tiered compilation?**\n\n**A:** The JVM starts by **interpreting** bytecode — slow but no compilation cost. It profiles method calls and detects **hot methods** — those called many times. Hot methods get compiled to native machine code at runtime by the **JIT (Just-In-Time)** compiler. HotSpot uses **tiered compilation**: **Tier 1** (interpreter) → **Tier 2/3** (**C1** compiler — fast compile, basic optimizations) → **Tier 4** (**C2** compiler — slow compile, aggressive optimizations like inlining, escape analysis, loop unrolling). This is why long-running JVMs get significantly faster in the first few minutes — the hot code paths reach C2. Short-running JVMs (CLIs) never see the benefit, which is why alternatives like GraalVM Native Image (AOT compilation) exist." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What are the different types of OutOfMemoryError?**\n\n**A:** The error message tells you where to look. **'Java heap space'** — too many live objects; either raise -Xmx or find a memory leak. **'GC overhead limit exceeded'** — GC is running constantly reclaiming almost nothing; same causes as heap space. **'Metaspace'** — too many classes loaded (Java 8+); often a classloader leak in app servers. **'Unable to create native thread'** — you've hit the OS thread limit; use a smaller pool or virtual threads. **'Direct buffer memory'** — NIO direct byte buffers exhausted. **'Requested array size exceeds VM limit'** — trying to create an array bigger than Integer.MAX_VALUE. Each has a distinct fix — the error message is diagnostic gold." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What's the difference between Metaspace and PermGen?**\n\n**A:** **PermGen** (Permanent Generation) was a fixed-size heap region in Java 7 and earlier where class metadata lived. It was easy to fill — heavy frameworks (Spring, JSF) hit `OutOfMemoryError: PermGen` regularly. **Metaspace** replaced it in Java 8 and lives in **native memory** (not the Java heap). By default it grows dynamically (bounded only by native memory). You can cap it with `-XX:MaxMetaspaceSize`. This change also freed up PermGen space in the heap for objects. Practical impact: OOMs are now `Metaspace` errors, not `PermGen`, and they're usually caused by classloader leaks (webapps redeployed in Tomcat) rather than raw framework size." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What tools would you use to debug a slow or crashing production JVM?**\n\n**A:** All ship with the JDK. **`jps`** lists Java processes with their PIDs. **`jstack <pid>`** dumps every thread's stack — instant deadlock detection. **`jstat -gc <pid> 1s`** shows heap usage + GC frequency every second — reveals memory-leak trajectories. **`jcmd <pid> Thread.print`** or **`jcmd <pid> GC.heap_info`** are modern replacements. **`jmap -dump:live,file=heap.hprof <pid>`** takes a heap dump; open in **VisualVM** or **Eclipse MAT** to find leaks. In production I also enable `-Xlog:gc*` for GC logs, `-XX:+HeapDumpOnOutOfMemoryError` to auto-dump on crash, and use **JFR (Java Flight Recorder)** for low-overhead continuous profiling. Knowing this toolkit is a huge distinguisher between junior and senior Java engineers." },
+    { "type": "theory", "markdown": "## Real-world examples\n\n- **Kafka brokers, Cassandra nodes, Elasticsearch — every 'big Java' service** is tuned via GC and heap flags. A misconfigured heap can turn a 5-node cluster into a 50-node one.\n- **Spring Boot apps** typically use a G1GC-tuned heap of 512 MB - 4 GB in containers. Cloud Run / Kubernetes forces you to size correctly.\n- **Class-loader hell in Tomcat** is legendary — hot redeploy leaves ClassLoaders pinned, exhausting Metaspace over hours.\n- **GraalVM Native Image adoption is real** — Micronaut, Quarkus, and Spring Native compile to native binaries for sub-100ms startup and 10× less memory, useful for serverless." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Escape analysis** — the JIT can detect an object that doesn't 'escape' its method and stack-allocate it, avoiding heap allocation and GC pressure.\n- **Bytecode** — `javap -c ClassName` disassembles bytecode. Understanding a few common opcodes (`aload`, `invokevirtual`, `getfield`) demystifies the JVM.\n- **`invokedynamic`** — the bytecode instruction that powers lambdas, string concatenation (Java 9+), and modern Kotlin.\n- **AppCDS (Application Class-Data Sharing)** — dumps loaded classes to a shared archive for faster startup.\n- **CDS + AOT (JEP 483 Java 24)** — combines AppCDS with ahead-of-time compilation for even faster starts.\n- **Compressed OOPs** — on 64-bit heaps up to 32 GB, references are stored as 32-bit compressed pointers, saving memory.\n- **`-XX:+PrintFlagsFinal`** shows every JVM flag with its current value — priceless for understanding what tuning is really in effect." }
   ],
   "flashcards": [
-    { "front": "Heap vs stack in the JVM?", "back": "Heap holds objects (shared, GC-managed); each thread has its own stack of frames with locals and call info." },
-    { "front": "What replaced PermGen in Java 8?", "back": "Metaspace, which stores class metadata in native memory and grows dynamically." },
-    { "front": "What does the JIT do?", "back": "Profiles hot methods and compiles them from bytecode to optimized native code at runtime." }
+    { "front": "Heap vs stack?", "back": "Heap: shared, all objects, GC-managed. Stack: per thread, local primitives + refs, fast, bounded." },
+    { "front": "What replaced PermGen?", "back": "Metaspace (Java 8+). Native memory instead of heap. OOMs are now `Metaspace`, usually classloader leaks." },
+    { "front": "Interpreter → C1 → C2?", "back": "Bytecode is interpreted; hot methods promoted to C1 (fast compile) then C2 (aggressive optimizations). This is why warm JVMs are fast." },
+    { "front": "Parent delegation?", "back": "Class loaders ask the parent first. Ensures core classes always come from Bootstrap, unchallenged." },
+    { "front": "OOM: heap space vs Metaspace?", "back": "Heap space = too many live objects. Metaspace = too many classes loaded (often a classloader leak)." }
   ],
   "quiz": [
-    { "q": "Where do Java objects live?", "options": ["The stack", "The heap", "The PC register", "Metaspace"], "answer": 1, "explain": "Objects are allocated on the GC-managed heap; locals/refs live on the stack." },
-    { "q": "Class metadata in Java 8+ is stored in…", "options": ["PermGen", "Metaspace", "The Eden space", "The stack"], "answer": 1, "explain": "Metaspace (native memory) replaced PermGen in Java 8." },
-    { "q": "Why does a JVM app speed up after warm-up?", "options": ["GC stops running", "JIT compiles hot code to native", "The heap shrinks", "Threads merge"], "answer": 1, "explain": "Tiered JIT compilation optimizes frequently executed methods." }
+    { "q": "Class metadata in Java 8+ lives in…", "options": ["PermGen", "Metaspace (native memory)", "Old generation", "Stack"], "answer": 1, "explain": "Metaspace replaced PermGen; grows in native memory." },
+    { "q": "Why does a long-running JVM speed up after a few minutes?", "options": ["GC stops running", "JIT compiles hot code to native (C1 → C2)", "The heap shrinks", "Threads become virtual"], "answer": 1, "explain": "Tiered compilation optimizes frequently-executed methods." },
+    { "q": "Where do Java objects live?", "options": ["Stack", "Heap", "PC register", "Metaspace"], "answer": 1, "explain": "Objects on the heap; references on the stack." },
+    { "q": "The smallest deployable unit of memory managed by GC?", "options": ["Class", "Object", "Stack frame", "Cache line"], "answer": 1, "explain": "GC allocates + reclaims individual objects on the heap." },
+    { "q": "For faster JVM startup you'd consider…", "options": ["Bigger -Xmx", "GraalVM Native Image / AOT", "More cores", "Larger stack"], "answer": 1, "explain": "AOT compilation skips interpreter warm-up." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Trigger and read a StackOverflowError via deep recursion." },
-    { "level": "Medium", "text": "Use -Xmx to force and diagnose a Java heap space OOM." },
-    { "level": "Hard", "text": "Inspect a running JVM with jcmd/jstack/jmap and summarize threads and heap." },
-    { "level": "Expert", "text": "Write a custom ClassLoader that loads a class from bytes at runtime." }
+    { "level": "Easy", "text": "Trigger and catch StackOverflowError with an infinite recursive method; print the depth reached." },
+    { "level": "Easy", "text": "Print available heap, total heap, free heap, and CPU count via `Runtime.getRuntime()`." },
+    { "level": "Medium", "text": "Force a heap OOM (allocate 1 MB byte arrays). Run with -XX:+HeapDumpOnOutOfMemoryError and open the dump." },
+    { "level": "Medium", "text": "Use `jstat -gc <pid> 1s` on a running Java process for 60 seconds; interpret the columns." },
+    { "level": "Hard", "text": "Use jstack to detect a deadlock in a program you deliberately made deadlock." },
+    { "level": "Hard", "text": "Enable GC logs (`-Xlog:gc*`) and read them — count minor vs major GCs, average pause time." },
+    { "level": "Expert", "text": "Write a custom ClassLoader that loads a .class file from a byte array and instantiates it." }
   ],
   "interviewQuestions": [
     "Describe the JVM memory areas.",
-    "Stack vs heap — what lives where?",
-    "Explain class loading and parent delegation.",
+    "What's on the stack vs the heap?",
+    "How does class loading work, and what is parent delegation?",
     "What is the JIT compiler and tiered compilation?",
-    "Types of OutOfMemoryError and how you'd debug each?"
+    "What are the different types of OutOfMemoryError?",
+    "What's the difference between Metaspace and PermGen?",
+    "What tools would you use to debug a slow or crashing production JVM?",
+    "Why is warm JVM performance different from cold?"
   ],
   "references": [
-    { "label": "The JVM Specification", "url": "https://docs.oracle.com/javase/specs/" }
+    { "label": "The Java Virtual Machine Specification", "url": "https://docs.oracle.com/javase/specs/jvms/se17/html/" },
+    { "label": "HotSpot Runtime Overview", "url": "https://openjdk.org/groups/hotspot/docs/RuntimeOverview.html" }
   ]
 }

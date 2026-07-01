@@ -73,115 +73,15 @@ body.push(...topicToChapter(loadTopic("level_02", "exceptions"),
 body.push(...topicToChapter(loadTopic("level_02", "generics"),
   { chapterNumber: 4, bookmarkId: "ch4" }));
 
-body.push(H1("5. Multithreading & Concurrency", "ch5"));
-body.push(callout("definition", ["Multithreading runs multiple threads concurrently within one process to use multiple cores and stay responsive. Threads share memory, so coordination is required."]));
-body.push(code([
-  "ExecutorService pool = Executors.newFixedThreadPool(4);",
-  "Future<Integer> f = pool.submit(() -> compute());",
-  "int result = f.get();",
-  "pool.shutdown();",
-], "executors"));
-body.push(table(["Tool", "Purpose"], [
-  ["synchronized", "Mutual exclusion on a monitor"],
-  ["volatile", "Visibility only — NOT atomicity"],
-  ["AtomicInteger", "Lock-free atomic updates (CAS)"],
-  ["ReentrantLock", "tryLock, fairness, flexibility"],
-  ["ExecutorService", "Thread pools & task submission"],
-], [3000, 6360]));
-body.push(callout("mistake", ["Assuming volatile makes count++ thread-safe. It guarantees visibility, not atomicity — the read-modify-write still races. Use AtomicInteger or synchronized."]));
-body.push(callout("interview", ["The Java Memory Model defines happens-before: synchronized, volatile and Thread.start/join establish ordering so one thread's writes are visible to another. Without it, the JVM may reorder or cache values."]));
-body.push(...summary([
-  "Prefer executors/CompletableFuture over raw threads.",
-  "volatile = visibility; synchronized = mutual exclusion + visibility.",
-  "Atomics give lock-free updates via CAS.",
-  "Avoid deadlock with lock ordering; minimize shared mutable state.",
-]));
-body.push(...interview([
-  "volatile vs synchronized vs Atomic?",
-  "What is the Java Memory Model / happens-before?",
-  "Thread lifecycle and states?",
-  "How do you prevent deadlock?",
-  "Runnable vs Callable vs Future vs CompletableFuture?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Show a counter race, then fix with AtomicInteger." },
-  { level: "Medium", text: "Run two calls in parallel and combine with CompletableFuture." },
-  { level: "Hard", text: "Producer-consumer with a BlockingQueue." },
-  { level: "Expert", text: "Implement a bounded thread pool from scratch." },
-]));
-body.push(...realworld(["Every server handles concurrent requests; misused locks cause deadlocks and latency spikes that only appear under production load."]));
-body.push(...miniproject(["Build a multithreaded web-page downloader with a fixed pool, a work queue, and aggregated results via CompletableFuture."]));
-body.push(...advanced(["Lock-free structures and the ABA problem; ForkJoinPool & work-stealing; StampedLock; false sharing."]));
+body.push(...topicToChapter(loadTopic("level_02", "multithreading"),
+  { chapterNumber: 5, bookmarkId: "ch5" }));
 
-// 6. JVM internals
-body.push(H1("6. JVM Internals", "ch6"));
-body.push(callout("definition", ["The JVM loads, verifies and executes bytecode, manages memory, and JIT-compiles hot code to native instructions."]));
-body.push(code([
-  "Heap        -> objects (GC-managed): Young (Eden+Survivors) + Old",
-  "Metaspace   -> class metadata (native; replaced PermGen in Java 8)",
-  "Stack       -> per thread: frames, locals, partial results",
-  "PC register -> current instruction per thread",
-], "jvm memory areas"));
-body.push(callout("interview", ["JIT: the JVM interprets bytecode first, profiles hot methods, then compiles them to optimized native code (C1/C2 tiers). This is why long-running JVMs speed up after warm-up."]));
-body.push(callout("note", ["OutOfMemoryError flavors point to the cause: 'Java heap space' (too many live objects), 'Metaspace' (too many classes), 'unable to create native thread' (OS/thread limit)."]));
-body.push(...summary([
-  "Heap holds objects; each thread has its own stack.",
-  "Metaspace (native) replaced PermGen for class metadata.",
-  "Class loading: load → link (verify/prepare/resolve) → init, with parent delegation.",
-  "Tiered JIT compiles hot methods to native code.",
-]));
-body.push(...interview([
-  "Describe the JVM memory areas.",
-  "Stack vs heap — what lives where?",
-  "Explain class loading and parent delegation.",
-  "What is the JIT and tiered compilation?",
-  "Types of OutOfMemoryError and how to debug each?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Trigger and read a StackOverflowError." },
-  { level: "Medium", text: "Force and diagnose a heap-space OOM with -Xmx." },
-  { level: "Hard", text: "Inspect a live JVM with jstack/jmap/jcmd." },
-  { level: "Expert", text: "Write a custom ClassLoader that loads a class from bytes." },
-]));
-body.push(...realworld(["Diagnosing a production OOM or latency spike requires reading heap dumps and GC logs — JVM internals are a senior-engineer differentiator."]));
-body.push(...miniproject(["Build a tiny plugin loader using a custom ClassLoader to load and run classes dropped into a folder at runtime."]));
-body.push(...advanced(["Bytecode (javap), invokedynamic, escape analysis, AppCDS for faster startup."]));
+body.push(...topicToChapter(loadTopic("level_02", "jvm"),
+  { chapterNumber: 6, bookmarkId: "ch6" }));
 
-// 7. Garbage Collection
-body.push(H1("7. Garbage Collection", "ch7"));
-body.push(callout("definition", ["GC automatically reclaims memory held by unreachable objects, freeing developers from manual free()."]));
-body.push(P("Most objects die young (the weak generational hypothesis), so the heap is generational: a Young generation (Eden + two Survivor spaces) collected by fast, frequent minor GCs, and an Old generation collected by slower major/full GCs."));
-body.push(table(["Collector", "Optimized for", "Notes"], [
-  ["Parallel", "Throughput", "Stop-the-world, batch jobs"],
-  ["G1 (default)", "Balanced, predictable pauses", "Region-based, since Java 9"],
-  ["ZGC / Shenandoah", "Ultra-low pause (<1ms)", "Large heaps, concurrent"],
-], [2300, 3700, 3360]));
-body.push(callout("mistake", ["Believing GC means no leaks. You still leak by keeping references alive: static collections, unremoved listeners, unbounded caches. Reachable ≠ needed."]));
-body.push(callout("tip", ["Never call System.gc() in production. Tune the collector and heap, and profile with GC logs / heap dumps instead of guessing."]));
-body.push(...summary([
-  "GC reclaims unreachable objects automatically.",
-  "Generational GC: cheap minor GCs for the young gen, costlier major GCs for old.",
-  "G1 is the default; ZGC/Shenandoah target ultra-low pauses.",
-  "You can still leak via long-lived references.",
-]));
-body.push(...interview([
-  "How does generational GC work?",
-  "Minor vs major vs full GC?",
-  "Compare G1, ZGC and Parallel.",
-  "Can Java leak memory? Examples?",
-  "Why avoid System.gc()?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Observe minor GCs with -verbose:gc." },
-  { level: "Medium", text: "Create a static-collection leak and find it in a heap dump." },
-  { level: "Hard", text: "Compare Parallel vs G1 pause times on one workload." },
-  { level: "Expert", text: "Tune flags to keep p99 GC pause under a target under load." },
-]));
-body.push(...realworld(["Latency-sensitive services (trading, ads) pick ZGC/Shenandoah and tune heaps so GC pauses stay sub-millisecond — a core SRE skill."]));
-body.push(...miniproject(["Build a load generator that allocates at a controlled rate and charts GC pause times across collectors."]));
-body.push(...advanced(["Reference types (soft/weak/phantom), TLABs, string deduplication, GC ergonomics."]));
+body.push(...topicToChapter(loadTopic("level_02", "gc"),
+  { chapterNumber: 7, bookmarkId: "ch7" }));
 
-// 8. Streams
 body.push(H1("8. Streams API", "ch8"));
 body.push(callout("definition", ["The Streams API (Java 8) processes sequences of elements declaratively through a pipeline — filter, map, reduce — instead of explicit loops."]));
 body.push(code([
@@ -362,44 +262,9 @@ body.push(...miniproject(["Build a small calculator: a sealed Expr (Num, Add, Mu
 body.push(...advanced(["Exhaustiveness & dominance rules, nested/var patterns, the future of deconstruction patterns."]));
 
 // 13. Virtual Threads
-body.push(H1("13. Virtual Threads (Java 21)", "ch13"));
-body.push(callout("definition", ["Virtual threads (Project Loom) are lightweight threads scheduled by the JVM, not the OS. Millions can run at once, so simple blocking code scales like async — without callbacks."]));
-body.push(table(["", "Platform thread", "Virtual thread"], [
-  ["Backed by", "An OS thread", "JVM-scheduled on a carrier"],
-  ["Cost", "~1MB, thousands max", "~few KB, millions"],
-  ["Blocking I/O", "Wastes an OS thread", "Unmounts the carrier — cheap"],
-  ["Best for", "CPU-bound work", "High-concurrency I/O"],
-], [1700, 3830, 3830]));
-body.push(code([
-  "try (var exec = Executors.newVirtualThreadPerTaskExecutor()) {",
-  "    for (var req : requests) exec.submit(() -> handle(req));",
-  "}   // blocking code is fine; the JVM unmounts on I/O",
-], "virtual threads"));
-body.push(callout("mistake", ["Pinning: blocking inside a synchronized block (or some native calls) pins the virtual thread to its carrier, killing the benefit. Prefer ReentrantLock in hot I/O paths."]));
-body.push(...summary([
-  "Virtual threads make thread-per-request scale to millions.",
-  "They're cheap and unmount on blocking I/O.",
-  "They don't speed up CPU-bound work.",
-  "Avoid pinning (synchronized/native blocking).",
-]));
-body.push(...interview([
-  "What problem do virtual threads solve?",
-  "Platform vs virtual threads?",
-  "What is pinning and how to avoid it?",
-  "Do virtual threads help CPU-bound work?",
-  "How do they change thread-per-request design?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Launch 1,000,000 sleeping virtual threads; compare memory to platform threads." },
-  { level: "Medium", text: "Rewrite a pool-based server to one-virtual-thread-per-request." },
-  { level: "Hard", text: "Detect pinning with -Djdk.tracePinnedThreads and fix it." },
-  { level: "Expert", text: "Benchmark reactive vs virtual-thread blocking under load." },
-]));
-body.push(...realworld(["Frameworks (Spring 6+, Helidon) now run requests on virtual threads, letting teams write straightforward blocking code that scales — a major shift away from reactive complexity."]));
-body.push(...miniproject(["Build a high-concurrency port/health checker that fans out thousands of blocking checks on virtual threads and aggregates results."]));
-body.push(...advanced(["Structured concurrency (JEP 453), scoped values, carrier-thread tuning."]));
+body.push(...topicToChapter(loadTopic("level_02", "virtual_threads"),
+  { chapterNumber: 13, bookmarkId: "ch13" }));
 
-// 14. Versions
 body.push(H1("14. Java 8 → Latest LTS: Version Guide", "ch14"));
 body.push(callout("definition", ["Since Java 9, a feature release ships every 6 months and a Long-Term Support (LTS) release every ~2–3 years (8, 11, 17, 21). Most teams target LTS versions."]));
 body.push(table(["Version", "Year", "Headline features"], [

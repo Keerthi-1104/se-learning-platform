@@ -1,52 +1,106 @@
 {
   "id": "java.multithreading",
   "levelId": 2,
-  "title": "Multithreading",
+  "title": "Multithreading & Concurrency",
   "xp": 60,
-  "estimatedMinutes": 35,
+  "estimatedMinutes": 45,
   "objectives": [
-    "Create threads safely and use executors",
-    "Apply synchronization and the volatile keyword",
-    "Avoid deadlocks and race conditions"
+    "Understand multithreading through a real-life analogy",
+    "Distinguish threads, executors, and virtual threads",
+    "Master the classic bugs: race conditions and deadlocks — and their fixes",
+    "Understand the Java Memory Model + happens-before",
+    "Answer concurrency interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Multithreading runs multiple threads concurrently within one process to use multiple cores and keep apps responsive. Threads share memory, so coordination is required." },
-    { "type": "code", "language": "java", "code": "// Prefer executors over new Thread()\nExecutorService pool = Executors.newFixedThreadPool(4);\nFuture<Integer> f = pool.submit(() -> compute());\nint result = f.get();\npool.shutdown();" },
-    { "type": "table", "headers": ["Tool", "Purpose"], "rows": [
-      ["synchronized", "Mutual exclusion on a monitor"],
-      ["volatile", "Visibility (no caching) — not atomicity"],
-      ["AtomicInteger", "Lock-free atomic updates (CAS)"],
-      ["ReentrantLock", "Flexible locking, tryLock, fairness"],
-      ["ExecutorService", "Thread pools & task submission"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Imagine a coffee shop with three baristas.**\n\n- **One barista** taking every order = single-threaded. Simple. Everyone in line waits.\n- **Three baristas** working in parallel = multi-threaded. Faster… but now they might both grab the last cup of milk. That's a **race condition**.\n- To avoid the milk fight, they use a **lock** on the milk fridge: one at a time, please.\n- If barista A holds the milk and waits for the espresso machine, and barista B holds the espresso machine and waits for the milk, nobody can move. That's a **deadlock**.\n- A **manager (thread pool)** decides how many baristas exist and reuses them for many orders — better than hiring one per order.\n\n**Multithreading is coordinating multiple workers on shared resources.** Get the coordination right and you're fast. Get it wrong and you get subtle bugs that only show up under load." },
+    { "type": "callout", "variant": "definition", "markdown": "**Multithreading** is running multiple threads of execution concurrently within one process. They share memory — which makes communication cheap but synchronization necessary. Java's concurrency toolkit has evolved dramatically: raw `Thread`, then `ExecutorService`, then `CompletableFuture`, and finally virtual threads (Java 21)." },
+    { "type": "theory", "markdown": "## Three ways to create a thread — old to modern" },
+    { "type": "code", "language": "java", "code": "// 1. OLD — new Thread() manually. Almost never right in modern code.\nThread t = new Thread(() -> System.out.println(\"hi\"));\nt.start();\n\n// 2. GOOD — ExecutorService (thread pool). Reuses threads for many tasks.\nExecutorService exec = Executors.newFixedThreadPool(4);\nFuture<Integer> f = exec.submit(() -> compute());\nint result = f.get();       // blocks until done\nexec.shutdown();\n\n// 3. MODERN (Java 21+) — Virtual threads. Millions of them for I/O work.\ntry (var vexec = Executors.newVirtualThreadPerTaskExecutor()) {\n    for (var req : requests) vexec.submit(() -> handle(req));\n}\n// Blocking code inside virtual threads unmounts from the carrier — no OS-thread waste." },
+    { "type": "theory", "markdown": "## The concurrency toolkit — what to reach for" },
+    { "type": "table", "headers": ["Tool", "Purpose", "When to use"], "rows": [
+      ["synchronized", "Exclusive lock on an object monitor", "Simple mutual exclusion"],
+      ["volatile", "Visibility (no caching) — NOT atomicity", "Flags, done-signals"],
+      ["ReentrantLock", "More flexible lock — tryLock, timeout, fairness", "When synchronized isn't enough"],
+      ["AtomicInteger, AtomicReference", "Lock-free atomic ops using CAS", "Counters, single-value updates"],
+      ["ExecutorService", "Thread pool + task submission", "Almost every place you'd `new Thread`"],
+      ["CompletableFuture", "Async pipelines — thenApply, thenCompose", "Chaining async work"],
+      ["BlockingQueue", "Thread-safe producer/consumer queue", "Passing data between threads"],
+      ["StampedLock, ReadWriteLock", "Many readers, few writers", "Read-heavy shared state"]
     ]},
-    { "type": "callout", "variant": "mistake", "markdown": "Assuming `volatile` makes `count++` thread-safe. It guarantees visibility, not atomicity — read-modify-write still races. Use AtomicInteger or synchronized." },
-    { "type": "callout", "variant": "interview", "markdown": "The Java Memory Model defines happens-before: synchronized/volatile/Thread.start ensure one thread's writes are visible to another. Without it, the JVM may reorder or cache values." },
-    { "type": "callout", "variant": "best", "markdown": "Prefer high-level concurrency (ExecutorService, CompletableFuture, concurrent collections) over raw threads and locks. Minimize shared mutable state." }
+    { "type": "theory", "markdown": "## The two classic bugs — race conditions and deadlocks\n\nEvery multithreading interview asks about these. If you can explain both with examples, you're 80% of the way there." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Race condition — counter++ isn't atomic.**\n\n`count++` looks like one operation. It's actually three: read count, add 1, write count. If two threads interleave those three steps, one update is lost.\n\n**Fixes** (in order of preference): `AtomicInteger.incrementAndGet()`, or wrap the increment in `synchronized`, or (best) don't share the state." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Deadlock — two locks, opposite order.**\n\n```\nThread A: lock(X); lock(Y);   // waits for Y\nThread B: lock(Y); lock(X);   // waits for X\n// Both wait forever. App freezes.\n```\n\n**Fix:** always acquire locks in a **globally consistent order** — every thread grabs X before Y. No cycles form." },
+    { "type": "theory", "markdown": "## `volatile` vs `synchronized` vs `Atomic` — the interview trap\n\nMost beginners think `volatile` makes `count++` thread-safe. It doesn't." },
+    { "type": "table", "headers": ["Guarantee", "volatile", "synchronized", "AtomicInteger"], "rows": [
+      ["Visibility (writes visible to others)", "✓", "✓", "✓"],
+      ["Atomicity (read-modify-write in one step)", "✗", "✓", "✓"],
+      ["Mutual exclusion (one thread at a time)", "✗", "✓", "N/A (lock-free)"],
+      ["Fast under contention", "Fastest for pure flags", "Slowest", "Fast (CAS)"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**`volatile int done = false;`** is fine for a done-flag (visibility is enough). **`volatile int count; count++;`** is still buggy — because count++ isn't atomic. Use `AtomicInteger` for that." },
+    { "type": "theory", "markdown": "## The Java Memory Model in one paragraph\n\nWithout synchronization, the JVM can **reorder writes** and **cache values in CPU registers** — two threads may see different values for the same variable. The **JMM (Java Memory Model)** defines a **happens-before** relationship: certain constructs — a `synchronized` release/acquire, `volatile` write/read, `Thread.start`/`join`, atomic operations — guarantee that all writes before them are visible to any thread that observes them. If you don't establish happens-before, you're on your own." },
+    { "type": "theory", "markdown": "## A complete sample program — race demo, then all the fixes" },
+    { "type": "code", "language": "java", "code": "// File: ConcurrencyDemo.java\n// Compile: javac ConcurrencyDemo.java && java ConcurrencyDemo\nimport java.util.concurrent.*;\nimport java.util.concurrent.atomic.*;\n\npublic class ConcurrencyDemo {\n  static int broken = 0;\n  static volatile int volatileButBroken = 0;\n  static AtomicInteger atomic = new AtomicInteger(0);\n  static int synced = 0;\n  static final Object lock = new Object();\n\n  static void incrementSynchronized() {\n    synchronized (lock) { synced++; }\n  }\n\n  public static void main(String[] args) throws Exception {\n    final int threads = 8;\n    final int perThread = 100_000;\n    ExecutorService exec = Executors.newFixedThreadPool(threads);\n\n    Runnable task = () -> {\n      for (int i = 0; i < perThread; i++) {\n        broken++;                              // RACE — some updates lost\n        volatileButBroken++;                   // STILL race — increment isn't atomic\n        atomic.incrementAndGet();              // safe — CAS\n        incrementSynchronized();               // safe — mutex\n      }\n    };\n\n    for (int i = 0; i < threads; i++) exec.submit(task);\n    exec.shutdown();\n    exec.awaitTermination(1, TimeUnit.MINUTES);\n\n    int expected = threads * perThread;\n    System.out.println(\"expected           : \" + expected);\n    System.out.println(\"broken (racy)      : \" + broken            + \"  (varies EVERY run)\");\n    System.out.println(\"volatile but racy  : \" + volatileButBroken + \"  (also varies!)\");\n    System.out.println(\"atomic (CAS)       : \" + atomic.get()      + \"  (always correct)\");\n    System.out.println(\"synchronized       : \" + synced            + \"  (always correct)\");\n  }\n}\n\n// Typical output:\n//   expected           : 800000\n//   broken (racy)      : 618341    (or any number below 800000)\n//   volatile but racy  : 632587    (also wrong — volatile doesn't make ++ atomic!)\n//   atomic (CAS)       : 800000\n//   synchronized       : 800000\n//\n// Key lesson: volatile alone does NOT make read-modify-write safe." },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Believing `volatile` makes `count++` safe.**\n\n`volatile` only guarantees visibility, not atomicity. `count++` = read, add, write — three separate ops. Use `AtomicInteger` or `synchronized`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: `new Thread()` per task in server code.**\n\nEach OS thread costs ~1 MB of stack and setup time. Spawning one per HTTP request kills servers. Use a thread pool (`Executors.newFixedThreadPool`) — or virtual threads in Java 21." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Holding a lock across an I/O call.**\n\nDon't call the network or a slow DB while holding a lock — you serialize all other threads waiting on that lock. Copy what you need, release the lock, then do the I/O." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Prefer executors and virtual threads over raw `Thread`.** Modern Java has better primitives." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Minimize shared mutable state.** Immutable data + message passing (via `BlockingQueue` or `CompletableFuture`) eliminates whole categories of bugs." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Use `ConcurrentHashMap` instead of `Collections.synchronizedMap`.** Fine-grained locking is much faster under contention." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Prefer `CompletableFuture` for async pipelines** — chaining `.thenApply` / `.thenCompose` is clearer than nested callbacks." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — See a race live.** Spawn 8 threads incrementing a shared `int` 100,000 times each. Print the final value. It won't be 800,000. Fix with `AtomicInteger`.\n\n**Why:** You'll never forget what a race feels like." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — CompletableFuture pipeline.** Fetch a user, then their orders, then their most-expensive order — all async, in one chain: `.thenCompose(...).thenApply(...)`.\n\n**Why:** This is how modern async Java is written." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — Producer/consumer with BlockingQueue.** One producer thread puts numbers into a bounded queue; two consumer threads read + process. Verify no items are lost.\n\n**Why:** Every real background pipeline (image resizing, log ingestion) is this shape." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Expert) — Build a mini thread pool from scratch.** With a `BlockingQueue<Runnable>` and N worker threads. Match the API of `ExecutorService.submit`.\n\n**Why:** You'll internalize how a thread pool actually works." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What's the difference between `volatile`, `synchronized`, and `AtomicInteger`?**\n\n**A:** All three ensure **visibility** — writes by one thread are visible to another. But they differ on **atomicity** and **mutual exclusion**. **`volatile`** guarantees visibility only. Every read reaches memory (not a stale cached copy) and every write flushes. But `count++` still races because it's read-modify-write. Great for done-flags or one-off state changes; wrong for counters. **`synchronized`** provides visibility AND mutual exclusion via an object monitor — one thread at a time. Slower under contention. **`AtomicInteger`** uses hardware Compare-And-Swap (CAS) instructions — lock-free, very fast, atomic read-modify-write. Rule: `volatile` for flags, `Atomic*` for counters, `synchronized` for compound invariants across multiple fields." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What is the Java Memory Model, and what does 'happens-before' mean?**\n\n**A:** The Java Memory Model (JMM) defines when writes made by one thread become visible to another. Without it, the compiler and CPU are free to reorder operations and cache values in registers — two threads may see completely different values for the same variable. The JMM establishes a **happens-before** relationship: if action A happens-before action B, then everything visible after A is visible in B. Constructs that establish happens-before include: writing a `volatile` field (happens-before subsequent reads), releasing a `synchronized` lock (happens-before subsequent acquires), `Thread.start()` (happens-before the thread's first action), and `Thread.join()` (the thread's last action happens-before join returns). Without establishing happens-before, you have no guarantees — and that's how the trickiest concurrency bugs are born." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What is a race condition, and how do you fix one?**\n\n**A:** A race condition happens when two or more threads read-modify-write shared state without coordination, so the final result depends on unpredictable thread interleaving. Classic example: two threads both execute `counter++`. That's actually three operations — read counter, add one, write counter. If both threads read the old value at the same time, both add one to the *same* old value, both write back — one update is lost. **Fixes** (in order of preference): (1) **Eliminate the sharing** — use per-thread state or immutable data. (2) **Use atomic operations** — `AtomicInteger.incrementAndGet()` does the whole read-add-write in one hardware step. (3) **Use synchronization** — wrap the compound operation in `synchronized (lock) { counter++; }`. The lesson: any read-modify-write on shared mutable state must be either atomic or locked." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What is a deadlock, and how do you prevent it?**\n\n**A:** A deadlock happens when two or more threads each hold a resource the other needs, and none can proceed. The four Coffman conditions: **mutual exclusion** (a resource is exclusively held), **hold-and-wait** (a thread holds one while requesting another), **no preemption** (resources can't be forcibly taken), and **circular wait** (a cycle of threads waiting on each other). Break any one to prevent deadlock. The most practical fix is **eliminating circular wait** by acquiring locks in a **globally consistent order** — if every thread grabs lock A before lock B, no cycle can form. Other techniques: use `tryLock` with a timeout, keep critical sections short, and prefer high-level primitives (executors, atomic operations, immutable data) over hand-rolled locking. And when a deadlock does happen in production, `jstack` shows you the exact locks each thread holds and waits for." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: Why use a thread pool instead of `new Thread()`?**\n\n**A:** Creating an OS thread is expensive — a few milliseconds and ~1 MB of stack per thread. In a server handling 1000 requests/second, spawning one thread per request either exhausts memory or crashes with `OutOfMemoryError: unable to create native thread`. A **thread pool** reuses a small pool of threads for many tasks. `Executors.newFixedThreadPool(N)` maintains N threads; new tasks queue up when all are busy. This bounds resource usage and eliminates thread-creation cost. Modern Java 21 also offers **virtual threads** — millions of cheap threads managed by the JVM, so 'one thread per task' actually works for I/O work. But for CPU-bound work, a fixed pool sized to your core count remains the right choice." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: Runnable vs Callable vs Future vs CompletableFuture — what's each for?**\n\n**A:** **`Runnable`** — a task that returns nothing (`void run()`). Can't throw checked exceptions. **`Callable<T>`** — a task that returns a value (`T call()`) and can throw. Submit both to an `ExecutorService`. **`Future<T>`** — a handle to a pending Callable result. `future.get()` blocks until it's done. Old and limited — no chaining. **`CompletableFuture<T>`** (Java 8+) — a Future you can chain: `.thenApply`, `.thenCompose`, `.exceptionally`, `.allOf`. Composable, non-blocking, and the modern way to write async code. Rule: `Runnable`/`Callable` for tasks, `CompletableFuture` for anything you'd otherwise nest callbacks or block on." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What is a `ReentrantLock` and when would you prefer it over `synchronized`?**\n\n**A:** `ReentrantLock` is a lock class in `java.util.concurrent.locks` that offers everything `synchronized` does plus: **`tryLock()`** (attempt without blocking, with optional timeout), **fairness** (grant locks in FIFO order), **interruptible waits** (a blocked thread can be `interrupt()`ed out), and **explicit Condition objects** (finer-grained wait/notify). Reach for it when `synchronized` isn't flexible enough — for example, a lock that needs a timeout to avoid deadlock, or a producer/consumer with multiple wait conditions. It requires more care (must `unlock()` in a `finally` block) but is more powerful. For simple mutual exclusion, `synchronized` is still cleaner and often faster." },
+    { "type": "theory", "markdown": "## Real-world examples\n\n- **Every HTTP server** processes concurrent requests via a thread pool. Bad tuning here is the #1 cause of server slowness.\n- **Spring's `@Async` annotation** submits methods to an `ExecutorService` — you get async behavior with one annotation.\n- **Kafka consumers** run in worker pools; a race on offset commits can cause double-processing or lost messages.\n- **Android's `Handler` and Flutter's isolates** are alternatives to shared-memory threading — message passing instead of locks.\n- **When production hangs and `jstack` shows two threads waiting on each other's locks** — that's a real deadlock. You'll fix it by imposing a global lock order." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Lock-free data structures** using CAS (e.g., `ConcurrentLinkedQueue`) — fast under contention but tricky to reason about.\n- **ABA problem** — CAS sees 'A' twice and assumes nothing changed, but it went A→B→A. Fix with versioned references (`AtomicStampedReference`).\n- **`ForkJoinPool`** — work-stealing pool used by parallel streams. Excellent for CPU-bound divide-and-conquer.\n- **False sharing** — two threads writing to different variables that share a cache line kill each other's performance. Pad or align.\n- **`StampedLock`** — optimistic reads for read-heavy state. Very fast when contention is low.\n- **Structured concurrency (Java 21+ preview)** — treats concurrent tasks like structured programming: a scope opens; tasks inside are guaranteed to finish before the scope closes." }
   ],
   "flashcards": [
-    { "front": "volatile vs synchronized?", "back": "volatile guarantees visibility only; synchronized guarantees mutual exclusion + visibility." },
-    { "front": "Why use a thread pool over new Thread()?", "back": "Reuses threads, bounds concurrency, and avoids the cost of creating/destroying threads per task." },
-    { "front": "What is happens-before?", "back": "A JMM ordering guarantee ensuring one thread's writes are visible to another (via synchronized/volatile/etc.)." }
+    { "front": "volatile vs synchronized vs Atomic?", "back": "volatile: visibility only (no atomicity). synchronized: visibility + mutual exclusion. Atomic: lock-free atomic read-modify-write via CAS." },
+    { "front": "What is happens-before?", "back": "A JMM guarantee — writes before a happens-before edge are visible after it. Established by volatile, synchronized, Thread.start/join, etc." },
+    { "front": "Four Coffman conditions for deadlock?", "back": "Mutual exclusion, hold-and-wait, no preemption, circular wait. Break any one to prevent deadlock." },
+    { "front": "Why thread pool over `new Thread()`?", "back": "Threads are expensive (~1 MB stack, ms startup). Pools reuse threads and bound resource usage." },
+    { "front": "Runnable vs Callable?", "back": "Runnable returns nothing, can't throw checked. Callable returns a value and can throw. Both submitted to ExecutorService." }
   ],
   "quiz": [
-    { "q": "volatile guarantees…", "options": ["Atomicity", "Visibility", "Mutual exclusion", "Ordering of unrelated writes"], "answer": 1, "explain": "volatile ensures reads see the latest write but does NOT make compound operations atomic." },
-    { "q": "Best for a lock-free counter?", "options": ["volatile int", "AtomicInteger", "plain int", "String"], "answer": 1, "explain": "AtomicInteger uses CAS for atomic increments without locks." },
-    { "q": "Preferred way to run many short tasks?", "options": ["new Thread() per task", "ExecutorService thread pool", "Busy-wait loops", "System.gc()"], "answer": 1, "explain": "A pool reuses threads and bounds resource usage." }
+    { "q": "`volatile int count; count++;` is…", "options": ["Thread-safe", "Still racy — increment isn't atomic", "Faster than AtomicInteger always", "A compile error"], "answer": 1, "explain": "volatile guarantees visibility, not atomicity." },
+    { "q": "Best for a lock-free counter?", "options": ["volatile int", "AtomicInteger", "plain int", "synchronized"], "answer": 1, "explain": "AtomicInteger uses hardware CAS — lock-free, fast, atomic." },
+    { "q": "Preferred way to run many short tasks?", "options": ["new Thread() per task", "ExecutorService thread pool", "Busy loops", "System.gc()"], "answer": 1, "explain": "Pool reuses threads and bounds resources." },
+    { "q": "Deadlock requires…", "options": ["Multiple CPU cores", "All four Coffman conditions", "A shared secret", "GC pauses"], "answer": 1, "explain": "Mutex + hold-and-wait + no preemption + circular wait." },
+    { "q": "Two threads deadlock most often when…", "options": ["They use volatile", "They acquire the same locks in different orders", "GC runs", "Threads sleep"], "answer": 1, "explain": "Consistent lock ordering eliminates cycles." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Run 1000 increments across threads; show the race, then fix with AtomicInteger." },
-    { "level": "Medium", "text": "Use CompletableFuture to run two calls in parallel and combine results." },
-    { "level": "Hard", "text": "Implement producer-consumer with BlockingQueue." },
-    { "level": "Expert", "text": "Build a bounded thread pool from scratch with a task queue and worker threads." }
+    { "level": "Easy", "text": "Spawn 8 threads incrementing a shared int 100,000 times each. Show the racy total; fix with AtomicInteger." },
+    { "level": "Easy", "text": "Print `Runtime.getRuntime().availableProcessors()`; spawn that many threads, each print thread name + a random number." },
+    { "level": "Medium", "text": "CompletableFuture pipeline: fetch a user, then their orders, then their most expensive order." },
+    { "level": "Medium", "text": "Producer/consumer with BlockingQueue — producer + 2 consumers; verify no items lost." },
+    { "level": "Hard", "text": "Deadlock two threads intentionally (two locks, opposite order). Fix with consistent lock ordering." },
+    { "level": "Hard", "text": "Reduce a hot-spot: replace a global `synchronized` counter with `AtomicLong` and benchmark the throughput improvement." },
+    { "level": "Expert", "text": "Build a mini thread pool with BlockingQueue + N workers matching ExecutorService.submit API." }
   ],
   "interviewQuestions": [
-    "volatile vs synchronized vs Atomic?",
-    "What is the Java Memory Model / happens-before?",
-    "Thread states and lifecycle?",
-    "How do you avoid deadlock?",
-    "Runnable vs Callable vs Future vs CompletableFuture?"
+    "What's the difference between `volatile`, `synchronized`, and `AtomicInteger`?",
+    "What is the Java Memory Model, and what does 'happens-before' mean?",
+    "What is a race condition, and how do you fix one?",
+    "What is a deadlock, and how do you prevent it?",
+    "Why use a thread pool instead of `new Thread()`?",
+    "Runnable vs Callable vs Future vs CompletableFuture — what's each for?",
+    "What is a `ReentrantLock` and when would you prefer it over `synchronized`?",
+    "When would you choose ConcurrentHashMap vs Collections.synchronizedMap?"
   ],
   "references": [
-    { "label": "Java Concurrency in Practice", "url": "https://jcip.net" }
+    { "label": "Java Concurrency in Practice (Goetz)", "url": "https://jcip.net" },
+    { "label": "Java Memory Model (JLS 17.4)", "url": "https://docs.oracle.com/javase/specs/jls/se17/html/jls-17.html" }
   ]
 }
