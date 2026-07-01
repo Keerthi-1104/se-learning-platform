@@ -1,0 +1,45 @@
+{
+  "id": "gs1.serialization",
+  "levelId": 11,
+  "title": "Serialization",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain SGTIN, SSCC serial semantics",
+    "Design a serial-number allocator",
+    "Meet DSCSA / FMD regulatory needs"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "**Serialization** attaches a unique per-unit identifier to each physical item. GTIN identifies the product type; serialization identifies **this specific bottle / this specific pallet**. The GS1 EPC syntax combines them: **SGTIN** = GTIN + serial, **SSCC** = its own serial." },
+    { "type": "code", "language": "text", "code": "SGTIN (Serialized GTIN) URN:\n  urn:epc:id:sgtin:8901234.00001.SN-777\n           GCP           Item     Serial\n\nOn a pack (GS1 DataMatrix):\n  <FNC1> 01 08901234000015 21 SN-777 17 261231 10 BATCH42\n     GTIN(14)          Serial(≤20)   Expiry     Batch\n\nRegulatory 'four elements' on pharma packs (DSCSA, EU FMD):\n  GTIN + Serial + Batch + Expiry" },
+    { "type": "callout", "variant": "interview", "markdown": "Serial-space design matters: use a **random serial** for tamper resistance (attackers can't guess valid serials) or a **counter** for auditability, but never mix. Keep the space large (10–12 chars) so exhaustion doesn't force reissue. Reserve a checksum/HMAC-like segment if you want offline validation." },
+    { "type": "callout", "variant": "mistake", "markdown": "Sequential serials 000001, 000002, … printed in the clear. Attackers infer volumes and generate valid-looking clones. Prefer **randomized** or **format-preserving encrypted** serials." },
+    { "type": "callout", "variant": "best", "markdown": "For pharma/regulated flows, generate serials centrally with an authenticated allocator; log every allocation to an EPCIS commissioning event. For consumer engagement, keep serials short + human-friendly on-pack (for shorter URLs)." }
+  ],
+  "flashcards": [
+    { "front": "SGTIN in one sentence?", "back": "The URN combining a GTIN and a per-item serial to identify one specific physical unit." },
+    { "front": "Pharma 'four elements'?", "back": "GTIN + Serial + Batch + Expiry — required by DSCSA / EU FMD." },
+    { "front": "Why avoid sequential public serials?", "back": "Attackers infer volumes and mint valid-looking clones. Prefer randomized or FPE serials." }
+  ],
+  "quiz": [
+    { "q": "SGTIN identifies…", "options": ["A brand", "A trade item type", "One specific physical unit (GTIN + serial)", "A location"], "answer": 2, "explain": "GTIN + serial = per-item identity." },
+    { "q": "For counterfeit resistance, prefer…", "options": ["Sequential public serials", "Randomized serials", "One serial for everyone", "No serial"], "answer": 1, "explain": "Non-guessable serials are harder to clone." },
+    { "q": "'Four elements' means…", "options": ["GCP + GTIN + item + check", "GTIN + Serial + Batch + Expiry", "GLN + SSCC + Batch + Serial", "None"], "answer": 1, "explain": "Regulatory pharma requirement." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Emit an SGTIN URN from a GTIN + serial." },
+    { "level": "Medium", "text": "Design a serial allocator that guarantees uniqueness + auditable log." },
+    { "level": "Hard", "text": "Emit an EPCIS commissioning event for a batch of 10k serials." },
+    { "level": "Expert", "text": "Design a two-stage anti-counterfeit strategy: printed serial + server-signed short token stored in Digital Link params." }
+  ],
+  "interviewQuestions": [
+    "GTIN vs SGTIN vs SSCC?",
+    "How would you allocate serials for a pharma line?",
+    "What are the 'four elements'?",
+    "Why avoid sequential public serials?",
+    "How do serials integrate with EPCIS?"
+  ],
+  "references": [
+    { "label": "GS1 — Serialization for Pharma", "url": "https://www.gs1.org/industries/healthcare" }
+  ]
+}

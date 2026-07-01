@@ -1,0 +1,51 @@
+{
+  "id": "gs1.authentication",
+  "levelId": 11,
+  "title": "Product Authentication",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain how GS1 identifiers enable authentication",
+    "Combine GTIN + serial + crypto signals",
+    "Design a scan-to-verify flow"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "**Product authentication** uses GS1 identifiers (GTIN + serial) plus additional signals (crypto tokens, one-time codes, tamper evidence) so a consumer or supply-chain actor can verify a product is genuine and hasn't been diverted." },
+    { "type": "table", "headers": ["Signal", "Strength", "Notes"], "rows": [
+      ["GTIN + serial lookup", "Weak alone", "Anyone can copy printed data"],
+      ["Signed token in Digital Link", "Medium", "Verifiable offline with a public key"],
+      ["Server-side one-scan tokens", "Strong", "Detects clones (both scan the same code)"],
+      ["Tamper-evident + Digital Link", "Strongest", "Physical + digital layers combined"]
+    ]},
+    { "type": "code", "language": "text", "code": "Simple scan-to-verify flow:\n  scan QR (Digital Link) -> resolver returns \n    { gtin, serial, brand, first-scanned-at, last-scanned-at, status }\n  App logic:\n    - Unknown serial      -> FAKE (not issued)\n    - Serial already used -> LIKELY CLONE (already scanned as sold)\n    - Fresh serial        -> OK; server marks it as consumed" },
+    { "type": "callout", "variant": "interview", "markdown": "The clever bit: serials are **first-sale tokens**. The first scan after purchase is expected; subsequent scans of the same serial suggest either the buyer re-scanning (fine) or a clone with the same printed code (not fine). Server-side state turns a static barcode into a one-shot proof." },
+    { "type": "callout", "variant": "mistake", "markdown": "Relying only on 'is this GTIN valid?' Counterfeiters copy GTINs trivially. Real authentication needs a UNIQUE per-item element (serial + server state, or a crypto signature)." },
+    { "type": "callout", "variant": "best", "markdown": "Combine a Digital Link QR (public, human-readable-ish) with a **server-signed short opaque token** so even without network the app can partially verify, and with network the server can catch clones and enforce first-scan policies." }
+  ],
+  "flashcards": [
+    { "front": "Why is GTIN alone weak for authentication?", "back": "GTIN is public; anyone can print the same number." },
+    { "front": "How does a serial catch clones?", "back": "Server tracks 'first scan' — a second unrelated device scanning the same serial signals a duplicate." },
+    { "front": "Strongest layer?", "back": "Digital + tamper-evident physical (holograms, seals) + server state + optional crypto." }
+  ],
+  "quiz": [
+    { "q": "GTIN alone provides…", "options": ["Strong authentication", "Weak (public + copyable)", "Cryptographic proof", "Nothing"], "answer": 1, "explain": "Public identifier; easily copied." },
+    { "q": "Server tracking 'first scan' catches…", "options": ["Battery drain", "Cloned duplicates of the same serial", "Slow queries", "GC pauses"], "answer": 1, "explain": "Duplicate scans are red flags." },
+    { "q": "Best mobile UX for scan-to-verify?", "options": ["Show raw JSON", "Green/yellow/red with clear explanation + action", "Only vibrate", "Play music"], "answer": 1, "explain": "Clear consumer signal + actionable next step." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Design a JSON response for authentic vs suspicious vs unknown." },
+    { "level": "Medium", "text": "Implement server 'first-scan' state with abuse detection." },
+    { "level": "Hard", "text": "Add signed short tokens verifiable offline with a rotating key." },
+    { "level": "Expert", "text": "Design an anti-cloning strategy combining Digital Link + tamper-evident seals + server-side heuristics (geo/time)." }
+  ],
+  "interviewQuestions": [
+    "Why isn't GTIN alone sufficient?",
+    "How does a serial defeat clones?",
+    "Offline vs online authentication?",
+    "How to combine physical + digital signals?",
+    "How would you architect a scan-to-verify app?"
+  ],
+  "references": [
+    { "label": "GS1 — Brand Protection", "url": "https://www.gs1.org/industries/brand-protection" }
+  ]
+}

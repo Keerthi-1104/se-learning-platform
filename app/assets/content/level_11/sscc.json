@@ -1,0 +1,44 @@
+{
+  "id": "gs1.sscc",
+  "levelId": 11,
+  "title": "SSCC — Serial Shipping Container Code",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Explain what SSCC identifies",
+    "Structure an SSCC (extension digit + GCP + serial + check)",
+    "Use SSCC in logistics labels (GS1-128)"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "An **SSCC** (Serial Shipping Container Code) is an 18-digit identifier for a **logistics unit** — a pallet, carton, or roll cage — that travels through the supply chain. Every SSCC is unique; you never reuse it (traceability depends on it)." },
+    { "type": "code", "language": "text", "code": "SSCC structure (18 digits):\n  [Extension][GCP][Serial Reference][Check Digit]\n  Extension: 0..9 (chosen by the brand — expands capacity)\n  Total data: 17 digits + 1 check digit\n\nOn a logistics label: SSCC uses Application Identifier (00)\n  GS1-128:  (00) 3 8901234 000000001 5" },
+    { "type": "callout", "variant": "interview", "markdown": "SSCC vs GTIN: **GTIN identifies a product type; SSCC identifies a specific physical shipment container**. Two identical pallets of the same GTIN each have their own SSCC. That's what enables track-and-trace of shipments." },
+    { "type": "callout", "variant": "mistake", "markdown": "Reusing an SSCC 'because the shipment is done.' GS1 requires SSCCs remain unique for at least **12 months**. Reusing too soon breaks recalls and reconciliation with historical logistics data." }
+  ],
+  "flashcards": [
+    { "front": "What does SSCC identify?", "back": "A specific logistics unit — pallet, carton or container travelling in the supply chain." },
+    { "front": "SSCC total length + first digit?", "back": "18 digits total, first digit is an 'extension' (0–9)." },
+    { "front": "SSCC reuse rule?", "back": "Do not reuse for at least 12 months — traceability data depends on uniqueness." }
+  ],
+  "quiz": [
+    { "q": "SSCC vs GTIN?", "options": ["Same thing", "GTIN = product type; SSCC = physical logistics unit", "SSCC is for stores", "GTIN is for pallets"], "answer": 1, "explain": "Product identity vs unit identity." },
+    { "q": "SSCC is…", "options": ["12 digits", "13 digits", "17 digits", "18 digits (incl. check)"], "answer": 3, "explain": "18 digits with a check digit." },
+    { "q": "SSCC reuse before 12 months…", "options": ["Is fine", "Breaks traceability / GS1 rules", "Is required", "Improves speed"], "answer": 1, "explain": "Reuse too early breaks recalls and reconciliation." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Compute the check digit for a 17-digit SSCC seed." },
+    { "level": "Medium", "text": "Print a GS1-128 label encoding `(00) SSCC` and scan-test it." },
+    { "level": "Hard", "text": "Add a per-warehouse SSCC allocator that never repeats (persistent counter)." },
+    { "level": "Expert", "text": "Model pallet → cartons → items with SSCC/SSCC/SGTIN in EPCIS `aggregation` events." }
+  ],
+  "interviewQuestions": [
+    "What does SSCC identify?",
+    "How is an SSCC structured?",
+    "SSCC vs GTIN?",
+    "SSCC reuse rules?",
+    "How is SSCC encoded on a logistics label?"
+  ],
+  "references": [
+    { "label": "GS1 — SSCC", "url": "https://www.gs1.org/standards/id-keys/sscc" }
+  ]
+}

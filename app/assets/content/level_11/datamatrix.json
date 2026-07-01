@@ -1,0 +1,51 @@
+{
+  "id": "gs1.datamatrix",
+  "levelId": 11,
+  "title": "DataMatrix",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain the DataMatrix code format",
+    "Encode GS1 AI data with FNC1",
+    "Choose DataMatrix vs QR for a use case"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "**DataMatrix** is a compact 2D matrix barcode (square or rectangular) using Reed-Solomon error correction. When used with GS1 (as **GS1 DataMatrix**), the first character is FNC1 — signalling that the payload is a stream of Application Identifiers." },
+    { "type": "code", "language": "text", "code": "GS1 DataMatrix payload (with FNC1 as start-of-message):\n  <FNC1> 01 08901234000015 17 261231 10 BATCH42 21 SN-777\n\nParsing rules:\n  - Fixed-length AIs (01, 17) read exact digit count\n  - Variable-length AIs (10, 21, 91-99) end at FNC1 or end-of-data\n  - FNC1 = 0x1D (GS in ASCII) — invisible to humans, delimits fields" },
+    { "type": "table", "headers": ["", "DataMatrix", "QR Code"], "rows": [
+      ["Size", "Very compact for small data", "Larger; better for URLs / logos"],
+      ["Aesthetic", "Utilitarian (industrial)", "Consumer-familiar"],
+      ["Error correction", "Reed-Solomon (fixed levels)", "Reed-Solomon (L/M/Q/H)"],
+      ["GS1 signal", "FNC1 in first position", "GS1 QR uses FNC1 too"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "DataMatrix dominates **regulated industries**: pharmaceuticals (EU FMD / US DSCSA), medical devices (UDI), electronic components. Its compactness lets you fit GTIN + batch + expiry + serial on a tiny label — critical for small syringes or pills." },
+    { "type": "callout", "variant": "mistake", "markdown": "Ignoring the FNC1 → treating the payload as plain text. Without recognizing FNC1 (0x1D), your parser can't tell where a variable-length AI ends. Every GS1 DataMatrix parser must handle this delimiter." },
+    { "type": "callout", "variant": "tip", "markdown": "For pharma, use DataMatrix with GTIN + serial + batch + expiry (the DSCSA/FMD 'four elements'). For consumer engagement, use QR (or a Digital Link QR)." }
+  ],
+  "flashcards": [
+    { "front": "How does GS1 DataMatrix signal AI data?", "back": "With FNC1 (0x1D) at start-of-message and between variable-length AIs." },
+    { "front": "Where does DataMatrix dominate?", "back": "Pharma (DSCSA/FMD), medical devices (UDI), industrial components — small labels + serialization." },
+    { "front": "GS1 'four elements' on pharma packs?", "back": "GTIN, serial number, batch/lot, expiry date." }
+  ],
+  "quiz": [
+    { "q": "GS1 DataMatrix indicates its payload with…", "options": ["A header string", "FNC1 at start of data", "A URL prefix", "A magic image"], "answer": 1, "explain": "FNC1 signals AI-formatted data." },
+    { "q": "DataMatrix shines for…", "options": ["Consumer marketing QR", "Small labels with serialized data (pharma/UDI)", "Traffic signs", "Web login"], "answer": 1, "explain": "Compact + regulated serialization use." },
+    { "q": "Pharma packs typically carry…", "options": ["GTIN only", "GTIN + serial + batch + expiry", "Only expiry", "Nothing"], "answer": 1, "explain": "The 'four elements' for DSCSA/FMD compliance." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Parse a GS1 DataMatrix string with GTIN + batch + expiry into fields." },
+    { "level": "Medium", "text": "Build a Dart parser handling fixed- and variable-length AIs + FNC1." },
+    { "level": "Hard", "text": "Generate a printable GS1 DataMatrix label with the 'four elements'." },
+    { "level": "Expert", "text": "Implement DSCSA-style verification: scan → parse → check GTIN/serial via API." }
+  ],
+  "interviewQuestions": [
+    "What is GS1 DataMatrix and how does it differ from a plain DataMatrix?",
+    "What is FNC1 and why is it required?",
+    "DataMatrix vs QR — when use each?",
+    "How do you parse variable-length AIs?",
+    "What are the pharma 'four elements'?"
+  ],
+  "references": [
+    { "label": "GS1 DataMatrix Guideline", "url": "https://www.gs1.org/standards/barcodes/2d-barcodes" }
+  ]
+}

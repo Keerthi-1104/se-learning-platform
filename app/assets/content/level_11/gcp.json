@@ -1,0 +1,45 @@
+{
+  "id": "gs1.gcp",
+  "levelId": 11,
+  "title": "GCP — GS1 Company Prefix",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Explain what the GCP is and how it's licensed",
+    "Understand variable GCP lengths",
+    "Route lookups by GCP correctly"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "The **GS1 Company Prefix (GCP)** is the unique digit sequence a GS1 Member Organization (like GS1 India) licenses to a brand. Every GTIN/GLN/SSCC/etc. that brand issues starts with its GCP — that's what makes those numbers globally unique." },
+    { "type": "code", "language": "text", "code": "EAN-13: 8 9 0 1 2 3 4 0 0 0 0 1 5\n         [ ---- GCP ---- ][item][cd]\nGCP length is VARIABLE (typically 7–12 digits).\nRule: longer GCP = fewer item slots but cheaper subscription.\n  - Big brand with many SKUs → shorter GCP (7–8) → more item slots\n  - Small brand with few products → longer GCP (10–12)" },
+    { "type": "callout", "variant": "interview", "markdown": "GCP length is **not encoded in the barcode**. To split a GTIN into GCP + item reference, you need the **GCP length table** from GS1 (per prefix range) or use the **GEPIR** service. This is why 'give me the brand from a GTIN' is not trivial." },
+    { "type": "callout", "variant": "mistake", "markdown": "Hard-coding 'GCP is always 7 digits.' It varies. Look up the length via GS1's published GCP-length table for the leading prefix, or via the Verified by GS1 / GEPIR API." },
+    { "type": "callout", "variant": "best", "markdown": "Cache the GCP-length table locally in your app; refresh on a schedule. Combined with a cache of GCP → brand mapping, you get instant offline 'who owns this GTIN' answers." }
+  ],
+  "flashcards": [
+    { "front": "What does GS1 license to a brand?", "back": "A GCP — a unique digit sequence that starts every identifier that brand issues." },
+    { "front": "Is GCP length fixed?", "back": "No — variable (typically 7–12 digits); consult the GS1 GCP-length table." },
+    { "front": "How to look up brand from a GTIN?", "back": "Use GEPIR / Verified by GS1 — the GCP resolves to the licensee." }
+  ],
+  "quiz": [
+    { "q": "The GCP is licensed to…", "options": ["Each product", "Each store", "The brand (company)", "The consumer"], "answer": 2, "explain": "The company licenses one GCP and issues all identifiers under it." },
+    { "q": "GCP length…", "options": ["Is always 7", "Is always 12", "Varies (7–12) per licensee", "Is stored in the check digit"], "answer": 2, "explain": "Longer GCP = fewer item slots but cheaper." },
+    { "q": "To resolve a GTIN to its brand you can use…", "options": ["Guessing", "GEPIR / Verified by GS1", "The check digit", "Random API"], "answer": 1, "explain": "Global registry that maps GCP → licensee." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Given a GTIN and a known GCP length, split into GCP + item reference." },
+    { "level": "Medium", "text": "Fetch the GCP-length table and cache it in Isar with a TTL." },
+    { "level": "Hard", "text": "Add a local GEPIR-like lookup fallback for brand name given a GCP." },
+    { "level": "Expert", "text": "Handle GCP length reassignment / prefix rearrangement without breaking historical scans." }
+  ],
+  "interviewQuestions": [
+    "What is a GCP and how is it licensed?",
+    "Why is GCP length variable?",
+    "Given a GTIN, how do you find the licensee?",
+    "How is Verified by GS1 different from GEPIR?",
+    "How would you cache the GCP-length table on mobile?"
+  ],
+  "references": [
+    { "label": "GS1 — Company Prefix", "url": "https://www.gs1.org/services/gs1-company-prefix" }
+  ]
+}

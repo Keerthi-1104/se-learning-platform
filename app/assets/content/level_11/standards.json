@@ -1,0 +1,53 @@
+{
+  "id": "gs1.standards",
+  "levelId": 11,
+  "title": "Barcode Standards",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Distinguish the common 1D + 2D symbologies",
+    "Choose the right symbology per use case",
+    "Understand Application Identifiers (AIs)"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "GS1 defines a family of symbologies for different use cases. Each is a specification for how data becomes bars/dots — the identifier itself (GTIN, SSCC…) is separate from how it's encoded." },
+    { "type": "table", "headers": ["Symbology", "Dim.", "Use"], "rows": [
+      ["EAN-13 / UPC-A", "1D", "Retail POS"],
+      ["ITF-14", "1D", "Cases/cartons (GTIN-14)"],
+      ["GS1-128 (Code 128)", "1D", "Logistics labels: SSCC + AIs"],
+      ["GS1 DataBar", "1D", "Small items (fresh food, coupons)"],
+      ["GS1 DataMatrix", "2D", "Pharma/UDI/serialized items"],
+      ["GS1 QR", "2D", "Consumer engagement + GS1 data"],
+      ["GS1 Digital Link QR", "2D 'web'", "Multi-purpose future default"]
+    ]},
+    { "type": "code", "language": "text", "code": "Application Identifiers (AI) — the language of GS1-128 and GS1 2D:\n  01  GTIN                    (14 digits)\n  10  Batch/Lot               (variable, up to 20)\n  11  Production date         (YYMMDD)\n  17  Expiry date             (YYMMDD)\n  21  Serial number           (variable, up to 20)\n  00  SSCC                    (18 digits)\n  310n Net weight (kg, n = dec places)\n\nFNC1 delimits variable-length AIs from the next AI." },
+    { "type": "callout", "variant": "interview", "markdown": "Two dimensions of choice: **symbology** (how bars/dots encode data) and **data content** (which AIs and identifiers you include). Choose symbology by physical constraints (small pack? DataMatrix). Choose AIs by workflow (pharma needs GTIN+batch+expiry+serial)." },
+    { "type": "callout", "variant": "mistake", "markdown": "Using EAN-13 on a case/carton — POS won't accept it. Use ITF-14 or GS1-128 for logistics units. Conversely, printing GS1-128 on a consumer pack: retail POS may not be configured for it." }
+  ],
+  "flashcards": [
+    { "front": "GS1-128 primary use?", "back": "Logistics labels — encodes SSCC and other AIs on cases/pallets." },
+    { "front": "Application Identifier (AI)?", "back": "A short numeric prefix (01, 10, 17, 21, …) that says what the following digits mean." },
+    { "front": "AI 00, 01, 17?", "back": "00 = SSCC, 01 = GTIN, 17 = Expiry (YYMMDD)." }
+  ],
+  "quiz": [
+    { "q": "For a small pharma vial serialized to the unit, choose…", "options": ["EAN-13", "GS1-128", "GS1 DataMatrix", "ITF-14"], "answer": 2, "explain": "Compact 2D with serialization support." },
+    { "q": "For a pallet with SSCC + shipment details use…", "options": ["EAN-13", "GS1-128", "QR", "UPC-A"], "answer": 1, "explain": "GS1-128 is the logistics workhorse." },
+    { "q": "AI '01' means…", "options": ["Expiry", "GTIN", "Batch", "SSCC"], "answer": 1, "explain": "AI 01 introduces a GTIN." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Given AI-encoded string, decode into GTIN/batch/expiry fields." },
+    { "level": "Medium", "text": "Encode SSCC + weight for a GS1-128 label." },
+    { "level": "Hard", "text": "Write a symbology chooser for use cases: (retail unit, case, pallet, pharma)." },
+    { "level": "Expert", "text": "Build an end-to-end labeler that picks symbology + AIs from a product spec." }
+  ],
+  "interviewQuestions": [
+    "Family of GS1 symbologies?",
+    "How do you choose a symbology?",
+    "What are Application Identifiers?",
+    "GS1-128 vs Code 128?",
+    "When would you pick DataMatrix over QR?"
+  ],
+  "references": [
+    { "label": "GS1 General Specifications", "url": "https://www.gs1.org/standards/barcodes-epcrfid-id-keys/gs1-general-specifications" }
+  ]
+}

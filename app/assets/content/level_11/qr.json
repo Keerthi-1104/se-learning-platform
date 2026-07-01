@@ -1,0 +1,50 @@
+{
+  "id": "gs1.qr",
+  "levelId": 11,
+  "title": "QR Code",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Explain QR structure and error correction",
+    "Distinguish plain QR from GS1 QR from Digital Link QR",
+    "Choose sizing + ECC level for real-world scanning"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "**QR (Quick Response)** codes are 2D matrix barcodes with Reed-Solomon error correction, capable of encoding up to ~3 KB. Ubiquitous in consumer apps; the default 'scan this' code because every smartphone camera reads them natively." },
+    { "type": "table", "headers": ["ECC level", "Recoverable damage", "Data capacity"], "rows": [
+      ["L", "~7%", "Highest"],
+      ["M", "~15%", "High"],
+      ["Q", "~25%", "Medium"],
+      ["H", "~30%", "Lowest"]
+    ]},
+    { "type": "code", "language": "text", "code": "Three flavors on GS1 products:\n  1. Plain QR — arbitrary URL / text (marketing links)\n  2. GS1 QR   — payload begins with FNC1, carries AIs like DataMatrix\n  3. Digital Link QR — URL like https://id.gs1.org/01/...\n                       (consumer-friendly + carries GS1 data)" },
+    { "type": "callout", "variant": "interview", "markdown": "For consumer engagement, **Digital Link QR is the future**: same code serves POS, regulator, and consumer. Choose ECC ≥ M (higher for outdoor/damaged surfaces), and place a **quiet zone** (blank border) — most 'won't scan' complaints trace to no quiet zone or too small a code." },
+    { "type": "callout", "variant": "mistake", "markdown": "Embedding a giant logo covering >30% of the QR without upgrading to ECC-H. The code stops scanning. Always test on real devices with real lighting, not just the printer PDF." },
+    { "type": "callout", "variant": "tip", "markdown": "Rule of thumb: minimum module (pixel) size = 0.4 mm printed; scan distance ≈ 10× code width. Sub-1cm codes are unreliable in real retail lighting." }
+  ],
+  "flashcards": [
+    { "front": "QR error correction levels?", "back": "L (~7%) / M (~15%) / Q (~25%) / H (~30%) — higher = more damage tolerance but less capacity." },
+    { "front": "What is a quiet zone?", "back": "A blank margin around the code (usually ≥ 4 modules) required for scanners to detect it." },
+    { "front": "Three GS1-relevant QR flavors?", "back": "Plain QR (URL), GS1 QR (FNC1 + AIs), Digital Link QR (GS1-formatted URL)." }
+  ],
+  "quiz": [
+    { "q": "For consumer engagement + POS on the same code use…", "options": ["Plain QR", "GS1 Digital Link QR", "SSCC label", "SGLN"], "answer": 1, "explain": "One code serves multiple audiences." },
+    { "q": "For a logo inside the QR you should…", "options": ["Ignore ECC", "Use ECC-H", "Skip quiet zone", "Print smaller"], "answer": 1, "explain": "Higher ECC tolerates the covered area." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Generate a QR that encodes a URL." },
+    { "level": "Medium", "text": "Generate a GS1 QR with FNC1 + GTIN + batch + expiry." },
+    { "level": "Hard", "text": "Test scan reliability across ECC levels and module sizes." },
+    { "level": "Expert", "text": "Ship a labeling pipeline that auto-generates Digital Link QRs with brand logo overlay + quiet zone enforcement." }
+  ],
+  "interviewQuestions": [
+    "QR ECC levels — trade-offs?",
+    "Why is quiet zone required?",
+    "Plain vs GS1 vs Digital Link QR?",
+    "QR vs DataMatrix?",
+    "How do you size a QR for retail print?"
+  ],
+  "references": [
+    { "label": "GS1 QR + DataMatrix", "url": "https://www.gs1.org/standards/barcodes/2d-barcodes" }
+  ]
+}

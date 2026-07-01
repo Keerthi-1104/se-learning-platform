@@ -1,0 +1,45 @@
+{
+  "id": "gs1.traceability",
+  "levelId": 11,
+  "title": "Product Traceability",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain 'one step up / one step down' traceability",
+    "Model events + master data correctly",
+    "Handle recalls end-to-end"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "**Product traceability** is the ability to follow a product's journey — from raw ingredients through manufacturing, distribution and retail to the consumer — and back again for recall. GS1 identifiers make each step referenceable with the same keys everyone agrees on." },
+    { "type": "code", "language": "text", "code": "'One up, one down' minimum:\n  Every actor records who they received from (one up)\n  and who they shipped to (one down).\n  Combined across the chain -> full journey.\n\nFive traceability questions (What/When/Where/Why/Who):\n  What?  GTIN + batch/serial\n  When?  Event timestamp\n  Where? GLN / SGLN (read point, biz location)\n  Why?   Business step (shipping, receiving, transforming)\n  Who?   Party GLN" },
+    { "type": "callout", "variant": "interview", "markdown": "The senior lens: traceability is **not just recording events** — it's ensuring the whole chain uses the **same identifiers** so events from Farm → Factory → Distributor → Retailer can be joined by GTIN + batch + SSCC without reconciliation. That's why GS1 keys are the bedrock." },
+    { "type": "callout", "variant": "mistake", "markdown": "Free-text 'source' fields ('supplier X, batch #12'). Recalls collapse: 'batch #12' means different things per supplier. Use GTIN + batch + GLN — machine-joinable and audit-friendly." },
+    { "type": "callout", "variant": "best", "markdown": "Model events with **EPCIS** (next topic). Recall SLA: from decision → target retrievals in < 4 hours for critical categories (pharma, high-risk food). Test recalls quarterly — you don't want to find out during a real one." }
+  ],
+  "flashcards": [
+    { "front": "'One up, one down' rule?", "back": "Each actor records who they received from and who they shipped to — chained across the industry it yields full traceability." },
+    { "front": "Five W's of a traceable event?", "back": "What (GTIN/batch), When, Where (GLN), Why (bizStep), Who (party GLN)." },
+    { "front": "Why GS1 keys not free text?", "back": "Only globally-agreed keys let separate actors' records join for cross-chain traceability." }
+  ],
+  "quiz": [
+    { "q": "The minimum bar for traceability across the industry is…", "options": ["Full mesh visibility", "One up, one down at each actor", "Blockchain always", "Nothing"], "answer": 1, "explain": "Every actor tracking neighbors is enough to reconstruct chains." },
+    { "q": "Standard identifiers matter because…", "options": ["They look pretty", "Actors' records can be joined without reconciliation", "They're patented", "They save disk"], "answer": 1, "explain": "Shared keys avoid ambiguous joins." },
+    { "q": "Free-text sources fail at recall because…", "options": ["Too fast", "Ambiguity → wrong batches / missed products", "Too legible", "None"], "answer": 1, "explain": "Ambiguity across suppliers." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Model a 'received / shipped' event with GTIN + batch + GLN." },
+    { "level": "Medium", "text": "Simulate a mock recall using an EPCIS-like event store." },
+    { "level": "Hard", "text": "Implement 'given a batch, list everywhere it's currently held' via aggregation events." },
+    { "level": "Expert", "text": "Design an industry-wide recall SLA + rehearsal process." }
+  ],
+  "interviewQuestions": [
+    "Explain 'one up, one down'.",
+    "The five W's of a traceable event?",
+    "Why GS1 keys not free text?",
+    "How would you architect a recall in <4 hours?",
+    "What data must every event carry?"
+  ],
+  "references": [
+    { "label": "GS1 Global Traceability Standard", "url": "https://www.gs1.org/standards/traceability" }
+  ]
+}

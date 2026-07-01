@@ -1,0 +1,50 @@
+{
+  "id": "gs1.gln",
+  "levelId": 11,
+  "title": "GLN — Global Location Number",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Explain what GLN identifies",
+    "Distinguish legal, physical and functional locations",
+    "Use GLNs correctly in EDI / EPCIS"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "A **GLN** (Global Location Number) is a 13-digit identifier for a party or place — a company, a warehouse, a store, a hospital ward, a specific dock door. It's how supply chain messages (EDI orders, EPCIS events, invoices) address 'where' or 'who' with a single global key." },
+    { "type": "table", "headers": ["Type", "Example"], "rows": [
+      ["Legal entity", "A company / hospital / school"],
+      ["Physical location", "A warehouse, store, dock door, ward"],
+      ["Function", "A department (procurement, ship-to)"],
+      ["Digital", "A web service endpoint"]
+    ]},
+    { "type": "code", "language": "text", "code": "GLN structure (13 digits):\n  GCP + Location Reference + Check Digit\nSame check-digit algorithm as GTIN.\n\nUsage in EDI / EPCIS:\n  bizLocation:  urn:epc:id:sgln:8901234.00021.0\n  readPoint:    urn:epc:id:sgln:8901234.00021.dock5\n  (Extension after '.' identifies the sub-location.)" },
+    { "type": "callout", "variant": "interview", "markdown": "One GLN can act as multiple parties: same location as 'ship-to,' 'bill-to,' 'end user.' In EDI (EDIFACT / X12) and EPCIS, GLNs replace free-text addresses — the whole supply chain agrees on the same key, so integrations don't break on name changes." },
+    { "type": "callout", "variant": "mistake", "markdown": "Using one GLN for many distinct physical sites. If two warehouses share the same GLN, you can't route inventory correctly. Issue distinct GLNs per physical location, plus GLN extensions for dock doors / rooms / shelves." }
+  ],
+  "flashcards": [
+    { "front": "GLN in one sentence?", "back": "13-digit global identifier for a party (company/department) or a place (warehouse/store/dock/ward)." },
+    { "front": "GLN extension?", "back": "A suffix identifying a sub-location within a GLN (e.g., dock5 in an SGLN)." },
+    { "front": "GLN vs GTIN check digit?", "back": "Same algorithm — mod-10 with weight-3-and-1 pattern." }
+  ],
+  "quiz": [
+    { "q": "GLN identifies…", "options": ["A trade item", "A location or party", "An event", "A digital certificate"], "answer": 1, "explain": "Locations or parties in the supply chain." },
+    { "q": "One warehouse should have…", "options": ["No GLN", "One GLN (dock doors as extensions)", "Ten unrelated GLNs", "Only a name"], "answer": 1, "explain": "One physical location = one GLN; sub-locations via extensions." },
+    { "q": "In EPCIS, `readPoint` typically references…", "options": ["A GTIN", "An SGLN (GLN + extension)", "A GCP", "An SSCC"], "answer": 1, "explain": "SGLN identifies exactly where the event was captured." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Compute a GLN check digit; verify against a known correct GLN." },
+    { "level": "Medium", "text": "Model warehouse + dock doors as GLN + extensions in your DB." },
+    { "level": "Hard", "text": "Emit an EPCIS `readPoint` and `bizLocation` from a mobile scan event." },
+    { "level": "Expert", "text": "Design GLN allocation policy for a retailer with 500 stores and multiple functional GLNs each." }
+  ],
+  "interviewQuestions": [
+    "What is a GLN and what does it identify?",
+    "GLN vs GTIN?",
+    "Physical vs functional GLN — when use each?",
+    "What is a GLN extension?",
+    "How is GLN used in EDI / EPCIS?"
+  ],
+  "references": [
+    { "label": "GS1 — GLN", "url": "https://www.gs1.org/standards/id-keys/gln" }
+  ]
+}

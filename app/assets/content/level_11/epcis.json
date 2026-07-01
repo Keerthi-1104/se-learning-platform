@@ -1,0 +1,51 @@
+{
+  "id": "gs1.epcis",
+  "levelId": 11,
+  "title": "EPCIS",
+  "xp": 50,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Explain EPCIS's event model",
+    "Distinguish the four event types",
+    "Emit and query EPCIS events"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "**EPCIS** (Electronic Product Code Information Services) is the GS1 standard for **event-based supply-chain visibility**. Every meaningful action — shipped, received, packed, dispensed — becomes a structured event with GTINs/SSCCs/GLNs, timestamps, business step, and disposition. Version 2.0 (2022) is JSON/JSON-LD-based." },
+    { "type": "table", "headers": ["Event type", "Purpose"], "rows": [
+      ["ObjectEvent", "Something happened to one or more objects (ship, receive)"],
+      ["AggregationEvent", "Objects packed/unpacked into a container (SSCC ↔ SGTINs)"],
+      ["TransactionEvent", "Objects associated with a business transaction (PO, invoice)"],
+      ["TransformationEvent", "Inputs consumed → outputs produced (manufacturing)"]
+    ]},
+    { "type": "code", "language": "json", "code": "{\n  \"type\": \"ObjectEvent\",\n  \"eventTime\": \"2026-07-01T10:15:30Z\",\n  \"eventTimeZoneOffset\": \"+05:30\",\n  \"epcList\": [ \"urn:epc:id:sgtin:8901234.00001.SN-777\" ],\n  \"action\": \"OBSERVE\",\n  \"bizStep\": \"urn:epcglobal:cbv:bizstep:shipping\",\n  \"disposition\": \"urn:epcglobal:cbv:disp:in_transit\",\n  \"readPoint\": { \"id\": \"urn:epc:id:sgln:8901234.00021.dock5\" },\n  \"bizLocation\": { \"id\": \"urn:epc:id:sgln:8901234.00021.0\" }\n}" },
+    { "type": "callout", "variant": "interview", "markdown": "EPCIS is powerful because it **standardizes 'what happened' across companies**. A regulator, brand, retailer and 3PL can each ingest the same event stream and reconstruct the same picture. Version 2.0 adopted JSON/JSON-LD, so modern APIs feel native to REST engineers." },
+    { "type": "callout", "variant": "mistake", "markdown": "Skipping `readPoint` vs `bizLocation` — different fields with different meanings. `readPoint` = exactly where the scan happened (dock door); `bizLocation` = the business site the object is at (warehouse). Confusing them corrupts location-based queries." },
+    { "type": "callout", "variant": "best", "markdown": "For a manufacturer flow: TransformationEvent (make) → AggregationEvent (pack into SSCC) → ObjectEvent (ship) → ObjectEvent (receive at retailer) → ObjectEvent (dispense to consumer). Store events append-only; drive dashboards from CBV vocabularies (bizStep, disposition)." }
+  ],
+  "flashcards": [
+    { "front": "Four EPCIS event types?", "back": "Object, Aggregation, Transaction, Transformation." },
+    { "front": "readPoint vs bizLocation?", "back": "readPoint = where the scan happened (specific); bizLocation = the business site the object is now at." },
+    { "front": "EPCIS 2.0 format?", "back": "JSON / JSON-LD (was XML in 1.x) — much friendlier for modern REST." }
+  ],
+  "quiz": [
+    { "q": "Packing items into an SSCC pallet is a…", "options": ["ObjectEvent", "AggregationEvent", "TransactionEvent", "TransformationEvent"], "answer": 1, "explain": "Aggregation captures parent↔children object relationships." },
+    { "q": "readPoint captures…", "options": ["Which company", "The exact scan location", "The business site", "The disposition"], "answer": 1, "explain": "Specific place (e.g., dock door) where the scan occurred." },
+    { "q": "EPCIS 2.0 uses…", "options": ["Only XML", "JSON / JSON-LD", "CSV only", "MessagePack"], "answer": 1, "explain": "REST + JSON friendly by design." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Emit an ObjectEvent JSON for a 'shipping' step." },
+    { "level": "Medium", "text": "Build an AggregationEvent packing 10 SGTINs into an SSCC." },
+    { "level": "Hard", "text": "Query event history for a given SGTIN across a stream store." },
+    { "level": "Expert", "text": "Implement CBV-driven dashboards (bizStep + disposition) for a mock retailer." }
+  ],
+  "interviewQuestions": [
+    "Four EPCIS event types?",
+    "readPoint vs bizLocation?",
+    "How does EPCIS enable cross-actor traceability?",
+    "EPCIS 1.x vs 2.0?",
+    "How do you query event history?"
+  ],
+  "references": [
+    { "label": "GS1 EPCIS 2.0", "url": "https://www.gs1.org/standards/epcis" }
+  ]
+}

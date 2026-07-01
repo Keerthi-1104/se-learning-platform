@@ -1,0 +1,51 @@
+{
+  "id": "gs1.gtin",
+  "levelId": 11,
+  "title": "GTIN — Global Trade Item Number",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain what a GTIN identifies",
+    "Distinguish GTIN-8, 12, 13, 14",
+    "Compute and validate the GTIN check digit"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "A **GTIN** (Global Trade Item Number) is the globally unique identifier for a trade item — a product, packaging level or service — that can be priced, ordered, or invoiced. It's the number encoded in the barcode on virtually every product sold at retail." },
+    { "type": "table", "headers": ["Format", "Digits", "Where it's used"], "rows": [
+      ["GTIN-8", "8", "Very small items (small labels)"],
+      ["GTIN-12 (UPC-A)", "12", "North America retail"],
+      ["GTIN-13 (EAN-13)", "13", "Rest of world retail (default in India)"],
+      ["GTIN-14", "14", "Trade units / cases (in ITF-14 or GS1-128)"]
+    ]},
+    { "type": "code", "language": "text", "code": "GTIN-13 example: 8 901234 000015\n  8901234 = GS1 India company prefix (GCP)\n  00001   = Item reference (assigned by brand)\n  5       = Check digit (computed)\n\nCheck-digit algorithm (all GTIN lengths):\n  From RIGHT of the number without check digit:\n    - Multiply digits at odd positions by 3, even positions by 1\n    - Sum them\n    - Check digit = (10 - sum mod 10) mod 10" },
+    { "type": "callout", "variant": "interview", "markdown": "Every GTIN has three parts: **GCP** (issued by GS1 to the brand), **item reference** (assigned by the brand), and a **check digit** computed from the other 12 digits. Understanding this decomposition is fundamental — it's how you verify authenticity and route look-ups." },
+    { "type": "callout", "variant": "mistake", "markdown": "Storing GTINs as integers (loses leading zeros) or as `int64` (fine, but never as int32 → GTIN-13 overflows). Always store as a **string** in DBs and DTOs, padded to full length." },
+    { "type": "callout", "variant": "best", "markdown": "One GTIN per distinct trade item / consumer variant (size, flavor, pack). Different pack sizes → different GTINs. Reassigning a retired GTIN too early breaks retailer and search history — respect GS1's reuse rules (currently 48 months after discontinuation)." }
+  ],
+  "flashcards": [
+    { "front": "GTIN in one sentence?", "back": "Globally unique identifier for a trade item that can be priced, ordered or invoiced." },
+    { "front": "GTIN-13 in India?", "back": "13-digit EAN-13; starts with the GS1 India company prefix (e.g., 890)." },
+    { "front": "Storing GTINs in DBs?", "back": "As STRINGS (preserve leading zeros); left-pad to full length." }
+  ],
+  "quiz": [
+    { "q": "GTIN identifies…", "options": ["A person", "A location", "A trade item / product variant", "An event"], "answer": 2, "explain": "A pricable/orderable/invoiceable trade item." },
+    { "q": "The default retail format in India is…", "options": ["GTIN-8", "GTIN-12 (UPC-A)", "GTIN-13 (EAN-13)", "GTIN-14"], "answer": 2, "explain": "EAN-13 dominates the rest of the world including India." },
+    { "q": "GTINs should be stored in DBs as…", "options": ["Integers", "Floats", "Strings", "Booleans"], "answer": 2, "explain": "Preserving leading zeros and treating as opaque code." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Compute the check digit for '890123400001' and verify it equals 5." },
+    { "level": "Medium", "text": "Write a `GTIN.isValid(code)` that validates any GTIN-8/12/13/14." },
+    { "level": "Hard", "text": "Given an EAN-13, extract GCP + item reference (assume 7-digit GCP)." },
+    { "level": "Expert", "text": "Build a lookup service that resolves a GTIN to product data via a local Isar cache + a GS1 Digital Link fallback." }
+  ],
+  "interviewQuestions": [
+    "What is a GTIN and what does it identify?",
+    "Formats and where each is used?",
+    "How is the check digit computed?",
+    "Why do different pack sizes need different GTINs?",
+    "GS1's rules on reusing a retired GTIN?"
+  ],
+  "references": [
+    { "label": "GS1 — GTIN", "url": "https://www.gs1.org/standards/id-keys/gtin" }
+  ]
+}

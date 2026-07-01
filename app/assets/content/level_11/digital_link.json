@@ -1,0 +1,45 @@
+{
+  "id": "gs1.digital_link",
+  "levelId": 11,
+  "title": "GS1 Digital Link",
+  "xp": 50,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Explain the Web URL syntax for GS1 identifiers",
+    "Resolve a scan to the right content",
+    "Encode a GS1 Digital Link in QR / DataMatrix"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "**GS1 Digital Link** is a web-friendly URL syntax for GS1 identifiers. Instead of a raw GTIN, a product carries a URL like `https://id.gs1.org/01/08901234000015`. Scanning it in any camera opens a web page — no special app needed — and the URL can carry batch/serial/expiry info too." },
+    { "type": "code", "language": "text", "code": "Structure: https://<resolver>/<Primary key>/<value>[/<qualifier>/<value>]*[?params]\n\nExamples:\n  https://id.gs1.org/01/08901234000015\n  https://id.gs1.org/01/08901234000015/10/BATCH42/17/261231/21/SN-777\n    01 = GTIN\n    10 = Batch/Lot     (Application Identifier)\n    17 = Expiry (YYMMDD)\n    21 = Serial number\n\nThe resolver returns different content per context:\n  Consumer   -> product page / recipes\n  Regulator  -> compliance data\n  Pharmacist -> track-and-trace data" },
+    { "type": "callout", "variant": "interview", "markdown": "Digital Link solves the '**one barcode, many uses**' problem. A single 2D code (QR/DataMatrix) can serve consumers (marketing/nutrition), retailers (POS scan → GTIN), regulators (traceability), and product authentication — because a resolver dispatches by requesting context / Accept headers." },
+    { "type": "callout", "variant": "mistake", "markdown": "Assuming a QR from an unknown source is a GS1 Digital Link. Validate the structure: valid resolver + `/01/` + a real GTIN + valid AIs. Treat unrecognized URLs as untrusted content, not identifiers." },
+    { "type": "callout", "variant": "best", "markdown": "For QR + Digital Link, place a GS1-approved resolver URL like `id.gs1.org` (or your own brand resolver). Include the minimum AIs on-pack; carry extended data (photos, allergens) in the resolver response — smaller printed code, easier to change online." }
+  ],
+  "flashcards": [
+    { "front": "What is GS1 Digital Link?", "back": "A web URL syntax for GS1 identifiers that anyone with a camera can 'scan' — no special app." },
+    { "front": "How to encode batch and expiry?", "back": "Use Application Identifiers in the URL path: /10/<lot>/17/<yymmdd>/21/<serial>." },
+    { "front": "How does one code serve many audiences?", "back": "The resolver returns different content by context/Accept — consumer vs regulator vs POS." }
+  ],
+  "quiz": [
+    { "q": "Digital Link is…", "options": ["A binary format", "A Web URL syntax for GS1 identifiers", "A radio protocol", "An RFID standard"], "answer": 1, "explain": "URL-based — works with any smartphone camera." },
+    { "q": "In `/01/…/10/…/17/…/21/…`, `01` is…", "options": ["An IP", "GTIN Application Identifier", "A GLN", "A random path"], "answer": 1, "explain": "GS1 Application Identifier for GTIN." },
+    { "q": "One code, many uses works via…", "options": ["Copy-paste", "A resolver that dispatches by context", "Multiple codes on-pack", "Nothing"], "answer": 1, "explain": "Resolver → context-appropriate content." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Parse a Digital Link URL and extract GTIN + batch." },
+    { "level": "Medium", "text": "Emit a valid Digital Link with GTIN + expiry + serial." },
+    { "level": "Hard", "text": "Build a resolver stub that returns different JSON for consumer vs regulator Accept headers." },
+    { "level": "Expert", "text": "Migrate an existing SKU line from EAN-13 to a single Digital Link QR on-pack." }
+  ],
+  "interviewQuestions": [
+    "What problem does Digital Link solve?",
+    "How does a resolver work?",
+    "How do you encode batch/expiry/serial in a Digital Link?",
+    "Digital Link vs traditional 1D barcodes at POS?",
+    "How do you validate a Digital Link on scan?"
+  ],
+  "references": [
+    { "label": "GS1 Digital Link", "url": "https://www.gs1.org/standards/gs1-digital-link" }
+  ]
+}
