@@ -3,6 +3,12 @@
 *.log
 *.iml
 
+# MS Office lockfiles
+.~*.docx
+~$*.docx
+~$*.xlsx
+~$*.pptx
+
 # IDE
 .idea/
 .vscode/
