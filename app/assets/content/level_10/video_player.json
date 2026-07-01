@@ -1,0 +1,45 @@
+{
+  "id": "plg.video_player",
+  "levelId": 10,
+  "title": "video_player",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Play network / asset / file videos",
+    "Wrap with Chewie for controls",
+    "Manage buffering, disposal and playback state"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "`video_player` (Flutter Team) plays videos via ExoPlayer (Android) and AVPlayer (iOS). It's the primitive; for a full-featured player with controls, wrap it with `chewie` or `better_player`." },
+    { "type": "code", "language": "dart", "code": "final ctrl = VideoPlayerController.networkUrl(Uri.parse(url));\nawait ctrl.initialize();\nctrl.play();\n// UI: AspectRatio + VideoPlayer(ctrl)\n@override void dispose(){ ctrl.dispose(); super.dispose(); }" },
+    { "type": "callout", "variant": "interview", "markdown": "For HLS/DASH streams (adaptive bitrate), plain `video_player` works but has limits — `better_player` exposes more knobs (cache, subtitles, ABR). For scale, use a real video CDN and preheat next-video decoders." },
+    { "type": "callout", "variant": "mistake", "markdown": "Skipping `dispose()` — a huge leak because decoders are heavy. Also: creating a new controller in `build()` — one controller per video, cached." },
+    { "type": "callout", "variant": "tip", "markdown": "Wrap with Chewie for defaults you'd otherwise reimplement (play/pause, scrubbing, fullscreen). Use `visibility_detector` to pause auto-play videos scrolled out of view." }
+  ],
+  "flashcards": [
+    { "front": "video_player runtime engines?", "back": "ExoPlayer on Android, AVPlayer on iOS." },
+    { "front": "Where do you get UI controls?", "back": "Wrap the controller in Chewie (or better_player)." },
+    { "front": "Common mistake?", "back": "Missing dispose() or building the controller inside build()." }
+  ],
+  "quiz": [
+    { "q": "For controls out of the box…", "options": ["video_player alone", "Chewie / better_player wrapping the controller", "camera plugin", "share_plus"], "answer": 1, "explain": "video_player is the low-level primitive." },
+    { "q": "For adaptive streaming (HLS/DASH) at scale…", "options": ["video_player alone is optimal", "Add better_player / real CDN + tuning", "Base64 videos", "Skip streaming"], "answer": 1, "explain": "Better options for ABR + caching." },
+    { "q": "Skipping dispose() causes…", "options": ["Faster app", "Decoder leaks + battery drain", "Better colors", "Nothing"], "answer": 1, "explain": "Native decoders stay alive." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Play a network URL with default controls (Chewie)." },
+    { "level": "Medium", "text": "Auto-pause when scrolled off-screen via visibility_detector." },
+    { "level": "Hard", "text": "Add subtitles + fullscreen with better_player." },
+    { "level": "Expert", "text": "Prefetch + cache next N clips in a TikTok-style feed." }
+  ],
+  "interviewQuestions": [
+    "video_player vs Chewie vs better_player?",
+    "How do you prevent decoder leaks?",
+    "How do you support HLS?",
+    "How to handle background/foreground?",
+    "How to test playback code?"
+  ],
+  "references": [
+    { "label": "video_player", "url": "https://pub.dev/packages/video_player" }
+  ]
+}

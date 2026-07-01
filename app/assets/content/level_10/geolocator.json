@@ -1,0 +1,45 @@
+{
+  "id": "plg.geolocator",
+  "levelId": 10,
+  "title": "geolocator",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Request location permissions correctly",
+    "Choose accuracy vs battery trade-offs",
+    "Stream position updates safely"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "`geolocator` gives you the device's current position, distance/bearing calculations, and a position stream. It handles the platform permission dance and picks the right underlying provider (GPS / Wi-Fi / network)." },
+    { "type": "code", "language": "dart", "code": "var p = await Geolocator.checkPermission();\nif (p == LocationPermission.denied) p = await Geolocator.requestPermission();\nfinal pos = await Geolocator.getCurrentPosition(\n  locationSettings: LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 10),\n);\nGeolocator.getPositionStream(...).listen(...);" },
+    { "type": "callout", "variant": "interview", "markdown": "Battery vs accuracy is a real design choice. `LocationAccuracy.high` uses GPS aggressively; `medium`/`low` prefers cell/Wi-Fi. `distanceFilter` throttles updates. Background location requires **extra platform config + reviewer justification** on both stores." },
+    { "type": "callout", "variant": "mistake", "markdown": "Requesting `alwaysGranted` without a strong reason. On iOS, Apple rejects apps that ask for background location without clear justification. Ask for `whileInUse` first, then upgrade only when needed." },
+    { "type": "callout", "variant": "tip", "markdown": "Add proper strings: iOS `NSLocationWhenInUseUsageDescription` (and `Always` if needed) in Info.plist; Android permissions in AndroidManifest.xml. Check `Geolocator.isLocationServiceEnabled` before requesting." }
+  ],
+  "flashcards": [
+    { "front": "Common accuracy setting?", "back": "LocationAccuracy.high uses GPS; medium/low favor cell/Wi-Fi (battery-friendly)." },
+    { "front": "Distance filter?", "back": "Minimum movement (meters) before emitting a new position — saves battery + reduces noise." },
+    { "front": "Background location on iOS?", "back": "Extra Info.plist keys + review scrutiny; use whileInUse where possible." }
+  ],
+  "quiz": [
+    { "q": "For battery-friendly city tracking…", "options": ["accuracy.best + no filter", "medium accuracy + distanceFilter", "None", "GPS forever"], "answer": 1, "explain": "Lower accuracy + a filter reduces GPS usage." },
+    { "q": "Before requesting permission, check…", "options": ["Nothing", "isLocationServiceEnabled + checkPermission", "GPU state", "Storage"], "answer": 1, "explain": "Confirm services + current status first." },
+    { "q": "iOS background location needs…", "options": ["Nothing", "Extra Info.plist entries + justification", "Root", "Firebase"], "answer": 1, "explain": "Apple review requires clear justification." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Show the current lat/lng once." },
+    { "level": "Medium", "text": "Stream positions with a 20m filter; update a marker on a map." },
+    { "level": "Hard", "text": "Handle permanently-denied permission with a settings redirect." },
+    { "level": "Expert", "text": "Enable background location and pass Apple review with proper strings." }
+  ],
+  "interviewQuestions": [
+    "How do you balance accuracy and battery?",
+    "How do you request permissions correctly?",
+    "What is distanceFilter?",
+    "iOS background location requirements?",
+    "Fallback behavior when location is off?"
+  ],
+  "references": [
+    { "label": "geolocator", "url": "https://pub.dev/packages/geolocator" }
+  ]
+}

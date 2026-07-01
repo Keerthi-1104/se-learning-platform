@@ -1,0 +1,45 @@
+{
+  "id": "plg.scandit",
+  "levelId": 10,
+  "title": "Scandit SDK",
+  "xp": 50,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Understand Scandit's enterprise scanning edge",
+    "Configure Data Capture Context + BarcodeCapture",
+    "Handle licensing + performance"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Scandit is a commercial, enterprise-grade barcode + document scanning SDK. Tuned for tough real-world conditions — damaged codes, glare, motion blur, tiny prints — and multi-code batch scanning. Requires a license key." },
+    { "type": "code", "language": "dart", "code": "final ctx = DataCaptureContext.forLicenseKey(kScanditKey);\nfinal cam = Camera.defaultCamera!;\nawait cam.applySettings(BarcodeCapture.recommendedCameraSettings);\nctx.setFrameSource(cam);\nfinal capture = BarcodeCapture(ctx, BarcodeCaptureSettings()\n  ..enableSymbologies({Symbology.ean13, Symbology.qr}));\ncapture.addListener(...);   // frames of decoded barcodes\ncam.switchToDesiredState(FrameSourceState.on);" },
+    { "type": "callout", "variant": "interview", "markdown": "Scandit outperforms ML Kit on **hostile scanning conditions** — critical for retail POS, warehouse, and GS1 workflows where scan speed × accuracy directly impacts throughput. It's the reason enterprises pay: 2–3× faster scans and near-100% accuracy on damaged codes." },
+    { "type": "callout", "variant": "mistake", "markdown": "Enabling every symbology + auto-focus tricks 'just in case.' Each extra symbology costs decoder cycles. Enable only what you actually scan (e.g., GS1: EAN-13, GS1-128, DataMatrix)." },
+    { "type": "callout", "variant": "tip", "markdown": "Manage lifecycle: switch camera OFF between scans, ON only when the scanner is visible. Preload the DataCaptureContext once at app start; instantiating it per screen is slow. Bundle license keys per flavor (dev/prod)." }
+  ],
+  "flashcards": [
+    { "front": "When choose Scandit over ML Kit?", "back": "Enterprise / GS1 / retail throughput where accuracy on damaged codes and scan speed matter." },
+    { "front": "Perf trap?", "back": "Enabling too many symbologies. Enable only what you need." },
+    { "front": "Camera lifecycle?", "back": "Switch OFF between screens; ON when scanner is visible." }
+  ],
+  "quiz": [
+    { "q": "Scandit's edge is…", "options": ["Free tier", "Enterprise accuracy + speed on hostile scans", "GraphQL support", "Analytics"], "answer": 1, "explain": "Optimized for tough real-world scanning." },
+    { "q": "For fewer decoder cycles…", "options": ["All symbologies always", "Enable only what you scan", "Disable the camera", "Random"], "answer": 1, "explain": "Restrict enabled symbologies." },
+    { "q": "License key belongs…", "options": ["In README", "Bundled per flavor via build config", "In printf", "On the server only"], "answer": 1, "explain": "Inject per-flavor at build; keep out of git." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Set up a BarcodeCapture with EAN-13 + QR and log reads." },
+    { "level": "Medium", "text": "Add MatrixScan-style batch scanning of multiple codes at once." },
+    { "level": "Hard", "text": "Optimize scan time for damaged GS1-128 labels." },
+    { "level": "Expert", "text": "A/B compare Scandit vs mobile_scanner on a real dataset; report scans/sec + accuracy." }
+  ],
+  "interviewQuestions": [
+    "Scandit vs ML Kit — when justify Scandit's license cost?",
+    "How to configure symbologies for a workflow?",
+    "How do you manage camera lifecycle?",
+    "How would you evaluate Scandit for a client?",
+    "How to handle license rotation?"
+  ],
+  "references": [
+    { "label": "Scandit — docs", "url": "https://docs.scandit.com" }
+  ]
+}

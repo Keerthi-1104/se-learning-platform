@@ -1,0 +1,45 @@
+{
+  "id": "plg.drift",
+  "levelId": 10,
+  "title": "drift (plugin)",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Wire drift on mobile/desktop/web",
+    "Use build_runner for the schema",
+    "Move heavy work off the UI isolate"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "`drift` (formerly moor) is Flutter's typed reactive SQL persistence library over SQLite. You define tables in Dart or .drift files; codegen produces type-safe DAOs and reactive Streams." },
+    { "type": "code", "language": "dart", "code": "@DriftDatabase(tables: [Users])\nclass AppDb extends _$AppDb {\n  AppDb(): super(NativeDatabase.createInBackground(_openFile()));\n  int get schemaVersion => 1;\n}\nStream<List<User>> watchAll() =>\n  (select(users)..orderBy([(u) => OrderingTerm.desc(u.id)])).watch();" },
+    { "type": "callout", "variant": "interview", "markdown": "Use `NativeDatabase.createInBackground()` to run SQLite on a **background isolate** — the UI thread never touches disk. Combined with reactive streams, this yields buttery-smooth offline-first UIs." },
+    { "type": "callout", "variant": "mistake", "markdown": "Skipping schema migrations. Bump `schemaVersion` and provide a `MigrationStrategy` (or Drift's `schemaSteps`) — otherwise upgrades crash on production devices." },
+    { "type": "callout", "variant": "tip", "markdown": "Put complex SQL in .drift files (SQL-first) — you get full syntax + type-checked results. On Web, target drift's WASM SQLite build." }
+  ],
+  "flashcards": [
+    { "front": "Where does drift run its SQL?", "back": "Best practice: a background isolate via NativeDatabase.createInBackground()." },
+    { "front": "Reactive queries?", "back": "watch() returns a Stream that emits when relevant tables change." },
+    { "front": "How to migrate schema?", "back": "Bump schemaVersion + MigrationStrategy (or schemaSteps generated from .drift files)." }
+  ],
+  "quiz": [
+    { "q": "For a snappy UI on large queries…", "options": ["Run on the UI isolate", "createInBackground()", "Disable Streams", "Use setState only"], "answer": 1, "explain": "Background isolate keeps the UI free." },
+    { "q": "Reactive updates come from…", "options": ["Polling a timer", "watch() streams reacting to table changes", "setState", "restarts"], "answer": 1, "explain": "Table-change subscriptions drive Streams." },
+    { "q": "Schema evolution needs…", "options": ["Nothing", "schemaVersion + MigrationStrategy", "Wiping user data", "A new package"], "answer": 1, "explain": "Otherwise old databases crash." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Define Users table; watch a list." },
+    { "level": "Medium", "text": "Migration adding a column with default backfill." },
+    { "level": "Hard", "text": "Complex JOIN in a .drift file with typed API." },
+    { "level": "Expert", "text": "Move DB to background isolate; measure jank before/after." }
+  ],
+  "interviewQuestions": [
+    "Drift vs raw sqflite?",
+    "How do reactive queries work?",
+    "Why run on a background isolate?",
+    "How do migrations work?",
+    "Drift on Web?"
+  ],
+  "references": [
+    { "label": "drift", "url": "https://pub.dev/packages/drift" }
+  ]
+}

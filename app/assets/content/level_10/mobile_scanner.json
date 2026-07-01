@@ -1,0 +1,45 @@
+{
+  "id": "plg.mobile_scanner",
+  "levelId": 10,
+  "title": "mobile_scanner",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Scan barcodes/QR quickly with ML Kit",
+    "Debounce duplicate reads",
+    "Tune camera + performance"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "`mobile_scanner` is a lightweight, community-maintained barcode/QR scanner using Google ML Kit under the hood — much faster and more accurate than the older `qr_code_scanner`, with better lifecycle handling." },
+    { "type": "code", "language": "dart", "code": "MobileScanner(\n  controller: MobileScannerController(\n    detectionSpeed: DetectionSpeed.normal,\n    facing: CameraFacing.back,\n    formats: const [BarcodeFormat.qrCode, BarcodeFormat.ean13],\n  ),\n  onDetect: (capture) {\n    for (final b in capture.barcodes) handle(b.rawValue);\n  },\n)" },
+    { "type": "callout", "variant": "interview", "markdown": "Real-world scanning UX needs **debouncing** (don't handle the same code 60 times a second) and clear scan-zone framing. Pass only the barcode formats you actually need; more formats = more CPU + more false positives." },
+    { "type": "callout", "variant": "mistake", "markdown": "Leaving the controller alive across screens → drains battery + keeps camera on. Dispose it in your State's dispose(), and pause on background." },
+    { "type": "callout", "variant": "tip", "markdown": "For enterprise GS1/retail workflows (heavy throughput, damaged barcodes), Scandit outperforms ML Kit. mobile_scanner is the default for consumer/QR scanning; Scandit for pro workflows." }
+  ],
+  "flashcards": [
+    { "front": "Under the hood?", "back": "Google ML Kit's barcode scanning." },
+    { "front": "Why restrict formats?", "back": "Fewer formats = less CPU + fewer false positives." },
+    { "front": "Duplicate scans problem?", "back": "onDetect fires continuously; debounce by rawValue + a cooldown timer." }
+  ],
+  "quiz": [
+    { "q": "For consumer QR scanning use…", "options": ["mobile_scanner", "shared_preferences", "camera raw", "printf"], "answer": 0, "explain": "Fast and modern." },
+    { "q": "Duplicate reads should be…", "options": ["Handled every fire", "Debounced per rawValue", "Encrypted", "Ignored"], "answer": 1, "explain": "Otherwise UX cascades." },
+    { "q": "For heavy enterprise/damaged barcodes…", "options": ["mobile_scanner is best", "Scandit typically wins", "shared_preferences", "URL launcher"], "answer": 1, "explain": "Scandit is tuned for tough workflows." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Scan a QR code and show its content." },
+    { "level": "Medium", "text": "Debounce duplicate reads and restrict to EAN-13 + QR." },
+    { "level": "Hard", "text": "Add scan-region overlay + torch toggle + camera switch." },
+    { "level": "Expert", "text": "Benchmark mobile_scanner vs Scandit on a set of damaged codes." }
+  ],
+  "interviewQuestions": [
+    "mobile_scanner vs qr_code_scanner?",
+    "Why restrict formats?",
+    "How do you debounce reads?",
+    "When to switch to Scandit?",
+    "How to test scanning code?"
+  ],
+  "references": [
+    { "label": "mobile_scanner", "url": "https://pub.dev/packages/mobile_scanner" }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "id": "plg.workmanager",
+  "levelId": 10,
+  "title": "workmanager (Flutter)",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Schedule guaranteed background work",
+    "Wire Android WorkManager and iOS BGTaskScheduler",
+    "Handle constraints, retries and platform limits"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "The Flutter `workmanager` package wraps Android WorkManager and iOS BGTaskScheduler so you can run Dart work in the background — even after app kill (Android) — with constraints and retries." },
+    { "type": "code", "language": "dart", "code": "void callbackDispatcher() {\n  Workmanager().executeTask((task, inputData) async {\n    await sync();\n    return Future.value(true);\n  });\n}\nawait Workmanager().initialize(callbackDispatcher);\nawait Workmanager().registerPeriodicTask('sync','sync',\n  frequency: const Duration(hours: 1),\n  constraints: Constraints(networkType: NetworkType.connected));" },
+    { "type": "callout", "variant": "interview", "markdown": "iOS is strict: BGTasks are opportunistic and rare. Never assume iOS will run your sync on time. Use it for eventually-consistent work (upload logs, refresh caches), not exact schedules. Android WorkManager is much more reliable." },
+    { "type": "callout", "variant": "mistake", "markdown": "Doing UI work or Firebase inits from the background isolate without re-initializing plugins. Background runs in a fresh isolate — you must set up plugins/DI inside `callbackDispatcher`." },
+    { "type": "callout", "variant": "tip", "markdown": "For pure Android use cases, plain WorkManager via native code + platform channel is more mature. This plugin is best when you need cross-platform simplicity and iOS 'good-enough' background work." }
+  ],
+  "flashcards": [
+    { "front": "What does workmanager wrap?", "back": "Android WorkManager + iOS BGTaskScheduler behind one Dart API." },
+    { "front": "iOS background reality?", "back": "Opportunistic, rare, no guaranteed timing. Never rely for exact schedules." },
+    { "front": "Common pitfall in the callback?", "back": "Fresh isolate — plugins/DI must be re-initialized inside callbackDispatcher." }
+  ],
+  "quiz": [
+    { "q": "iOS BGTasks are…", "options": ["Guaranteed on schedule", "Opportunistic and rare", "Continuous", "Root-required"], "answer": 1, "explain": "iOS decides when to run them." },
+    { "q": "In callbackDispatcher you must…", "options": ["Nothing extra", "Re-init plugins/DI (new isolate)", "Return null", "Sleep 60s"], "answer": 1, "explain": "It runs in a fresh isolate." },
+    { "q": "For network-only sync…", "options": ["No constraints", "Constraints.networkType = connected", "Random", "Delete data"], "answer": 1, "explain": "Constraints avoid battery/data drain." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Run a one-off task that logs from background." },
+    { "level": "Medium", "text": "Periodic task with a network constraint that syncs data." },
+    { "level": "Hard", "text": "Wire retries with backoff for transient failures." },
+    { "level": "Expert", "text": "Design a hybrid: FCM data message triggers WorkManager for guaranteed processing." }
+  ],
+  "interviewQuestions": [
+    "Android WorkManager vs iOS BGTaskScheduler expectations?",
+    "Common isolate pitfalls in callback?",
+    "How do you constrain and retry?",
+    "workmanager vs native WorkManager?",
+    "When wouldn't you use it?"
+  ],
+  "references": [
+    { "label": "workmanager plugin", "url": "https://pub.dev/packages/workmanager" }
+  ]
+}

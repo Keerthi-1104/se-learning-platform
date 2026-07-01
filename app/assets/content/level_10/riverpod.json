@@ -1,0 +1,45 @@
+{
+  "id": "plg.riverpod",
+  "levelId": 10,
+  "title": "flutter_riverpod",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Wire ProviderScope + ConsumerWidget",
+    "Use ref.watch / ref.read / ref.listen correctly",
+    "Override providers in tests"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "`flutter_riverpod` is the Flutter binding for Riverpod — compile-safe, context-free DI + state. Wrap the app in `ProviderScope`; widgets extend `ConsumerWidget` (or use `HookConsumer`)." },
+    { "type": "code", "language": "dart", "code": "final counterProvider = StateProvider<int>((ref) => 0);\nclass Home extends ConsumerWidget {\n  Widget build(BuildContext c, WidgetRef ref) {\n    final count = ref.watch(counterProvider);\n    return TextButton(\n      onPressed: () => ref.read(counterProvider.notifier).state++,\n      child: Text('$count'),\n    );\n  }\n}" },
+    { "type": "callout", "variant": "interview", "markdown": "Riverpod fixes Provider's biggest issues: no BuildContext dependency (test-friendly), multiple providers of the same type, and compile-time safety. `ProviderScope.overrides` swaps providers for widget/integration tests without touching widgets." },
+    { "type": "callout", "variant": "mistake", "markdown": "Calling `ref.watch` in an event handler → runtime error. `watch` is for build; use `ref.read` in callbacks, and `ref.listen` for side effects that shouldn't rebuild." },
+    { "type": "callout", "variant": "tip", "markdown": "Use `.autoDispose` for provider lifecycles tied to a screen; use `family` for parameterized providers (e.g. `userProvider(id)`). The codegen (`@riverpod`) removes even more boilerplate." }
+  ],
+  "flashcards": [
+    { "front": "watch vs read vs listen?", "back": "watch subscribes (build only); read is one-off (callbacks); listen runs side effects on change without rebuilding." },
+    { "front": "Testing a screen with Riverpod?", "back": "Wrap in a ProviderScope with `overrides` mapping providers to fakes." },
+    { "front": "Parameterized providers?", "back": "`family` — e.g. `userProvider = FutureProvider.family<User, String>((ref, id) => ...);`" }
+  ],
+  "quiz": [
+    { "q": "In an onPressed callback, use…", "options": ["ref.watch", "ref.read", "ref.listen", "Consumer"], "answer": 1, "explain": "watch is only allowed in build." },
+    { "q": "To override providers in a test…", "options": ["Delete them", "ProviderScope(overrides: [...])", "setState", "Nothing"], "answer": 1, "explain": "Overrides swap providers for fakes." },
+    { "q": "Providers tied to a screen's lifecycle use…", "options": ["Global scope", ".autoDispose", "family without .autoDispose", "context.watch"], "answer": 1, "explain": "autoDispose cleans up when nothing is listening." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Counter with StateProvider." },
+    { "level": "Medium", "text": "FutureProvider fetching user data and rendering AsyncValue.when." },
+    { "level": "Hard", "text": "NotifierProvider driving a search screen with debounce + cancellation." },
+    { "level": "Expert", "text": "Widget test overriding providers with fakes and asserting rebuild behavior." }
+  ],
+  "interviewQuestions": [
+    "How does Riverpod improve on Provider?",
+    "watch vs read vs listen?",
+    "autoDispose and family — when use each?",
+    "How do you test with Riverpod?",
+    "Codegen (@riverpod) — pros/cons?"
+  ],
+  "references": [
+    { "label": "Riverpod docs", "url": "https://riverpod.dev" }
+  ]
+}

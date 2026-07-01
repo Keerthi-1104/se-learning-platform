@@ -1,0 +1,45 @@
+{
+  "id": "plg.secure_storage",
+  "levelId": 10,
+  "title": "flutter_secure_storage",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Store secrets in Keychain / Keystore",
+    "Configure encryption + accessibility options",
+    "Handle biometric/hardware-backed keys"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "`flutter_secure_storage` stores small key-value data (auth tokens, refresh tokens, encryption keys) in the platform's secure enclave — iOS **Keychain**, Android **EncryptedSharedPreferences** (Keystore-backed)." },
+    { "type": "code", "language": "dart", "code": "const s = FlutterSecureStorage(\n  aOptions: AndroidOptions(encryptedSharedPreferences: true),\n  iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),\n);\nawait s.write(key: 'refresh_token', value: token);\nfinal t = await s.read(key: 'refresh_token');" },
+    { "type": "callout", "variant": "interview", "markdown": "Choose iOS accessibility deliberately: `first_unlock` (available after first unlock post-boot; readable in background) vs `when_unlocked` (only while the device is unlocked). Auth flows usually want `first_unlock` so background refreshes work." },
+    { "type": "callout", "variant": "mistake", "markdown": "Reusing the same encryption for a huge blob of data. This plugin is for **small** secrets. For large encrypted local data, put the KEY here and use an encrypted DB (Hive/Isar) for the payload." },
+    { "type": "callout", "variant": "tip", "markdown": "Clear on logout with `deleteAll()`. On Android <21 or misconfigured devices, encryption falls back — test on real devices, not just emulators. Never log the values." }
+  ],
+  "flashcards": [
+    { "front": "Where are values stored on iOS / Android?", "back": "iOS Keychain / Android EncryptedSharedPreferences (Keystore-backed)." },
+    { "front": "What's this plugin for?", "back": "Small secrets — tokens, encryption keys. Not bulk data." },
+    { "front": "iOS accessibility for background token refresh?", "back": "first_unlock — readable after first unlock post-boot, works in background." }
+  ],
+  "quiz": [
+    { "q": "Best use for this plugin?", "options": ["User photos", "Small secrets (tokens)", "Cached HTML", "Video files"], "answer": 1, "explain": "Only small secrets belong in secure storage." },
+    { "q": "For background refresh on iOS, choose…", "options": ["when_unlocked", "first_unlock", "always", "none"], "answer": 1, "explain": "first_unlock allows reads in background after the first unlock." },
+    { "q": "On logout you should…", "options": ["Nothing", "deleteAll() secrets", "Delete the app", "Rotate colors"], "answer": 1, "explain": "Clear all secrets on logout." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Write/read a token; verify persistence across restart." },
+    { "level": "Medium", "text": "Combine secure_storage for AES key + Hive box encrypted with it." },
+    { "level": "Hard", "text": "Handle read failures on a corrupted keychain gracefully with re-auth flow." },
+    { "level": "Expert", "text": "Add biometric-gated reads for a super-sensitive value on Android + iOS." }
+  ],
+  "interviewQuestions": [
+    "What does this plugin protect and how?",
+    "iOS accessibility options — trade-offs?",
+    "When would this plugin be the wrong choice?",
+    "Threats it does and doesn't stop?",
+    "How to test secure storage code?"
+  ],
+  "references": [
+    { "label": "flutter_secure_storage", "url": "https://pub.dev/packages/flutter_secure_storage" }
+  ]
+}

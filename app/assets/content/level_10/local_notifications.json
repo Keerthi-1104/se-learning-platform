@@ -1,0 +1,45 @@
+{
+  "id": "plg.local_notifications",
+  "levelId": 10,
+  "title": "flutter_local_notifications",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Schedule + show local notifications",
+    "Handle taps, categories and channels",
+    "Combine with FCM for hybrid flows"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "`flutter_local_notifications` schedules and shows OS notifications from your app — reminders, alarms, timers — without a server. Different from FCM (which pushes from a server), though the two often combine." },
+    { "type": "code", "language": "dart", "code": "final fln = FlutterLocalNotificationsPlugin();\nawait fln.initialize(const InitializationSettings(\n  android: AndroidInitializationSettings('@mipmap/ic_launcher'),\n  iOS: DarwinInitializationSettings(),\n), onDidReceiveNotificationResponse: (r) { handleTap(r.payload); });\nawait fln.zonedSchedule(1, 'Time!', 'Meeting in 10 min',\n  TZDateTime.now(local).add(Duration(minutes: 10)),\n  const NotificationDetails(android: AndroidNotificationDetails('cal','Calendar')),\n  androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle);" },
+    { "type": "callout", "variant": "interview", "markdown": "Android channels are required (8.0+): create them once at startup with correct importance. Android 13+ requires POST_NOTIFICATIONS runtime permission. iOS uses interruption levels (`passive`, `active`, `timeSensitive`, `critical`) — pick the right one." },
+    { "type": "callout", "variant": "mistake", "markdown": "Assuming exact alarms are free on Android 12+. `SCHEDULE_EXACT_ALARM` (or `USE_EXACT_ALARM`) permission is needed, and exact alarms are user-visible in system settings. Use inexact scheduling unless timing truly matters." },
+    { "type": "callout", "variant": "tip", "markdown": "Use the `timezone` package (`tz.local`) for correct DST-aware scheduling. On iOS, register categories for actions (buttons). Handle app-launched-from-notification by reading `getNotificationAppLaunchDetails()`." }
+  ],
+  "flashcards": [
+    { "front": "Android 8+ requires…", "back": "A notification channel per category with an importance level." },
+    { "front": "Exact alarms on Android 12+?", "back": "Need SCHEDULE_EXACT_ALARM/USE_EXACT_ALARM; prefer inexact when possible." },
+    { "front": "iOS interruption levels?", "back": "passive, active, timeSensitive, critical — pick by user impact." }
+  ],
+  "quiz": [
+    { "q": "For a reminder in 10 min…", "options": ["Push via FCM", "Local zonedSchedule with tz", "Poll a timer", "Wake up user via alarm always"], "answer": 1, "explain": "Local notifications don't need a server." },
+    { "q": "Android 13+ additionally requires…", "options": ["Nothing new", "POST_NOTIFICATIONS runtime permission", "Root", "Kernel hack"], "answer": 1, "explain": "Runtime permission for showing notifications." },
+    { "q": "For DST-safe scheduling use…", "options": ["DateTime.now()", "tz.TZDateTime with tz.local", "Random", "Server time"], "answer": 1, "explain": "The `timezone` package handles DST correctly." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Show an immediate local notification with a channel." },
+    { "level": "Medium", "text": "Schedule a reminder for tomorrow at 9AM local time." },
+    { "level": "Hard", "text": "Add tap handling + notification actions (buttons)." },
+    { "level": "Expert", "text": "Combine FCM (delivery) + local notifications (display) with rich actions." }
+  ],
+  "interviewQuestions": [
+    "Local vs push notifications?",
+    "Android notification channels — why?",
+    "Exact vs inexact alarms on Android 12+?",
+    "iOS interruption levels?",
+    "How do you handle app-launched-from-notification?"
+  ],
+  "references": [
+    { "label": "flutter_local_notifications", "url": "https://pub.dev/packages/flutter_local_notifications" }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "id": "plg.retrofit",
+  "levelId": 10,
+  "title": "Retrofit",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Generate a typed HTTP client from annotations",
+    "Combine Retrofit with Dio + json_serializable",
+    "Test the generated API safely"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "`retrofit` (Dart) is a code-generated, typed HTTP client on top of Dio, inspired by Square's Retrofit for Android. You declare an abstract class with `@GET`/`@POST` etc., and the generator writes the implementation." },
+    { "type": "code", "language": "dart", "code": "@RestApi(baseUrl: 'https://api.example.com')\nabstract class UserApi {\n  factory UserApi(Dio dio) = _UserApi;\n  @GET('/users/{id}')\n  Future<User> getUser(@Path('id') String id);\n  @POST('/users')\n  Future<User> create(@Body() UserDto dto);\n}\n// Run: dart run build_runner build --delete-conflicting-outputs" },
+    { "type": "callout", "variant": "interview", "markdown": "Retrofit's win is **typed, discoverable, testable** APIs: the client is an interface — you swap in a fake for tests. Combined with json_serializable + freezed models, you get near-zero boilerplate networking with compile-time safety." },
+    { "type": "callout", "variant": "mistake", "markdown": "Forgetting to re-run build_runner after annotation/model changes — 'method not found' errors on generated symbols. Add `dart run build_runner watch` in your dev loop." },
+    { "type": "callout", "variant": "tip", "markdown": "Pass a configured Dio (with your interceptors) into the Retrofit factory. Keep endpoint URLs relative to baseUrl. For OpenAPI schemas, consider `openapi_generator` — Retrofit still shines for small/handwritten schemas." }
+  ],
+  "flashcards": [
+    { "front": "What does Retrofit generate?", "back": "The implementation of your abstract API class from `@GET/@POST/…` annotations, on top of Dio." },
+    { "front": "How does Retrofit help testing?", "back": "Your code depends on the abstract interface; fakes are trivial to inject." },
+    { "front": "Companion tools?", "back": "Dio (transport) + json_serializable / freezed (models) + build_runner (codegen)." }
+  ],
+  "quiz": [
+    { "q": "Retrofit is built on…", "options": ["package:http", "Dio", "grpc", "Isolates"], "answer": 1, "explain": "It generates Dio-based clients." },
+    { "q": "The main win is…", "options": ["Faster network", "Typed, testable, low-boilerplate APIs", "No dependencies", "Smaller APK"], "answer": 1, "explain": "Interfaces + codegen + typed models." },
+    { "q": "Symbols not found after adding an @GET method?", "options": ["Restart phone", "Re-run build_runner", "Delete pubspec", "Change SDK"], "answer": 1, "explain": "Codegen must re-run to update generated files." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Define a UserApi with @GET /users/{id}." },
+    { "level": "Medium", "text": "Add typed models via json_serializable + @Body." },
+    { "level": "Hard", "text": "Swap the real Dio for a fake in a widget test." },
+    { "level": "Expert", "text": "Generate a large API from OpenAPI; keep the interface stable across versions." }
+  ],
+  "interviewQuestions": [
+    "How does Retrofit generate its client?",
+    "Retrofit + Dio + json_serializable — who does what?",
+    "How do you test a Retrofit-based repository?",
+    "Retrofit vs OpenAPI generators?",
+    "How to handle versioned/deprecated endpoints?"
+  ],
+  "references": [
+    { "label": "retrofit package", "url": "https://pub.dev/packages/retrofit" }
+  ]
+}

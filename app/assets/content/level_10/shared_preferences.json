@@ -1,0 +1,45 @@
+{
+  "id": "plg.shared_preferences",
+  "levelId": 10,
+  "title": "shared_preferences",
+  "xp": 20,
+  "estimatedMinutes": 10,
+  "objectives": [
+    "Persist simple primitive settings",
+    "Know its limits vs Hive/secure storage",
+    "Handle async initialization"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "`shared_preferences` persists small primitive values (bool, int, double, String, List<String>) using the platform's native key-value store: SharedPreferences on Android, NSUserDefaults on iOS." },
+    { "type": "code", "language": "dart", "code": "final prefs = await SharedPreferences.getInstance();\nawait prefs.setBool('onboarded', true);\nfinal on = prefs.getBool('onboarded') ?? false;" },
+    { "type": "callout", "variant": "interview", "markdown": "Perfect for tiny app settings (theme, onboarded flag, last-used tab). Not encrypted, not fast for big data, and easy to inspect on a rooted device — never store tokens here." },
+    { "type": "callout", "variant": "mistake", "markdown": "Storing JSON blobs, objects, or auth tokens. For structured data → Hive/Drift/Isar. For secrets → flutter_secure_storage. shared_preferences is for tiny flags and settings." },
+    { "type": "callout", "variant": "tip", "markdown": "`getInstance()` is async — the modern approach uses `SharedPreferencesAsync` (newer API) or the sync-after-init pattern. Migrate to the new SharedPreferencesAsync/WithCache APIs when convenient." }
+  ],
+  "flashcards": [
+    { "front": "What is shared_preferences backed by?", "back": "Android SharedPreferences / iOS NSUserDefaults." },
+    { "front": "Types you can store?", "back": "bool, int, double, String, List<String>. That's it." },
+    { "front": "Should you keep tokens here?", "back": "No — not encrypted; use flutter_secure_storage." }
+  ],
+  "quiz": [
+    { "q": "Right use case?", "options": ["Auth tokens", "Onboarded flag / theme", "Photos", "Chat history"], "answer": 1, "explain": "Tiny primitive settings only." },
+    { "q": "Backing store on iOS?", "options": ["Keychain", "NSUserDefaults", "Core Data", "CloudKit"], "answer": 1, "explain": "iOS user defaults." },
+    { "q": "Storing an object?", "options": ["Direct .setObject", "JSON-encode to String (small only)", "Cannot at all", "Photos allowed"], "answer": 1, "explain": "Serialize to a small string; better yet, use Hive." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Persist an 'onboarded' bool." },
+    { "level": "Medium", "text": "Persist a list of recent search strings." },
+    { "level": "Hard", "text": "Migrate from shared_preferences to Hive without losing state." },
+    { "level": "Expert", "text": "Adopt SharedPreferencesAsync/WithCache in a legacy codebase." }
+  ],
+  "interviewQuestions": [
+    "When is shared_preferences the right tool?",
+    "Why NOT store tokens here?",
+    "Which types does it support?",
+    "shared_preferences vs Hive vs secure_storage?",
+    "What is SharedPreferencesAsync?"
+  ],
+  "references": [
+    { "label": "shared_preferences", "url": "https://pub.dev/packages/shared_preferences" }
+  ]
+}

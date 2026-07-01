@@ -1,0 +1,45 @@
+{
+  "id": "plg.firebase",
+  "levelId": 10,
+  "title": "Firebase packages (Flutter)",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Initialize FlutterFire with flutterfire_cli",
+    "Add individual product packages",
+    "Handle multi-environment configs"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Firebase on Flutter (FlutterFire) is a family of packages: `firebase_core` (always required) plus one per product — `firebase_auth`, `cloud_firestore`, `firebase_messaging`, etc. `flutterfire_cli` generates `firebase_options.dart` per project." },
+    { "type": "code", "language": "bash", "code": "dart pub global activate flutterfire_cli\nflutterfire configure    # picks project + platforms; writes firebase_options.dart\n\n// main.dart\nawait Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);" },
+    { "type": "callout", "variant": "interview", "markdown": "Multi-env is the classic gotcha. Run `flutterfire configure` twice for dev/prod — write to different files (`firebase_options_dev.dart`) — then choose at runtime via `--dart-define` (flavor). This keeps analytics/crashlytics separated per environment." },
+    { "type": "callout", "variant": "mistake", "markdown": "Version mismatches across packages (firebase_core 2.x with firebase_auth 3.x from different times) cause native build failures. Upgrade FlutterFire packages together and check the compatibility matrix." },
+    { "type": "callout", "variant": "tip", "markdown": "Enable App Check + turn on offline persistence where it matters (Firestore, RTDB). Firebase Emulator Suite lets you develop and test locally without touching production." }
+  ],
+  "flashcards": [
+    { "front": "First package you always add?", "back": "firebase_core; every other Firebase package depends on it." },
+    { "front": "Tool for setup?", "back": "flutterfire_cli — generates firebase_options.dart per project + platforms." },
+    { "front": "Multi-env approach?", "back": "Configure twice; choose the right firebase_options at runtime via flavor / dart-define." }
+  ],
+  "quiz": [
+    { "q": "Every Firebase Flutter app must add…", "options": ["cloud_firestore", "firebase_core", "firebase_auth", "firebase_messaging"], "answer": 1, "explain": "Core is the foundation package." },
+    { "q": "For local development without touching production, use…", "options": ["Real Firebase always", "Firebase Emulator Suite", "Delete Firebase", "Local JSON"], "answer": 1, "explain": "Emulator Suite mirrors many products." },
+    { "q": "Version mismatch symptom?", "options": ["Faster startup", "Native build failure", "Extra memory", "Cool colors"], "answer": 1, "explain": "Mixed versions break native integrations." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Add firebase_core + one product; call Firebase.initializeApp." },
+    { "level": "Medium", "text": "Set up flavors (dev/prod) with separate firebase_options files." },
+    { "level": "Hard", "text": "Run Firestore + Auth against the local Emulator Suite in tests." },
+    { "level": "Expert", "text": "Enable App Check across iOS + Android + Web." }
+  ],
+  "interviewQuestions": [
+    "How does FlutterFire package structure work?",
+    "How do you handle multiple environments?",
+    "How do you test with the Emulator Suite?",
+    "How do you keep package versions aligned?",
+    "How to enable App Check?"
+  ],
+  "references": [
+    { "label": "FlutterFire", "url": "https://firebase.flutter.dev" }
+  ]
+}

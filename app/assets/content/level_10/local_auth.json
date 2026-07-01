@@ -1,0 +1,44 @@
+{
+  "id": "plg.local_auth",
+  "levelId": 10,
+  "title": "local_auth",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Authenticate with biometrics (Face ID, Touch ID, fingerprint)",
+    "Fall back to device passcode",
+    "Configure iOS + Android correctly"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "`local_auth` gates actions with biometric authentication (Face ID / Touch ID / fingerprint) plus device passcode fallback. Uses LocalAuthentication (iOS) and BiometricPrompt (Android)." },
+    { "type": "code", "language": "dart", "code": "final la = LocalAuthentication();\nfinal can = await la.canCheckBiometrics && await la.isDeviceSupported();\nfinal ok = await la.authenticate(\n  localizedReason: 'Confirm to view balance',\n  options: const AuthenticationOptions(biometricOnly: false, stickyAuth: true),\n);" },
+    { "type": "callout", "variant": "interview", "markdown": "`local_auth` verifies the user is present — it does NOT protect secrets on its own. Combine with **flutter_secure_storage** (or Android Keystore biometric-bound keys via a custom channel) for real key-release-on-biometric flows." },
+    { "type": "callout", "variant": "mistake", "markdown": "Skipping iOS `NSFaceIDUsageDescription` in Info.plist — Face ID silently fails. Also: doing sensitive work in Dart based on `authenticate() == true` without any cryptographic binding." },
+    { "type": "callout", "variant": "tip", "markdown": "Use `stickyAuth: true` so backgrounding doesn't reset the prompt. Offer a manual retry and a device-passcode fallback for accessibility." }
+  ],
+  "flashcards": [
+    { "front": "Does local_auth protect data?", "back": "No — it authenticates the user. Combine with secure storage / keystore-bound keys to protect data." },
+    { "front": "iOS Face ID requirement?", "back": "NSFaceIDUsageDescription in Info.plist." },
+    { "front": "What does stickyAuth do?", "back": "Keeps the prompt across app backgrounding instead of cancelling." }
+  ],
+  "quiz": [
+    { "q": "local_auth returning true means…", "options": ["Data is encrypted", "The user was verified now", "The user is admin", "Nothing"], "answer": 1, "explain": "It's a presence check; pair with real key material for security." },
+    { "q": "For real key protection on Android use…", "options": ["nothing extra", "Keystore biometric-bound key material", "shared_preferences", "print statements"], "answer": 1, "explain": "Biometric-bound keys via Keystore are the strong control." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Gate a screen behind biometric authenticate()." },
+    { "level": "Medium", "text": "Add device-passcode fallback and stickyAuth." },
+    { "level": "Hard", "text": "Bind an AES key to biometrics via Android Keystore (custom channel)." },
+    { "level": "Expert", "text": "Wrap secure_storage reads behind a biometric prompt with retry + timeout." }
+  ],
+  "interviewQuestions": [
+    "What does local_auth actually verify?",
+    "How do you truly bind keys to biometrics?",
+    "Face ID vs Touch ID differences?",
+    "How to handle biometric changes (new fingerprint added)?",
+    "Accessibility fallbacks?"
+  ],
+  "references": [
+    { "label": "local_auth", "url": "https://pub.dev/packages/local_auth" }
+  ]
+}

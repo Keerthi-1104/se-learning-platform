@@ -1,0 +1,45 @@
+{
+  "id": "plg.webview",
+  "levelId": 10,
+  "title": "webview_flutter",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Embed a WebView with a controller",
+    "Bridge JS ↔ Dart with channels",
+    "Handle navigation, cookies and security"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "`webview_flutter` embeds a native WebView (WKWebView on iOS, WebView on Android) inside a Flutter widget. Recent versions use platform views with a controller-based API." },
+    { "type": "code", "language": "dart", "code": "final ctrl = WebViewController()\n  ..setJavaScriptMode(JavaScriptMode.unrestricted)\n  ..setNavigationDelegate(NavigationDelegate(\n    onNavigationRequest: (r) => allow(r.url) ? NavigationDecision.navigate : NavigationDecision.prevent,\n  ))\n  ..addJavaScriptChannel('Flutter', onMessageReceived: (m) => handle(m.message))\n  ..loadRequest(Uri.parse(url));" },
+    { "type": "callout", "variant": "interview", "markdown": "The WebView is a wide-open attack surface. Whitelist origins in `onNavigationRequest`, disable JS unless required, and be careful with `addJavaScriptChannel` — anything the injected page can post reaches your app." },
+    { "type": "callout", "variant": "mistake", "markdown": "Loading arbitrary user-supplied URLs. If a link is untrusted, open it in the system browser (`url_launcher`) — don't embed. Also: forgetting to configure cookies + iOS App Transport Security for HTTPS-only." },
+    { "type": "callout", "variant": "tip", "markdown": "For SSO/OAuth in-app, prefer `flutter_web_auth_2` or an ASWebAuthenticationSession-based flow — safer + supported by IdPs. For rich interop consider `flutter_inappwebview` (more features, more surface)." }
+  ],
+  "flashcards": [
+    { "front": "JS ↔ Dart bridge?", "back": "addJavaScriptChannel exposes a JS object whose postMessage reaches Dart." },
+    { "front": "How to block navigation to untrusted URLs?", "back": "Return NavigationDecision.prevent in onNavigationRequest." },
+    { "front": "For OAuth flows, prefer…", "back": "flutter_web_auth_2 / ASWebAuthenticationSession over an embedded WebView." }
+  ],
+  "quiz": [
+    { "q": "To whitelist navigation targets…", "options": ["Never possible", "Inspect and return NavigationDecision", "Root the phone", "Disable Flutter"], "answer": 1, "explain": "onNavigationRequest returns navigate/prevent." },
+    { "q": "For an OAuth login flow, prefer…", "options": ["Embedded WebView", "flutter_web_auth_2 / ASWebAuthenticationSession", "http package alone", "Nothing"], "answer": 1, "explain": "Providers block/embargo embedded WebViews for security." },
+    { "q": "addJavaScriptChannel is…", "options": ["Encrypted by default", "A JS→Dart message channel — treat inputs as untrusted", "A REST endpoint", "A DB"], "answer": 1, "explain": "Always validate/limit what the page can send." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Show a fixed URL in a WebView." },
+    { "level": "Medium", "text": "Bridge JS → Dart via a channel; show messages in a snackbar." },
+    { "level": "Hard", "text": "Block navigation to non-whitelisted origins; open external links in the system browser." },
+    { "level": "Expert", "text": "Implement a secure OAuth flow via flutter_web_auth_2 instead of embedded WebView." }
+  ],
+  "interviewQuestions": [
+    "How do you bridge JS and Dart?",
+    "How do you block untrusted navigations?",
+    "Why avoid embedded WebViews for OAuth?",
+    "webview_flutter vs flutter_inappwebview?",
+    "How to handle cookies and downloads?"
+  ],
+  "references": [
+    { "label": "webview_flutter", "url": "https://pub.dev/packages/webview_flutter" }
+  ]
+}

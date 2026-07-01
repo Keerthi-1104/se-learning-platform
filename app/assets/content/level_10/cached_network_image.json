@@ -1,0 +1,45 @@
+{
+  "id": "plg.cached_network_image",
+  "levelId": 10,
+  "title": "cached_network_image",
+  "xp": 20,
+  "estimatedMinutes": 10,
+  "objectives": [
+    "Cache network images on disk with placeholders",
+    "Size-request the right variant",
+    "Manage cache lifecycle"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "`cached_network_image` downloads network images once and reuses them from disk/memory. Provides `placeholder` and `errorWidget` so lists don't flash blank or crash on bad URLs." },
+    { "type": "code", "language": "dart", "code": "CachedNetworkImage(\n  imageUrl: url,\n  placeholder: (_, __) => const ShimmerBox(),\n  errorWidget: (_, __, ___) => const Icon(Icons.broken_image),\n  memCacheWidth: 200,  // decode at target size — huge memory win\n);" },
+    { "type": "callout", "variant": "interview", "markdown": "Set `memCacheWidth`/`memCacheHeight` to the widget's physical size. Otherwise a 4000-px hero image decodes at full resolution into an 80-px thumbnail — a common OOM cause in list screens." },
+    { "type": "callout", "variant": "mistake", "markdown": "Assuming the cache is unbounded/permanent. It's an LRU with defaults you can tune (`DefaultCacheManager`). Call `emptyCache()` on logout for privacy or `removeFile(url)` when an image is updated server-side." },
+    { "type": "callout", "variant": "tip", "markdown": "Combine with a server-side resize (Firebase resize-images extension, imgproxy, or a CDN). Request the correct variant instead of one giant image for all screens." }
+  ],
+  "flashcards": [
+    { "front": "Why set memCacheWidth?", "back": "Decodes the image at the display size, avoiding OOM when a huge image ends up in a small widget." },
+    { "front": "How to clear cache on logout?", "back": "`DefaultCacheManager().emptyCache()` (or a custom cache manager for scoped clears)." },
+    { "front": "Why placeholder + errorWidget?", "back": "Keeps list UI stable while loading, and handles broken URLs without blank frames." }
+  ],
+  "quiz": [
+    { "q": "The most impactful setting for memory is…", "options": ["placeholder", "errorWidget", "memCacheWidth/Height", "fit"], "answer": 2, "explain": "Decoding at target size prevents huge bitmaps in small widgets." },
+    { "q": "To clear cached images on logout…", "options": ["Reinstall app", "DefaultCacheManager().emptyCache()", "Nothing", "Restart Flutter"], "answer": 1, "explain": "The cache manager exposes emptyCache." },
+    { "q": "cached_network_image caches to…", "options": ["Memory only", "Memory + disk", "Server only", "Nowhere"], "answer": 1, "explain": "In-memory + persistent disk cache." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Show a network image with a shimmer placeholder + error icon." },
+    { "level": "Medium", "text": "Add memCacheWidth to a grid of thumbnails; measure memory before/after." },
+    { "level": "Hard", "text": "Force refetch when the server updates an image (bust cache)." },
+    { "level": "Expert", "text": "Use a custom BaseCacheManager scoped to a feature; empty it on feature exit." }
+  ],
+  "interviewQuestions": [
+    "Why cache network images at all?",
+    "How to avoid OOMs from huge images?",
+    "How is the cache stored and evicted?",
+    "How to bust the cache when server updates?",
+    "cached_network_image vs Image.network?"
+  ],
+  "references": [
+    { "label": "cached_network_image", "url": "https://pub.dev/packages/cached_network_image" }
+  ]
+}

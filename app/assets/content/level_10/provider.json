@@ -1,0 +1,45 @@
+{
+  "id": "plg.provider",
+  "levelId": 10,
+  "title": "provider (plugin)",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Wire providers cleanly at the app root",
+    "Use Consumer, Selector, watch/read correctly",
+    "Combine multiple providers with MultiProvider / ProxyProvider"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "`provider` is a lightweight wrapper around InheritedWidget with builders for ChangeNotifier, Streams, Futures, and dependent providers. It's the officially recommended baseline for shared state." },
+    { "type": "code", "language": "dart", "code": "runApp(MultiProvider(providers: [\n  ChangeNotifierProvider(create: (_) => AuthNotifier()),\n  ProxyProvider<AuthNotifier, Api>(update: (_, a, __) => Api(a.token)),\n], child: const MyApp()));\n\nfinal count = context.watch<Counter>().value;\ncontext.read<Counter>().inc();" },
+    { "type": "callout", "variant": "interview", "markdown": "Under the hood everything provider offers is an InheritedWidget — the value is that you don't have to write one. It's the fastest way to teach a team dependency injection + state without a heavier framework." },
+    { "type": "callout", "variant": "mistake", "markdown": "Using `context.watch` inside a callback → rebuild loops / assertion errors. Use `context.read` in callbacks and event handlers; use `watch` / `Consumer` / `Selector` only inside `build`." },
+    { "type": "callout", "variant": "tip", "markdown": "For granular rebuilds use `Selector<T, S>` or Consumer's `child:` parameter to avoid rebuilding heavy subtrees. Consider Riverpod when compile-time safety and multi-instance providers matter." }
+  ],
+  "flashcards": [
+    { "front": "watch vs read?", "back": "watch subscribes and rebuilds; read is a one-off access (callbacks/handlers)." },
+    { "front": "How to combine dependent providers?", "back": "ProxyProvider (or ChangeNotifierProxyProvider) — rebuilds when its dependencies change." },
+    { "front": "How to reduce rebuild cost?", "back": "Selector or Consumer's child parameter." }
+  ],
+  "quiz": [
+    { "q": "In a button onPressed, use…", "options": ["watch", "read", "Selector", "MultiProvider"], "answer": 1, "explain": "read is one-off; no subscription." },
+    { "q": "ProxyProvider is for…", "options": ["Networking", "Depending on other providers", "Routing", "Theming"], "answer": 1, "explain": "It derives its value from other providers." },
+    { "q": "The primitive underneath provider is…", "options": ["Stream", "InheritedWidget", "Isolate", "ChangeNotifier only"], "answer": 1, "explain": "provider wraps InheritedWidget." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Counter with ChangeNotifierProvider + Consumer." },
+    { "level": "Medium", "text": "Selector to rebuild only one label." },
+    { "level": "Hard", "text": "ProxyProvider deriving an Api from an AuthNotifier." },
+    { "level": "Expert", "text": "Refactor an over-rebuilding screen; measure rebuild count before/after." }
+  ],
+  "interviewQuestions": [
+    "watch vs read vs Selector?",
+    "How does ProxyProvider work?",
+    "How does provider relate to InheritedWidget?",
+    "When would you leave provider for Riverpod?",
+    "How to test code that depends on provider?"
+  ],
+  "references": [
+    { "label": "provider package", "url": "https://pub.dev/packages/provider" }
+  ]
+}

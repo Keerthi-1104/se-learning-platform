@@ -1,0 +1,45 @@
+{
+  "id": "plg.hive",
+  "levelId": 10,
+  "title": "hive (plugin)",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Initialize Hive + register adapters",
+    "Encrypt sensitive boxes",
+    "Migrate models safely"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "The `hive` / `hive_flutter` packages provide a pure-Dart NoSQL key-value store. Zero native code, boxes as files on disk, fast get/put; great for settings, small caches, and simple lookups." },
+    { "type": "code", "language": "dart", "code": "await Hive.initFlutter();\nHive.registerAdapter(UserAdapter());   // BEFORE openBox\nfinal box = await Hive.openBox<User>('users');\nawait box.put('me', User(name: 'Ada'));" },
+    { "type": "callout", "variant": "interview", "markdown": "For sensitive data (auth tokens), wrap the box in HiveAesCipher and store the key in flutter_secure_storage. Registering adapters BEFORE openBox is essential — otherwise you get 'unknown typeId' errors on cold start." },
+    { "type": "callout", "variant": "mistake", "markdown": "Renumbering @HiveField ids or removing them — breaks reads of older data. Only ADD new fields with new ids; deprecate old ones with a comment." },
+    { "type": "callout", "variant": "tip", "markdown": "Use lazy boxes for large values (`LazyBox<T>`) so they're not fully loaded into memory. On startup, only open the boxes you need for the first frame." }
+  ],
+  "flashcards": [
+    { "front": "Adapter registration order?", "back": "Register adapters BEFORE openBox — otherwise cold reads fail with unknown typeId." },
+    { "front": "Encrypting a box?", "back": "HiveAesCipher(keyBytes); store the key in flutter_secure_storage." },
+    { "front": "Safe schema evolution?", "back": "Only add new @HiveFields with new ids; never renumber or remove used ones." }
+  ],
+  "quiz": [
+    { "q": "Store an auth token safely?", "options": ["Plain box", "Encrypted box + key in secure storage", "Print to logs", "SharedPreferences"], "answer": 1, "explain": "Combine HiveAesCipher with flutter_secure_storage." },
+    { "q": "Registering an adapter…", "options": ["After openBox", "Before openBox", "In dispose", "Only in tests"], "answer": 1, "explain": "Otherwise Hive can't decode existing objects." },
+    { "q": "Large payloads should live in…", "options": ["A normal Box", "A LazyBox", "SharedPreferences", "main.dart"], "answer": 1, "explain": "LazyBox avoids loading the whole box in memory." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Persist a theme setting with Hive." },
+    { "level": "Medium", "text": "Persist a custom User class with a generated adapter." },
+    { "level": "Hard", "text": "Encrypt a Session box; rotate the AES key." },
+    { "level": "Expert", "text": "Add a v1→v2 model migration for a widely-deployed field change." }
+  ],
+  "interviewQuestions": [
+    "When is Hive the right fit?",
+    "How do you encrypt Hive data?",
+    "How do TypeAdapters work?",
+    "How do you evolve the schema safely?",
+    "Lazy box vs Box?"
+  ],
+  "references": [
+    { "label": "hive_flutter", "url": "https://pub.dev/packages/hive_flutter" }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "id": "plg.http",
+  "levelId": 10,
+  "title": "http (package)",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Make simple GET/POST calls with the http package",
+    "Reuse a single Client",
+    "Know when to graduate to Dio/Retrofit"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "`package:http` is Dart's official, minimal HTTP client — just enough for straightforward REST calls. Small, no ceremony, works everywhere Dart runs (mobile, desktop, web, server)." },
+    { "type": "code", "language": "dart", "code": "final client = http.Client();\ntry {\n  final res = await client.get(Uri.parse('https://api.example.com/users'));\n  if (res.statusCode == 200) return jsonDecode(res.body);\n} finally {\n  client.close();\n}" },
+    { "type": "callout", "variant": "interview", "markdown": "Reuse a single `http.Client` for many requests — it pools connections (HTTP keep-alive). Creating a new client per call defeats connection reuse and can hurt latency, especially over TLS." },
+    { "type": "callout", "variant": "mistake", "markdown": "Manually building interceptor logic in every call site (auth headers, retries). At that point graduate to Dio or wrap `http.Client` in a middleware pattern (`BaseClient`)." },
+    { "type": "callout", "variant": "tip", "markdown": "For simple apps or packages that want minimal dependencies, `http` is perfect. For complex flows (auth refresh, retries, cancellation, progress), Dio saves a lot of code." }
+  ],
+  "flashcards": [
+    { "front": "http vs dio in one line?", "back": "http is small and official — great for simple calls. Dio has interceptors/cancellation/progress and scales to complex apps." },
+    { "front": "Should you create a new Client per request?", "back": "No — reuse one Client to pool TCP/TLS connections." },
+    { "front": "How to add global behavior with http?", "back": "Subclass BaseClient and wrap sends (middleware pattern)." }
+  ],
+  "quiz": [
+    { "q": "For minimal dependencies, prefer…", "options": ["dio", "package:http", "grpc", "gql"], "answer": 1, "explain": "Small official client, no ceremony." },
+    { "q": "Reusing an http.Client…", "options": ["Slows things down", "Pools connections (keep-alive)", "Is not allowed", "Encrypts requests"], "answer": 1, "explain": "Connection reuse cuts TLS + TCP overhead." },
+    { "q": "For interceptors/retries at scale you'd typically…", "options": ["Reinvent them in every call", "Move to Dio", "Skip retries", "Poll instead"], "answer": 1, "explain": "Dio provides them out of the box." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "GET a URL and pretty-print the JSON." },
+    { "level": "Medium", "text": "POST a JSON body with headers; handle errors." },
+    { "level": "Hard", "text": "Wrap http.Client in a BaseClient adding an Authorization header." },
+    { "level": "Expert", "text": "Add retry-with-backoff via a BaseClient wrapper." }
+  ],
+  "interviewQuestions": [
+    "http vs dio — when use each?",
+    "Why reuse an http.Client?",
+    "How would you add auth to every call?",
+    "How do you test code using http.Client?",
+    "How to handle timeouts with http?"
+  ],
+  "references": [
+    { "label": "http package", "url": "https://pub.dev/packages/http" }
+  ]
+}

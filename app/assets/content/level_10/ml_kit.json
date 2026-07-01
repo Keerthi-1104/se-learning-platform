@@ -1,0 +1,45 @@
+{
+  "id": "plg.ml_kit",
+  "levelId": 10,
+  "title": "Google ML Kit",
+  "xp": 50,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Run on-device ML for text/face/barcode/pose",
+    "Feed camera frames into detectors efficiently",
+    "Choose bundled vs Play-services models"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Google ML Kit provides on-device ML primitives via Flutter packages (`google_mlkit_text_recognition`, `_face_detection`, `_barcode_scanning`, `_pose_detection`, `_translate`, and more) — no server calls, works offline." },
+    { "type": "code", "language": "dart", "code": "final recognizer = TextRecognizer(script: TextRecognitionScript.latin);\nfinal input = InputImage.fromFilePath(image.path);\nfinal text = await recognizer.processImage(input);\n// dispose when done:\nawait recognizer.close();" },
+    { "type": "callout", "variant": "interview", "markdown": "On-device ML wins on privacy (data never leaves the phone), latency (no round trip), and cost (no server bills). For custom models use ML Kit's custom-model support with a TensorFlow Lite file bundled or hosted via Firebase ML." },
+    { "type": "callout", "variant": "mistake", "markdown": "Running ML on every camera frame → dropped frames + heat. Throttle to N frames/sec, downscale input, and reuse the detector instance (don't create per-frame)." },
+    { "type": "callout", "variant": "tip", "markdown": "Bundled models increase APK size but work first-launch offline; Play-services models are smaller but need a one-time download. Pick per user experience. Always `close()` detectors to free native memory." }
+  ],
+  "flashcards": [
+    { "front": "Where does ML Kit run?", "back": "On device — no server needed; works offline." },
+    { "front": "Perf mistake?", "back": "Processing every frame + creating detector per frame — throttle + reuse instance." },
+    { "front": "Bundled vs Play-services models?", "back": "Bundled: bigger APK, works day one. Play-services: smaller APK, first-launch downloads." }
+  ],
+  "quiz": [
+    { "q": "ML Kit runs…", "options": ["Only in the cloud", "On device", "On the GPU only", "Nowhere"], "answer": 1, "explain": "On-device ML." },
+    { "q": "For custom models…", "options": ["Only Google-provided", "Custom .tflite via ML Kit's custom-model support", "Not possible", "Only server"], "answer": 1, "explain": "You can bring your own model." },
+    { "q": "Perf best practice?", "options": ["New detector per frame", "Reuse detector + throttle + downscale", "Full-res always", "Ignore"], "answer": 1, "explain": "Reuse + throttle for smooth performance." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "OCR a picked image with text_recognition." },
+    { "level": "Medium", "text": "Live face-detection preview from the camera, throttled to 15fps." },
+    { "level": "Hard", "text": "Bundle a custom .tflite model and label images with it." },
+    { "level": "Expert", "text": "Compare bundled vs Play-services model UX (APK size, first-launch)." }
+  ],
+  "interviewQuestions": [
+    "Advantages of on-device ML?",
+    "How do you feed camera frames efficiently?",
+    "Bundled vs Play-services model trade-offs?",
+    "Custom model support?",
+    "How to test ML Kit code?"
+  ],
+  "references": [
+    { "label": "Google ML Kit Flutter", "url": "https://pub.dev/publishers/flutter-ml.dev/packages" }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "id": "plg.dio",
+  "levelId": 10,
+  "title": "Dio",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Configure a robust Dio instance",
+    "Use interceptors for auth, logging, retries",
+    "Handle cancellation and error mapping"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Dio is the de-facto HTTP client for Flutter — powerful base options, interceptors, form data, file up/download with progress, and CancelTokens. Ideal when you need more than the standard `http` package." },
+    { "type": "code", "language": "dart", "code": "final dio = Dio(BaseOptions(\n  baseUrl: 'https://api.example.com',\n  connectTimeout: Duration(seconds: 10),\n  receiveTimeout: Duration(seconds: 15),\n));\ndio.interceptors.addAll([\n  LogInterceptor(responseBody: true),\n  AuthInterceptor(),      // adds Bearer\n  RetryInterceptor(),     // exp backoff\n]);\nfinal res = await dio.get('/users', cancelToken: token);" },
+    { "type": "callout", "variant": "interview", "markdown": "The interceptor chain is Dio's superpower: attach the token, refresh on 401, log requests, retry with backoff, and adapt responses — all without touching call sites. Order matters: auth before retry, logging outermost." },
+    { "type": "callout", "variant": "mistake", "markdown": "Sharing one Dio globally without CancelTokens. When the user leaves a screen, in-flight requests keep running (and setState-after-dispose). Pass a CancelToken per screen and cancel on dispose()." },
+    { "type": "callout", "variant": "best", "markdown": "Set baseUrl + timeouts once. Map DioException.type to a typed AppError. Use `receiveDataWhenStatusError: true` to read error bodies. For gzip/brotli, use dio_smart_retry or a custom Adapter." }
+  ],
+  "flashcards": [
+    { "front": "What's Dio's superpower over http?", "back": "Interceptors (auth, retry, logging), CancelTokens, upload/download progress, form data, custom adapters." },
+    { "front": "How to cancel in-flight requests?", "back": "Attach a CancelToken to each call; token.cancel() cancels them." },
+    { "front": "Common interceptor order?", "back": "Log → Auth → Retry (or Auth → Retry → Log outermost) — auth attaches token before retry considers a failure." }
+  ],
+  "quiz": [
+    { "q": "Which is NOT built into Dio?", "options": ["Interceptors", "CancelToken", "Automatic OAuth server", "FormData"], "answer": 2, "explain": "Dio provides HTTP primitives; OAuth flow is your responsibility." },
+    { "q": "To cancel requests on screen dispose…", "options": ["Kill the app", "Use a CancelToken per screen", "Ignore them", "Restart the process"], "answer": 1, "explain": "CancelTokens are the idiomatic way." },
+    { "q": "Handling a 401 across all endpoints is best done via…", "options": ["Every call site", "An interceptor that refreshes the token", "Ignoring it", "A global if in main"], "answer": 1, "explain": "Interceptors centralize this cross-cutting concern." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Configure a Dio instance with baseUrl + timeouts + a LogInterceptor." },
+    { "level": "Medium", "text": "Add an AuthInterceptor that refreshes a token on 401." },
+    { "level": "Hard", "text": "Add exponential backoff for 5xx + connection errors." },
+    { "level": "Expert", "text": "Wrap Dio in a typed API client, mapping DioException → AppError variants." }
+  ],
+  "interviewQuestions": [
+    "Dio vs http?",
+    "How do interceptors work?",
+    "How to cancel requests correctly?",
+    "How to handle 401 with token refresh?",
+    "How to test code that uses Dio?"
+  ],
+  "references": [
+    { "label": "Dio package", "url": "https://pub.dev/packages/dio" }
+  ]
+}

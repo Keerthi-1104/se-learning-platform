@@ -1,0 +1,45 @@
+{
+  "id": "plg.camera",
+  "levelId": 10,
+  "title": "camera",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Preview and capture safely with the camera plugin",
+    "Dispose controllers on route change",
+    "Handle orientation and permissions"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "The `camera` plugin (Flutter Team) provides low-level access to the platform camera: enumerate cameras, start a preview, capture stills, and record videos with a `CameraController`." },
+    { "type": "code", "language": "dart", "code": "final cams = await availableCameras();\nfinal ctrl = CameraController(cams.first, ResolutionPreset.high);\nawait ctrl.initialize();\n// ... show CameraPreview(ctrl)\nfinal file = await ctrl.takePicture();\n@override void dispose(){ ctrl.dispose(); super.dispose(); }" },
+    { "type": "callout", "variant": "interview", "markdown": "The camera is a scarce, expensive resource. Dispose the controller in `dispose()`; pause it in the app's `AppLifecycleState.paused` (background) and re-init on resume. Otherwise you'll leak sensors and drain battery." },
+    { "type": "callout", "variant": "mistake", "markdown": "Setting the highest `ResolutionPreset` for a UI preview → hot device + jank. Use `medium`/`high` for preview and switch just before capture, or use `imageFormatGroup` tuned to your ML/scan pipeline." },
+    { "type": "callout", "variant": "tip", "markdown": "For scanning workflows (barcodes, ML Kit), prefer `mobile_scanner` or camera + ML Kit direct — the raw camera plugin gives you flexibility but more code. Watch orientation with WidgetsBindingObserver + didChangeMetrics." }
+  ],
+  "flashcards": [
+    { "front": "When to dispose CameraController?", "back": "In State.dispose() AND on AppLifecycleState.paused; re-init on resume." },
+    { "front": "Why not always max resolution?", "back": "Overheats, drops frames, and burns battery. Use appropriate preset per stage." },
+    { "front": "For scanning, prefer…", "back": "mobile_scanner or camera + ML Kit direct, tuned for detection latency." }
+  ],
+  "quiz": [
+    { "q": "Best pattern for camera lifecycle?", "options": ["Ignore", "Dispose on route exit; pause on background", "Keep it open forever", "Reinitialize every frame"], "answer": 1, "explain": "Camera is expensive — free it when unused." },
+    { "q": "For a smooth preview…", "options": ["Always max resolution", "Reasonable preset + switch before capture", "Disable preview", "Software render"], "answer": 1, "explain": "Balance quality vs heat/battery." },
+    { "q": "For barcode scanning use…", "options": ["Raw camera + heavy Dart parsing", "mobile_scanner / ML Kit", "shared_preferences", "Nothing"], "answer": 1, "explain": "Purpose-built scanners are lower-latency." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Show a camera preview + take a photo." },
+    { "level": "Medium", "text": "Add orientation lock and switch front/back cameras." },
+    { "level": "Hard", "text": "Handle lifecycle: pause/resume without leaking sensors." },
+    { "level": "Expert", "text": "Feed frames to ML Kit for realtime pose/text detection." }
+  ],
+  "interviewQuestions": [
+    "How do you manage the CameraController lifecycle?",
+    "Why does resolution matter for a preview?",
+    "camera vs mobile_scanner?",
+    "How do you handle orientation?",
+    "How to keep power/temperature under control?"
+  ],
+  "references": [
+    { "label": "camera plugin", "url": "https://pub.dev/packages/camera" }
+  ]
+}

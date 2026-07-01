@@ -1,0 +1,45 @@
+{
+  "id": "plg.google_maps",
+  "levelId": 10,
+  "title": "google_maps_flutter",
+  "xp": 40,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Embed a Google Map with markers/polylines",
+    "Handle iOS + Android API keys and permissions",
+    "Cluster markers and control performance"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "`google_maps_flutter` embeds a native Google Map inside a Flutter widget. You provide API keys per platform, add markers/polylines/circles, and drive camera position via a `GoogleMapController`." },
+    { "type": "code", "language": "dart", "code": "GoogleMap(\n  initialCameraPosition: CameraPosition(target: LatLng(12.97, 77.59), zoom: 12),\n  markers: {\n    Marker(markerId: MarkerId('a'), position: LatLng(12.97, 77.59))\n  },\n  onMapCreated: (c) => _controller.complete(c),\n)" },
+    { "type": "callout", "variant": "interview", "markdown": "Native maps are the heaviest platform view Flutter embeds. Keep markers under a few hundred, cluster the rest, and avoid rebuilding the whole GoogleMap when only markers change — pass the marker set as a const-friendly Set." },
+    { "type": "callout", "variant": "mistake", "markdown": "Committing API keys in source. Restrict keys per platform + application (bundle ID / SHA1) in the Google Cloud Console, and inject via build config (`--dart-define`, Info.plist, AndroidManifest placeholders)." },
+    { "type": "callout", "variant": "tip", "markdown": "For heat maps or thousands of points, prefer a tile-based layer or clustering (fluster / google_maps_cluster_manager). Cache tiles for offline where feasible. Consider Mapbox/MapLibre if pricing/features push you." }
+  ],
+  "flashcards": [
+    { "front": "Where do API keys live?", "back": "Info.plist (iOS) + AndroidManifest.xml (Android), restricted to your bundle IDs in Cloud Console." },
+    { "front": "How to handle many markers?", "back": "Cluster them; don't render thousands independently." },
+    { "front": "Why is GoogleMap heavy?", "back": "It's a native platform view — heavier than pure Flutter widgets." }
+  ],
+  "quiz": [
+    { "q": "API keys should be…", "options": ["Committed to git", "Restricted per platform + bundle ID and injected", "Hardcoded in Dart", "Shared publicly"], "answer": 1, "explain": "Never expose unrestricted keys." },
+    { "q": "For thousands of markers…", "options": ["Add them one by one", "Cluster or use tile layers", "Skip performance", "Use setState per marker"], "answer": 1, "explain": "Clustering keeps rendering feasible." },
+    { "q": "Camera control uses…", "options": ["setState only", "GoogleMapController", "Navigator", "Provider"], "answer": 1, "explain": "The controller manages camera + animations." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Show a map centered on a city with one marker." },
+    { "level": "Medium", "text": "Draw a polyline between two points and fit camera bounds." },
+    { "level": "Hard", "text": "Add clustering for 5k markers." },
+    { "level": "Expert", "text": "Overlay a custom tile source with offline caching." }
+  ],
+  "interviewQuestions": [
+    "How does the plugin embed native maps?",
+    "How do you secure API keys?",
+    "How do you handle many markers?",
+    "google_maps vs Mapbox/MapLibre — trade-offs?",
+    "How do you drive the camera from state?"
+  ],
+  "references": [
+    { "label": "google_maps_flutter", "url": "https://pub.dev/packages/google_maps_flutter" }
+  ]
+}

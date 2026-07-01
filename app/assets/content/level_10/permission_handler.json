@@ -1,0 +1,45 @@
+{
+  "id": "plg.permission_handler",
+  "levelId": 10,
+  "title": "permission_handler",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Request runtime permissions correctly",
+    "Handle 'permanently denied' with a settings redirect",
+    "Configure Info.plist and AndroidManifest"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "`permission_handler` unifies runtime permissions across iOS and Android: request them, check status, and route the user to app settings when they've permanently denied." },
+    { "type": "code", "language": "dart", "code": "var s = await Permission.camera.status;\nif (!s.isGranted) s = await Permission.camera.request();\nif (s.isPermanentlyDenied) await openAppSettings();" },
+    { "type": "callout", "variant": "interview", "markdown": "Request in-context: ask when the user taps the feature that needs it, not on app launch. Explain WHY before showing the OS prompt — better acceptance rates and less rejection risk from Apple review." },
+    { "type": "callout", "variant": "mistake", "markdown": "Missing Info.plist keys (iOS) or AndroidManifest permissions — request calls silently fail. Also: not handling `permanentlyDenied` — the OS won't show a prompt again; you must guide the user to settings." },
+    { "type": "callout", "variant": "tip", "markdown": "Group related permissions and request only what you use. On Android 13+ POST_NOTIFICATIONS is a runtime permission; on iOS `criticalAlert` needs an entitlement." }
+  ],
+  "flashcards": [
+    { "front": "What is 'permanently denied'?", "back": "User denied and (Android: 'Don't ask again' / iOS: after prior denial) — the OS won't show the prompt; open settings." },
+    { "front": "iOS runtime permission setup?", "back": "Add the usage description keys to Info.plist (NSCameraUsageDescription, etc.)." },
+    { "front": "Best UX pattern?", "back": "Request in context of a user action, with a pre-prompt explaining the reason." }
+  ],
+  "quiz": [
+    { "q": "For 'permanently denied' status…", "options": ["Give up", "openAppSettings() and guide user", "Show a fake dialog", "Reinstall app"], "answer": 1, "explain": "OS won't prompt again; user must change it in Settings." },
+    { "q": "Missing Info.plist keys causes…", "options": ["Success", "Silent failure of the request", "Faster app", "Crash-free"], "answer": 1, "explain": "iOS silently fails without the usage description." },
+    { "q": "Best time to request?", "options": ["On splash screen", "When user taps the feature (with pre-prompt)", "In background", "Never"], "answer": 1, "explain": "In-context requests have higher acceptance rates." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Request camera permission before opening camera." },
+    { "level": "Medium", "text": "Show a pre-prompt explaining why; handle denial gracefully." },
+    { "level": "Hard", "text": "Handle permanentlyDenied with a Settings redirect + re-check on resume." },
+    { "level": "Expert", "text": "Add POST_NOTIFICATIONS (Android 13+) and iOS notification permission with fallback UX." }
+  ],
+  "interviewQuestions": [
+    "How do you handle 'permanently denied'?",
+    "iOS Info.plist usage descriptions — why required?",
+    "Best UX pattern for permission requests?",
+    "Android 13 POST_NOTIFICATIONS?",
+    "How to test permission flows?"
+  ],
+  "references": [
+    { "label": "permission_handler", "url": "https://pub.dev/packages/permission_handler" }
+  ]
+}

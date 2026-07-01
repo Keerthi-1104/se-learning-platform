@@ -1,0 +1,45 @@
+{
+  "id": "plg.flutter_bloc",
+  "levelId": 10,
+  "title": "flutter_bloc",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Wire BlocProvider, BlocBuilder, BlocListener",
+    "Use MultiBlocProvider at feature roots",
+    "Test with bloc_test"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "`flutter_bloc` is the Flutter binding for the BLoC library — Blocs/Cubits expose immutable states via streams; widgets subscribe to and rebuild from them. Adds BlocProvider, BlocBuilder, BlocListener, BlocConsumer, RepositoryProvider, and BlocObserver." },
+    { "type": "code", "language": "dart", "code": "BlocProvider(create: (_) => CounterCubit(),\n  child: BlocConsumer<CounterCubit, int>(\n    listenWhen: (o,n) => n < 0,\n    listener: (c, s) => showSnack(c, 'Negative!'),\n    buildWhen: (o,n) => o != n,\n    builder: (c, s) => Text('$s'),\n  ),\n);" },
+    { "type": "callout", "variant": "interview", "markdown": "Use BlocBuilder for UI, BlocListener for side effects (nav, snackbars), BlocConsumer for both. Add a global BlocObserver in main() to log every transition — a huge debugging + auditing win." },
+    { "type": "callout", "variant": "mistake", "markdown": "Sharing a Bloc across the whole app when it should be scoped to a feature. Use MultiBlocProvider at the feature route; the Bloc is disposed when the route pops." },
+    { "type": "callout", "variant": "tip", "markdown": "`buildWhen`/`listenWhen` avoid noisy rebuilds/handlers. Use bloc_test to assert emitted state sequences for a given event input — one of the cleanest test stories in Flutter." }
+  ],
+  "flashcards": [
+    { "front": "BlocBuilder vs BlocListener vs BlocConsumer?", "back": "Builder rebuilds UI; Listener runs side effects; Consumer does both." },
+    { "front": "How to log every state transition?", "back": "Register a BlocObserver in main() via Bloc.observer = MyObserver()." },
+    { "front": "How to reduce rebuild noise?", "back": "buildWhen / listenWhen to filter which state changes matter." }
+  ],
+  "quiz": [
+    { "q": "For a snackbar reaction to state change, use…", "options": ["BlocBuilder", "BlocListener", "BlocProvider", "Bloc.observer"], "answer": 1, "explain": "Listener is for side effects." },
+    { "q": "To scope a Bloc to a feature route…", "options": ["Provide it globally", "Wrap the feature route with BlocProvider", "Use a global variable", "Ignore scope"], "answer": 1, "explain": "Scoped provision + auto-dispose." },
+    { "q": "To assert state sequences for tests…", "options": ["Print everything", "bloc_test's blocTest()", "setState", "Riverpod overrides"], "answer": 1, "explain": "blocTest asserts emitted states for given events." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Counter Cubit driving a BlocBuilder text." },
+    { "level": "Medium", "text": "Login BLoC with loading/error/success states; show snackbar on error." },
+    { "level": "Hard", "text": "Use BlocObserver to log all transitions; hide sensitive fields." },
+    { "level": "Expert", "text": "Write blocTest suites for a search BLoC with debounce transformers." }
+  ],
+  "interviewQuestions": [
+    "Difference between BlocBuilder / Listener / Consumer?",
+    "How does BlocProvider scope a Bloc?",
+    "What is BlocObserver used for?",
+    "How do you test a Bloc?",
+    "Cubit vs Bloc — when use each?"
+  ],
+  "references": [
+    { "label": "flutter_bloc", "url": "https://pub.dev/packages/flutter_bloc" }
+  ]
+}

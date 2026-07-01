@@ -1,0 +1,45 @@
+{
+  "id": "plg.isar",
+  "levelId": 10,
+  "title": "isar (plugin)",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Wire Isar + codegen",
+    "Batch writes in writeTxn",
+    "Watch queries reactively"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "`isar` is a fast native NoSQL DB for Flutter/Dart: schemas from Dart classes via codegen, indexes, full-text search, links, and reactive queries — all with a compact native binary." },
+    { "type": "code", "language": "dart", "code": "@collection\nclass User {\n  Id id = Isar.autoIncrement;\n  @Index(caseSensitive: false) late String name;\n}\nfinal isar = await Isar.open([UserSchema]);\nawait isar.writeTxn(() async {\n  await isar.users.put(User()..name = 'Ada');\n});\nfinal adas = await isar.users.filter().nameEqualTo('Ada').findAll();" },
+    { "type": "callout", "variant": "interview", "markdown": "Isar's edge: high write throughput + rich queries without SQL migrations. `writeTxn` batches many puts efficiently. `watchLazy()` / `watch()` streams re-emit on change — perfect for offline-first Flutter UIs." },
+    { "type": "callout", "variant": "mistake", "markdown": "Writing outside a `writeTxn` (throws) or writing one record per transaction (slow). Batch inside a single writeTxn for bulk operations." },
+    { "type": "callout", "variant": "tip", "markdown": "One query uses one index at a time — design indexes to match top queries. On desktop/CI, initialize with the correct native library path. Consider Isar v4 / community forks as the ecosystem evolves." }
+  ],
+  "flashcards": [
+    { "front": "Batch writes in Isar?", "back": "Wrap them in a single writeTxn() closure." },
+    { "front": "Reactive updates?", "back": "watch() / watchLazy() streams re-emit on data changes." },
+    { "front": "Query index rule?", "back": "One index used per query — design indexes for top query patterns." }
+  ],
+  "quiz": [
+    { "q": "For a fast bulk import…", "options": ["One writeTxn per row", "One writeTxn wrapping all rows", "No transaction", "Delete and reinsert"], "answer": 1, "explain": "Single transaction beats many." },
+    { "q": "A query uses…", "options": ["Multiple indexes at once", "One index at a time", "No indexes", "SQL joins"], "answer": 1, "explain": "Design indexes to match top queries." },
+    { "q": "Isar is best fit for…", "options": ["Server SQL queries", "Local mobile-first NoSQL with high write throughput", "Auth flows", "Static assets"], "answer": 1, "explain": "Local high-perf NoSQL for Flutter." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Collection + put/find." },
+    { "level": "Medium", "text": "Index + filter query; observe changes with watch()." },
+    { "level": "Hard", "text": "Model a one-to-many with IsarLinks." },
+    { "level": "Expert", "text": "Add full-text search + benchmark 100k inserts." }
+  ],
+  "interviewQuestions": [
+    "Isar vs Drift vs Hive?",
+    "Why wrap writes in writeTxn?",
+    "How do watch() streams work?",
+    "How do you handle schema changes?",
+    "How do you optimize a slow Isar query?"
+  ],
+  "references": [
+    { "label": "Isar", "url": "https://pub.dev/packages/isar" }
+  ]
+}

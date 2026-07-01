@@ -1,0 +1,45 @@
+{
+  "id": "plg.file_picker",
+  "levelId": 10,
+  "title": "file_picker",
+  "xp": 20,
+  "estimatedMinutes": 10,
+  "objectives": [
+    "Pick single/multiple files with type filters",
+    "Handle iOS document picker + Android SAF",
+    "Deal with large files without OOM"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "`file_picker` opens the platform document/file picker and returns file(s) — with optional MIME/type filtering, multi-select and byte streams for large content." },
+    { "type": "code", "language": "dart", "code": "final result = await FilePicker.platform.pickFiles(\n  type: FileType.custom,\n  allowedExtensions: ['pdf','docx'],\n  allowMultiple: true,\n  withData: false,          // set true only for small files\n);\nfor (final f in result?.files ?? []) { /* use f.path */ }" },
+    { "type": "callout", "variant": "interview", "markdown": "Set `withData: false` for large files — otherwise the whole content is loaded into memory (OOM risk). Use `f.path` + a `File(...)` stream, or upload via a resumable client." },
+    { "type": "callout", "variant": "mistake", "markdown": "Assuming a stable file path. Android SAF and iOS document picker often return content-URIs / temporary paths; copy to your app's docs directory if you need durability." },
+    { "type": "callout", "variant": "tip", "markdown": "For image/video specifically, `image_picker` gives a nicer UX; use `file_picker` for arbitrary documents (PDFs, spreadsheets, archives)." }
+  ],
+  "flashcards": [
+    { "front": "Danger of withData: true?", "back": "Loads the entire file into memory — OOM on large files." },
+    { "front": "Are returned paths always stable?", "back": "No — copy to your app's docs directory if you need durability." },
+    { "front": "Prefer image_picker vs file_picker for photos?", "back": "image_picker for photos/videos; file_picker for arbitrary documents." }
+  ],
+  "quiz": [
+    { "q": "For a 500MB video, use…", "options": ["withData: true", "path + streaming", "In-memory Base64", "Skip"], "answer": 1, "explain": "Never load huge files into memory." },
+    { "q": "Returned paths are…", "options": ["Always permanent", "Often temporary/content-URIs", "Encrypted", "Random"], "answer": 1, "explain": "Copy to a durable path if needed." },
+    { "q": "For arbitrary docs use…", "options": ["image_picker", "file_picker", "shared_preferences", "camera"], "answer": 1, "explain": "Document picker across formats." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Pick a single PDF and show its size." },
+    { "level": "Medium", "text": "Pick multiple docs with a type filter; render a list." },
+    { "level": "Hard", "text": "Stream a picked file to a server without loading into memory." },
+    { "level": "Expert", "text": "Copy the picked file to app docs; resume upload after app restart." }
+  ],
+  "interviewQuestions": [
+    "How do you avoid OOM on large picks?",
+    "Why aren't returned paths stable?",
+    "file_picker vs image_picker?",
+    "How to filter by type/MIME?",
+    "How to test picker flows?"
+  ],
+  "references": [
+    { "label": "file_picker", "url": "https://pub.dev/packages/file_picker" }
+  ]
+}

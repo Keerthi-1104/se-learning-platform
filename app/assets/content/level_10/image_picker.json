@@ -1,0 +1,45 @@
+{
+  "id": "plg.image_picker",
+  "levelId": 10,
+  "title": "image_picker",
+  "xp": 20,
+  "estimatedMinutes": 10,
+  "objectives": [
+    "Pick photos/videos from gallery or camera",
+    "Handle iOS Photos permissions",
+    "Compress/resize before upload"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "`image_picker` (Flutter Team) opens the system gallery or camera and returns a picked file. Simple, reliable, and adequate for 90% of 'let me add a profile pic' UX." },
+    { "type": "code", "language": "dart", "code": "final picker = ImagePicker();\nfinal xfile = await picker.pickImage(\n  source: ImageSource.gallery,\n  imageQuality: 80,           // JPEG compression 0..100\n  maxWidth: 1600,\n);" },
+    { "type": "callout", "variant": "interview", "markdown": "iOS 14+ splits photo access into **full** and **limited**. The plugin handles the sheet, but you must add `NSPhotoLibraryUsageDescription` (and `NSCameraUsageDescription` if you allow camera). Limited access can silently return only a subset of images." },
+    { "type": "callout", "variant": "mistake", "markdown": "Uploading the raw 12MP image directly — kills bandwidth and storage. Use `imageQuality` + `maxWidth`/`maxHeight` for quick compression, or a proper image lib for heavy work." },
+    { "type": "callout", "variant": "tip", "markdown": "For gallery UIs and richer selection UX use `photo_manager`. For camera-first flows with framing/cropping, layer `image_cropper` on top." }
+  ],
+  "flashcards": [
+    { "front": "How does image_picker compress?", "back": "imageQuality (0..100) and maxWidth/maxHeight parameters." },
+    { "front": "iOS Photos permission?", "back": "NSPhotoLibraryUsageDescription (add limited/full considerations)." },
+    { "front": "For a fancier gallery UI use…", "back": "photo_manager (richer selection) + image_cropper for cropping." }
+  ],
+  "quiz": [
+    { "q": "Before uploading a picked image…", "options": ["Send raw", "Compress via imageQuality/maxWidth or a lib", "Delete it", "Convert to text"], "answer": 1, "explain": "Compress to save bandwidth." },
+    { "q": "iOS 14+ can return…", "options": ["Whole library only", "Limited-access subset", "No images ever", "Only videos"], "answer": 1, "explain": "Users can grant partial access." },
+    { "q": "For richer selection UI, prefer…", "options": ["image_picker only", "photo_manager", "shared_preferences", "hive"], "answer": 1, "explain": "photo_manager exposes albums, metadata, custom UIs." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Pick a single image from gallery and show it." },
+    { "level": "Medium", "text": "Add camera option; handle permission denial gracefully." },
+    { "level": "Hard", "text": "Compress + crop before upload; measure size reduction." },
+    { "level": "Expert", "text": "Support iOS limited-photo access with a re-request flow." }
+  ],
+  "interviewQuestions": [
+    "image_picker vs photo_manager?",
+    "How to compress before upload?",
+    "iOS limited photo access handling?",
+    "Camera source vs gallery source?",
+    "How to test image-picker flows?"
+  ],
+  "references": [
+    { "label": "image_picker", "url": "https://pub.dev/packages/image_picker" }
+  ]
+}
