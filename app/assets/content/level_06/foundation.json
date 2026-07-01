@@ -1,0 +1,49 @@
+{
+  "id": "arch.foundation",
+  "levelId": 6,
+  "title": "Foundation Layer",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Identify what belongs in the foundation",
+    "Keep foundation code framework-agnostic",
+    "Avoid leaking foundation concerns into features"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "The Foundation layer is the bedrock of an app: cross-cutting utilities and infrastructure — logging, error types, network client, storage, config, DI, feature flags — used by every feature but owning no domain rules." },
+    { "type": "table", "headers": ["Belongs in foundation", "Does NOT belong"], "rows": [
+      ["Result/Failure types, logger", "User, Order, Cart entities"],
+      ["Configured Dio/http client", "Auth business rules"],
+      ["Storage (Hive/secure) helpers", "Feature-specific state"],
+      ["Feature-flag reader, env config", "UI screens"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "A stable foundation is why features can move fast. When network, error handling, DI, config and logging are solved once and centrally, every new feature reuses them and looks the same shape — code review becomes easier." },
+    { "type": "callout", "variant": "mistake", "markdown": "Letting a feature type sneak into foundation ('Foundation depends on `Cart`'). Foundation must know nothing about specific domains — otherwise it becomes a dumping ground and prevents reuse." }
+  ],
+  "flashcards": [
+    { "front": "Foundation's rule of thumb?", "back": "Cross-cutting, framework-agnostic infra used everywhere; no domain rules." },
+    { "front": "Examples of foundation code?", "back": "Logger, Result/Failure types, network client, storage helpers, config, feature flags." },
+    { "front": "What must foundation never import?", "back": "Feature-specific domain types or UI screens." }
+  ],
+  "quiz": [
+    { "q": "Which belongs in the foundation?", "options": ["User entity", "Configured HTTP client + logger", "Cart use case", "Home screen"], "answer": 1, "explain": "Cross-cutting infra belongs there; domain does not." },
+    { "q": "A red flag in the foundation is…", "options": ["A logger", "Importing a specific feature's entity", "Small utilities", "A Result type"], "answer": 1, "explain": "Foundation must remain domain-agnostic." },
+    { "q": "Foundation should be…", "options": ["Domain-heavy", "Framework-agnostic and reusable", "UI-only", "Test-only"], "answer": 1, "explain": "Reusable across features and apps." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Add a shared Result<T> + Failure type to foundation and adopt in one repo." },
+    { "level": "Medium", "text": "Move a duplicated Dio setup into a foundation NetworkClient." },
+    { "level": "Hard", "text": "Extract logging behind an abstraction so tests use a fake logger." },
+    { "level": "Expert", "text": "Ship the foundation as a separate package and adopt it in two apps." }
+  ],
+  "interviewQuestions": [
+    "What is the foundation layer?",
+    "What does NOT belong in the foundation?",
+    "How does a good foundation speed up feature work?",
+    "How do you keep foundation reusable across apps?",
+    "Foundation vs core vs shared — how do you name them?"
+  ],
+  "references": [
+    { "label": "Google — Guide to app architecture", "url": "https://developer.android.com/topic/architecture" }
+  ]
+}

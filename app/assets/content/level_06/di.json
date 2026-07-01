@@ -1,0 +1,50 @@
+{
+  "id": "arch.di",
+  "levelId": 6,
+  "title": "Dependency Injection",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain DI vs the Service Locator pattern",
+    "Choose constructor injection over globals",
+    "Scope dependencies deliberately"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Dependency Injection means an object receives its collaborators from outside instead of creating them. This decouples classes, enables testing with fakes, and is the practical form of the Dependency Inversion Principle (SOLID)." },
+    { "type": "table", "headers": ["Style", "Example", "Notes"], "rows": [
+      ["Constructor DI", "class VM(this.repo)", "Preferred — explicit, testable"],
+      ["Service Locator", "GetIt.I<Repo>()", "Convenient but hides deps"],
+      ["Riverpod DI", "ref.watch(repoProvider)", "Compile-safe container"],
+      ["Hilt / Dagger", "@Inject", "Annotation-driven codegen (Android)"]
+    ]},
+    { "type": "code", "language": "dart", "code": "// Preferred: constructor DI (explicit, unit-testable)\nclass HomeViewModel {\n  final UserRepository repo;\n  HomeViewModel(this.repo);\n}\n// In wiring: HomeViewModel(sl.get());  or via provider" },
+    { "type": "callout", "variant": "interview", "markdown": "Constructor DI is the strongest form: a class's dependencies are visible in its signature, making it obvious what to fake in tests. Service locators (`GetIt.I<...>()`) are convenient but hide dependencies and can cause runtime surprises." },
+    { "type": "callout", "variant": "mistake", "markdown": "Registering everything as a global singleton. Long-lived state leaks across screens/users and breaks tests. Scope thoughtfully: app / feature / screen." }
+  ],
+  "flashcards": [
+    { "front": "DI in one sentence?", "back": "Classes receive their collaborators from outside instead of creating them." },
+    { "front": "Constructor DI vs Service Locator?", "back": "Constructor DI is explicit and testable; Service Locator is convenient but hides dependencies." },
+    { "front": "Why scope dependencies?", "back": "To avoid global state that leaks between users/features and breaks tests." }
+  ],
+  "quiz": [
+    { "q": "The preferred form of DI is…", "options": ["Global variables", "Constructor injection", "Reflection at runtime", "Compile-time macros"], "answer": 1, "explain": "Constructor DI makes dependencies explicit and easy to fake." },
+    { "q": "A Service Locator's biggest downside is…", "options": ["It's slow", "It hides dependencies", "It requires reflection", "It can't be async"], "answer": 1, "explain": "You can't tell a class's dependencies from its signature." },
+    { "q": "Over-scoping to @Singleton…", "options": ["Improves testability", "Leaks state and hurts tests", "Speeds up GC", "Is required"], "answer": 1, "explain": "Global lifetime keeps state alive too long." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Rewrite a class that creates its own Api to receive it via the constructor." },
+    { "level": "Medium", "text": "Wire the app using GetIt (Service Locator) and note the trade-offs." },
+    { "level": "Hard", "text": "Wire the app using Riverpod providers with proper scopes; swap in fakes for tests." },
+    { "level": "Expert", "text": "Build a per-feature scope where each screen gets its own ViewModel instance while a Repository is shared." }
+  ],
+  "interviewQuestions": [
+    "Difference between DIP and DI?",
+    "Constructor DI vs Service Locator?",
+    "How does DI help testing?",
+    "Why is over-scoping to Singleton bad?",
+    "How do Riverpod/Hilt/GetIt compare as DI tools?"
+  ],
+  "references": [
+    { "label": "Fowler — Inversion of Control", "url": "https://martinfowler.com/articles/injection.html" }
+  ]
+}

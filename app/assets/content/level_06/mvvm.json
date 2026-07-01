@@ -1,0 +1,49 @@
+{
+  "id": "arch.mvvm",
+  "levelId": 6,
+  "title": "MVVM",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Describe the three MVVM roles",
+    "Bind View to ViewModel via observable state",
+    "Keep the View 'dumb' and the Model 'pure'"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "MVVM (Model-View-ViewModel) is a UI pattern where the **View** observes an immutable state exposed by the **ViewModel**, which orchestrates the **Model** (data + business rules). Perfect fit for Flutter's declarative UI." },
+    { "type": "table", "headers": ["Role", "Responsibility"], "rows": [
+      ["Model", "Domain data + business rules (framework-free)"],
+      ["ViewModel", "UI state + user actions; no Flutter imports ideally"],
+      ["View", "Widgets that render state and call VM methods"]
+    ]},
+    { "type": "code", "language": "dart", "code": "class HomeViewModel {\n  final Repo repo;\n  final _state = ValueNotifier(HomeState.loading());\n  ValueListenable<HomeState> get state => _state;\n  Future<void> load() async {\n    _state.value = HomeState.loading();\n    try { _state.value = HomeState.data(await repo.get()); }\n    catch (e) { _state.value = HomeState.error(e); }\n  }\n}" },
+    { "type": "callout", "variant": "interview", "markdown": "MVVM works because it enforces **one-way data flow**: state flows View ← ViewModel, actions flow View → ViewModel. Riverpod NotifierProviders, BLoC/Cubit, and ChangeNotifier are all ways to implement the ViewModel in Flutter." },
+    { "type": "callout", "variant": "mistake", "markdown": "Putting business logic (validation, network, mapping) inside widgets — that's a Massive-View anti-pattern. Widgets should read state and call VM methods; nothing more." }
+  ],
+  "flashcards": [
+    { "front": "The three MVVM roles?", "back": "Model (data + rules), ViewModel (state + actions), View (renders state, dispatches actions)." },
+    { "front": "MVVM data flow?", "back": "State flows View ← VM; actions flow View → VM. Strictly one-way rendering." },
+    { "front": "How is MVVM implemented in Flutter?", "back": "With ChangeNotifier, ValueNotifier, Riverpod Notifiers, or BLoC/Cubit exposing state." }
+  ],
+  "quiz": [
+    { "q": "In MVVM, the View should…", "options": ["Contain business logic", "Only render state and dispatch actions", "Own the database", "Own network code"], "answer": 1, "explain": "Widgets stay dumb; the ViewModel owns behavior." },
+    { "q": "MVVM data flow is…", "options": ["View → Model directly", "Two-way with implicit sync", "One-way: state down, actions up", "Random"], "answer": 2, "explain": "State flows down from VM; actions flow up from View." },
+    { "q": "Which is NOT a common ViewModel in Flutter?", "options": ["ChangeNotifier", "NotifierProvider", "Cubit", "A raw SQLite Cursor"], "answer": 3, "explain": "The others expose observable UI state; a Cursor is a data-layer primitive." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Extract a widget's business logic into a ChangeNotifier VM." },
+    { "level": "Medium", "text": "Model a screen's UI as an immutable state class (loading/data/error)." },
+    { "level": "Hard", "text": "Unit-test the ViewModel with a fake Model without any Flutter imports." },
+    { "level": "Expert", "text": "Migrate a Flutter screen from setState soup to a testable MVVM with Riverpod." }
+  ],
+  "interviewQuestions": [
+    "Roles of Model, View, ViewModel?",
+    "Why one-way data flow?",
+    "MVVM implementations in Flutter?",
+    "MVVM vs MVC vs MVP?",
+    "How do you test a ViewModel?"
+  ],
+  "references": [
+    { "label": "Flutter — App architecture", "url": "https://docs.flutter.dev/app-architecture" }
+  ]
+}

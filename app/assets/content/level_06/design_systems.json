@@ -1,0 +1,50 @@
+{
+  "id": "arch.design_systems",
+  "levelId": 6,
+  "title": "Design Systems",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain tokens, components and patterns",
+    "Adopt a shared design system in Flutter",
+    "Handle theming and light/dark modes cleanly"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "A design system is the shared vocabulary of a product: **tokens** (colors, typography, spacing), **components** (buttons, inputs, cards), and **patterns** (empty states, error banners). It makes many screens look and behave like one product." },
+    { "type": "code", "language": "dart", "code": "class AppTokens {\n  static const spaceSm = 8.0;\n  static const spaceMd = 16.0;\n  static const radiusMd = 12.0;\n}\nclass AppTheme {\n  static ThemeData light() => ThemeData(\n    colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),\n    textTheme: const TextTheme(headlineSmall: TextStyle(fontWeight: FontWeight.w800)),\n  );\n}" },
+    { "type": "table", "headers": ["Layer", "What it defines", "Example"], "rows": [
+      ["Tokens", "Primitive values", "Colors, spacing, radii, type"],
+      ["Themes", "Semantic groupings", "Material ThemeData, ThemeExtensions"],
+      ["Components", "Reusable widgets", "AppButton, AppCard, AppTextField"],
+      ["Patterns", "Composed UX flows", "Empty state, loading skeletons"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "In Flutter, use Material 3 `ColorScheme.fromSeed` for a coherent palette and `ThemeExtension` for design-token additions Material doesn't cover. Wire dark mode through the same theme so light/dark differ by values, not by if/else in widgets." },
+    { "type": "callout", "variant": "mistake", "markdown": "Hard-coding colors, sizes and radii everywhere. Later you can't rebrand or theme; changes need find-and-replace. Read tokens/theme through context (`Theme.of(context)` and extensions), never literals." }
+  ],
+  "flashcards": [
+    { "front": "Three layers of a design system?", "back": "Tokens (values), Components (widgets), Patterns (flows). Themes tie tokens into a coherent style." },
+    { "front": "Why avoid raw colors in widgets?", "back": "It kills theming, dark mode and rebranding — read through theme/tokens." },
+    { "front": "What is a ThemeExtension?", "back": "A way to add typed design tokens to Flutter's ThemeData beyond Material's defaults." }
+  ],
+  "quiz": [
+    { "q": "Tokens define…", "options": ["Widgets", "Primitive design values (color, spacing, radii)", "Screens", "Business rules"], "answer": 1, "explain": "Tokens are the primitives that themes and components consume." },
+    { "q": "Dark mode is best handled by…", "options": ["if/else in widgets", "Different theme values through the same widgets", "Two apps", "Hardcoded colors"], "answer": 1, "explain": "Themes swap values; widgets stay the same." },
+    { "q": "In Flutter, extending theme values beyond Material's defaults uses…", "options": ["Global variables", "ThemeExtension", "InheritedWidget only", "Reflection"], "answer": 1, "explain": "ThemeExtension attaches typed extra tokens to ThemeData." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Extract spacing/radii/colors into an AppTokens class and use them." },
+    { "level": "Medium", "text": "Build AppButton/AppCard components that consume tokens/theme." },
+    { "level": "Hard", "text": "Add a ThemeExtension for semantic tokens (success/warn) and use in widgets." },
+    { "level": "Expert", "text": "Ship the design system as a separate package used by two apps with different brands." }
+  ],
+  "interviewQuestions": [
+    "What is a design system and its layers?",
+    "How do tokens differ from components?",
+    "How do you implement theming/dark mode in Flutter?",
+    "What is ThemeExtension and when use it?",
+    "How do you evolve a design system without breaking apps?"
+  ],
+  "references": [
+    { "label": "Material 3 for Flutter", "url": "https://docs.flutter.dev/ui/design/material" }
+  ]
+}

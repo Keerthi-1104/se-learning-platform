@@ -1,0 +1,50 @@
+{
+  "id": "arch.modular",
+  "levelId": 6,
+  "title": "Modular Architecture",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Split a monolith into independent packages",
+    "Enforce module boundaries and public APIs",
+    "Speed up builds and enable team ownership"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Modular architecture splits the codebase into independent packages (modules) with explicit dependencies. In Flutter this is typically a multi-package repo — an `app/` module plus `core/`, `ui/`, `feature_auth/`, `feature_cart/` and so on." },
+    { "type": "code", "language": "text", "code": "packages/\n  core/           (network, storage, config)\n  design_system/  (theme, tokens, shared widgets)\n  feature_auth/   (public: AuthApi, private: impl)\n  feature_cart/\n  app/            (composes features, wires DI)" },
+    { "type": "table", "headers": ["Wins", "Costs"], "rows": [
+      ["Enforced boundaries (imports blocked)", "Extra package plumbing"],
+      ["Faster incremental builds", "Version-alignment work"],
+      ["Independent team ownership", "Some duplication if boundaries wrong"],
+      ["Reusable modules across apps", ""]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "The main win of modular architecture is **compiler-enforced boundaries**: package B cannot import a private symbol of package A. That's stronger than any lint rule and scales to many teams working in parallel." },
+    { "type": "callout", "variant": "mistake", "markdown": "Modularizing too early. For a small team/app, one package with strict folders is enough. Modularize when build times or team coordination become a bottleneck." }
+  ],
+  "flashcards": [
+    { "front": "What does modular architecture enforce?", "back": "Import boundaries — a package can only see another's public API." },
+    { "front": "Typical modules in a Flutter monorepo?", "back": "core, design_system, feature_X packages, and an app module that composes them." },
+    { "front": "When to modularize?", "back": "When build times or team coordination hurt — not day one." }
+  ],
+  "quiz": [
+    { "q": "Modular architecture's key enforcement is…", "options": ["Faster GC", "Import boundaries between packages", "Higher frame rates", "Cheaper hosting"], "answer": 1, "explain": "Modules can only expose their public API." },
+    { "q": "A common Flutter modular layout has…", "options": ["Only one lib/", "core + design_system + feature_* packages + app", "One package per widget", "No app module"], "answer": 1, "explain": "Feature packages composed by an app module." },
+    { "q": "The main risk of early modularization is…", "options": ["Faster builds", "Overhead without payoff", "Better DI", "Fewer bugs"], "answer": 1, "explain": "You pay setup cost before the wins arrive." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Extract a feature into its own package with a small public API." },
+    { "level": "Medium", "text": "Set up a monorepo (melos) with core + design_system + one feature package." },
+    { "level": "Hard", "text": "Break a circular dependency between two features by introducing a shared abstraction." },
+    { "level": "Expert", "text": "Add CI that builds only affected packages on push." }
+  ],
+  "interviewQuestions": [
+    "What is modular architecture and why use it?",
+    "How do modules enforce boundaries?",
+    "What's a typical Flutter module layout?",
+    "When would you NOT modularize?",
+    "How do you handle shared code between modules?"
+  ],
+  "references": [
+    { "label": "melos — Dart monorepo tool", "url": "https://melos.invertase.dev" }
+  ]
+}

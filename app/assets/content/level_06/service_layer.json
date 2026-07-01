@@ -1,0 +1,48 @@
+{
+  "id": "arch.service_layer",
+  "levelId": 6,
+  "title": "Service Layer",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Distinguish services from repositories and use cases",
+    "Use services for cross-cutting concerns",
+    "Keep services stateless where possible"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "A Service is a reusable, focused unit of behavior that isn't domain data itself — analytics, notifications, auth, sync, connectivity. Services are often stateless helpers injected wherever they're needed." },
+    { "type": "table", "headers": ["", "Service", "Repository", "UseCase"], "rows": [
+      ["Owns", "A capability / integration", "Data access to an aggregate", "A single business action"],
+      ["State?", "Usually stateless", "Sometimes caches", "Stateless"],
+      ["Example", "AnalyticsService, AuthService", "OrderRepository", "PlaceOrderUseCase"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "The distinction interviewers love: a **Repository** is about DATA of an aggregate; a **Service** is about a CAPABILITY that doesn't fit one aggregate (auth, notifications, crash reporting). Use cases orchestrate both to perform actions." },
+    { "type": "callout", "variant": "mistake", "markdown": "Turning every class into a 'Service' — a giant `UserService` doing auth, profile, roles AND messaging is just a God object. Split by capability and cohesion." }
+  ],
+  "flashcards": [
+    { "front": "Service vs Repository?", "back": "Repository = data access to an aggregate. Service = a capability/integration (auth, analytics, notifications)." },
+    { "front": "Are services usually stateful?", "back": "No — prefer stateless services; caches/state belong in repositories or dedicated stores." },
+    { "front": "Why not one giant Service class?", "back": "It becomes a God object; split by cohesion (one capability per service)." }
+  ],
+  "quiz": [
+    { "q": "Which is most likely a Service?", "options": ["OrderRepository", "AnalyticsService", "UserEntity", "HomeViewModel"], "answer": 1, "explain": "Analytics is a cross-cutting capability, not aggregate data." },
+    { "q": "Services should be…", "options": ["Big monoliths", "Focused and often stateless", "UI-aware", "Global singletons only"], "answer": 1, "explain": "Small, focused, testable helpers work best." },
+    { "q": "A UseCase typically…", "options": ["Only mutates the DB", "Orchestrates repositories/services for one action", "Draws widgets", "Handles UI navigation"], "answer": 1, "explain": "Use cases coordinate collaborators to perform one business action." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Extract analytics calls from widgets into an AnalyticsService." },
+    { "level": "Medium", "text": "Build an AuthService with signIn/signOut used by multiple screens." },
+    { "level": "Hard", "text": "Split a God 'UserService' into AuthService, ProfileRepository, RolesService." },
+    { "level": "Expert", "text": "Add a connectivity Service and use it to gate a sync worker." }
+  ],
+  "interviewQuestions": [
+    "Service vs Repository vs UseCase?",
+    "When would a service be stateful?",
+    "How do services help SOLID?",
+    "How do you test a service?",
+    "Cross-cutting concerns you'd model as services?"
+  ],
+  "references": [
+    { "label": "Fowler — Service Layer", "url": "https://martinfowler.com/eaaCatalog/serviceLayer.html" }
+  ]
+}

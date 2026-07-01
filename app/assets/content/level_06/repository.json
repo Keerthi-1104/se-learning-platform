@@ -1,0 +1,45 @@
+{
+  "id": "arch.repository",
+  "levelId": 6,
+  "title": "Repository Pattern",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain what a repository abstracts",
+    "Combine remote + local sources behind one interface",
+    "Enable offline-first via the same API"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "A Repository is an abstraction over data sources. It exposes domain-shaped operations (`getUser(id)`) while hiding whether the data comes from network, cache, DB, or a mix." },
+    { "type": "code", "language": "dart", "code": "abstract class UserRepository {\n  Future<User> getUser(String id);\n  Stream<List<User>> watchAll();\n}\nclass UserRepositoryImpl implements UserRepository {\n  final RemoteSource api; final LocalSource db;\n  Future<User> getUser(String id) async {\n    try { final u = await api.fetch(id); await db.upsert(u); return u; }\n    catch (_) { return db.get(id); }   // fall back to cache\n  }\n}" },
+    { "type": "callout", "variant": "interview", "markdown": "The Repository is where **offline-first** lives. Callers see one API; internally it reads-through/writes-through to cache and network, exposing a `Stream` so the UI updates when either source changes. Domain never touches Dio or Room." },
+    { "type": "callout", "variant": "mistake", "markdown": "Leaking data-layer types (DTOs, HTTP responses, DB entities) through the repository interface. Return **domain models** — mappers convert at the boundary." },
+    { "type": "callout", "variant": "tip", "markdown": "One repository per aggregate/feature, not one per table. Keep interfaces small; put mappers and caching policy inside the implementation." }
+  ],
+  "flashcards": [
+    { "front": "What does a repository abstract?", "back": "Data sources (network/DB/cache) behind a domain-shaped interface." },
+    { "front": "What does 'offline-first via repository' mean?", "back": "The repo reads/writes cache first and syncs remote, so the UI works with or without network." },
+    { "front": "What must repositories NOT expose?", "back": "Data-layer types (DTOs, HTTP responses, DB rows) — always return domain models." }
+  ],
+  "quiz": [
+    { "q": "The repository pattern separates…", "options": ["UI from routing", "Domain from data sources", "GC from allocation", "Threads from processes"], "answer": 1, "explain": "Domain code calls the interface; implementations pick the source." },
+    { "q": "For offline-first, a repository typically…", "options": ["Only calls the network", "Uses cache + network behind one API, syncing both", "Uses only SharedPreferences", "Never caches"], "answer": 1, "explain": "Reads-through/writes-through to keep the UI usable offline." },
+    { "q": "A repository should return…", "options": ["HTTP responses", "SQL rows", "Domain models", "JSON strings"], "answer": 2, "explain": "Mappers translate DTOs/rows into domain models at the boundary." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Wrap a Retrofit/Dio call behind a Repository interface returning a domain model." },
+    { "level": "Medium", "text": "Add Hive/Room caching with read-through fallback." },
+    { "level": "Hard", "text": "Expose a Stream from the repo that emits on network OR cache updates." },
+    { "level": "Expert", "text": "Add conflict resolution (last-write-wins vs merge) across cache + remote." }
+  ],
+  "interviewQuestions": [
+    "What is a Repository and what does it hide?",
+    "How does it enable offline-first?",
+    "What must repositories NOT expose?",
+    "One repository per table or per aggregate?",
+    "How do you test a repository?"
+  ],
+  "references": [
+    { "label": "DDD Reference — Repositories", "url": "https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf" }
+  ]
+}

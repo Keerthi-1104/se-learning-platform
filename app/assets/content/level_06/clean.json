@@ -1,0 +1,51 @@
+{
+  "id": "arch.clean",
+  "levelId": 6,
+  "title": "Clean Architecture",
+  "xp": 60,
+  "estimatedMinutes": 35,
+  "objectives": [
+    "Explain the dependency rule and its layers",
+    "Separate domain from framework code",
+    "Test business logic without the UI or a network"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Clean Architecture (Uncle Bob) organizes code into concentric layers where **dependencies point inward**. Framework details (UI, DB, network) sit on the outside; pure business rules sit at the center." },
+    { "type": "code", "language": "text", "code": "  [ Frameworks & Drivers ]     (Flutter, Retrofit, Room)\n     [ Interface Adapters ]    (repositories, mappers, VMs)\n        [ Use Cases ]          (application-specific business rules)\n           [ Entities ]        (enterprise/pure business rules)\n    dependencies ONLY point INWARD" },
+    { "type": "table", "headers": ["Layer", "Contains", "Knows about"], "rows": [
+      ["Entities", "Pure domain models", "Nothing outside"],
+      ["Use Cases", "Business rules / actions", "Entities only"],
+      ["Interface Adapters", "Repositories, mappers, ViewModels", "Use cases + entities"],
+      ["Frameworks/Drivers", "Flutter, DB, network, DI", "Everything above"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "The dependency rule = the killer idea. Business rules never import Flutter/Retrofit/Hive. They depend on abstractions (interfaces) that the outer layers implement — Dependency Inversion in the large. Result: swap the UI, DB, or network without rewriting logic, and test it without any of them." },
+    { "type": "callout", "variant": "mistake", "markdown": "Building 'Clean' as three folders that all import Flutter and each other. Real Clean means the domain layer has **zero imports of framework code**. If it uses BuildContext or `dart:io`, it's not clean." },
+    { "type": "callout", "variant": "tip", "markdown": "Don't overuse it. Small apps drown in boilerplate. Apply Clean where the payoff is real: long-lived apps, multiple data sources, strict testability, or teams larger than one." }
+  ],
+  "flashcards": [
+    { "front": "The Clean Architecture dependency rule?", "back": "Source code dependencies point only inward — outer layers know inner ones, never the reverse." },
+    { "front": "What lives in the innermost layer?", "back": "Entities — pure domain models with no framework code." },
+    { "front": "How does DI enable Clean Architecture?", "back": "Domain defines interfaces; outer layers implement and inject them, so business rules stay framework-free." }
+  ],
+  "quiz": [
+    { "q": "The core principle of Clean Architecture is…", "options": ["Fewer classes", "Dependencies point inward", "Global state", "No interfaces"], "answer": 1, "explain": "Outer layers depend on inner ones, never the reverse." },
+    { "q": "Where do pure business rules live?", "options": ["The UI", "The use case / entity layers", "The data source", "main()"], "answer": 1, "explain": "Use cases and entities are the framework-free core." },
+    { "q": "Which import in a domain UseCase would violate Clean?", "options": ["A domain entity", "A domain repository interface", "package:flutter/material.dart", "dart:core"], "answer": 2, "explain": "Domain must not depend on Flutter or any framework." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Extract a domain Entity + UseCase from a widget's business logic." },
+    { "level": "Medium", "text": "Define a Repository interface in domain and implement it in data with a fake source." },
+    { "level": "Hard", "text": "Refactor a screen so its ViewModel only calls use cases; unit-test them without Flutter." },
+    { "level": "Expert", "text": "Add a second data source (e.g., cache) behind the same repository interface with no domain changes." }
+  ],
+  "interviewQuestions": [
+    "What is Clean Architecture's dependency rule?",
+    "Name the layers and what belongs in each.",
+    "How does DIP/DI make it work?",
+    "When is Clean Architecture worth the boilerplate?",
+    "How do you test business logic without the UI?"
+  ],
+  "references": [
+    { "label": "Clean Architecture — Uncle Bob", "url": "https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html" }
+  ]
+}

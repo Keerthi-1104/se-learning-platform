@@ -1,0 +1,50 @@
+{
+  "id": "arch.feature_first",
+  "levelId": 6,
+  "title": "Feature-first Architecture",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Organize code by feature, not by layer",
+    "Keep vertical slices testable and swappable",
+    "Avoid the deep layer-first pyramid"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Feature-first architecture organizes the codebase by **domain feature** (auth, cart, orders) with each feature owning its full vertical slice — presentation, domain, data — instead of one giant top-level 'screens' and 'services' folder." },
+    { "type": "code", "language": "text", "code": "lib/\n  core/                 (theme, router, DI, shared widgets)\n  features/\n    auth/               \n       presentation/    (screens, view models)\n       domain/          (entities, use cases, repo interfaces)\n       data/            (repo impls, sources, DTOs, mappers)\n    cart/    (same structure)\n    orders/  (same structure)" },
+    { "type": "table", "headers": ["", "Layer-first", "Feature-first"], "rows": [
+      ["Top folders", "presentation, domain, data", "features/auth, features/cart, …"],
+      ["Change locality", "One feature touches every folder", "Change one feature in one folder"],
+      ["Onboarding", "Layer maze", "Read one feature end to end"],
+      ["Deletion", "Hunt across layers", "Delete one folder"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Feature-first scales to large teams because a feature is a **replaceable unit**. You can delete or refactor a feature in one directory; layers still exist — inside each feature — so Clean Architecture and MVVM still apply." },
+    { "type": "callout", "variant": "tip", "markdown": "Put truly shared code in `core/` and be strict about what qualifies. If two features need to share code, hoist it — but resist premature 'utilities' that leak feature concerns." }
+  ],
+  "flashcards": [
+    { "front": "Layer-first vs feature-first?", "back": "Layer-first groups by concern (all screens, all repos); feature-first groups by feature, each owning its own layers." },
+    { "front": "Why feature-first scales?", "back": "Features are replaceable units — change/delete a folder without touching others." },
+    { "front": "Do you drop Clean Architecture with feature-first?", "back": "No — layers still exist inside each feature (presentation/domain/data)." }
+  ],
+  "quiz": [
+    { "q": "Feature-first organizes code by…", "options": ["Layer (all VMs together)", "Feature (each with its own layers)", "Widget type", "Package name only"], "answer": 1, "explain": "Each feature owns its vertical slice." },
+    { "q": "A key benefit is…", "options": ["Global variables", "Change locality: touch one folder for a feature", "No layers", "Fewer files"], "answer": 1, "explain": "Changes cluster inside the feature folder." },
+    { "q": "Where does truly shared code live?", "options": ["Duplicated per feature", "core/ or shared/", "In tests only", "In main.dart"], "answer": 1, "explain": "core/ or shared/ hosts cross-feature utilities." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Migrate one screen from layer-first to feature-first." },
+    { "level": "Medium", "text": "Move shared widgets/theme into core/ and verify no feature imports another." },
+    { "level": "Hard", "text": "Enforce feature isolation with a lint / import boundary rule." },
+    { "level": "Expert", "text": "Extract a feature into its own package and depend on it from the app module." }
+  ],
+  "interviewQuestions": [
+    "Layer-first vs feature-first — trade-offs?",
+    "How does feature-first help large teams?",
+    "How do you decide what belongs in core/?",
+    "Does feature-first replace Clean Architecture?",
+    "How do you prevent cross-feature imports?"
+  ],
+  "references": [
+    { "label": "Reso Coder — Flutter architecture", "url": "https://resocoder.com/flutter-clean-architecture-tdd/" }
+  ]
+}

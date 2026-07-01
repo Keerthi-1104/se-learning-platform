@@ -1,0 +1,50 @@
+{
+  "id": "arch.offline_first",
+  "levelId": 6,
+  "title": "Offline-first Architecture",
+  "xp": 50,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Design an app that works without network",
+    "Read/write through a local source of truth",
+    "Sync in the background with conflict rules"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Offline-first treats the **local database as the source of truth**. The UI reads and writes locally; a background sync layer talks to the server. Users get instant feedback and the app keeps working with no connection." },
+    { "type": "code", "language": "text", "code": "UI --(observe)--> Local DB (source of truth)\n         |\n         v\n    Sync engine <---> Network\n    - read-through:   fetch → cache → emit\n    - write-through:  write local → enqueue outbox → push" },
+    { "type": "table", "headers": ["Pattern", "Idea"], "rows": [
+      ["Read-through", "Fetch on miss, cache, emit"],
+      ["Write-through / outbox", "Persist locally + queue for server"],
+      ["Background sync", "Periodic/triggered flush with retries"],
+      ["Conflict resolution", "Last-write-wins, merge, or CRDT"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Offline-first isn't 'add caching' — it's a different mental model. The UI never blocks on the network. That flips your architecture: repositories emit Streams from the local store, and network is a background concern that eventually syncs." },
+    { "type": "callout", "variant": "mistake", "markdown": "Silently dropping user writes when offline. Enqueue them in a durable outbox and surface pending/failed state; never lie to the user about a save that didn't reach the server." }
+  ],
+  "flashcards": [
+    { "front": "What is the source of truth in offline-first?", "back": "The local database. The UI reads/writes locally; sync is a background concern." },
+    { "front": "Write-through with outbox?", "back": "Persist the change locally AND queue it for the server, retrying on network." },
+    { "front": "How handle a sync conflict?", "back": "Choose a policy: last-write-wins, per-field merge, or CRDT — and surface it to the user when needed." }
+  ],
+  "quiz": [
+    { "q": "In offline-first, the UI reads from…", "options": ["Network only", "The local DB (source of truth)", "SharedPreferences", "In-memory only"], "answer": 1, "explain": "Local store is authoritative; the UI never blocks on network." },
+    { "q": "A safe way to handle offline writes is…", "options": ["Silently drop them", "Persist + enqueue in an outbox, retry", "Wait until online", "Show a fake success"], "answer": 1, "explain": "Durable queue + retries + honest UI status." },
+    { "q": "Conflict resolution examples include…", "options": ["Only rebooting", "Last-write-wins, merge, CRDT", "Only clearing cache", "Random pick"], "answer": 1, "explain": "Pick a policy consistent with your data." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Add read-through caching to one repository." },
+    { "level": "Medium", "text": "Implement write-through with a durable outbox that retries on connectivity." },
+    { "level": "Hard", "text": "Add optimistic UI + rollback on server rejection." },
+    { "level": "Expert", "text": "Design a merge/CRDT strategy for two devices editing the same record." }
+  ],
+  "interviewQuestions": [
+    "What does offline-first mean at the architecture level?",
+    "Why is the local DB the source of truth?",
+    "How do you handle offline writes safely?",
+    "Strategies for conflict resolution?",
+    "How do you surface sync/failure state to users?"
+  ],
+  "references": [
+    { "label": "Google — Offline-first", "url": "https://developer.android.com/topic/architecture/data-layer/offline-first" }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "id": "arch.mvc",
+  "levelId": 6,
+  "title": "MVC",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Explain classic MVC roles",
+    "Know how MVC differs from MVP and MVVM",
+    "Understand why MVVM/MVI dominate modern Flutter"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "MVC (Model-View-Controller) is a classic UI pattern where the **Controller** receives input, updates the **Model**, and the **View** renders the Model. Common on the server (Spring MVC) and iOS UIKit, less directly used in modern Flutter." },
+    { "type": "table", "headers": ["", "MVC", "MVP", "MVVM"], "rows": [
+      ["Middle role", "Controller", "Presenter", "ViewModel"],
+      ["View knows Model?", "Yes (renders)", "No (via Presenter)", "No (observes VM state)"],
+      ["Testability", "Medium", "Better", "Best in Flutter"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "In classic web MVC (Rails/Spring), the Controller handles a request, calls the Model, and returns a View. In iOS UIKit's MVC the Controller became a 'Massive View Controller' anti-pattern — one big class doing everything." },
+    { "type": "callout", "variant": "tip", "markdown": "For Flutter, prefer MVVM (or MVI/BLoC). MVC is worth knowing because backend frameworks and legacy iOS code use it, and interviewers compare the three." }
+  ],
+  "flashcards": [
+    { "front": "MVC roles?", "back": "Model (data/rules), View (renders), Controller (handles input, updates model)." },
+    { "front": "MVC vs MVVM in Flutter?", "back": "MVVM's observable state fits Flutter's declarative UI better than direct controller updates." },
+    { "front": "What is the 'Massive View Controller'?", "back": "An iOS anti-pattern where all logic lives in one huge UIViewController." }
+  ],
+  "quiz": [
+    { "q": "In MVC the Controller…", "options": ["Renders the View", "Handles input and updates the Model", "Stores data", "Runs SQL"], "answer": 1, "explain": "Input → Controller → Model → View." },
+    { "q": "MVC is common in…", "options": ["Modern Flutter apps", "Server frameworks and legacy UIKit", "Kernel code", "Compilers"], "answer": 1, "explain": "Spring MVC, Rails, UIKit — that's classic MVC's home." },
+    { "q": "Flutter apps usually prefer…", "options": ["MVC", "MVVM/MVI/BLoC", "Direct DB → widget", "Global state only"], "answer": 1, "explain": "Observable-state patterns match Flutter's declarative UI." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Diagram MVC vs MVVM for a login screen." },
+    { "level": "Medium", "text": "Take a classic Spring MVC endpoint and map its parts onto Flutter." },
+    { "level": "Hard", "text": "Convert a Massive-View-Controller-style Dart file into MVVM." },
+    { "level": "Expert", "text": "Compare testability of the same feature under MVC vs MVVM with unit tests." }
+  ],
+  "interviewQuestions": [
+    "MVC vs MVP vs MVVM?",
+    "Why is MVC less natural in Flutter?",
+    "What is the Massive View Controller anti-pattern?",
+    "How does MVC show up on the server side?",
+    "When would you choose MVC over MVVM?"
+  ],
+  "references": [
+    { "label": "Fowler — GUI Architectures", "url": "https://martinfowler.com/eaaDev/uiArchs.html" }
+  ]
+}

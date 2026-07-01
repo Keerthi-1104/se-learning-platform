@@ -1,0 +1,50 @@
+{
+  "id": "arch.sdui",
+  "levelId": 6,
+  "title": "Server-Driven UI",
+  "xp": 50,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Explain what SDUI ships from the server",
+    "Design a widget schema and renderer",
+    "Weigh SDUI's power vs its risks"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Server-Driven UI (SDUI) means the server sends a description of a screen (JSON) — a tree of typed components with props and actions — that the client renders with pre-built widgets. UI changes without a new app release." },
+    { "type": "code", "language": "json", "code": "{\n  \"type\": \"Column\",\n  \"children\": [\n    { \"type\": \"Text\", \"text\": \"Welcome!\", \"style\": \"h1\" },\n    { \"type\": \"Button\", \"label\": \"Continue\",\n      \"action\": { \"type\": \"navigate\", \"route\": \"/home\" } }\n  ]\n}" },
+    { "type": "table", "headers": ["Win", "Cost / risk"], "rows": [
+      ["A/B, promos, layout tweaks with no release", "Only supported widgets can appear"],
+      ["Personalize per user/segment", "Versioning: old clients must degrade"],
+      ["One backend can serve iOS/Android/web", "Security review of actions is critical"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Big consumer apps (Airbnb Epoxy/BloxUI, Instagram, Zomato) use SDUI for the home feed and promo modules so growth teams ship UI daily. The client is a strict renderer: unknown components are ignored or degraded, never executed as code." },
+    { "type": "callout", "variant": "mistake", "markdown": "Letting the server ship logic — arbitrary conditionals, scripting, or 'run this expression' payloads. That's an app-store violation risk (native code from a server) and a security hole." },
+    { "type": "callout", "variant": "tip", "markdown": "Version your schema, whitelist actions, and reject unknown component types. Keep a fallback native screen for critical flows so SDUI never becomes a single point of failure." }
+  ],
+  "flashcards": [
+    { "front": "What is SDUI?", "back": "The server sends a UI description (JSON tree of components); the client renders it with pre-built widgets." },
+    { "front": "Main SDUI wins?", "back": "Ship UI changes / A/B tests / personalization without new app releases." },
+    { "front": "What must the client NOT do with SDUI?", "back": "Execute arbitrary server-sent code — only render whitelisted components/actions." }
+  ],
+  "quiz": [
+    { "q": "SDUI moves which decision to the server?", "options": ["Language runtime", "Screen layout & content", "Auth secrets", "GC settings"], "answer": 1, "explain": "Server describes the screen; client renders it." },
+    { "q": "A key rule for safe SDUI is…", "options": ["Ship JavaScript from the server", "Whitelist component types and actions", "Store passwords in the payload", "Skip versioning"], "answer": 1, "explain": "Only known-safe components render; unknown ones degrade." },
+    { "q": "Best fit for SDUI?", "options": ["Payment cryptography", "Home feed / promo modules", "OS-level drivers", "Compiler"], "answer": 1, "explain": "High-churn UI benefits most; core critical flows stay native." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Define a JSON schema for Text/Column/Button and render it." },
+    { "level": "Medium", "text": "Add actions (navigate, api_call) with a whitelist and safe defaults." },
+    { "level": "Hard", "text": "Add schema versioning + graceful degradation for unknown components." },
+    { "level": "Expert", "text": "Introduce A/B routing where the server chooses layout variants for a segment." }
+  ],
+  "interviewQuestions": [
+    "What is SDUI and what does it ship?",
+    "When would you use SDUI vs a native screen?",
+    "How do you keep SDUI safe?",
+    "How do you handle schema versioning?",
+    "Who's using SDUI in production?"
+  ],
+  "references": [
+    { "label": "Airbnb — SDUI (talk)", "url": "https://www.youtube.com/results?search_query=airbnb+server+driven+ui" }
+  ]
+}
