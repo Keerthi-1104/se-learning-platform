@@ -1,0 +1,53 @@
+{
+  "id": "db.query_optimization",
+  "levelId": 8,
+  "title": "Query Optimization",
+  "xp": 50,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Read EXPLAIN plans and spot problems",
+    "Avoid N+1s and full scans",
+    "Rewrite queries to use indexes and aggregates"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Query optimization is the practice of shaping SQL and schemas so the planner picks efficient plans — index scans instead of sequential scans, hash joins with correct build sides, streaming aggregates instead of sorts." },
+    { "type": "code", "language": "sql", "code": "EXPLAIN (ANALYZE, BUFFERS)\nSELECT o.id, u.name\nFROM orders o JOIN users u ON u.id = o.user_id\nWHERE o.status = 'PAID' AND o.created_at > now() - interval '7 days'\nORDER BY o.created_at DESC\nLIMIT 20;\n\n-- Fix: index (status, created_at DESC) on orders" },
+    { "type": "table", "headers": ["Symptom", "Likely fix"], "rows": [
+      ["Seq Scan on hot table", "Add matching index"],
+      ["Sort on large result", "Order-matching composite index"],
+      ["Nested Loop with high loops", "Wrong join order / stats"],
+      ["N+1 queries in app", "JOIN or IN-batch fetch"],
+      ["Filter after fetch", "Push predicate into query"],
+      ["OFFSET on huge tables", "Cursor / keyset pagination"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "'Show me the slow query' → run EXPLAIN ANALYZE, look for **Seq Scan** on big tables, **Sort** without an ordered index, and **Rows Removed by Filter** (predicate not pushed down). Rewrites often beat re-indexes." },
+    { "type": "callout", "variant": "mistake", "markdown": "OFFSET pagination on large tables — the DB scans and discards N rows for each page. Use **keyset pagination**: `WHERE (created_at, id) < (?, ?) ORDER BY created_at DESC, id DESC LIMIT 20` — O(log n) per page." },
+    { "type": "callout", "variant": "best", "markdown": "Enable pg_stat_statements / Performance Schema. Rewrite `SELECT *` to specific columns. Batch fetches with IN(?, ?, ?, …) to kill N+1. Cache read-heavy aggregates or use materialized views." }
+  ],
+  "flashcards": [
+    { "front": "First tool for a slow query?", "back": "EXPLAIN ANALYZE (or the equivalent) — read the actual plan." },
+    { "front": "Why avoid OFFSET on large tables?", "back": "The DB scans OFFSET+LIMIT rows on every page; use keyset (cursor) pagination instead." },
+    { "front": "How to eliminate N+1 in the app?", "back": "Batch fetches (IN clauses) or single JOIN; avoid per-row queries in loops." }
+  ],
+  "quiz": [
+    { "q": "For paging huge result sets, prefer…", "options": ["Bigger OFFSET", "Keyset (cursor) pagination", "SELECT *", "No index"], "answer": 1, "explain": "Keyset pagination is O(log n) per page." },
+    { "q": "'Seq Scan' on a hot large table usually means…", "options": ["Faster query", "Missing/inapplicable index", "Perfect plan", "Locked table"], "answer": 1, "explain": "Add or fix the index to enable an index scan." },
+    { "q": "Best way to kill an app-side N+1…", "options": ["Add more threads", "Batch fetch with IN() or JOIN", "Disable caching", "Restart DB"], "answer": 1, "explain": "One query for many rows beats N per-row queries." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "EXPLAIN a query; identify Seq Scan vs Index Scan." },
+    { "level": "Medium", "text": "Convert OFFSET pagination to keyset pagination." },
+    { "level": "Hard", "text": "Rewrite a subquery to a JOIN and confirm faster plan." },
+    { "level": "Expert", "text": "Add a materialized view + refresh strategy for a heavy aggregate." }
+  ],
+  "interviewQuestions": [
+    "Walk through reading an EXPLAIN ANALYZE plan.",
+    "How do you fix an N+1 problem?",
+    "Why is OFFSET pagination bad on large tables?",
+    "How do you find slow queries in production?",
+    "When would you use a materialized view?"
+  ],
+  "references": [
+    { "label": "Postgres — Using EXPLAIN", "url": "https://www.postgresql.org/docs/current/using-explain.html" }
+  ]
+}

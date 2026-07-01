@@ -1,0 +1,51 @@
+{
+  "id": "db.mongodb",
+  "levelId": 8,
+  "title": "MongoDB",
+  "xp": 40,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Model documents for read patterns",
+    "Use indexes, aggregation and transactions",
+    "Understand replica sets and sharding"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "MongoDB is a document database: JSON-like BSON documents in collections, with a flexible schema, secondary indexes, aggregation pipelines, and horizontal scaling via sharding. ACID transactions on replica sets since 4.0." },
+    { "type": "code", "language": "js", "code": "// Embed related data if read together (denormalize)\n{ _id: ObjectId(), user: 'ada', orders: [{id:1,total:99},{id:2,total:45}] }\n\n// Aggregation pipeline\ndb.orders.aggregate([\n  { $match: { status: 'paid' } },\n  { $group: { _id: '$userId', total: { $sum: '$amount' } } },\n  { $sort:  { total: -1 } },\n  { $limit: 10 }\n]);" },
+    { "type": "table", "headers": ["Model choice", "When"], "rows": [
+      ["Embed", "Data read together, small, bounded"],
+      ["Reference", "Independent access, large, unbounded"],
+      ["Bucket pattern", "Time-series / high-write events"],
+      ["Extended reference", "Copy hot fields to avoid joins"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Schema design in MongoDB is driven by **read patterns**, not normalization. Embed if you read together; reference if independent or unbounded. 'It depends on how you query it' is the right senior answer." },
+    { "type": "callout", "variant": "mistake", "markdown": "Skipping indexes and letting queries scan the whole collection. Every production query needs an index — check with `.explain('executionStats')`. Compound indexes must follow the ESR rule (Equality → Sort → Range)." },
+    { "type": "callout", "variant": "tip", "markdown": "Use replica sets for HA (auto-failover), shard when a single node's write throughput or dataset size can't keep up. Choose a shard key that spreads writes evenly and matches query patterns." }
+  ],
+  "flashcards": [
+    { "front": "Embed vs reference?", "back": "Embed if data is read together and bounded; reference if independent or unbounded." },
+    { "front": "ESR rule for compound indexes?", "back": "Equality → Sort → Range: order fields so the index serves equality filters, then sorts, then range scans." },
+    { "front": "What is a shard key?", "back": "The field(s) used to partition data across shards; must spread writes evenly and match queries." }
+  ],
+  "quiz": [
+    { "q": "Schema design in MongoDB is driven by…", "options": ["Normalization rules", "Read patterns", "Alphabetical order", "Random choice"], "answer": 1, "explain": "Optimize the schema for how you query." },
+    { "q": "ESR stands for…", "options": ["Extra Storage Ratio", "Equality → Sort → Range in compound indexes", "Encrypted Session Response", "Event Sync Rule"], "answer": 1, "explain": "It's the compound-index ordering rule." },
+    { "q": "MongoDB supports multi-doc ACID transactions since…", "options": ["Never", "4.0+", "1.0", "Only in the enterprise edition"], "answer": 1, "explain": "Replica-set transactions arrived in 4.0; sharded in 4.2." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Insert, find and update documents; add a single-field index." },
+    { "level": "Medium", "text": "Write an aggregation for top-10 users by spend." },
+    { "level": "Hard", "text": "Design compound indexes following the ESR rule for a mixed workload." },
+    { "level": "Expert", "text": "Shard a collection; pick a shard key; verify balanced writes." }
+  ],
+  "interviewQuestions": [
+    "Embed vs reference — how do you decide?",
+    "What is the ESR rule?",
+    "How do MongoDB transactions work?",
+    "Replica set vs sharded cluster?",
+    "How do you find a slow query?"
+  ],
+  "references": [
+    { "label": "MongoDB — Data Modeling", "url": "https://www.mongodb.com/docs/manual/data-modeling/" }
+  ]
+}

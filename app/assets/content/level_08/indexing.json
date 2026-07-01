@@ -1,0 +1,52 @@
+{
+  "id": "db.indexing",
+  "levelId": 8,
+  "title": "Indexing",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Choose the right index for a workload",
+    "Understand covering, partial and composite indexes",
+    "Avoid index bloat and write amplification"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "An index is a separate data structure (usually a B+ tree) that maps lookup keys to row positions, turning O(n) table scans into O(log n) lookups — at the cost of extra storage and slower writes." },
+    { "type": "table", "headers": ["Type", "Idea", "Use"], "rows": [
+      ["Single-column B-tree", "Ordered on one column", "Equality + range"],
+      ["Composite / compound", "Ordered on multiple columns", "Left-prefix queries"],
+      ["Covering", "Includes all queried columns", "Index-only scan, no row fetch"],
+      ["Partial", "WHERE predicate", "Small subset (deleted_at IS NULL)"],
+      ["Unique", "Enforces uniqueness", "Emails, natural keys"]
+    ]},
+    { "type": "code", "language": "sql", "code": "-- Composite: leftmost-prefix rule\nCREATE INDEX idx_orders_uid_status ON orders(user_id, status);\n-- Serves: WHERE user_id=? or WHERE user_id=? AND status=?\n-- Not:    WHERE status=?  (skips leftmost)\n\n-- Partial index: hot subset only\nCREATE INDEX idx_active ON orders(user_id) WHERE status='OPEN';\n\n-- Covering (Postgres): include columns without indexing them\nCREATE INDEX idx_cover ON orders(user_id) INCLUDE (total, status);" },
+    { "type": "callout", "variant": "interview", "markdown": "The **leftmost-prefix rule**: a composite index on (A, B, C) serves queries filtering by A, or A+B, or A+B+C — but NOT queries filtering by B alone. Design compound indexes to match your top queries in that order." },
+    { "type": "callout", "variant": "mistake", "markdown": "Indexing every column 'just in case.' Each index slows every INSERT/UPDATE/DELETE and eats storage. Measure query patterns first; add indexes to real slow queries." },
+    { "type": "callout", "variant": "tip", "markdown": "Use EXPLAIN/EXPLAIN ANALYZE to confirm the index is used (index scan, not seq scan). Watch for **index bloat** in Postgres; rebuild/repack when needed." }
+  ],
+  "flashcards": [
+    { "front": "Leftmost-prefix rule?", "back": "A composite index (A,B,C) serves queries on A, A+B, A+B+C — not B alone or C alone." },
+    { "front": "What is a covering index?", "back": "One that includes all columns a query needs, letting the DB answer without reading the row (index-only scan)." },
+    { "front": "Why not index everything?", "back": "Every index slows writes and eats storage; add indexes to real hot queries." }
+  ],
+  "quiz": [
+    { "q": "An index on (user_id, status) does NOT help…", "options": ["WHERE user_id=?", "WHERE user_id=? AND status=?", "WHERE status=?", "None of the above"], "answer": 2, "explain": "Leftmost prefix — status alone can't use the index." },
+    { "q": "A covering index enables…", "options": ["Faster writes", "Index-only scans without row lookups", "Fewer transactions", "Better locking"], "answer": 1, "explain": "All needed columns are in the index." },
+    { "q": "Partial indexes are useful when…", "options": ["Small, frequently queried subsets exist", "You want to slow writes", "You have no schema", "You can't use B-trees"], "answer": 0, "explain": "Index only the rows matching a predicate." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Add a single-column B-tree; prove the plan uses it with EXPLAIN." },
+    { "level": "Medium", "text": "Add a composite matching a top query; test with/without." },
+    { "level": "Hard", "text": "Convert a slow query into an index-only scan with a covering index." },
+    { "level": "Expert", "text": "Detect bloat and rebuild/repack indexes without downtime." }
+  ],
+  "interviewQuestions": [
+    "How does a B-tree index work?",
+    "Explain the leftmost-prefix rule.",
+    "What is a covering index?",
+    "When use partial indexes?",
+    "Why is indexing every column bad?"
+  ],
+  "references": [
+    { "label": "Use The Index, Luke!", "url": "https://use-the-index-luke.com" }
+  ]
+}

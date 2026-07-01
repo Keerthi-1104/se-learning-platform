@@ -1,0 +1,50 @@
+{
+  "id": "db.sqlite",
+  "levelId": 8,
+  "title": "SQLite",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain SQLite's in-process, single-file model",
+    "Enable WAL mode for concurrency",
+    "Handle migrations and constraints correctly"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "SQLite is a serverless, embedded, single-file SQL database — the most-deployed database on Earth (every phone, browser, and OS). ACID, small, fast, no separate process." },
+    { "type": "code", "language": "sql", "code": "PRAGMA journal_mode = WAL;      -- writer + concurrent readers\nPRAGMA synchronous = NORMAL;    -- balance safety vs speed\nPRAGMA foreign_keys = ON;       -- off by default!\n\nCREATE TABLE users(id INTEGER PRIMARY KEY, name TEXT NOT NULL);\nCREATE INDEX idx_users_name ON users(name);" },
+    { "type": "table", "headers": ["Journal mode", "Meaning"], "rows": [
+      ["DELETE (default)", "Traditional rollback journal — writer blocks readers"],
+      ["WAL", "Writers append to a WAL; readers see snapshots concurrently"],
+      ["MEMORY", "In-memory journal — fastest, least safe"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "WAL mode is a huge win: concurrent readers don't block writers, and a single writer streams changes to a WAL file. On mobile, enabling WAL alone often doubles read throughput on hot screens." },
+    { "type": "callout", "variant": "mistake", "markdown": "Forgetting `PRAGMA foreign_keys = ON` — SQLite has FKs but they're OFF by default. Also: relying on strict column types — SQLite uses **type affinity**, storing values loosely unless STRICT tables are used (3.37+)." },
+    { "type": "callout", "variant": "tip", "markdown": "Wrap batches of writes in a single transaction — commit-per-row is 100× slower. Use `PRAGMA optimize` before close. On Android/iOS use versioned migrations (Room/Drift handle it)." }
+  ],
+  "flashcards": [
+    { "front": "What makes SQLite unusual?", "back": "It's embedded and serverless — the whole DB is one file inside your app process." },
+    { "front": "Default journal mode vs WAL?", "back": "DELETE journal blocks readers on writes; WAL allows concurrent readers with a writer." },
+    { "front": "Default state of foreign keys?", "back": "OFF — you must `PRAGMA foreign_keys = ON;` per connection." }
+  ],
+  "quiz": [
+    { "q": "SQLite is best described as…", "options": ["A client-server database", "A serverless embedded database (single file)", "A key-value store", "A graph DB"], "answer": 1, "explain": "It runs inside your process; the DB is a file." },
+    { "q": "Which PRAGMA improves read concurrency?", "options": ["synchronous=OFF", "journal_mode=WAL", "foreign_keys=ON", "cache_size=0"], "answer": 1, "explain": "WAL allows concurrent readers with a writer." },
+    { "q": "Batching many inserts?", "options": ["One insert per statement is fine", "Wrap in a single transaction (much faster)", "Use temp files", "Disable WAL"], "answer": 1, "explain": "One commit per insert is orders of magnitude slower." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Create tables + indexes; enable FKs and WAL." },
+    { "level": "Medium", "text": "Benchmark commit-per-row vs batched transaction." },
+    { "level": "Hard", "text": "Write a schema migration adding a column with default + backfill." },
+    { "level": "Expert", "text": "Detect corruption via `PRAGMA integrity_check` and recover from a backup." }
+  ],
+  "interviewQuestions": [
+    "Why is SQLite so widely deployed?",
+    "What is WAL mode and its benefits?",
+    "Why are FKs off by default?",
+    "How do you migrate schema safely?",
+    "How to batch writes fast?"
+  ],
+  "references": [
+    { "label": "SQLite documentation", "url": "https://www.sqlite.org/docs.html" }
+  ]
+}

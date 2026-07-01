@@ -1,0 +1,51 @@
+{
+  "id": "db.hive",
+  "levelId": 8,
+  "title": "Hive",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Use Hive boxes as a fast local KV store",
+    "Register type adapters for custom classes",
+    "Know when Hive is and isn't the right fit"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Hive is a pure-Dart, lightweight NoSQL key-value store: data lives in **boxes** (a Map<String, dynamic> on steroids). No native code, fast on device, no queries — just get/put." },
+    { "type": "code", "language": "dart", "code": "await Hive.initFlutter();\nfinal box = await Hive.openBox('settings');\nawait box.put('theme', 'dark');\nfinal t = box.get('theme', defaultValue: 'light');\n\n// Custom classes need a TypeAdapter (generated via hive_generator)\n@HiveType(typeId: 0)\nclass User extends HiveObject {\n  @HiveField(0) String name;\n  User(this.name);\n}" },
+    { "type": "table", "headers": ["", "Hive", "Drift/Isar (SQL-ish)"], "rows": [
+      ["Model", "Key-value", "Tables + queries"],
+      ["Native code", "None (pure Dart)", "Yes"],
+      ["Query", "None (scan/filter in Dart)", "Rich queries + indexes"],
+      ["Best for", "Settings, cache, small state", "Larger structured data"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Hive shines for **app preferences, small caches, and simple lookups** where SQLite/Isar are overkill. For any structured data with queries or joins, reach for Drift or Isar." },
+    { "type": "callout", "variant": "mistake", "markdown": "Storing thousands of large objects and filtering in Dart. Hive isn't a query engine — full scans on big datasets tank your UI. Add a real DB when you need queries." },
+    { "type": "callout", "variant": "tip", "markdown": "Encrypt sensitive boxes with `HiveAesCipher`. Register adapters BEFORE opening boxes. Use lazy boxes for large values you don't read on startup." }
+  ],
+  "flashcards": [
+    { "front": "What is a Hive box?", "back": "A persistent Map-like container for key-value data, backed by binary files on device." },
+    { "front": "How do you store a custom class?", "back": "Register a TypeAdapter (generated via hive_generator + build_runner)." },
+    { "front": "When outgrow Hive?", "back": "When you need queries, indexes, joins, or gigabytes of structured data." }
+  ],
+  "quiz": [
+    { "q": "Hive is best described as…", "options": ["A relational DB", "A key-value store in pure Dart", "An ORM", "A GraphQL server"], "answer": 1, "explain": "Fast local KV store, no native code." },
+    { "q": "To store custom classes you need…", "options": ["Nothing", "A TypeAdapter", "A migration file", "gRPC"], "answer": 1, "explain": "TypeAdapters teach Hive how to serialize your class." },
+    { "q": "Hive is a poor fit for…", "options": ["User settings", "Small caches", "Complex queries on large data", "Feature flags"], "answer": 2, "explain": "No query engine — full scans get expensive fast." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Persist a theme setting with Hive." },
+    { "level": "Medium", "text": "Store a custom User class via a TypeAdapter." },
+    { "level": "Hard", "text": "Encrypt a box with HiveAesCipher and rotate the key." },
+    { "level": "Expert", "text": "Migrate from Hive to Isar/Drift when your data outgrows KV." }
+  ],
+  "interviewQuestions": [
+    "When would you choose Hive over SQLite?",
+    "How do TypeAdapters work?",
+    "How do you encrypt Hive data?",
+    "Lazy box vs box?",
+    "Signs you've outgrown Hive?"
+  ],
+  "references": [
+    { "label": "Hive package", "url": "https://pub.dev/packages/hive" }
+  ]
+}

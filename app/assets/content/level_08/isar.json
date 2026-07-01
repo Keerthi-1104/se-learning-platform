@@ -1,0 +1,51 @@
+{
+  "id": "db.isar",
+  "levelId": 8,
+  "title": "Isar",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain Isar's NoSQL model + native performance",
+    "Query with indexes and full-text search",
+    "Watch data with streams"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Isar is a fast, cross-platform NoSQL database for Flutter/Dart — schemas defined by Dart classes with codegen, native binaries under the hood, and rich query + full-text + relation support." },
+    { "type": "code", "language": "dart", "code": "@collection\nclass User {\n  Id id = Isar.autoIncrement;\n  @Index(caseSensitive: false) late String name;\n  late DateTime createdAt;\n}\n\nfinal isar = await Isar.open([UserSchema]);\nawait isar.writeTxn(() => isar.users.put(User()..name = 'Ada'));\nfinal adas = await isar.users.filter().nameEqualTo('Ada').findAll();" },
+    { "type": "table", "headers": ["", "Isar", "Drift"], "rows": [
+      ["Model", "Documents + relations", "Relational SQL"],
+      ["Perf", "Very fast native store", "Fast SQLite"],
+      ["Queries", "Query DSL + indexes + FTS", "SQL + typed DSL"],
+      ["Reactivity", "watch() on collections/queries", "Streams on tables"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Isar's edge: **write speed and cross-platform native perf** without dealing with SQL migrations. Great for mobile-first apps with lots of local data. Downside: smaller community/tooling than SQLite-backed Drift." },
+    { "type": "callout", "variant": "mistake", "markdown": "Doing multiple writes without a `writeTxn` — each write is its own transaction (slower). Batch writes inside one transaction." },
+    { "type": "callout", "variant": "tip", "markdown": "Index only the fields you filter/sort on. Isar's queries use only one index at a time — compose your indexes to match your top queries." }
+  ],
+  "flashcards": [
+    { "front": "What is Isar's model?", "back": "NoSQL documents defined by Dart classes with codegen; native binaries provide speed." },
+    { "front": "How do you batch writes?", "back": "Inside a single writeTxn() closure." },
+    { "front": "Isar's reactivity primitive?", "back": "watch() on a collection or query returns a Stream that emits on changes." }
+  ],
+  "quiz": [
+    { "q": "Isar is best described as…", "options": ["A cloud DB", "A native cross-platform NoSQL DB for Dart", "A KV store like Hive", "A GraphQL engine"], "answer": 1, "explain": "Document model + indexes + native perf." },
+    { "q": "For fast bulk writes…", "options": ["One write per transaction", "Wrap them in one writeTxn()", "Disable indexes", "Use isolates only"], "answer": 1, "explain": "One transaction avoids per-write overhead." },
+    { "q": "Isar's queries use…", "options": ["Multiple indexes at once", "One index at a time", "No indexes ever", "SQL joins"], "answer": 1, "explain": "Design indexes to match your top queries." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Define a collection and insert/read a document." },
+    { "level": "Medium", "text": "Add an index and query with filter().equalTo()." },
+    { "level": "Hard", "text": "Model a one-to-many relation with links." },
+    { "level": "Expert", "text": "Add full-text search over a collection and watch results as a Stream." }
+  ],
+  "interviewQuestions": [
+    "Isar vs Drift vs Hive?",
+    "How does Isar achieve high write throughput?",
+    "How do transactions work?",
+    "How do you index a query?",
+    "How do you handle schema changes?"
+  ],
+  "references": [
+    { "label": "Isar docs", "url": "https://isar.dev" }
+  ]
+}

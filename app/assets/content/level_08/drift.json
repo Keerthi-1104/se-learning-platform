@@ -1,0 +1,51 @@
+{
+  "id": "db.drift",
+  "levelId": 8,
+  "title": "Drift",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain Drift's role over SQLite",
+    "Write typed queries with the DSL and .drift files",
+    "Use reactive queries with Streams"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Drift is a reactive, typed persistence library for Flutter/Dart, built on SQLite. You define tables in Dart (or .drift SQL files); Drift generates type-safe query APIs and returns Streams that emit when the data changes." },
+    { "type": "code", "language": "dart", "code": "class Users extends Table {\n  IntColumn get id => integer().autoIncrement()();\n  TextColumn get name => text()();\n}\n// generated: db.users.insertOne(...)\nStream<List<User>> watchAll() =>\n  (select(users)..orderBy([(u) => OrderingTerm.desc(u.id)])).watch();" },
+    { "type": "table", "headers": ["", "Drift", "Isar", "Hive"], "rows": [
+      ["Backend", "SQLite (proven)", "Native custom store", "Pure Dart KV"],
+      ["Queries", "Full SQL + typed DSL", "NoSQL-ish + indexes", "None"],
+      ["Reactivity", "Streams on table changes", "Watch queries", "Box listeners"],
+      ["Multi-platform", "Mobile/desktop/web (WASM)", "Mobile+desktop", "All"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Drift's strength: **full SQL power + compile-time type safety**. It scales from a small table to complex joins, and its streams make offline-first UIs trivial — the query re-emits when the underlying tables change." },
+    { "type": "callout", "variant": "mistake", "markdown": "Blocking the UI on heavy DB work. Use Drift's isolate support (`NativeDatabase.createInBackground`) for large queries; keep the main isolate for UI." },
+    { "type": "callout", "variant": "tip", "markdown": "Prefer .drift files for complex SQL you want to review as SQL. Version your schema and write **schema tests** (Drift generates helpers) so migrations don't break on release." }
+  ],
+  "flashcards": [
+    { "front": "What DB does Drift wrap?", "back": "SQLite — with a typed Dart DSL, SQL-file support, and reactive Streams." },
+    { "front": "How do reactive queries work?", "back": "Drift observes affected tables and re-emits the stream when they change." },
+    { "front": "How do you keep DB work off the UI thread?", "back": "Use NativeDatabase.createInBackground() to run on a background isolate." }
+  ],
+  "quiz": [
+    { "q": "Drift is built on…", "options": ["Isar", "SQLite", "MongoDB", "Firebase"], "answer": 1, "explain": "It's a typed reactive layer over SQLite." },
+    { "q": "Drift's streams re-emit when…", "options": ["A timer fires", "Any of the queried tables changes", "The app resumes", "Never"], "answer": 1, "explain": "Table-change subscriptions drive reactivity." },
+    { "q": "For heavy DB work you should…", "options": ["Run on the UI isolate", "Use createInBackground() for a background isolate", "Disable transactions", "Use Hive"], "answer": 1, "explain": "Keep the UI isolate free of long queries." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Define a Users table and watch all rows with a Stream." },
+    { "level": "Medium", "text": "Add a schema migration adding a new column with default backfill." },
+    { "level": "Hard", "text": "Write a complex join in a .drift SQL file with a generated typed API." },
+    { "level": "Expert", "text": "Move heavy queries to a background isolate; measure UI jank before/after." }
+  ],
+  "interviewQuestions": [
+    "Drift vs Isar vs Hive?",
+    "How does Drift give type safety?",
+    "How do reactive queries work?",
+    "How do you handle migrations?",
+    "When to run Drift on a background isolate?"
+  ],
+  "references": [
+    { "label": "Drift docs", "url": "https://drift.simonbinder.eu" }
+  ]
+}

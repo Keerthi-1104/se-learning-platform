@@ -1,0 +1,52 @@
+{
+  "id": "db.postgresql",
+  "levelId": 8,
+  "title": "PostgreSQL",
+  "xp": 50,
+  "estimatedMinutes": 30,
+  "objectives": [
+    "Explain MVCC + VACUUM",
+    "Choose the right index type (B-tree, GIN, BRIN)",
+    "Use JSONB, CTEs and window functions"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "PostgreSQL is a feature-rich, standards-compliant, ACID relational database with strong support for JSON (JSONB), full-text search, window functions, CTEs, arrays, and extensions (PostGIS, pg_trgm, TimescaleDB)." },
+    { "type": "table", "headers": ["Index type", "Best for"], "rows": [
+      ["B-tree (default)", "Equality + range on scalars"],
+      ["Hash", "Equality only (rarely needed)"],
+      ["GIN", "JSONB, arrays, full-text (many→one)"],
+      ["GiST", "Geometry (PostGIS), fuzzy search"],
+      ["BRIN", "Huge, naturally-ordered tables (time series)"]
+    ]},
+    { "type": "code", "language": "sql", "code": "-- JSONB + expression index\nSELECT id FROM events\nWHERE payload->>'userId' = '42';\nCREATE INDEX ON events ((payload->>'userId'));\n\n-- Window function: running total\nSELECT id, amount, SUM(amount) OVER (ORDER BY id) AS running\nFROM orders;\n\n-- CTE\nWITH ranked AS (SELECT *, ROW_NUMBER() OVER(PARTITION BY user_id ORDER BY ts DESC) rn FROM logs)\nSELECT * FROM ranked WHERE rn=1;" },
+    { "type": "callout", "variant": "interview", "markdown": "Postgres uses MVCC: writers create new row versions, readers see a snapshot. Dead versions accumulate → **VACUUM** reclaims them; autovacuum runs continuously. Long transactions block vacuum and cause 'table bloat' — a classic performance interview trap." },
+    { "type": "callout", "variant": "note", "markdown": "For JSONB, use `->>` for text, `->` for JSONB. Index specific paths (expression index) or use GIN for arbitrary keys. Don't stuff everything into JSONB — schema still wins for common access patterns." },
+    { "type": "callout", "variant": "tip", "markdown": "Use EXPLAIN (ANALYZE, BUFFERS) to see actual timings and buffer reads. Prefer partial indexes (`WHERE deleted_at IS NULL`) for hot subsets. Enable pg_stat_statements to find slow queries." }
+  ],
+  "flashcards": [
+    { "front": "What does VACUUM do?", "back": "Reclaims space from dead row versions (MVCC leftovers) and updates statistics; autovacuum runs it continuously." },
+    { "front": "When use GIN vs B-tree?", "back": "GIN for containment/inverse queries (JSONB keys, arrays, full-text). B-tree for scalar equality + range." },
+    { "front": "Why can long transactions cause bloat?", "back": "They keep old row versions visible, preventing VACUUM from cleaning up." }
+  ],
+  "quiz": [
+    { "q": "Postgres implements concurrency via…", "options": ["Locking readers", "MVCC (multi-version concurrency)", "Global mutex", "Optimistic only"], "answer": 1, "explain": "MVCC lets readers never block writers." },
+    { "q": "Best index for JSONB keys?", "options": ["Hash", "B-tree", "GIN or expression index", "BRIN"], "answer": 2, "explain": "GIN handles containment; expression indexes target specific paths." },
+    { "q": "Long-running transactions can cause…", "options": ["Faster queries", "Table bloat (blocked VACUUM)", "Better indexes", "Lower disk usage"], "answer": 1, "explain": "Old versions can't be reclaimed until the transaction ends." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Query JSONB with `->>` and add an expression index." },
+    { "level": "Medium", "text": "Write a window function for a per-user running total." },
+    { "level": "Hard", "text": "Diagnose slow query with EXPLAIN ANALYZE + fix with correct index." },
+    { "level": "Expert", "text": "Detect bloat via pg_stat_user_tables and fix with VACUUM FULL / pg_repack." }
+  ],
+  "interviewQuestions": [
+    "How does MVCC work in Postgres?",
+    "What is VACUUM and autovacuum?",
+    "Index types and when use each?",
+    "JSONB `->>` vs `->`?",
+    "How do you find slow queries?"
+  ],
+  "references": [
+    { "label": "PostgreSQL documentation", "url": "https://www.postgresql.org/docs/" }
+  ]
+}

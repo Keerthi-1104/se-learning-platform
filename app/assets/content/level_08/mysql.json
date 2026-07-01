@@ -1,0 +1,51 @@
+{
+  "id": "db.mysql",
+  "levelId": 8,
+  "title": "MySQL",
+  "xp": 40,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Explain InnoDB's clustered index",
+    "Choose isolation levels and lock modes",
+    "Use replication and read replicas"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "MySQL is the world's most-deployed open-source relational database. Its default InnoDB engine offers ACID transactions, row-level locking, foreign keys, and a **clustered index** — rows are physically stored in primary-key order." },
+    { "type": "table", "headers": ["Isolation", "Reads", "Note"], "rows": [
+      ["READ UNCOMMITTED", "Dirty reads", "Rarely used"],
+      ["READ COMMITTED", "No dirty reads", "Non-repeatable reads possible"],
+      ["REPEATABLE READ", "Snapshot per tx (default)", "Prevents non-repeatable reads via MVCC"],
+      ["SERIALIZABLE", "Full serial order", "Highest lock contention"]
+    ]},
+    { "type": "code", "language": "sql", "code": "SELECT id, name FROM users\nWHERE email = 'a@x.com'    -- must have an index on email\nFOR UPDATE;                -- row lock for concurrent-safe update\n\n-- InnoDB: PK = clustered index; secondary indexes store the PK, not row ptr" },
+    { "type": "callout", "variant": "interview", "markdown": "InnoDB clustered index means: choose your PK carefully — a UUID PK causes random inserts (page splits, bloat). Prefer AUTO_INCREMENT or a time-ordered UUID (UUIDv7/ULID) for hot tables." },
+    { "type": "callout", "variant": "mistake", "markdown": "Believing 'MySQL is not ACID.' InnoDB has been ACID for over 20 years. Just don't use MyISAM in 2026 — it has no transactions and no crash safety." },
+    { "type": "callout", "variant": "best", "markdown": "Use InnoDB, UTF8MB4 charset (real 4-byte Unicode/emoji), covering indexes for hot queries, connection pooling (HikariCP), and async logical replication for read replicas." }
+  ],
+  "flashcards": [
+    { "front": "InnoDB's clustered index?", "back": "Rows are physically stored in primary-key order; secondary indexes store the PK, not a row pointer." },
+    { "front": "Default isolation level?", "back": "REPEATABLE READ, via MVCC snapshots — prevents non-repeatable reads without locking readers." },
+    { "front": "Why avoid random UUIDs as PK?", "back": "They cause random inserts into the clustered index, leading to page splits and index bloat." }
+  ],
+  "quiz": [
+    { "q": "InnoDB stores rows…", "options": ["Randomly", "In primary-key order (clustered index)", "By insert time only", "In separate files per row"], "answer": 1, "explain": "Clustered index = physical row layout by PK." },
+    { "q": "MySQL's default isolation is…", "options": ["READ UNCOMMITTED", "READ COMMITTED", "REPEATABLE READ", "SERIALIZABLE"], "answer": 2, "explain": "REPEATABLE READ via MVCC — snapshot per transaction." },
+    { "q": "Best PK for a high-insert table?", "options": ["Random UUID", "AUTO_INCREMENT or UUIDv7/ULID", "Random string", "Timestamp string"], "answer": 1, "explain": "Time-ordered PKs keep inserts append-only in the clustered index." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Create a users table with a covering index and prove it via EXPLAIN." },
+    { "level": "Medium", "text": "Demonstrate REPEATABLE READ preventing a non-repeatable read." },
+    { "level": "Hard", "text": "Reproduce a deadlock; fix by ordering lock acquisition." },
+    { "level": "Expert", "text": "Set up primary + read replica; route reads via a proxy (ProxySQL/Vitess)." }
+  ],
+  "interviewQuestions": [
+    "What is InnoDB's clustered index?",
+    "Explain isolation levels; which is MySQL's default?",
+    "Why avoid random UUIDs as PK?",
+    "MyISAM vs InnoDB?",
+    "How does replication work in MySQL?"
+  ],
+  "references": [
+    { "label": "MySQL Reference Manual", "url": "https://dev.mysql.com/doc/" }
+  ]
+}

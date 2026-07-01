@@ -1,0 +1,51 @@
+{
+  "id": "db.objectbox",
+  "levelId": 8,
+  "title": "ObjectBox",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain ObjectBox's object-first, native design",
+    "Use relations and queries efficiently",
+    "Enable Sync for offline-first"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "ObjectBox is a very fast, native embedded object database (C++ core) with clients in many languages (Dart/Flutter, Java/Kotlin, Swift, Go). Objects in, objects out — no ORM mapping code." },
+    { "type": "code", "language": "dart", "code": "@Entity()\nclass User {\n  @Id() int id = 0;\n  String name;\n  final orders = ToMany<Order>();      // relation\n  User(this.name);\n}\nfinal store = await openStore();\nfinal box = store.box<User>();\nbox.put(User('Ada'));\nfinal all = box.query().build().find();" },
+    { "type": "table", "headers": ["Feature", "ObjectBox"], "rows": [
+      ["Model", "Objects + relations (ToOne, ToMany)"],
+      ["Perf", "Native C++ core; best-in-class writes"],
+      ["Query", "Builder DSL + indexes"],
+      ["Sync (paid)", "Multi-device data sync built in"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "ObjectBox is the choice when you need **raw local speed** with strongly-typed objects and no SQL boilerplate. Its optional Sync product is a differentiator for teams building offline-first collaborative apps." },
+    { "type": "callout", "variant": "mistake", "markdown": "Ignoring the Store lifecycle: opening/closing repeatedly leaks resources. Open once, close on app termination. Also: forgetting to run codegen after entity changes." },
+    { "type": "callout", "variant": "tip", "markdown": "Index only what you query. Use lazy loading for large ToMany relations. Version-tag your data model when you migrate." }
+  ],
+  "flashcards": [
+    { "front": "ObjectBox's core language?", "back": "C++, with client bindings in Dart, Java/Kotlin, Swift, Go, etc." },
+    { "front": "Two relation types?", "back": "ToOne<T> and ToMany<T> in the entity class." },
+    { "front": "ObjectBox differentiator?", "back": "Very fast writes + an optional multi-device Sync product for offline-first." }
+  ],
+  "quiz": [
+    { "q": "ObjectBox is powered by…", "options": ["A SQL engine", "A native C++ core", "Firebase", "Postgres"], "answer": 1, "explain": "C++ core with language bindings." },
+    { "q": "Two relation types are…", "options": ["OneToOne / ManyToMany", "ToOne / ToMany", "HasA / IsA", "ForeignKey / Primary"], "answer": 1, "explain": "Dart ToOne<T> and ToMany<T>." },
+    { "q": "Best-fit use case?", "options": ["Cloud analytics", "Local offline-first apps needing speed + optional sync", "Static assets", "Web-only apps"], "answer": 1, "explain": "Native local DB with an optional Sync product." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Define a User entity, put and find some objects." },
+    { "level": "Medium", "text": "Add a ToMany relation and query across it." },
+    { "level": "Hard", "text": "Benchmark ObjectBox vs Isar for 100k inserts." },
+    { "level": "Expert", "text": "Prototype ObjectBox Sync across two clients." }
+  ],
+  "interviewQuestions": [
+    "What is ObjectBox and its differentiator?",
+    "How do relations work?",
+    "ObjectBox vs Isar vs Drift?",
+    "How do you handle data-model migrations?",
+    "What is ObjectBox Sync?"
+  ],
+  "references": [
+    { "label": "ObjectBox docs", "url": "https://docs.objectbox.io" }
+  ]
+}

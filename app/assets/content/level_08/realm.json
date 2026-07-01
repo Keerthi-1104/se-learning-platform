@@ -1,0 +1,51 @@
+{
+  "id": "db.realm",
+  "levelId": 8,
+  "title": "Realm",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain Realm's live objects and reactivity",
+    "Use Realm from Dart/Flutter",
+    "Understand Atlas Device Sync"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Realm is an object-oriented mobile database from MongoDB with **live objects** — query results stay in sync with the DB automatically — and optional cloud sync via MongoDB Atlas Device Sync." },
+    { "type": "code", "language": "dart", "code": "@RealmModel()\nclass _User { @PrimaryKey() late ObjectId id;\n  late String name;\n}\nfinal config = Configuration.local([User.schema]);\nfinal realm = Realm(config);\nrealm.write(() => realm.add(User(ObjectId(), 'Ada')));\nfinal users = realm.all<User>().query('name == \\$0', ['Ada']);" },
+    { "type": "table", "headers": ["Feature", "Realm"], "rows": [
+      ["Model", "Live objects — auto-refresh with DB"],
+      ["Query", "Realm query language + type-safe API"],
+      ["Sync", "Atlas Device Sync (conflict resolution)"],
+      ["Threading", "Realms are per-isolate; use frozen for cross-isolate reads"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "The live-object model is Realm's superpower: when you write to the DB, any object references you hold reflect the change immediately. Combined with Device Sync, this makes real-time collaborative mobile apps unusually simple." },
+    { "type": "callout", "variant": "mistake", "markdown": "Passing live objects across isolates. Live objects are tied to their Realm's isolate — snapshot them (`freeze()` in some SDKs) or re-query on the target isolate." },
+    { "type": "callout", "variant": "tip", "markdown": "For offline-first with server sync, Atlas Device Sync + conflict rules can replace a lot of custom infrastructure. Just watch the cost model for large user bases." }
+  ],
+  "flashcards": [
+    { "front": "What are live objects in Realm?", "back": "Query results that auto-update with the DB — reads always see the latest committed state." },
+    { "front": "What is Atlas Device Sync?", "back": "MongoDB's managed sync that keeps Realm data in sync across devices with conflict resolution." },
+    { "front": "Threading rule for Realm?", "back": "Realms and live objects are per-isolate; don't pass live objects between isolates." }
+  ],
+  "quiz": [
+    { "q": "Realm's defining feature is…", "options": ["SQL joins", "Live objects that auto-refresh", "GraphQL native", "Pure Dart no native code"], "answer": 1, "explain": "Live objects reflect DB changes without re-querying." },
+    { "q": "Realm's cloud sync product is…", "options": ["Firebase", "Atlas Device Sync", "Amplify", "Realtime DB"], "answer": 1, "explain": "MongoDB Atlas Device Sync." },
+    { "q": "Live objects across isolates…", "options": ["Are safe", "Are not — snapshot or re-query", "Improve speed", "Are required"], "answer": 1, "explain": "Live objects are tied to the Realm's isolate." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Define a model and CRUD via a local Realm." },
+    { "level": "Medium", "text": "Use RQL to filter and observe changes reactively." },
+    { "level": "Hard", "text": "Model a one-to-many relation and query across it." },
+    { "level": "Expert", "text": "Prototype Atlas Device Sync with two devices and a conflict scenario." }
+  ],
+  "interviewQuestions": [
+    "What are live objects?",
+    "How does Atlas Device Sync work?",
+    "Realm vs Isar/ObjectBox?",
+    "Threading rules in Realm?",
+    "How do you handle conflict resolution?"
+  ],
+  "references": [
+    { "label": "Realm docs", "url": "https://www.mongodb.com/docs/realm/" }
+  ]
+}

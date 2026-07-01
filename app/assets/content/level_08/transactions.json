@@ -1,0 +1,51 @@
+{
+  "id": "db.transactions",
+  "levelId": 8,
+  "title": "Transactions",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain the ACID properties",
+    "Choose isolation levels; understand the anomalies each prevents",
+    "Handle deadlocks and long-running transactions"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "A transaction is a group of operations that succeed or fail together. The **ACID** properties — Atomicity, Consistency, Isolation, Durability — guarantee correctness even under concurrency and crashes." },
+    { "type": "table", "headers": ["Isolation", "Prevents", "Allows"], "rows": [
+      ["READ UNCOMMITTED", "—", "Dirty reads"],
+      ["READ COMMITTED", "Dirty reads", "Non-repeatable + phantom reads"],
+      ["REPEATABLE READ", "Dirty + non-repeatable", "Phantom reads (in some engines)"],
+      ["SERIALIZABLE", "All", "None (may abort on conflict)"]
+    ]},
+    { "type": "code", "language": "sql", "code": "BEGIN;\nSELECT balance FROM accounts WHERE id=1 FOR UPDATE;   -- row lock\nUPDATE accounts SET balance = balance-100 WHERE id=1;\nUPDATE accounts SET balance = balance+100 WHERE id=2;\nCOMMIT;\n-- Or ROLLBACK on any failure — money never lost or duplicated" },
+    { "type": "callout", "variant": "interview", "markdown": "The classic transfer example proves atomicity: without a transaction, a crash between the two updates leaves money missing. Combined with isolation, you also avoid seeing half-applied transfers from other users." },
+    { "type": "callout", "variant": "mistake", "markdown": "Keeping transactions open across UI clicks or API calls. Long transactions block others, hold locks, and (in Postgres) prevent VACUUM. Keep transactions small and fast." },
+    { "type": "callout", "variant": "best", "markdown": "Retry on deadlocks (they're expected under contention). Use SELECT FOR UPDATE only when you actually need to lock rows. In distributed systems, prefer sagas or the Outbox pattern to two-phase commit." }
+  ],
+  "flashcards": [
+    { "front": "ACID stands for?", "back": "Atomicity, Consistency, Isolation, Durability." },
+    { "front": "What does REPEATABLE READ prevent?", "back": "Dirty reads and non-repeatable reads; may still allow phantoms in some engines." },
+    { "front": "How to handle deadlocks?", "back": "Detect + retry with backoff; acquire locks in a consistent order to reduce chance." }
+  ],
+  "quiz": [
+    { "q": "Atomicity guarantees…", "options": ["No concurrency", "All-or-nothing execution", "Highest isolation", "Instant durability"], "answer": 1, "explain": "Either all operations commit or none do." },
+    { "q": "SERIALIZABLE prevents…", "options": ["Only dirty reads", "Only phantoms", "All standard anomalies", "Nothing"], "answer": 2, "explain": "It gives the illusion of a serial schedule." },
+    { "q": "The right response to a deadlock is…", "options": ["Ignore it", "Restart the DB", "Retry with backoff", "Disable transactions"], "answer": 2, "explain": "Deadlocks are expected under contention; retry the transaction." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Wrap a transfer between two accounts in a transaction." },
+    { "level": "Medium", "text": "Reproduce a lost-update anomaly, then fix with SELECT FOR UPDATE." },
+    { "level": "Hard", "text": "Trigger and observe a deadlock; fix with consistent lock ordering + retry." },
+    { "level": "Expert", "text": "Implement a Saga across two services with compensating transactions." }
+  ],
+  "interviewQuestions": [
+    "Explain ACID.",
+    "Isolation levels and the anomalies each prevents?",
+    "How do you handle deadlocks?",
+    "Optimistic vs pessimistic locking?",
+    "Why avoid distributed transactions in microservices?"
+  ],
+  "references": [
+    { "label": "PostgreSQL — Concurrency Control", "url": "https://www.postgresql.org/docs/current/mvcc.html" }
+  ]
+}
