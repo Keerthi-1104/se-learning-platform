@@ -3,56 +3,112 @@
   "levelId": 1,
   "title": "HTTP / HTTPS",
   "xp": 40,
-  "estimatedMinutes": 20,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Read an HTTP request/response and its status codes",
-    "Explain safe vs idempotent methods",
-    "Describe what HTTP/2 and HTTP/3 improve"
+    "Read a real HTTP request/response and understand every line",
+    "Know all the HTTP methods, when to use each, and which are 'safe' or 'idempotent'",
+    "Recognize the important status codes (200, 301, 401, 404, 429, 500…)",
+    "Explain what HTTPS adds on top of HTTP",
+    "Answer HTTP questions confidently in interviews"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "HTTP is a stateless request/response protocol at the application layer. HTTPS is HTTP carried inside a TLS-encrypted channel." },
-    { "type": "code", "language": "http", "code": "GET /api/products?id=42 HTTP/1.1\nHost: api.example.com\nAuthorization: Bearer eyJhbGci...\nAccept: application/json\n\nHTTP/1.1 200 OK\nContent-Type: application/json\n\n{ \"id\": 42, \"name\": \"GS1 Widget\" }" },
-    { "type": "table", "headers": ["Method", "Purpose", "Safe?", "Idempotent?"], "rows": [
-      ["GET", "Read", "Yes", "Yes"],
-      ["POST", "Create", "No", "No"],
-      ["PUT", "Replace", "No", "Yes"],
-      ["DELETE", "Remove", "No", "Yes"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Imagine ordering food at a restaurant counter.**\n\n1. You walk up and say: *'One masala dosa, please.'* — that's your **HTTP request**.\n2. The cashier replies: *'OK, that'll be ready in 5 minutes'* — that's the **HTTP response**.\n3. Sometimes they say *'Sorry, we're out'* (404) or *'Card declined'* (402) or *'System's down, come back later'* (503).\n4. Each time you order, you start fresh — the cashier doesn't remember your name from last week. That's what **stateless** means.\n\n**HTTPS is the same conversation, but you're speaking through a soundproof booth so nobody standing nearby can eavesdrop.**" },
+    { "type": "callout", "variant": "definition", "markdown": "**HTTP (HyperText Transfer Protocol)** is a text-based request/response protocol at the application layer. The client asks; the server answers. **HTTPS** is HTTP carried inside a **TLS-encrypted channel** — the same conversation, but private and tamper-proof." },
+    { "type": "theory", "markdown": "## Anatomy of a real HTTP request and response\n\nHTTP is remarkably simple — it's just text over TCP. Here's an actual request/response pair, annotated:" },
+    { "type": "code", "language": "http", "code": "GET /api/products?id=42 HTTP/1.1        <- Request line: METHOD PATH VERSION\nHost: api.example.com                    <- Which host on this IP? (needed for shared hosting)\nAuthorization: Bearer eyJhbGci...        <- Who are you? (token)\nAccept: application/json                 <- What format do you want back?\nUser-Agent: MyApp/1.2.0                  <- Which client software?\n                                          <- BLANK LINE separates headers from body\n(No body for a GET request.)\n\n\nHTTP/1.1 200 OK                          <- Status line: VERSION CODE MEANING\nContent-Type: application/json           <- Response body format\nContent-Length: 127                      <- How many bytes follow\nCache-Control: max-age=60                <- Cacheable for 60 seconds\nDate: Wed, 01 Jul 2026 09:30:00 GMT      <- When it was sent\n                                          <- BLANK LINE separates headers from body\n{\n  \"id\": 42,\n  \"name\": \"GS1 Widget\",\n  \"price\": 199\n}                                        <- The response body" },
+    { "type": "callout", "variant": "tip", "markdown": "The whole thing is just plain text — you can literally type it into a `telnet` session by hand and get a real response. That's why HTTP became the language of the internet: it's readable, debuggable, and easy to implement." },
+    { "type": "theory", "markdown": "## HTTP methods — 'verbs' for talking to the server\n\nEach method tells the server what kind of action you want. Two adjectives matter for interviews: **safe** and **idempotent**." },
+    { "type": "table", "headers": ["Method", "Meaning", "Safe?", "Idempotent?", "Has body?"], "rows": [
+      ["GET", "Read a resource", "Yes", "Yes", "No"],
+      ["POST", "Create / submit", "No", "No", "Yes"],
+      ["PUT", "Replace a resource", "No", "Yes", "Yes"],
+      ["PATCH", "Partial update", "No", "No", "Yes"],
+      ["DELETE", "Remove a resource", "No", "Yes", "No"],
+      ["HEAD", "Like GET, no body", "Yes", "Yes", "No"],
+      ["OPTIONS", "What methods are allowed?", "Yes", "Yes", "No"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "**Safe** = no server state change. **Idempotent** = N calls == 1 call. Is POST idempotent? No. Is DELETE? Yes — deleting twice leaves it deleted." },
-    { "type": "table", "headers": ["Class", "Meaning", "Examples"], "rows": [
-      ["2xx", "Success", "200, 201, 204"],
-      ["3xx", "Redirect", "301, 304"],
-      ["4xx", "Client error", "400, 401, 403, 404, 429"],
-      ["5xx", "Server error", "500, 502, 503"]
+    { "type": "callout", "variant": "interview", "markdown": "**'Safe' vs 'idempotent' — the trap question:**\n\n- **Safe** = does not change server state. Only GET, HEAD, OPTIONS are safe.\n- **Idempotent** = calling it N times has the same effect as calling it once. GET, PUT, DELETE, HEAD, OPTIONS are idempotent. **POST and PATCH are not.**\n\n**Why it matters:** if a POST request times out, the client can't safely retry — it might create two orders. But a PUT can always be retried safely. This is why real APIs (like Stripe) require an *idempotency key* header on POST requests — so retries are safe." },
+    { "type": "theory", "markdown": "## Status codes — the ones you must memorize\n\nStatus codes come in ranges. The first digit tells you the category." },
+    { "type": "table", "headers": ["Range", "Meaning", "Common ones"], "rows": [
+      ["1xx", "Informational (rare)", "100 Continue"],
+      ["2xx", "Success", "200 OK, 201 Created, 204 No Content"],
+      ["3xx", "Redirection", "301 Moved Permanently, 302 Found, 304 Not Modified"],
+      ["4xx", "Client error", "400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 409 Conflict, 429 Too Many Requests"],
+      ["5xx", "Server error", "500 Internal Server Error, 502 Bad Gateway, 503 Service Unavailable, 504 Gateway Timeout"]
     ]},
-    { "type": "theory", "markdown": "## HTTP versions\n- **HTTP/1.1**: persistent connections, one request at a time per connection.\n- **HTTP/2**: multiplexed streams + header compression — no app-layer head-of-line blocking.\n- **HTTP/3**: runs over QUIC (UDP) to remove TCP head-of-line blocking." },
-    { "type": "callout", "variant": "mistake", "markdown": "Putting auth tokens or secrets in the URL query string — URLs leak into logs, history and Referer headers. Use headers or the body." }
+    { "type": "callout", "variant": "interview", "markdown": "**401 vs 403 — the classic trap:**\n\n- **401 Unauthorized** — *'I don't know who you are.'* The client didn't send credentials, or they're wrong. Log in and try again.\n- **403 Forbidden** — *'I know who you are, but you don't have permission for this.'* Logging in again won't help; the user just isn't allowed.\n\nBoth are 4xx (client's problem), but the fix is different." },
+    { "type": "theory", "markdown": "## HTTP versions — the evolution\n\nThe protocol has gone through three major versions, each solving the previous one's biggest problem." },
+    { "type": "table", "headers": ["Version", "Year", "Big idea", "Solves"], "rows": [
+      ["HTTP/1.1", "1997", "Persistent connections", "Don't re-handshake for every request"],
+      ["HTTP/2", "2015", "Multiplexed streams, binary, header compression", "Head-of-line blocking at app layer"],
+      ["HTTP/3", "2020+", "Runs over QUIC (UDP)", "Head-of-line blocking at TCP layer"]
+    ]},
+    { "type": "callout", "variant": "tip", "markdown": "In practice, your browser and most cloud CDNs now use HTTP/2 or HTTP/3. Your Flutter app's Dio/`http` package speaks whichever the server offers. You rarely code differently — but performance is very different, especially on lossy mobile networks." },
+    { "type": "theory", "markdown": "## Stateless — the most misunderstood word in HTTP\n\nHTTP is **stateless**: the server does not remember you between requests. Every request is a fresh conversation.\n\nSo how do you 'stay logged in'?\n\n- **Cookies** — the server sends you an ID; you send it back on every request.\n- **Tokens (JWT)** — you present a signed proof of who you are on every request.\n- **Sessions** — a server-side store keyed by a cookie.\n\nThe magic is that from HTTP's point of view, every request still stands alone. State is layered on top." },
+    { "type": "theory", "markdown": "## HTTPS in one paragraph\n\nHTTPS = HTTP inside a **TLS-encrypted tunnel**. Before any HTTP happens, the client and server do a TLS handshake: exchange certificates, verify identity, agree on a symmetric key. From then on, everything (headers, body, URLs, cookies) is encrypted. An attacker on the same Wi-Fi sees only ciphertext.\n\nHTTPS gives three things at once:\n1. **Confidentiality** — nobody can read what you're sending.\n2. **Integrity** — nobody can silently modify it.\n3. **Authentication** — you know you're talking to the real server, not an impostor." },
+    { "type": "theory", "markdown": "## A complete sample program — make and inspect an HTTP request\n\nThis Dart script issues an HTTP request and prints every detail — the exact bytes on the wire, the status code, the headers, timing:" },
+    { "type": "code", "language": "dart", "code": "// File: http_demo.dart\n// Run: dart http_demo.dart\nimport 'dart:convert';\nimport 'package:http/http.dart' as http;\n\nvoid main() async {\n  final url = Uri.parse('https://httpbin.org/get?hello=world');\n\n  print('--- Request ---');\n  print('GET  ${url}');\n  print('Headers: User-Agent: dart-demo, Accept: application/json');\n\n  final t0 = DateTime.now();\n  final res = await http.get(url, headers: {\n    'User-Agent': 'dart-demo',\n    'Accept':     'application/json',\n  });\n  final ms = DateTime.now().difference(t0).inMilliseconds;\n\n  print('\\n--- Response ($ms ms) ---');\n  print('Status: ${res.statusCode} ${res.reasonPhrase}');\n  print('Headers:');\n  res.headers.forEach((k, v) => print('  $k: $v'));\n\n  print('\\n--- Body (first 200 chars) ---');\n  print(res.body.substring(0, res.body.length.clamp(0, 200)));\n\n  // Interpret the status code family:\n  final family = res.statusCode ~/ 100;\n  const meaning = {2: 'Success', 3: 'Redirect', 4: 'Client error', 5: 'Server error'};\n  print('\\nStatus family: ${meaning[family] ?? \"Unknown\"}');\n}\n\n// Typical output (abridged):\n// --- Request ---\n// GET  https://httpbin.org/get?hello=world\n// Headers: User-Agent: dart-demo, Accept: application/json\n//\n// --- Response (231 ms) ---\n// Status: 200 OK\n// Headers:\n//   content-type: application/json\n//   date: Wed, 01 Jul 2026 10:00:00 GMT\n//   ...\n//\n// --- Body (first 200 chars) ---\n// { \"args\": { \"hello\": \"world\" }, ... }\n//\n// Status family: Success" },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Putting sensitive data in the URL.**\n\nURLs land in server logs, browser history, `Referer` headers, and analytics tools. Never put tokens, passwords, credit-card numbers, or personal IDs in the query string. Use headers or the request body." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Ignoring status codes and returning `200 OK` for errors.**\n\nSome APIs return `200 OK` with `{ \"error\": \"not_found\" }` in the body. This breaks caching, monitoring, and retry logic — clients treat 200 as success. Use the correct 4xx/5xx code AND include an error body." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Retrying POST requests without an idempotency key.**\n\nIf a POST /orders times out, retrying may create a second order. Add an `Idempotency-Key: <uuid>` header — the server can deduplicate. This is exactly what Stripe requires." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Design URLs around nouns, not verbs.** `/users/42/orders` is REST-ful. `/getOrdersForUser?id=42` is not — the verb belongs in the HTTP method." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Always version your API.** Ship it as `/v1/...` from day one. Otherwise your first breaking change will hurt every client." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Return the correct status code AND a machine-readable error body.** Something like `{ \"code\": \"user_not_found\", \"message\": \"...\", \"request_id\": \"...\" }`. Log the request_id server-side for tracing." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Set timeouts on every HTTP call.** Never let a hanging request block your app forever." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Print all headers.** Write a script that GETs a URL and prints every response header along with the status code.\n\n**Why:** You'll see the invisible details every server sends — `Cache-Control`, `Set-Cookie`, `ETag`, `Server` — that most beginners never notice." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Conditional GET.** Fetch a URL. Store its `ETag` header. Fetch again with `If-None-Match: <that etag>`. Confirm the server returns `304 Not Modified` (empty body — huge bandwidth saving).\n\n**Why:** Real caching in the wild uses exactly this pattern." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — Mini REST API.** Build a small HTTP server for a TODO list with `GET /todos`, `POST /todos`, `PUT /todos/:id`, `DELETE /todos/:id`. Return the right status codes (200, 201, 204, 404). Use in-memory storage — no database needed.\n\n**Why:** You'll internalize the resource model that every REST API on Earth uses." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Expert) — Token-bucket rate limiter.** Extend your TODO API so each client IP can only make 10 requests per minute; excess requests get `429 Too Many Requests` with a `Retry-After` header.\n\n**Why:** Rate limiting is a real-world skill; getting it wrong breaks production." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Is PUT idempotent? Is POST? Explain.**\n\n**A:** **PUT is idempotent**: `PUT /users/42 { name: \"Ada\" }` twice leaves the user's name as 'Ada' — same result as once. **POST is not idempotent**: `POST /orders` twice usually creates two orders. This is why retry logic must be method-aware — you can safely retry a PUT after a timeout, but not a POST unless you use an idempotency key. DELETE is also idempotent: deleting a resource twice leaves it deleted." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What's the difference between 401 and 403?**\n\n**A:** **401 Unauthorized** means the server couldn't authenticate you — you didn't send credentials, or they were wrong. The fix is to log in (or send a token). **403 Forbidden** means the server knows exactly who you are, but you're not allowed to perform this action. The fix is not more login — the user just doesn't have permission. In practice: 401 means 'try again with credentials'; 403 means 'don't bother, ask an admin.'" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What is HTTP statelessness and how do we still 'stay logged in'?**\n\n**A:** HTTP itself keeps no memory between requests — every one stands alone. Login state is layered on top using **cookies**, **tokens**, or **sessions**. The server sends a session ID (cookie) or a signed token (JWT) after login. The client sends it back on every request. The server verifies and treats you as authenticated. So HTTP is still stateless — the state lives in what the client presents each time." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What problem does HTTP/2 solve that HTTP/1.1 had?**\n\n**A:** HTTP/1.1 had **head-of-line blocking**: even with persistent connections, requests over the same connection were processed in order — a slow request would block later ones. Browsers worked around this by opening 6 parallel TCP connections per host. HTTP/2 introduced **multiplexed streams** on a single TCP connection: many requests interleave in parallel, so one slow response doesn't block others. It also added binary framing (faster to parse) and header compression (huge win — cookies and auth headers repeat on every request)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How does HTTPS differ from HTTP at the protocol level?**\n\n**A:** HTTPS is the same HTTP protocol, but wrapped in a **TLS-encrypted tunnel**. Before any HTTP is exchanged, the client and server do a TLS handshake: the server presents an X.509 certificate signed by a trusted CA, the client verifies it, and they agree on a symmetric session key. After the handshake, all HTTP data — headers, body, URLs — is encrypted. This gives confidentiality (nobody can read the traffic), integrity (nobody can modify it), and authentication (you know you're talking to the real server). The trade-off is a small handshake cost, mitigated in TLS 1.3 with fewer round trips and 0-RTT resumption." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What makes an API RESTful?**\n\n**A:** REST (Roy Fielding) has six constraints, but for practical interviews the essence is: **resource-oriented URLs (nouns, not verbs), correct HTTP methods, correct status codes, stateless server, and cacheable responses.** So `GET /users/42` is REST; `POST /getUser?id=42` is not. A truly REST-ful API also uses hypermedia (HATEOAS) — the server tells the client what actions are available next — but in the real world 'Level 2' REST (URLs + methods + status codes) is what almost everyone actually ships." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: How does an ETag / 304 save bandwidth?**\n\n**A:** On a successful GET, the server sends an `ETag` header — a hash or version string identifying the response. The client stores the ETag with the cached response. On the next request the client sends `If-None-Match: <etag>`. If the resource hasn't changed, the server replies **304 Not Modified** with no body — telling the client 'your cached version is still fresh.' No wasted bandwidth on unchanged data. Every browser and every CDN uses this." },
+    { "type": "theory", "markdown": "## Real-world examples\n\n- **Stripe's API** is the gold standard: idempotency keys on POST, correct status codes, precise error bodies, versioning via a `Stripe-Version` header. Read their docs before any API-design interview.\n- **GitHub's API** uses ETags aggressively; polling for changes with `If-None-Match` costs almost nothing.\n- **Zomato / Swiggy** menus are cached with `Cache-Control` — that's why they load instantly on your phone even on slow networks.\n- **Every 502 you've ever seen on a website** is a reverse proxy (Nginx, CDN) telling you the upstream server failed." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **CORS** — the browser blocks cross-origin requests unless the server allows them with headers like `Access-Control-Allow-Origin`. Half of 'why doesn't my API work' questions on the internet are CORS.\n- **HTTP/3 + QUIC** — TCP has head-of-line blocking at the transport level; QUIC (UDP-based) fixes it. Great for mobile with packet loss.\n- **Server-sent events (SSE) & WebSocket** — for real-time updates without polling.\n- **`Cache-Control: no-store` vs `no-cache` vs `private`** — they mean different things; mis-configuring them causes stale data or bloated bandwidth.\n- **gRPC** rides on top of HTTP/2 for binary, typed RPCs. Same transport, very different application layer." }
   ],
   "flashcards": [
-    { "front": "Safe vs idempotent?", "back": "Safe = no state change (GET). Idempotent = N calls equal 1 call (GET, PUT, DELETE — not POST)." },
-    { "front": "401 vs 403?", "back": "401 = not authenticated (who are you?). 403 = authenticated but not allowed (you can't do this)." },
-    { "front": "What does HTTP/2 multiplexing fix?", "back": "It lets many requests share one connection without waiting in line (app-layer head-of-line blocking)." }
+    { "front": "Which HTTP methods are 'safe'?", "back": "GET, HEAD, OPTIONS — they don't change server state." },
+    { "front": "Which HTTP methods are idempotent?", "back": "GET, PUT, DELETE, HEAD, OPTIONS. POST and PATCH are NOT." },
+    { "front": "401 vs 403?", "back": "401 = not authenticated (log in). 403 = authenticated but not allowed (ask an admin)." },
+    { "front": "What is a 304 Not Modified?", "back": "The server saying 'your cached copy is still fresh' — no body sent." },
+    { "front": "Three guarantees of HTTPS?", "back": "Confidentiality, integrity, authentication." },
+    { "front": "What did HTTP/2 add over 1.1?", "back": "Multiplexed streams, binary framing, header compression — no more head-of-line blocking at the app layer." }
   ],
   "quiz": [
-    { "q": "Which method is NOT idempotent?", "options": ["GET", "PUT", "DELETE", "POST"], "answer": 3, "explain": "POST typically creates a new resource each time, so repeating it has additional effects." },
-    { "q": "What does status 401 mean?", "options": ["Server crashed", "Not authenticated", "Forbidden even when authenticated", "Resource not found"], "answer": 1, "explain": "401 Unauthorized means authentication is required/failed; 403 is authenticated-but-forbidden." },
-    { "q": "HTTP/3 runs on top of…", "options": ["TCP", "UDP (via QUIC)", "ICMP", "SMTP"], "answer": 1, "explain": "HTTP/3 uses QUIC over UDP to avoid TCP head-of-line blocking and speed up handshakes." },
-    { "q": "Which is a 5xx error?", "options": ["404 Not Found", "301 Moved", "503 Service Unavailable", "429 Too Many Requests"], "answer": 2, "explain": "5xx are server errors; 503 means the server is temporarily unavailable." }
+    { "q": "Which method is NOT idempotent?", "options": ["GET", "PUT", "DELETE", "POST"], "answer": 3, "explain": "POST creates something new each time; repeated calls have additional effects." },
+    { "q": "The right response for 'we hit our rate limit' is…", "options": ["500", "403", "429 with Retry-After", "418"], "answer": 2, "explain": "429 Too Many Requests exists exactly for this." },
+    { "q": "'You're not logged in' is…", "options": ["400", "401", "403", "404"], "answer": 1, "explain": "401 = missing/invalid credentials." },
+    { "q": "'You're logged in but you can't do this' is…", "options": ["400", "401", "403", "404"], "answer": 2, "explain": "403 = authenticated but not authorized." },
+    { "q": "HTTP/2's biggest win over HTTP/1.1 is…", "options": ["Encryption", "Multiplexed streams on one connection", "Bigger URLs", "New status codes"], "answer": 1, "explain": "Multiplexing eliminates app-layer head-of-line blocking." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Write a client that GETs a URL and prints the status code and selected headers." },
-    { "level": "Medium", "text": "Implement conditional GET using ETag / If-None-Match and handle 304." },
-    { "level": "Hard", "text": "Build a tiny REST API for a TODO list with correct verbs and status codes." },
-    { "level": "Expert", "text": "Add a token-bucket rate limiter returning 429 with a Retry-After header." }
+    { "level": "Easy", "text": "Write a script that GETs 3 different URLs and prints their status codes + Content-Type + size in bytes." },
+    { "level": "Easy", "text": "Print every response header for `https://httpbin.org/get`." },
+    { "level": "Medium", "text": "Implement Conditional GET using `ETag` / `If-None-Match`; count how many 304s you get." },
+    { "level": "Medium", "text": "Build a POST client that submits form-encoded data + JSON data, and shows the server sees both." },
+    { "level": "Hard", "text": "Tiny REST API for a TODO list — GET/POST/PUT/DELETE with correct status codes." },
+    { "level": "Hard", "text": "Add HTTP Basic auth (base64 of `user:pass`) to your TODO API." },
+    { "level": "Expert", "text": "Add token-bucket rate limiting to the TODO API: 10 requests/min per client IP, returning 429 with `Retry-After`." }
   ],
   "interviewQuestions": [
     "Is PUT idempotent? Is POST? Explain.",
-    "Difference between 401 and 403?",
-    "What problem does HTTP/2 multiplexing solve?",
-    "How do ETag and 304 Not Modified save bandwidth?",
-    "What makes an API RESTful?"
+    "What's the difference between 401 and 403?",
+    "What is HTTP statelessness and how do we still 'stay logged in'?",
+    "What problem does HTTP/2 solve that HTTP/1.1 had?",
+    "How does HTTPS differ from HTTP at the protocol level?",
+    "What makes an API RESTful?",
+    "How does an ETag / 304 save bandwidth?",
+    "What is CORS and why do browsers enforce it?"
   ],
   "references": [
-    { "label": "MDN HTTP docs", "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP" }
+    { "label": "MDN HTTP docs", "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP" },
+    { "label": "Stripe API design (reference)", "url": "https://stripe.com/docs/api" }
   ]
 }

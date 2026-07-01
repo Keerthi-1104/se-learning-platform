@@ -3,49 +3,102 @@
   "levelId": 1,
   "title": "Networking",
   "xp": 40,
-  "estimatedMinutes": 25,
+  "estimatedMinutes": 45,
   "objectives": [
-    "Map the OSI model onto TCP/IP",
-    "Explain encapsulation layer by layer",
-    "Identify a connection by its 5-tuple"
+    "Understand what a network really is (in plain English) and why layers exist",
+    "Map the OSI model onto TCP/IP without confusion",
+    "See how a packet is built layer by layer (encapsulation)",
+    "Identify a connection by its 5-tuple",
+    "Answer networking questions confidently in interviews"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Networking connects devices so they exchange data using agreed protocols organized in layers (the OSI and TCP/IP models)." },
-    { "type": "callout", "variant": "analogy", "markdown": "Sending a **letter**: you write it (Application), put it in an addressed envelope (Transport/Network), trucks route it (Network), and roads/planes carry it (Physical). Each layer only cares about its own job." },
-    { "type": "table", "headers": ["OSI layer", "TCP/IP", "Examples"], "rows": [
-      ["Application", "Application", "HTTP, DNS, SMTP"],
-      ["Transport", "Transport", "TCP, UDP"],
-      ["Network", "Internet", "IP, ICMP"],
-      ["Data Link / Physical", "Link", "Ethernet, Wi-Fi"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Imagine sending a birthday card to a friend in another city.**\n\n1. You **write the card** (the message you actually care about).\n2. You put it in an **envelope with your friend's address** (so it can be routed).\n3. You put the envelope in a **mailbox** — a truck picks it up, another truck carries it long-distance, a mail carrier walks it to your friend's door.\n4. Your friend **opens the envelope** and reads the card.\n\nNotice: you didn't have to know which trucks, which roads, or which planes were used. You didn't have to know your friend's mail carrier. Every layer just does its own job.\n\n**That is exactly how the internet works.** Your app writes the message; TCP puts an envelope on it; IP writes the address; the network cards carry it; and at the other end each layer unwraps its part until your friend's app reads the message." },
+    { "type": "callout", "variant": "definition", "markdown": "**Networking** is the practice of connecting devices so they can exchange data, using agreed-upon rules called **protocols** organized into **layers**. Each layer solves one problem and hides its details from the layers above and below it." },
+    { "type": "theory", "markdown": "## Why layers exist — the single most important idea\n\nBefore layers, every application had to talk to hardware directly. That means every Flutter app would need code for Wi-Fi, Ethernet, 5G, Bluetooth, IPv4, IPv6, congestion control, retransmission, encryption, and DNS. Impossible.\n\nLayers separate concerns. Your app just makes an HTTP call. Under the hood, six different layers each do a tiny job — routing, error correction, encryption — and none of them need to know what's inside the HTTP call. That's why the internet works." },
+    { "type": "theory", "markdown": "## The OSI model + TCP/IP — in a table you can memorize\n\nThe **OSI model** has 7 layers (theoretical). The **TCP/IP model** collapses them into 4 (practical). In real interviews you'll hear both — here's how they map." },
+    { "type": "table", "headers": ["OSI (theory)", "TCP/IP (practice)", "Job", "Examples"], "rows": [
+      ["7. Application", "Application", "App data + meaning", "HTTP, DNS, SMTP, gRPC"],
+      ["6. Presentation", "Application", "Encoding & encryption", "TLS, JPEG, UTF-8"],
+      ["5. Session", "Application", "Sessions & sync", "TLS session, cookies"],
+      ["4. Transport", "Transport", "End-to-end delivery", "TCP, UDP"],
+      ["3. Network", "Internet", "Routing across networks", "IP, ICMP (ping)"],
+      ["2. Data Link", "Link", "One-hop frames", "Ethernet, Wi-Fi"],
+      ["1. Physical", "Link", "Electricity, light, radio", "Cables, radio, fiber"]
     ]},
-    { "type": "code", "language": "text", "code": "Encapsulation (going down the stack):\n  data:                 [ HTTP body ]\n  +TCP header:     [TCP][ HTTP body ]\n  +IP header:  [IP][TCP][ HTTP body ]\n  +Ethernet:  [ETH][IP][TCP][data][CRC]" },
-    { "type": "theory", "markdown": "## Addressing\n- **IP address**: logical host address (IPv4 32-bit, IPv6 128-bit).\n- **MAC address**: hardware address used within one link.\n- **Port**: identifies a process/service (HTTP 80, HTTPS 443).\n- **Socket**: the (IP, port) endpoint of a connection." },
-    { "type": "callout", "variant": "interview", "markdown": "A connection is uniquely identified by its **5-tuple**: source IP, source port, destination IP, destination port, and protocol." }
+    { "type": "callout", "variant": "tip", "markdown": "**A trick to memorize the OSI layers, top to bottom:**\n\n> **All People Seem To Need Data Processing**\n> (Application, Presentation, Session, Transport, Network, Data-link, Physical)\n\nOr bottom to top:\n\n> **Please Do Not Throw Sausage Pizza Away**" },
+    { "type": "theory", "markdown": "## Encapsulation — how a packet is built layer by layer\n\nWhen your app sends 'Hi' over HTTP, it doesn't send 2 bytes. Each layer wraps the previous layer's output in its own header — like nesting envelopes inside envelopes." },
+    { "type": "code", "language": "text", "code": "Your app writes:                              'Hi'\n\nApplication adds HTTP:            [HTTP hdrs] [Hi]\n\nTransport adds TCP header:   [TCP][HTTP hdrs] [Hi]\n     (source & dest ports,\n     sequence numbers,\n     retransmission bits)\n\nNetwork adds IP header:   [IP][TCP][HTTP hdrs][Hi]\n     (source & dest IPs)\n\nLink adds Ethernet frame:[ETH][IP][TCP][HTTP hdrs][Hi][CRC]\n     (source & dest MAC,\n     error-check CRC)\n\nThe machine sends bits on the wire.\nAt the destination each layer strips its header off, in reverse.\nThe receiving app finally gets just: 'Hi'" },
+    { "type": "callout", "variant": "analogy", "markdown": "**It's like Russian nesting dolls.**\n\nYou put your gift inside a small doll. That small doll goes inside a medium doll (envelope). The medium goes in a large doll (mailbag). The mailbag goes in a truck.\n\nAt the destination, they open one doll at a time — truck → mailbag → envelope → small doll → gift. The person who opens the gift never sees the trucks. Every layer is invisible to the one above." },
+    { "type": "theory", "markdown": "## The addresses you need to know" },
+    { "type": "table", "headers": ["Address", "What it is", "Scope", "Example"], "rows": [
+      ["IP address", "Logical address of a host", "Routable across the whole internet", "192.168.1.5 or 2001:db8::1"],
+      ["MAC address", "Hardware address of a NIC", "Only within one physical link", "aa:bb:cc:11:22:33"],
+      ["Port", "Which app/service on a host", "One per app/service", "80 (HTTP), 443 (HTTPS)"],
+      ["Socket", "IP + port pair", "The endpoint of a connection", "192.168.1.5:443"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**The 5-tuple** — the golden rule of connection identity:\n\n> Every TCP connection is uniquely identified by:\n> **(source IP, source port, destination IP, destination port, protocol)**\n\nIf any one of those five changes, it's a different connection. This is why one server can handle 100,000 simultaneous HTTPS connections on port 443 — every client uses a different source IP/port combo." },
+    { "type": "theory", "markdown": "## A complete sample program — see the layers with your own eyes\n\nHere's a Dart program that connects to a website and prints exactly what's happening at each layer:" },
+    { "type": "code", "language": "dart", "code": "// File: peek_network.dart\n// Run: dart peek_network.dart example.com\nimport 'dart:io';\n\nvoid main(List<String> args) async {\n  final host = args.isNotEmpty ? args[0] : 'example.com';\n  print('--- Application layer (you) ---');\n  print('You want to visit:  $host');\n\n  print('\\n--- Application layer (DNS) ---');\n  final addrs = await InternetAddress.lookup(host);\n  final ip = addrs.first.address;\n  print('DNS resolved  ->  $ip');\n\n  print('\\n--- Transport layer (TCP) ---');\n  final t0 = DateTime.now();\n  final socket = await Socket.connect(ip, 80);\n  final ms = DateTime.now().difference(t0).inMilliseconds;\n  print('TCP connected to $ip:80 in ${ms}ms');\n  print('Local end  -> ${socket.address.address}:${socket.port}');\n  print('Remote end -> ${socket.remoteAddress.address}:${socket.remotePort}');\n  print('That 4-tuple + protocol = the 5-tuple that identifies this connection.');\n\n  print('\\n--- Application layer (HTTP) ---');\n  socket.write('GET / HTTP/1.1\\r\\nHost: $host\\r\\nConnection: close\\r\\n\\r\\n');\n  final response = await socket.fold<List<int>>(<int>[], (a, b) => a..addAll(b));\n  final text = String.fromCharCodes(response);\n  print('Got ${text.length} bytes back. First line:');\n  print('  ${text.split(\"\\n\").first}');\n\n  await socket.close();\n}\n\n// Typical output:\n// --- Application layer (you) ---\n// You want to visit:  example.com\n// --- Application layer (DNS) ---\n// DNS resolved  ->  93.184.216.34\n// --- Transport layer (TCP) ---\n// TCP connected to 93.184.216.34:80 in 84ms\n// Local end  -> 192.168.1.5:56312\n// Remote end -> 93.184.216.34:80\n// That 4-tuple + protocol = the 5-tuple that identifies this connection.\n// --- Application layer (HTTP) ---\n// Got 1256 bytes back. First line:\n//   HTTP/1.1 200 OK" },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Confusing IP and MAC address.**\n\nAn IP is a logical address that gets you across the internet. A MAC is a hardware address that only works within one physical link (your Wi-Fi network). Your laptop's MAC never leaves the coffee shop — only your IP goes on the internet." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Thinking a port is a physical thing.**\n\nA port is just a number — it identifies which app on your machine should receive an incoming packet. Ports 0–1023 are reserved (HTTP 80, HTTPS 443, SSH 22). Above 1024 is fair game." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Forgetting to close sockets.**\n\nEvery open socket uses a file descriptor. Servers run out and start refusing connections ('too many open files'). Always close in a `finally` block or `try-with-resources`." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Set timeouts.** A hung network call can freeze your app forever. Always specify connect + read timeouts (5–15 seconds is a good default)." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Reuse connections.** Opening a TCP connection costs at least one round trip (often three, with TLS). Reuse via keep-alive and connection pooling." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Handle DNS failures gracefully.** DNS is the network's Achilles heel — cache what you can, retry with backoff, and give a friendly error message." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Never log full request bodies in production.** Payloads may contain PII, tokens, or credit-card data. Log status codes + timing + a request ID instead." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — CIDR calculator.** Given a CIDR string like `192.168.1.0/24`, print the number of usable host addresses. **Formula:** `(2 ^ (32 - prefix)) - 2`.\n\n**Why:** Subnets confuse most beginners; five minutes of code makes them click." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — TCP echo server + client.** Write a server that accepts a connection, reads lines, and echoes them back. Write a client that connects and sends a line.\n\n**Why:** You'll internalize sockets, ports, and the client/server split." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — Tiny HTTP/1.1 parser.** Accept a TCP connection, read the request line + headers, respond with a hard-coded HTML page.\n\n**Why:** HTTP is 'just text over TCP.' Building even 100 lines of a server demystifies frameworks forever." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Expert) — Port scanner with a timeout.** Given a host and a range of ports, try connecting to each; report open/closed with a 200 ms timeout, running 100 in parallel.\n\n**Why:** Teaches you concurrency, timeouts, and how real network tools work." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Walk me through what happens when I type a URL and press Enter.**\n\n**A:** First the browser looks up the domain in its cache; if it's not there, it asks the OS resolver, which asks a **recursive DNS resolver** which walks the DNS hierarchy (root → TLD → authoritative) to get an IP. Then the browser opens a **TCP connection** to that IP on port 443 (three-way handshake). Then it does a **TLS handshake** — sharing a certificate, verifying it, agreeing on a symmetric key. Then it sends the **HTTP request**. The server responds with the HTML. The browser parses it, discovers CSS/JS/images, and repeats the whole process for each of those. Meanwhile it's rendering, executing scripts, and eventually painting the pixels you see. Every layer we've discussed touches this — DNS at application, TCP at transport, IP at network, Ethernet/Wi-Fi at link." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: Difference between an IP address, a MAC address, and a port?**\n\n**A:** An **IP address** is a logical address that identifies a host across the entire internet — it's what routers use to move packets between networks. A **MAC address** is a hardware address burned into your NIC; it identifies a device within a single local network segment and never crosses a router. A **port** is a number in the transport-layer header (TCP or UDP) that identifies which application on the host should receive the packet. The combination (IP + port) is called a **socket** — the endpoint of a connection." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What is the OSI model and how does it map to TCP/IP?**\n\n**A:** OSI is a 7-layer conceptual model: Physical, Data Link, Network, Transport, Session, Presentation, Application. TCP/IP is the practical 4-layer model actually used on the internet: Link, Internet, Transport, Application. TCP/IP folds OSI's top three (Session, Presentation, Application) into a single Application layer, and its bottom two (Physical, Data Link) into a single Link layer. The middle two — Transport and Network — line up directly. The value of layering is **separation of concerns**: each layer only knows about the one above and below it, and none of the upper layers care whether the physical medium is fiber, copper, or radio." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What does encapsulation mean in networking?**\n\n**A:** Encapsulation is how a packet is built layer by layer. When you send data, each layer adds its own header (and sometimes trailer) around the data given to it by the layer above. HTTP data gets a TCP header; the TCP segment gets an IP header; the IP packet gets an Ethernet frame with a source/dest MAC and a CRC. On the receiving side, each layer strips its own header off and passes the payload up. This means every layer only needs to understand its own header — a router looks at IP, doesn't need to understand HTTP." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What is a subnet mask / CIDR, and why do we need it?**\n\n**A:** An IP address has two parts — the network portion and the host portion. A subnet mask (or CIDR notation like `/24`) tells you where to split them. `/24` means the first 24 bits are the network, the last 8 are hosts — giving 2⁸ minus 2 = 254 usable addresses on that subnet. We need this to route: routers look at the network part to decide which direction to forward a packet. Without subnets, the internet couldn't scale — routers would need one entry per host, billions of them." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What is NAT and why is it used?**\n\n**A:** NAT (Network Address Translation) lets many devices behind a home/office router share one public IP. Your laptop has a private IP like `192.168.1.5`; when it sends a packet, the router rewrites the source to its own public IP and remembers the mapping. When the reply comes back, it rewrites the destination back to `192.168.1.5`. NAT exists mainly because IPv4 ran out of addresses (~4 billion). IPv6 has enough addresses (~3.4×10³⁸) to give every device on Earth its own — NAT is less needed there, but often still deployed for security." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What uniquely identifies a TCP connection?**\n\n**A:** The **5-tuple**: source IP, source port, destination IP, destination port, and protocol (TCP). If any single one of those is different, it's a different connection — that's how a single server IP on port 443 can handle 100,000 simultaneous HTTPS clients: every client has a different source IP or source port. The operating system uses the 5-tuple to route incoming packets to the right socket." },
+    { "type": "theory", "markdown": "## Real-world examples\n\n- **CDNs like Cloudflare** shorten your network path. Instead of every user reaching your origin server across the world, they hit an edge server nearby — cutting latency from 300 ms to 20 ms.\n- **Zoom / WhatsApp calls** use UDP, not TCP, because a late audio packet is useless. Better to drop it than wait for a retransmit.\n- **When your Flutter app 'feels slow on 4G'**, the problem is usually not bandwidth — it's TCP + TLS handshake round trips. HTTP/2 and HTTP/3 mostly exist to reduce those.\n- **Firewalls and load balancers** live at these layers — a firewall might inspect IP + port (network + transport), while a load balancer might peek all the way into HTTP (application) to route by URL." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **QUIC / HTTP/3** runs over UDP (not TCP) to avoid TCP's head-of-line blocking and speed up handshakes.\n- **BGP** is the protocol that routes traffic between autonomous systems (ISPs). A single misconfiguration once took Facebook offline for hours.\n- **MTU / Path MTU Discovery:** the maximum packet size that can travel a path without fragmentation.\n- **IPv6 adoption is real** — mobile carriers, especially in India (Jio) and the US, are largely IPv6 with NAT64 for legacy IPv4 servers.\n- **Anycast** — multiple servers around the world share the same IP; the network routes you to the closest one. This is how root DNS servers scale." }
   ],
   "flashcards": [
-    { "front": "Difference between IP and MAC address?", "back": "IP is a logical, routable host address; MAC is a hardware address used within a single link." },
-    { "front": "What is a socket?", "back": "The endpoint of a connection — the pair (IP address, port)." },
-    { "front": "What is encapsulation?", "back": "Each layer wraps the data with its own header going down, and strips it going up." }
+    { "front": "What is the 5-tuple that identifies a TCP connection?", "back": "(source IP, source port, destination IP, destination port, protocol)" },
+    { "front": "IP address vs MAC address?", "back": "IP is logical, routable across the internet. MAC is hardware, only within one physical link." },
+    { "front": "What are the 4 TCP/IP layers?", "back": "Link, Internet, Transport, Application." },
+    { "front": "What is encapsulation?", "back": "Each layer wraps its own header around the data from the layer above; the receiver strips them off in reverse." },
+    { "front": "What does /24 mean in CIDR?", "back": "The first 24 bits are the network portion; the last 8 identify hosts (254 usable per subnet)." }
   ],
   "quiz": [
-    { "q": "Which uniquely identifies a TCP connection?", "options": ["The IP address only", "The port only", "The 5-tuple (src/dst IP, src/dst port, protocol)", "The MAC address"], "answer": 2, "explain": "Connections are tracked by the full 5-tuple." },
-    { "q": "At which layer does IP operate?", "options": ["Application", "Transport", "Network/Internet", "Physical"], "answer": 2, "explain": "IP is the Internet/Network layer protocol responsible for routing across networks." },
-    { "q": "A port number identifies…", "options": ["A physical cable", "A specific process/service on a host", "A subnet", "A DNS record"], "answer": 1, "explain": "Ports let one host run many services (80 for HTTP, 443 for HTTPS, etc.)." }
+    { "q": "Which uniquely identifies a TCP connection?", "options": ["IP address only", "Port only", "5-tuple: src/dst IP, src/dst port, protocol", "MAC address"], "answer": 2, "explain": "That's the 5-tuple." },
+    { "q": "MAC addresses…", "options": ["Route across the whole internet", "Are used only within one local link", "Are the same as IP", "Are always public"], "answer": 1, "explain": "MAC doesn't cross routers." },
+    { "q": "A port…", "options": ["Is a physical connector", "Identifies a specific app/service on a host", "Only exists for HTTP", "Doesn't work on mobile"], "answer": 1, "explain": "It's a number in the transport header." },
+    { "q": "Which is TRUE about layering?", "options": ["Every app has to implement Wi-Fi drivers", "Each layer only knows about the one above and below", "Layers add speed", "Only OSI works"], "answer": 1, "explain": "Separation of concerns is the whole point." },
+    { "q": "For 192.168.1.0/24, how many usable host addresses?", "options": ["256", "254", "128", "1024"], "answer": 1, "explain": "2^(32-24) - 2 = 254 (subtract network + broadcast)." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Parse a CIDR string and print the number of usable host addresses." },
-    { "level": "Medium", "text": "Write a TCP echo client and server using raw sockets." },
-    { "level": "Hard", "text": "Implement a tiny HTTP/1.1 server that parses request lines and headers." },
-    { "level": "Expert", "text": "Build a minimal concurrent port scanner with a timeout." }
+    { "level": "Easy", "text": "CIDR calculator: parse `X.X.X.X/N` and print the number of usable host addresses." },
+    { "level": "Easy", "text": "Print your machine's IPv4 addresses using `NetworkInterface.list()` (Dart) or `ifconfig`/`ipconfig`." },
+    { "level": "Medium", "text": "TCP echo server + client — server reads lines and echoes them back; client sends 'hello'." },
+    { "level": "Medium", "text": "Write a script that does an HTTP GET without using any HTTP library — just raw TCP." },
+    { "level": "Hard", "text": "Minimal HTTP/1.1 parser — accept requests, parse the method/path/headers, respond with a hard-coded HTML page." },
+    { "level": "Hard", "text": "Port scanner with 200 ms timeout and 100 parallel probes." },
+    { "level": "Expert", "text": "Parse a real pcap file (or use raw socket bytes) — extract source/dest IP and port from IP + TCP headers by hand." }
   ],
   "interviewQuestions": [
-    "Walk through what happens when you type a URL and press Enter.",
-    "Difference between IP address, MAC address and port?",
-    "What is the OSI model and how does TCP/IP map onto it?",
-    "What does CIDR / a subnet mask mean?",
-    "What is NAT and why is it used?"
+    "Walk me through what happens when I type a URL and press Enter.",
+    "Difference between an IP address, a MAC address, and a port?",
+    "What is the OSI model and how does it map to TCP/IP?",
+    "What is encapsulation?",
+    "What is a subnet mask / CIDR, and why do we need it?",
+    "What is NAT and why is it used?",
+    "What uniquely identifies a TCP connection?",
+    "Why do layers exist at all?"
   ],
   "references": [
-    { "label": "High Performance Browser Networking (free)", "url": "https://hpbn.co" }
+    { "label": "High Performance Browser Networking (free)", "url": "https://hpbn.co" },
+    { "label": "Beej's Guide to Network Programming", "url": "https://beej.us/guide/bgnet/" }
   ]
 }
