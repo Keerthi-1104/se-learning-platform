@@ -1,0 +1,50 @@
+{
+  "id": "fb.performance",
+  "levelId": 9,
+  "title": "Performance Monitoring",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Capture app-start, screen-render and network traces",
+    "Add custom traces around business flows",
+    "Set SLIs and alert on regressions"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Firebase Performance Monitoring auto-collects app-start, foreground/background, screen rendering, and network request timings. You can add custom traces to time any business flow — and see p50/p95 in the console per app version." },
+    { "type": "code", "language": "dart", "code": "final t = FirebasePerformance.instance.newTrace('checkout');\nawait t.start();\n// ... your work ...\nt.setMetric('items', cart.length);\nt.putAttribute('paymentMethod', 'card');\nawait t.stop();\n\n// HTTP: auto-captured; you can also wrap manually\nfinal metric = FirebasePerformance.instance.newHttpMetric(url, HttpMethod.Get);\nawait metric.start(); ...; await metric.stop();" },
+    { "type": "table", "headers": ["Signal", "What it measures"], "rows": [
+      ["app_start", "Cold/warm start time"],
+      ["screen render", "Slow + frozen frames per screen"],
+      ["Network trace", "Duration, success rate, payload size per endpoint"],
+      ["Custom trace", "Any business flow you time"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Pick 2–3 top-line SLIs (cold start p95, checkout trace p95, home network p95). Alert when they regress by > 20% between two releases. This turns 'the app feels slow' into an SLO that ships or blocks releases." },
+    { "type": "callout", "variant": "mistake", "markdown": "Instrumenting everything → data overload + noise. Trace the flows that matter to users + revenue; use custom attributes to slice by network type / device tier. On top of Firebase Performance, Android Macrobenchmark and Impeller GPU frame telemetry catch different issues." }
+  ],
+  "flashcards": [
+    { "front": "What does Performance Monitoring auto-collect?", "back": "App start, foreground/background, screen render (slow/frozen frames), and HTTP request timings." },
+    { "front": "Custom trace API essentials?", "back": "newTrace(name) → start() → setMetric/putAttribute → stop()." },
+    { "front": "Good SLI to alert on?", "back": "Cold-start p95 or a key custom trace p95, regressing >20% between releases." }
+  ],
+  "quiz": [
+    { "q": "Which is auto-collected?", "options": ["Payment amounts", "App start + network request timings", "User passwords", "Chat messages"], "answer": 1, "explain": "Auto instrumentation focuses on performance signals." },
+    { "q": "Best sign that performance work is winning?", "options": ["More features shipped", "Cold-start / key-flow p95 improves across releases", "Bigger APK", "More logs"], "answer": 1, "explain": "Track p95 SLIs over time." },
+    { "q": "Too much tracing…", "options": ["Is always good", "Creates noise and hides signal", "Improves battery", "Reduces app size"], "answer": 1, "explain": "Instrument what matters; slice with attributes." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Turn on Performance; observe app_start and network signals." },
+    { "level": "Medium", "text": "Add a custom trace around a checkout flow with attributes." },
+    { "level": "Hard", "text": "Compare p95 across releases and gate a rollout on regression." },
+    { "level": "Expert", "text": "Correlate performance signals with Analytics events + Crashlytics for holistic release quality." }
+  ],
+  "interviewQuestions": [
+    "What does Performance Monitoring auto-collect?",
+    "How do you add a custom trace?",
+    "Which SLIs would you alert on?",
+    "How do you compare p95 across releases?",
+    "Perf vs Macrobenchmark vs Impeller telemetry?"
+  ],
+  "references": [
+    { "label": "Firebase Performance", "url": "https://firebase.google.com/docs/perf-mon" }
+  ]
+}

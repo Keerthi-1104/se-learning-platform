@@ -1,0 +1,51 @@
+{
+  "id": "fb.storage",
+  "levelId": 9,
+  "title": "Cloud Storage",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Upload/download files with progress",
+    "Secure files with Storage Rules",
+    "Serve images efficiently"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Cloud Storage for Firebase is a wrapper around Google Cloud Storage (GCS) with a mobile SDK: resumable uploads/downloads, progress events, and Firebase Auth-aware Security Rules." },
+    { "type": "code", "language": "dart", "code": "final ref = FirebaseStorage.instance.ref('users/$uid/avatar.jpg');\nfinal task = ref.putFile(file);\ntask.snapshotEvents.listen((s) => print('${s.bytesTransferred}/${s.totalBytes}'));\nfinal url = await ref.getDownloadURL();\n// Or, cheaper for private files:\nfinal bytes = await ref.getData();" },
+    { "type": "table", "headers": ["Rule", "Purpose"], "rows": [
+      ["allow read/write: if request.auth != null", "Baseline: signed-in users"],
+      ["path.uid check", "Users own their own subtree"],
+      ["contentType.matches('image/.*')", "Only images"],
+      ["resource.size < 5 * 1024 * 1024", "Cap file size"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Storage Rules validate not just paths and auth, but also **metadata** (contentType, size) BEFORE the file lands — reject huge uploads and wrong types at the edge instead of after paying for bandwidth." },
+    { "type": "callout", "variant": "mistake", "markdown": "Storing download URLs in your DB and calling them 'permanent.' They're revocable and can be rotated. Prefer short-lived signed URLs, or serve via a CDN with your own token." },
+    { "type": "callout", "variant": "tip", "markdown": "For images at scale: use Firebase Extensions for image resizing (multiple sizes on upload), a CDN in front, and cached_network_image on the client. Never load full-resolution images into thumbnails." }
+  ],
+  "flashcards": [
+    { "front": "What's underneath Firebase Storage?", "back": "Google Cloud Storage buckets, with a mobile-friendly SDK and Firebase Rules on top." },
+    { "front": "How do you validate uploads early?", "back": "Storage Rules can check contentType and size before the file is stored." },
+    { "front": "How do you serve images efficiently?", "back": "Resize on upload (extension), CDN, and cache on the client (cached_network_image)." }
+  ],
+  "quiz": [
+    { "q": "Firebase Storage is built on…", "options": ["S3", "Google Cloud Storage", "IPFS", "Its own store"], "answer": 1, "explain": "GCS buckets accessed via the Firebase SDK." },
+    { "q": "Uploads can be validated by…", "options": ["Client code alone", "Storage Rules on path, auth, contentType, size", "Nothing", "Cloud Functions only"], "answer": 1, "explain": "Rules enforce constraints server-side." },
+    { "q": "For scalable image delivery, use…", "options": ["Full-resolution downloads", "Resize + CDN + client cache", "One giant file", "Base64 in Firestore"], "answer": 1, "explain": "Resize once, cache everywhere." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Upload a file and show progress." },
+    { "level": "Medium", "text": "Rules that restrict path to the signed-in user's UID." },
+    { "level": "Hard", "text": "Add contentType + size validation; test uploads that should fail." },
+    { "level": "Expert", "text": "Wire the resize-images extension + CDN + cached_network_image." }
+  ],
+  "interviewQuestions": [
+    "How do you secure uploads?",
+    "Download URLs vs signed URLs?",
+    "How to serve images at scale?",
+    "Resumable uploads — how do they work?",
+    "How do you audit storage usage?"
+  ],
+  "references": [
+    { "label": "Cloud Storage for Firebase", "url": "https://firebase.google.com/docs/storage" }
+  ]
+}

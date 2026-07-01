@@ -1,0 +1,51 @@
+{
+  "id": "fb.firestore",
+  "levelId": 9,
+  "title": "Cloud Firestore",
+  "xp": 50,
+  "estimatedMinutes": 30,
+  "objectives": [
+    "Model data as collections + documents (denormalized)",
+    "Write efficient queries + indexes",
+    "Enforce access with Security Rules"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Cloud Firestore is a serverless, real-time, globally-distributed NoSQL document database. Data lives in **collections** of **documents** (max 1 MiB); queries return snapshots or Streams; access is enforced by declarative Security Rules." },
+    { "type": "code", "language": "dart", "code": "final db = FirebaseFirestore.instance;\nawait db.collection('users').doc(uid).set({'name':'Ada','ts':FieldValue.serverTimestamp()});\ndb.collection('orders').where('userId', isEqualTo: uid)\n  .orderBy('createdAt', descending: true).limit(20)\n  .snapshots()   // real-time stream\n  .listen(...);" },
+    { "type": "table", "headers": ["Cost driver", "How to control"], "rows": [
+      ["Document reads", "Cache, paginate, avoid over-fetching"],
+      ["Writes/deletes", "Batch related writes; avoid write hot spots"],
+      ["Egress", "Return small documents; use fieldMasks"],
+      ["Storage", "Delete stale data / TTL"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Firestore charges per document read — that shapes design. **Denormalize** aggressively (embed hot fields, keep counts on parent docs) and paginate with cursors, not offsets. A poorly designed screen can be 100× more expensive than a well-designed one." },
+    { "type": "callout", "variant": "mistake", "markdown": "Sequential inserts to a monotonically-increasing doc ID (like a timestamp) → **hotspot** on one server range → 500ms tail latencies. Add high-cardinality prefix or shard the ID." },
+    { "type": "callout", "variant": "best", "markdown": "Use Security Rules like `allow read: if request.auth.uid == resource.data.ownerId`. Composite indexes get auto-suggested — accept them. Transactions and batched writes are up to 500 ops each. Use `FieldValue.arrayUnion` / atomic increments for concurrent updates." }
+  ],
+  "flashcards": [
+    { "front": "Firestore's storage model?", "back": "Collections of documents (≤1 MiB each); documents can contain subcollections." },
+    { "front": "Firestore charges by…", "back": "Reads, writes, deletes, egress, and storage — reads dominate for most apps." },
+    { "front": "How to avoid a write hotspot on doc IDs?", "back": "Add high-cardinality prefixes or shard the key so writes spread across ranges." }
+  ],
+  "quiz": [
+    { "q": "Firestore's storage unit is…", "options": ["A row in a table", "A document in a collection", "A file", "A key-value pair"], "answer": 1, "explain": "Documents live in collections; documents can host subcollections." },
+    { "q": "Access is enforced by…", "options": ["Client-side code", "Declarative Security Rules", "Firewalls", "Nothing"], "answer": 1, "explain": "Rules run server-side on every request." },
+    { "q": "A common cost antipattern is…", "options": ["Denormalizing", "Fetching entire collections repeatedly", "Adding indexes", "Batching writes"], "answer": 1, "explain": "Every read costs — cache and paginate." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "CRUD a users collection with the Flutter SDK." },
+    { "level": "Medium", "text": "Add a real-time snapshot query with a composite index." },
+    { "level": "Hard", "text": "Enforce ownership via Security Rules + custom claims for role." },
+    { "level": "Expert", "text": "Refactor a hot write path to eliminate a monotonic-key hotspot." }
+  ],
+  "interviewQuestions": [
+    "Firestore data model and cost model?",
+    "How do you avoid hotspots?",
+    "Composite indexes — when required?",
+    "How do Security Rules work?",
+    "Transactions vs batched writes?"
+  ],
+  "references": [
+    { "label": "Firestore docs", "url": "https://firebase.google.com/docs/firestore" }
+  ]
+}

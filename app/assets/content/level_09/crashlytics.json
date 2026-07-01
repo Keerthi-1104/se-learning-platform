@@ -1,0 +1,51 @@
+{
+  "id": "fb.crashlytics",
+  "levelId": 9,
+  "title": "Crashlytics",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Capture fatal + non-fatal errors",
+    "Attach breadcrumbs, keys and user IDs",
+    "Interpret crash-free-users metrics"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Firebase Crashlytics automatically captures crashes and non-fatal errors, groups them by stack signature, and reports crash-free-users / crash-free-sessions — the industry-standard mobile stability metrics." },
+    { "type": "code", "language": "dart", "code": "FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;\nPlatformDispatcher.instance.onError = (e, s) {\n  FirebaseCrashlytics.instance.recordError(e, s, fatal: true);\n  return true;\n};\ntry { risky(); } catch (e, s) {\n  FirebaseCrashlytics.instance.recordError(e, s, reason: 'load feed');\n}\nFirebaseCrashlytics.instance.setUserIdentifier(uid);\nFirebaseCrashlytics.instance.setCustomKey('screen', 'home');" },
+    { "type": "table", "headers": ["Signal", "Meaning"], "rows": [
+      ["Crash-free users %", "Users who saw zero crashes in the window"],
+      ["Crash-free sessions %", "Sessions with zero crashes"],
+      ["Velocity alert", "Sudden spike in a crash signature"],
+      ["Signal (v1) vs Trace", "One issue can group by cause vs stack"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "The senior habit: wire Crashlytics AND set custom keys (screen, feature flag, tenant). When something breaks in production, you can filter by those keys and find the exact context — not just 'NullPointerException in some list'." },
+    { "type": "callout", "variant": "mistake", "markdown": "Uploading dSYMs (iOS) or ProGuard mapping files (Android) only sometimes. Without symbolication, stack traces are useless. Automate uploads in CI on every release build." },
+    { "type": "callout", "variant": "tip", "markdown": "Set an internal SLO: crash-free-users > 99.5% before shipping a release. Velocity alerts + Slack integration surface regressions within minutes of rollout." }
+  ],
+  "flashcards": [
+    { "front": "Crashlytics top-line metric?", "back": "Crash-free users % (and crash-free sessions %) — the standard mobile stability KPI." },
+    { "front": "Fatal vs non-fatal errors?", "back": "Fatal = crash. Non-fatal = handled error you still want to see (recordError)." },
+    { "front": "Why upload dSYMs / mapping files?", "back": "Without them, stack traces stay obfuscated and unhelpful." }
+  ],
+  "quiz": [
+    { "q": "The industry-standard mobile stability metric is…", "options": ["MTTR", "Crash-free users %", "APK size", "Battery drain"], "answer": 1, "explain": "Crash-free users % is the target on every mobile team." },
+    { "q": "Handled exceptions you still want reported use…", "options": ["Log statements only", "recordError (non-fatal)", "print()", "Silent try/catch"], "answer": 1, "explain": "Non-fatal reports give you visibility without a crash." },
+    { "q": "Symbolication requires…", "options": ["Extra Firebase billing", "Uploaded dSYMs / ProGuard mapping", "Root access", "Nothing"], "answer": 1, "explain": "Without symbols, stack traces are unreadable." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Wire Crashlytics in Flutter and force a test crash." },
+    { "level": "Medium", "text": "Add custom keys (screen, tenant) and filter by them." },
+    { "level": "Hard", "text": "Automate dSYM/mapping uploads in CI for every release." },
+    { "level": "Expert", "text": "Set a crash-free-users SLO with velocity alerts and Slack notifications." }
+  ],
+  "interviewQuestions": [
+    "What are crash-free-users/sessions?",
+    "Fatal vs non-fatal reports?",
+    "Why upload dSYMs / mapping?",
+    "How do you attribute crashes to a release?",
+    "How do you triage a crash spike?"
+  ],
+  "references": [
+    { "label": "Firebase Crashlytics", "url": "https://firebase.google.com/docs/crashlytics" }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "id": "fb.remote_config",
+  "levelId": 9,
+  "title": "Remote Config",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Feature-flag and A/B test with Remote Config",
+    "Target audiences safely",
+    "Fetch/activate wisely to avoid stale UI"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Firebase Remote Config is a managed feature-flag + configuration service. You set defaults in the app, override values in the console (with conditions targeting audiences), and the client fetches + activates the latest values." },
+    { "type": "code", "language": "dart", "code": "final rc = FirebaseRemoteConfig.instance;\nawait rc.setDefaults({'home_variant': 'A', 'max_items': 20});\nawait rc.setConfigSettings(RemoteConfigSettings(\n  fetchTimeout: Duration(seconds: 10),\n  minimumFetchInterval: Duration(hours: 1)));\nawait rc.fetchAndActivate();\nfinal variant = rc.getString('home_variant');" },
+    { "type": "table", "headers": ["Use case", "How"], "rows": [
+      ["Feature flag", "Boolean key gated in code"],
+      ["A/B test", "Random assignment condition + Analytics event"],
+      ["Kill switch", "Force disable a broken feature instantly"],
+      ["Config values", "Timeouts, URLs, thresholds without releases"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Remote Config's superpower: **release code once, roll it out gradually**. Ship the feature dark, enable for 1% → 10% → 100% via console. Combined with Crashlytics/Analytics you can auto-roll-back on regression." },
+    { "type": "callout", "variant": "mistake", "markdown": "Fetching on every screen — that flakes and burns quota. Fetch once on launch (with a fresh throttle), activate, and let the UI observe the active values." },
+    { "type": "callout", "variant": "tip", "markdown": "Always set defaults in the client bundle so the first launch never shows a broken UI. Use conditions (country, app version, user property) — never target by raw user ID." }
+  ],
+  "flashcards": [
+    { "front": "Remote Config in one line?", "back": "Server-controlled key-value config with targeting conditions, delivered to clients." },
+    { "front": "Why set defaults?", "back": "So first-run users see a good UI before any fetch completes." },
+    { "front": "How to roll out safely?", "back": "Start at 1%, monitor Crashlytics/Analytics, ramp up; keep a kill switch." }
+  ],
+  "quiz": [
+    { "q": "Remote Config is best used for…", "options": ["Storing user data", "Feature flags + gradual rollout + A/B", "Photo storage", "Push notifications"], "answer": 1, "explain": "It's a managed config + flag system." },
+    { "q": "Best time to fetch on mobile?", "options": ["Every screen", "Once per app launch (with throttle)", "Every button tap", "Never"], "answer": 1, "explain": "Fetch sparingly; use active values thereafter." },
+    { "q": "Missing defaults means…", "options": ["Nothing", "First launch may show a broken UI", "Better security", "Faster fetch"], "answer": 1, "explain": "Defaults are the safety net before a successful fetch." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Gate a UI change behind a boolean flag with a default." },
+    { "level": "Medium", "text": "Roll out a new home layout to 10% of users; measure with Analytics." },
+    { "level": "Hard", "text": "Add a kill switch tied to Crashlytics alerts (via a rule)." },
+    { "level": "Expert", "text": "Run an A/B test with Analytics conversions and choose the winner." }
+  ],
+  "interviewQuestions": [
+    "How does Remote Config work?",
+    "How do you gradually roll out a feature?",
+    "Why set defaults?",
+    "How do you run A/B tests?",
+    "Remote Config vs LaunchDarkly/Optimizely?"
+  ],
+  "references": [
+    { "label": "Firebase Remote Config", "url": "https://firebase.google.com/docs/remote-config" }
+  ]
+}

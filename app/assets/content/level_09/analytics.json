@@ -1,0 +1,52 @@
+{
+  "id": "fb.analytics",
+  "levelId": 9,
+  "title": "Analytics",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Log meaningful events + params",
+    "Define audiences and conversions",
+    "Comply with consent + privacy rules"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Firebase Analytics (Google Analytics for Firebase) is an event-based product analytics platform. You log events + parameters; Firebase computes retention, funnels, audiences and forwards data to BigQuery for arbitrary SQL." },
+    { "type": "code", "language": "dart", "code": "final a = FirebaseAnalytics.instance;\nawait a.logEvent(\n  name: 'add_to_cart',\n  parameters: {'item_id': '42', 'currency': 'INR', 'value': 199});\nawait a.setUserProperty(name: 'plan', value: 'pro');\n// Auto-collected: first_open, session_start, screen_view (with observer), etc." },
+    { "type": "table", "headers": ["Concept", "Definition"], "rows": [
+      ["Event", "A named action (add_to_cart, purchase)"],
+      ["Parameter", "Extra fields on an event (value, currency)"],
+      ["User property", "Persistent attribute (plan=pro)"],
+      ["Conversion", "Event marked as a business goal"],
+      ["Audience", "Segment based on events/properties"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**Instrument once, keep the schema.** Naming discipline matters: chose stable event names (snake_case) and a small, documented parameter set. Renaming later breaks funnels and BigQuery reports." },
+    { "type": "callout", "variant": "mistake", "markdown": "Ignoring consent. Under GDPR / DPDPA, log analytics only after explicit consent (or run in a consent-mode configuration). Also: burying PII in parameters — never log emails/phone/tokens." },
+    { "type": "callout", "variant": "tip", "markdown": "Enable the free BigQuery export on day one — historical raw events are gold for SQL analysis and stitching with server data. Use DebugView to verify events before releasing." }
+  ],
+  "flashcards": [
+    { "front": "Analytics's data model?", "back": "Events with parameters + user properties; audiences and conversions derive from them." },
+    { "front": "Why enable BigQuery export?", "back": "Raw event data becomes SQL-queryable for arbitrary analysis and joins with backend data." },
+    { "front": "PII in event parameters?", "back": "Never — no emails, phone, tokens, or personal identifiers. Use pseudonymous IDs." }
+  ],
+  "quiz": [
+    { "q": "Analytics is centered on…", "options": ["Session recordings", "Events + parameters + user properties", "Heatmaps only", "Ads"], "answer": 1, "explain": "Event-based product analytics." },
+    { "q": "For historical SQL analysis…", "options": ["Nothing possible", "Enable BigQuery export", "Screenshot the dashboard", "Poll the API"], "answer": 1, "explain": "Raw events land in BigQuery daily (free)." },
+    { "q": "Consent for analytics in the EU/India is…", "options": ["Optional", "Required (GDPR / DPDPA)", "Only for iOS", "Only server-side"], "answer": 1, "explain": "Explicit consent (or Consent Mode) is required." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Log a custom event with parameters; see it in DebugView." },
+    { "level": "Medium", "text": "Create a purchase funnel + define a conversion." },
+    { "level": "Hard", "text": "Enable BigQuery export and write a retention SQL query." },
+    { "level": "Expert", "text": "Implement full consent flow (Consent Mode) for GDPR + DPDPA compliance." }
+  ],
+  "interviewQuestions": [
+    "How does event-based analytics work?",
+    "Why is event naming so important?",
+    "How do you compute retention?",
+    "How do you handle PII and consent?",
+    "BigQuery export — why turn it on?"
+  ],
+  "references": [
+    { "label": "Firebase Analytics", "url": "https://firebase.google.com/docs/analytics" }
+  ]
+}

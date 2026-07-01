@@ -1,0 +1,50 @@
+{
+  "id": "fb.fcm",
+  "levelId": 9,
+  "title": "Cloud Messaging (FCM)",
+  "xp": 40,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Handle notification vs data messages",
+    "Manage tokens and topics",
+    "Respect background restrictions"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Firebase Cloud Messaging delivers notifications and data messages to Android, iOS and web. Each device gets a **registration token**; you send from your server (HTTP v1 API) to individual tokens, groups of tokens, or **topics**." },
+    { "type": "code", "language": "dart", "code": "await FirebaseMessaging.instance.requestPermission();\nfinal token = await FirebaseMessaging.instance.getToken();\nFirebaseMessaging.onMessage.listen((m) { /* foreground */ });\nFirebaseMessaging.onBackgroundMessage((m) async { /* isolate */ });\nFirebaseMessaging.instance.subscribeToTopic('promos');" },
+    { "type": "table", "headers": ["Payload type", "Behavior"], "rows": [
+      ["notification", "OS displays automatically; app may not run code"],
+      ["data", "Your app handles it; free-form JSON"],
+      ["notification + data", "Notification shown AND data delivered on tap"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Android Doze / iOS background restrictions mean **you cannot rely on background messages for silent work**. For guaranteed delivery, mark messages high-priority + use a foreground service on tap; for background sync, use WorkManager/BGTasks triggered from a data message." },
+    { "type": "callout", "variant": "mistake", "markdown": "Storing FCM tokens as identity. Tokens rotate (reinstall, restore, clear data). Refresh on `onTokenRefresh` and dedupe device rows by (userId, token) rather than trusting tokens as unique users." },
+    { "type": "callout", "variant": "tip", "markdown": "Use HTTP v1 API (OAuth-signed) — legacy server keys are deprecated. On iOS you must configure APNs. For rich notifications, use notification images / notification channels (Android) and interruption levels (iOS)." }
+  ],
+  "flashcards": [
+    { "front": "Notification vs data message?", "back": "Notification = OS shows it automatically. Data = your app receives free-form JSON to handle." },
+    { "front": "Why refresh FCM tokens?", "back": "Tokens rotate (reinstall, restore, clear data); handle onTokenRefresh." },
+    { "front": "Modern send API?", "back": "HTTP v1 API with OAuth; legacy server keys are deprecated." }
+  ],
+  "quiz": [
+    { "q": "For guaranteed background code…", "options": ["Use silent FCM", "Trigger WorkManager/BGTasks from a data message", "Assume it always runs", "Poll instead"], "answer": 1, "explain": "OS background restrictions apply; schedule guaranteed work." },
+    { "q": "FCM tokens are…", "options": ["Permanent user IDs", "Per-install, may rotate — refresh on onTokenRefresh", "Public IPs", "Certificates"], "answer": 1, "explain": "Don't treat tokens as durable user identity." },
+    { "q": "The modern FCM send API is…", "options": ["Server key legacy", "HTTP v1 with OAuth", "SMTP", "GraphQL"], "answer": 1, "explain": "Legacy server key API is deprecated; use v1." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Receive a foreground notification and log it." },
+    { "level": "Medium", "text": "Handle a data message from background and update local state." },
+    { "level": "Hard", "text": "Subscribe/unsubscribe to topics and send targeted campaigns." },
+    { "level": "Expert", "text": "Design guaranteed background sync via data message → WorkManager job." }
+  ],
+  "interviewQuestions": [
+    "Notification vs data messages?",
+    "How do FCM tokens work; when do they rotate?",
+    "How do you handle background restrictions?",
+    "How would you send to a segment of users?",
+    "Legacy server key vs HTTP v1?"
+  ],
+  "references": [
+    { "label": "FCM docs", "url": "https://firebase.google.com/docs/cloud-messaging" }
+  ]
+}

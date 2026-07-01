@@ -1,0 +1,50 @@
+{
+  "id": "fb.app_distribution",
+  "levelId": 9,
+  "title": "App Distribution",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Ship pre-release builds to testers fast",
+    "Compare with Play internal / TestFlight",
+    "Automate distribution in CI"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Firebase App Distribution ships APK/AAB (Android) and IPA (iOS) builds to invited testers by email — no Play/App Store review. Great for daily internal builds and QA loops." },
+    { "type": "code", "language": "bash", "code": "# Upload from CI\nfirebase appdistribution:distribute app-release.apk \\\n  --app 1:1234:android:abcd \\\n  --release-notes-file notes.txt \\\n  --groups qa,internal" },
+    { "type": "table", "headers": ["", "App Distribution", "Play Internal", "TestFlight"], "rows": [
+      ["Review needed", "No", "No (internal track)", "Yes (external), No (internal)"],
+      ["iOS", "IPA via emails", "N/A", "Apple's own"],
+      ["Analytics", "Adoption per tester", "Play console", "TestFlight"],
+      ["Best for", "Fast iteration", "Google-side QA / staged rollouts", "Broad iOS beta"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "The typical setup: **daily builds → App Distribution** for internal QA, **weekly builds → Play Internal / TestFlight** for wider beta, **release → production tracks**. This lets designers/QA test hot changes without waiting for review." },
+    { "type": "callout", "variant": "tip", "markdown": "Automate via `fastlane`, `codemagic`, or GitHub Actions. Include commit SHA + build number in release notes. Set the auto-update SDK so testers get notified in-app when a new build lands." }
+  ],
+  "flashcards": [
+    { "front": "What does App Distribution ship?", "back": "APK/AAB/IPA to invited testers by email, without store review." },
+    { "front": "App Distribution vs TestFlight?", "back": "Fastest iteration for internal QA (both platforms); TestFlight for larger iOS beta programs." },
+    { "front": "Common CI action?", "back": "firebase appdistribution:distribute <artifact> --app <id> --groups <groups>." }
+  ],
+  "quiz": [
+    { "q": "App Distribution requires…", "options": ["Store review", "Nothing — direct to invited testers", "In-app purchase config", "Root access"], "answer": 1, "explain": "No review; direct email invites." },
+    { "q": "In a typical release pipeline it's used for…", "options": ["Public releases", "Internal QA loops", "Kernel updates", "Server deploys"], "answer": 1, "explain": "Fast iteration to a small tester group." },
+    { "q": "Best CI practice?", "options": ["Manual uploads", "Automated fastlane/codemagic/gh-actions distribution", "Copy files by hand", "Skip release notes"], "answer": 1, "explain": "Automate with commit-SHA release notes." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Upload one APK to a tester group via CLI." },
+    { "level": "Medium", "text": "Automate distribution from GitHub Actions on push to main." },
+    { "level": "Hard", "text": "Add in-app update prompt using the App Distribution Testers SDK." },
+    { "level": "Expert", "text": "Multi-stage pipeline: App Distribution (nightly) → Play internal (weekly) → production track." }
+  ],
+  "interviewQuestions": [
+    "When use App Distribution vs Play Internal vs TestFlight?",
+    "How do you automate uploads?",
+    "How do testers get notified of new builds?",
+    "What's in release notes / metadata?",
+    "How do you deprecate old testers?"
+  ],
+  "references": [
+    { "label": "App Distribution", "url": "https://firebase.google.com/docs/app-distribution" }
+  ]
+}

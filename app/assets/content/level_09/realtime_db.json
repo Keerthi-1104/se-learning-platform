@@ -1,0 +1,52 @@
+{
+  "id": "fb.realtime_db",
+  "levelId": 9,
+  "title": "Realtime Database",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain the single-JSON-tree model",
+    "Structure data for shallow reads",
+    "Choose RTDB vs Firestore for the task"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Realtime Database is Firebase's original database — a single, JSON-tree store synchronized in real time via WebSocket. Reads/writes stream to clients within milliseconds; presence and low-latency updates are its superpower." },
+    { "type": "code", "language": "dart", "code": "final ref = FirebaseDatabase.instance.ref('rooms/xyz/messages');\nref.push().set({'text':'hi', 'ts': ServerValue.timestamp});\nref.orderByChild('ts').limitToLast(50).onValue.listen((e) { ... });" },
+    { "type": "table", "headers": ["", "Realtime DB", "Firestore"], "rows": [
+      ["Model", "One big JSON tree", "Collections of documents"],
+      ["Reads", "Whole subtree by default", "Per-document, indexed queries"],
+      ["Query power", "Limited (single orderBy)", "Multi-field composite queries"],
+      ["Scaling", "One shard until you shard manually", "Global multi-region"],
+      ["Best for", "Chat, presence, low-latency", "General app data"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Firestore is the default choice for new apps. Reach for RTDB only when you need ultra-low-latency presence/chat, or you're maintaining an existing RTDB codebase. RTDB's read charges by data volume, not doc count — very different cost model." },
+    { "type": "callout", "variant": "mistake", "markdown": "Nesting deeply and reading the whole tree — you pay for and download the entire subtree. **Flatten** data (denormalize) and use shallow references to keep reads small." },
+    { "type": "callout", "variant": "tip", "markdown": "Turn on offline persistence for smoother UX. Security Rules use `.read/.write/.validate` expressions — different syntax from Firestore. Use `onDisconnect()` handlers to manage presence." }
+  ],
+  "flashcards": [
+    { "front": "RTDB's storage shape?", "back": "One giant JSON tree; every path can be read or listened to." },
+    { "front": "RTDB vs Firestore for new apps?", "back": "Prefer Firestore unless you need ultra-low-latency chat/presence or have RTDB legacy." },
+    { "front": "How do you avoid huge reads?", "back": "Flatten (denormalize) data; read narrow subtrees; use shallow references." }
+  ],
+  "quiz": [
+    { "q": "RTDB stores data as…", "options": ["Tables", "Documents in collections", "One big JSON tree", "Files"], "answer": 2, "explain": "Single JSON tree, synchronized in real time." },
+    { "q": "RTDB is best for…", "options": ["General app data", "Ultra-low-latency chat/presence", "Analytics", "Payments"], "answer": 1, "explain": "Sub-ms sync + presence via onDisconnect." },
+    { "q": "The best fix for deep-tree reads is…", "options": ["Add more indexes", "Flatten/denormalize", "Use offline mode", "Disable rules"], "answer": 1, "explain": "Flat data lets you read only what you need." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Write and stream messages in a chat room path." },
+    { "level": "Medium", "text": "Implement online/offline presence with onDisconnect()." },
+    { "level": "Hard", "text": "Flatten a nested tree; measure read savings." },
+    { "level": "Expert", "text": "Shard the DB across instances for large user bases." }
+  ],
+  "interviewQuestions": [
+    "RTDB vs Firestore — when use each?",
+    "How does presence work with onDisconnect?",
+    "How do RTDB Security Rules differ from Firestore?",
+    "How do you avoid huge reads?",
+    "What is RTDB's scaling model?"
+  ],
+  "references": [
+    { "label": "Realtime Database docs", "url": "https://firebase.google.com/docs/database" }
+  ]
+}
