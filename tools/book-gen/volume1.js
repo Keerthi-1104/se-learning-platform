@@ -5,6 +5,9 @@ const {
   makeDoc, pageProps, save, Paragraph, TextRun, PageBreak, AlignmentType,
   TableOfContents, runs,
 } = L;
+// Bridge that reads the same topic JSON the Flutter app uses, so any
+// expansion of a topic's JSON automatically shows up in the book.
+const { loadTopic, topicToChapter } = require("./topic_to_chapter");
 
 // ---------- Cover page ----------
 function cover() {
@@ -106,84 +109,11 @@ body.push(table(
 ));
 
 // ============ 1. COMPUTER ARCHITECTURE ============
-body.push(H1("1. Computer Architecture", "ch1"));
-body.push(callout("definition", ["Computer architecture is the set of rules and structures that describe how a computer's hardware components (CPU, memory, I/O) are organized and how they cooperate to execute instructions."]));
-body.push(H2("Why it exists"));
-body.push(P("Software does not run on magic — it runs on silicon. Understanding the machine explains why caches matter, why memory layout affects speed, and why concurrency is hard. Interviewers at Google, Amazon and Oracle probe this to see if you understand performance from first principles."));
-body.push(callout("analogy", ["Think of a kitchen: the CPU is the chef, RAM is the countertop (fast but small), the SSD is the pantry (large but slower), registers are the chef's hands, and cache is the small shelf right beside the stove. A good chef keeps what they need closest."]));
-body.push(H2("Internal working — the fetch-decode-execute cycle"));
-body.push(num([{ t: "Fetch: ", b: true }, "the CPU reads the next instruction from memory (address held in the Program Counter)."]));
-body.push(num([{ t: "Decode: ", b: true }, "the control unit interprets what the instruction means."]));
-body.push(num([{ t: "Execute: ", b: true }, "the ALU performs the operation (add, compare, load, store)."]));
-body.push(num([{ t: "Write-back: ", b: true }, "the result is written to a register or memory; the PC advances."]));
-body.push(code([
-  "[ CPU ]                                  ",
-  "  ├─ Registers   (fastest, ~1 cycle)     ",
-  "  ├─ L1 cache     ~4 cycles               ",
-  "  ├─ L2 cache     ~12 cycles              ",
-  "  └─ L3 cache     ~40 cycles              ",
-  "[ RAM ]           ~100-300 cycles         ",
-  "[ SSD ]           ~10,000+ cycles         ",
-  "[ HDD / Network ] millions of cycles      ",
-], "memory hierarchy"));
-body.push(H2("Architecture concepts you must know"));
-body.push(table(
-  ["Concept", "What it is", "Why it matters"],
-  [
-    ["Von Neumann", "Code & data share one memory bus", "Explains the 'memory wall' bottleneck"],
-    ["Harvard", "Separate code & data memory", "Used in DSPs, microcontrollers"],
-    ["Pipelining", "Overlap fetch/decode/execute", "More instructions per second"],
-    ["Cache", "Small fast memory near CPU", "Locality makes loops fast"],
-    ["Word size", "32-bit vs 64-bit", "Addressable memory & int size"],
-    ["Endianness", "Byte order (big/little)", "Matters in networking & file formats"],
-  ],
-  [1900, 3700, 3760],
-));
-body.push(H2("Memory & performance"));
-body.push(callout("perf", [
-  ["Locality of reference is the #1 performance lever. ", { t: "Temporal locality", b: true }, " = reuse the same data soon; ", { t: "spatial locality", b: true }, " = use nearby data. Arrays beat linked lists in practice because contiguous memory is cache-friendly."],
-]));
-body.push(H2("Pros & cons of caching"));
-body.push(table(["Pros", "Cons"], [
-  ["Hides slow main-memory latency", "Cache misses cause stalls"],
-  ["Exploits locality automatically", "Cache coherence is hard with many cores"],
-  ["Huge real-world speedups", "Non-deterministic timing (bad for hard real-time)"],
-], [4680, 4680]));
-body.push(callout("mistake", ["Beginners assume 'one line of code = one unit of time'. In reality a cache miss can cost 100× more than an arithmetic op. Always think about data layout."]));
-body.push(callout("tip", ["Senior engineers reason in terms of cache lines (typically 64 bytes). Struct-of-arrays often beats array-of-structs for hot loops because it packs the hot fields together."]));
-body.push(...summary([
-  "A CPU repeats fetch → decode → execute → write-back billions of times per second.",
-  "Memory is a hierarchy: registers → L1/L2/L3 → RAM → disk → network, each ~10× slower.",
-  "Locality of reference makes caches effective; cache-friendly data wins.",
-  "Von Neumann shares one bus for code and data — the root of the memory wall.",
-]));
-body.push(...interview([
-  "Explain the fetch-decode-execute cycle.",
-  "What is the difference between Von Neumann and Harvard architectures?",
-  "Why is accessing an array faster than a linked list even with equal Big-O?",
-  "What is a cache line and why does it matter for performance?",
-  "What is endianness and when have you had to care about it?",
-  "How does pipelining increase throughput, and what is a pipeline stall?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Write a function that reports whether the host machine is big- or little-endian." },
-  { level: "Medium", text: "Benchmark summing a 2D array row-major vs column-major; explain the timing gap." },
-  { level: "Hard", text: "Implement a simple LRU cache (the same idea CPUs approximate in hardware)." },
-  { level: "Expert", text: "Write a matrix multiply and improve it 5×+ using cache blocking (tiling)." },
-]));
-body.push(...realworld([
-  "Databases like PostgreSQL and storage engines like RocksDB are designed around the memory hierarchy: hot pages stay in a buffer pool (RAM) while cold data lives on SSD. Query planners estimate I/O cost precisely because RAM access is ~1000× faster than disk.",
-]));
-body.push(...miniproject([
-  "Build a 'Memory Hierarchy Visualizer' CLI: it runs micro-benchmarks for register/cache/RAM access patterns and prints a bar chart of relative latencies.",
-  "Stretch goal: detect L1/L2/L3 sizes by timing strided array reads of increasing size.",
-]));
-body.push(...advanced([
-  "Out-of-order execution, branch prediction and speculative execution (and the Spectre/Meltdown class of vulnerabilities they enabled).",
-  "SIMD/vectorization (SSE/AVX/NEON) for data-parallel workloads.",
-  "NUMA: on multi-socket servers, memory has different latency per CPU socket.",
-  "False sharing: two threads writing different variables on the same cache line kill performance.",
-]));
+// Chapter now sources from the SAME JSON the Flutter app uses.
+// When the JSON is expanded (analogies, sample programs, Q&A with answers),
+// re-running this script picks it up automatically. No manual sync needed.
+body.push(...topicToChapter(loadTopic("level_01", "computer_architecture"),
+  { chapterNumber: 1, bookmarkId: "ch1" }));
 
 // ============ 2. OPERATING SYSTEMS ============
 body.push(H1("2. Operating Systems", "ch2"));
@@ -1235,5 +1165,5 @@ const doc = makeDoc([
     children: [...toc(), ...body] },
 ]);
 
-const out = require("path").join(__dirname, "Volume-1-CS-Fundamentals.docx");
+const out = require("path").join(__dirname, "../../docs/books/Volume-1-CS-Fundamentals.docx");
 save(doc, out).then(() => console.log("WROTE", out));
