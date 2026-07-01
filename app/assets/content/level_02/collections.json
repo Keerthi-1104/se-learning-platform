@@ -1,54 +1,111 @@
 {
   "id": "java.collections",
   "levelId": 2,
-  "title": "Java Collections",
+  "title": "Java Collections Framework",
   "xp": 50,
-  "estimatedMinutes": 30,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Choose the right collection for a workload",
-    "Explain how HashMap works internally",
-    "Know which collections are ordered/sorted/thread-safe"
+    "Pick the right collection for a workload — by dominant operation",
+    "Understand how HashMap works internally (buckets, treeification since Java 8)",
+    "Distinguish List / Set / Map / Queue and their common implementations",
+    "Choose between concurrent and non-concurrent collections",
+    "Answer Collections interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "The Collections Framework is a unified set of interfaces (List, Set, Map, Queue) and implementations for storing and manipulating groups of objects." },
-    { "type": "table", "headers": ["Type", "Implementation", "Order", "Lookup"], "rows": [
-      ["List", "ArrayList", "Insertion", "O(1) index"],
-      ["List", "LinkedList", "Insertion", "O(n)"],
-      ["Set", "HashSet", "None", "O(1)"],
-      ["Set", "TreeSet", "Sorted", "O(log n)"],
-      ["Map", "HashMap", "None", "O(1)"],
-      ["Map", "LinkedHashMap", "Insertion/access", "O(1)"],
-      ["Map", "TreeMap", "Sorted by key", "O(log n)"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Imagine reorganizing your kitchen.**\n\n- **ArrayList** — a shelf of numbered spice jars in order. Grab jar 7 instantly (`O(1)`). Add a new jar at the end — easy. Insert one in the middle — shift everything after (`O(n)`).\n- **LinkedList** — each spice is on a chain, each pointing to the next. Adding one at either end is a snap. Finding jar 7? Follow six links.\n- **HashSet** — a bin of unique salt packets. You know instantly whether you already have a packet (`O(1)`), but they're in no order.\n- **TreeSet** — a sorted rack of wine bottles by vintage. Adding takes a moment (`O(log n)`), but iterating in order is free.\n- **HashMap** — a phone book. Look up 'Ada' → jump straight to her number.\n- **PriorityQueue** — a hospital triage line. The next patient is always the most urgent, not the first who arrived.\n\n**The Java Collections Framework is a matched set of every kind of storage you'd design — pre-built, tested, and interchangeable.**" },
+    { "type": "callout", "variant": "definition", "markdown": "The **Java Collections Framework (JCF)** is a unified set of interfaces (`List`, `Set`, `Map`, `Queue`, `Deque`) and their implementations for storing and manipulating groups of objects. It ships with the standard library and is the daily workhorse of every Java engineer." },
+    { "type": "theory", "markdown": "## The mental map — interfaces + their common implementations" },
+    { "type": "table", "headers": ["Interface", "Common implementations", "Ordered?", "Duplicates?"], "rows": [
+      ["List", "ArrayList, LinkedList", "Insertion order", "Yes"],
+      ["Set", "HashSet, LinkedHashSet, TreeSet", "None / insertion / sorted", "No"],
+      ["Map", "HashMap, LinkedHashMap, TreeMap, ConcurrentHashMap", "None / insertion / sorted", "Keys: no"],
+      ["Queue / Deque", "ArrayDeque, LinkedList, PriorityQueue", "FIFO / LIFO / priority", "Yes"]
     ]},
-    { "type": "code", "language": "text", "code": "HashMap internals:\n  bucket = hash(key) & (capacity-1)\n  collisions -> linked list, then a balanced TREE if a bucket > 8 (Java 8+)\n  load factor 0.75 -> resize (double) & rehash" },
-    { "type": "callout", "variant": "interview", "markdown": "Java 8 upgraded HashMap buckets from linked lists to **red-black trees** once a bucket exceeds 8 entries, improving worst-case from O(n) to O(log n)." },
-    { "type": "callout", "variant": "mistake", "markdown": "Using a key whose hashCode/equals you didn't override (or that's mutable) — lookups silently fail. Map keys should be immutable with correct equals/hashCode." },
-    { "type": "callout", "variant": "best", "markdown": "Default to ArrayList and HashMap. Use ConcurrentHashMap (not Hashtable) for concurrency; use the right Set/Map when you need ordering or sorting." }
+    { "type": "theory", "markdown": "## Big-O by implementation — memorize this table" },
+    { "type": "table", "headers": ["Implementation", "Access", "Search", "Insert", "Delete", "Best for"], "rows": [
+      ["ArrayList", "O(1)", "O(n)", "O(1)* end", "O(n)", "Random access, iteration, append"],
+      ["LinkedList", "O(n)", "O(n)", "O(1) ends", "O(1) with iterator", "Very rare in practice"],
+      ["ArrayDeque", "O(1) ends", "O(n)", "O(1) ends", "O(1) ends", "Stack, queue, deque"],
+      ["HashMap / HashSet", "—", "O(1) avg", "O(1) avg", "O(1) avg", "Fast key lookup"],
+      ["LinkedHashMap", "—", "O(1) avg", "O(1) avg", "O(1) avg", "Insertion-order iteration"],
+      ["TreeMap / TreeSet", "—", "O(log n)", "O(log n)", "O(log n)", "Sorted keys"],
+      ["PriorityQueue", "peek O(1)", "O(n)", "O(log n)", "O(log n)", "Repeatedly extract min/max"]
+    ]},
+    { "type": "callout", "variant": "tip", "markdown": "**Default choice: `ArrayList` and `HashMap`.** In practice these serve 90% of use cases. Reach for something else only when you have a specific reason — ordering, sortedness, concurrency, or a proven bottleneck." },
+    { "type": "theory", "markdown": "## How HashMap actually works\n\nHashMap is the workhorse of Java. Understanding its internals is a common senior interview." },
+    { "type": "code", "language": "text", "code": "  HashMap internal array of 'buckets' — powers of 2 (default 16):\n\n     bucket #  0    1    2    3    4    5    6    7    ...\n              [·]  [·]  [·]  [K,V]-[K,V]  [·]  [·]  [K,V]\n                            └────────┘\n                       chain (linked list) for collisions\n\n  put(key, value):\n    1. h = hash(key)                        // spread bits to reduce collisions\n    2. slot = h & (capacity - 1)            // fast modulo for power-of-2 sizes\n    3. If slot empty → put entry there.\n       If slot has entries → walk the chain, replace-if-same-key, else append.\n    4. When size / capacity > load factor (0.75) → resize (double capacity, rehash).\n\n  Java 8+ upgrade: if a chain grows beyond 8 entries, it becomes a red-black tree.\n     Worst-case lookup goes from O(n) → O(log n).\n     Reverts to a list when the tree shrinks below 6." },
+    { "type": "callout", "variant": "interview", "markdown": "**The Java 8 HashMap 'treeification' upgrade is a beloved interview trivia.** Before Java 8, adversarial hash collisions could make a HashMap O(n). Since Java 8, chains longer than 8 convert to red-black trees — worst case is now O(log n). Amazon and Oracle interviewers ask this." },
+    { "type": "theory", "markdown": "## A complete sample program — the collections you'll use daily" },
+    { "type": "code", "language": "java", "code": "// File: CollectionsDemo.java\n// Run: javac CollectionsDemo.java && java CollectionsDemo\nimport java.util.*;\nimport java.util.concurrent.*;\n\npublic class CollectionsDemo {\n  public static void main(String[] args) {\n    // --- ArrayList — the default List ---\n    List<String> list = new ArrayList<>();\n    list.add(\"Ada\"); list.add(\"Kim\"); list.add(\"Bob\");\n    System.out.println(list.get(1));      // Kim (O(1) index)\n    list.remove(\"Kim\");\n    System.out.println(list);             // [Ada, Bob]\n\n    // --- HashSet — no duplicates ---\n    Set<String> set = new HashSet<>();\n    set.add(\"Ada\"); set.add(\"Ada\"); set.add(\"Bob\");\n    System.out.println(set.size());       // 2\n\n    // --- HashMap — key → value ---\n    Map<String, Integer> scores = new HashMap<>();\n    scores.put(\"Ada\", 90);\n    scores.put(\"Kim\", 87);\n    scores.merge(\"Ada\", 5, Integer::sum); // increment Ada's score by 5\n    System.out.println(scores);           // {Ada=95, Kim=87}\n\n    // --- TreeMap — sorted keys ---\n    Map<Integer, String> byId = new TreeMap<>();\n    byId.put(3, \"c\"); byId.put(1, \"a\"); byId.put(2, \"b\");\n    System.out.println(byId);             // {1=a, 2=b, 3=c} — sorted!\n\n    // --- LinkedHashMap — insertion order ---\n    Map<String, Integer> ordered = new LinkedHashMap<>();\n    ordered.put(\"z\", 1); ordered.put(\"a\", 2);\n    System.out.println(ordered);          // {z=1, a=2} — insertion order\n\n    // --- ArrayDeque as a stack + queue ---\n    Deque<Integer> deque = new ArrayDeque<>();\n    deque.push(1); deque.push(2); deque.push(3);   // stack\n    System.out.println(deque.pop());               // 3 (LIFO)\n    deque.offer(10); deque.offer(20);              // queue\n    System.out.println(deque.poll());              // 2 (FIFO)\n\n    // --- PriorityQueue — smallest first ---\n    PriorityQueue<Integer> pq = new PriorityQueue<>();\n    pq.offer(5); pq.offer(1); pq.offer(3);\n    while (!pq.isEmpty()) System.out.print(pq.poll() + \" \");   // 1 3 5\n    System.out.println();\n\n    // --- Common one-liners you'll write hundreds of times ---\n    Map<String, Long> wordCount = Arrays.stream(\"the quick brown fox the lazy fox\".split(\" \"))\n        .collect(java.util.stream.Collectors.groupingBy(w -> w, java.util.stream.Collectors.counting()));\n    System.out.println(wordCount);        // {quick=1, brown=1, fox=2, lazy=1, the=2}\n\n    // --- ConcurrentHashMap for multi-threaded work ---\n    Map<String, Integer> safe = new ConcurrentHashMap<>();\n    safe.compute(\"count\", (k, v) -> v == null ? 1 : v + 1);\n    System.out.println(safe);             // {count=1} — safe under threads\n  }\n}" },
+    { "type": "theory", "markdown": "## Concurrent vs non-concurrent — the choice" },
+    { "type": "table", "headers": ["Situation", "Choice"], "rows": [
+      ["Single-threaded", "ArrayList, HashMap, HashSet"],
+      ["Read-heavy, few writes", "CopyOnWriteArrayList, CopyOnWriteArraySet"],
+      ["Concurrent read + write on Map", "ConcurrentHashMap"],
+      ["Producer-consumer queue", "BlockingQueue (ArrayBlockingQueue, LinkedBlockingQueue)"],
+      ["Priority-based work queue", "PriorityBlockingQueue"]
+    ]},
+    { "type": "callout", "variant": "mistake", "markdown": "**Never use `Hashtable` or `Vector` in new code.** They're legacy (pre-Java 2) — every method is synchronized, making them slow. Use `ConcurrentHashMap` and synchronized `ArrayList` (or `Collections.synchronizedList`) instead. Interviews love asking why." },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Modifying a collection while iterating it.**\n\n```java\nfor (String s : list) {\n  if (s.startsWith(\"a\")) list.remove(s);   // ConcurrentModificationException\n}\n```\n\nUse an `Iterator` with `.remove()` or `list.removeIf(s -> s.startsWith(\"a\"))`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Using a mutable object as a HashMap key.**\n\nIf the key's `hashCode` changes after insertion, the map can't find it anymore. Rule: keys should be immutable (Strings, Integers, Records) or have stable state." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: `LinkedList` for random access.**\n\n`LinkedList` is O(n) to reach index `i` — but beginners reach for it because 'insert is O(1).' In practice `ArrayList` wins almost every workload thanks to cache locality." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Declare with the interface type.** `List<String> names = new ArrayList<>();` — you can swap the implementation without changing callers." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Prefer `computeIfAbsent`, `merge`, `getOrDefault` over manual null checks.** They're clearer and often faster." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Use `List.of(...)`, `Set.of(...)`, `Map.of(...)` for immutable collections** — safer and modern (Java 9+)." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Use `ConcurrentHashMap`, not `Collections.synchronizedMap`, for multi-threaded maps.** Concurrent is much faster under contention." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Count word frequencies.** Given a string, output a Map<word, count>. Use `merge` in one line.\n\n**Why:** The #1 basic collections exercise." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Build an LRU cache with `LinkedHashMap`.** Set `accessOrder=true` and override `removeEldestEntry`.\n\n**Why:** A well-known Java trick — you're using LinkedHashMap as a ready-made LRU." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — Custom key class.** Make a `Coord(x, y)` class as a HashMap key. Show it works both before and after implementing `equals`/`hashCode`.\n\n**Why:** You'll internalize why the contract matters." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Expert) — Benchmark ArrayList vs LinkedList vs ArrayDeque.** For appends, inserts at head, iteration, random access. Show which one wins each workload.\n\n**Why:** You'll see why 'LinkedList is O(1) inserts' is a myth in practice." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: ArrayList vs LinkedList — when would you pick each?**\n\n**A:** In practice, **`ArrayList` wins almost every workload**. It has O(1) index access, cache-friendly contiguous memory, and even middle-inserts are competitive because memory copies are fast on modern CPUs. `LinkedList`'s theoretical O(1) inserts at ends is real, but every operation touches a scattered pointer node — cache misses, GC pressure. Use `LinkedList` only when you're doing many inserts/removes at *both ends* — and even then, `ArrayDeque` is usually better. Interviewers love hearing 'in production, `ArrayList` is my default; `LinkedList` is almost never the right choice.'" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How does HashMap work internally?**\n\n**A:** Internally HashMap has an array of 'buckets' (initial size 16, power of 2). On `put(key, value)`, it computes `hash(key)`, then uses `hash & (capacity - 1)` (fast modulo for power-of-2 sizes) to pick a bucket. If the bucket is empty, place the entry. If not, walk the chain and either replace-if-same-key or append. When the load factor exceeds 0.75, the map doubles the array and rehashes everything. **Since Java 8**, if any bucket's chain exceeds 8 entries, it's converted to a red-black tree — bounding worst-case lookup at O(log n) instead of O(n). This defends against adversarial keys that all hash to the same bucket (a real DoS vector before Java 8)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: HashMap vs Hashtable vs ConcurrentHashMap?**\n\n**A:** **`Hashtable`** is legacy from Java 1.0 — every method is `synchronized`, making it thread-safe but slow due to a single lock. Don't use it in new code. **`HashMap`** is the standard implementation — fast, but *not* thread-safe. Concurrent modifications may corrupt internal state or throw `ConcurrentModificationException`. **`ConcurrentHashMap`** is the modern thread-safe map — it uses fine-grained locking (or lock-free CAS operations since Java 8) so multiple threads can read/write in parallel. It's dramatically faster than a synchronized HashMap under contention. Rule: `HashMap` in single-threaded code, `ConcurrentHashMap` when threads are involved." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: Why must HashMap keys have proper `equals` and `hashCode`?**\n\n**A:** HashMap uses `hashCode()` to pick a bucket, then walks the bucket comparing with `equals()`. If two 'equal' keys have different hashCodes, they go to different buckets — the map treats them as different keys and 'loses' data silently. If you override `equals` without `hashCode`, or your `hashCode` depends on a field that changes after insertion, entries become unreachable. The contract: `if a.equals(b), then a.hashCode() == b.hashCode()`, and the hash must be stable while the key is in the map. Practical rule: use immutable value types (String, Integer, records) as keys." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What's the difference between `HashMap`, `LinkedHashMap`, and `TreeMap`?**\n\n**A:** **`HashMap`** — O(1) average operations, no ordering. **`LinkedHashMap`** — O(1) average, but maintains a doubly-linked list to preserve insertion order (or access order — great for building an LRU cache). Slightly more memory than HashMap. **`TreeMap`** — O(log n) operations backed by a red-black tree, but keys are always sorted. Use TreeMap when you need range queries (`subMap`, `firstKey`, `ceilingKey`) or sorted iteration. Rule: HashMap by default, LinkedHashMap when you need insertion order, TreeMap when you need sorted keys or range operations." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What are fail-fast vs fail-safe iterators?**\n\n**A:** **Fail-fast** iterators (used by HashMap, ArrayList, HashSet) detect concurrent structural modification during iteration and throw `ConcurrentModificationException`. They check a modification counter on each `next()`. Fast to detect bugs — but they *may* miss modifications, so this is a bug-detection mechanism, not a thread-safety guarantee. **Fail-safe** iterators (used by ConcurrentHashMap, CopyOnWriteArrayList) don't throw — they iterate over a snapshot or a version that's safe under modifications. Reads see a consistent view but may not see the latest writes. Use fail-safe collections when threads are iterating and modifying simultaneously." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: When would you use `PriorityQueue`?**\n\n**A:** When you repeatedly need the smallest (or largest) element from a growing/shrinking collection. Common uses: Dijkstra's shortest-path (extract closest node), top-K problems (keep a size-K heap), scheduling (run highest-priority task next), event simulation (next event by time). Backed by a binary heap: `offer` and `poll` are O(log n), `peek` is O(1). Don't confuse it with a *sorted* collection — iteration order is heap-order, not sorted order. If you need repeated extraction of extremes, PriorityQueue. If you need general sorted iteration, TreeMap/TreeSet." },
+    { "type": "theory", "markdown": "## Real-world examples\n\n- **Every REST controller you write** returns a `List<Dto>` from `.stream().map().toList()`.\n- **Every caching layer** uses a `ConcurrentHashMap` — from Guava's Cache to Caffeine to hand-rolled solutions.\n- **Spring's `ApplicationContext` and Hibernate's session cache** are backed by concurrent maps under the hood.\n- **PriorityQueue** powers scheduled executors, Dijkstra implementations, and job queues in libraries like Quartz.\n- **`LinkedHashMap` with access-order mode** is a one-liner LRU cache used in interview answers and shipped in production code." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **CopyOnWriteArrayList** — every write creates a fresh copy. Perfect for read-heavy lists that rarely change (event listeners).\n- **`ConcurrentSkipListMap`** — concurrent sorted map. Used when TreeMap needs to be thread-safe.\n- **Java's `Stream` API** produces collections via `Collectors` — `groupingBy`, `partitioningBy`, `toMap` are the most-used.\n- **Immutable collections** (`List.of`, `Set.of`, `Map.of`, `Map.copyOf`) — Java 9+. Attempting to modify throws `UnsupportedOperationException`.\n- **Records + collections** — records are ideal as HashMap keys because they generate correct `equals`/`hashCode` automatically.\n- **`Collectors.toUnmodifiableList()`** and `Stream.toList()` (Java 16+) return unmodifiable lists — safer defaults than `Collectors.toList()`." }
   ],
   "flashcards": [
-    { "front": "ArrayList vs LinkedList?", "back": "ArrayList: O(1) index, cache-friendly. LinkedList: O(1) insert/remove at ends, O(n) access." },
-    { "front": "How does HashMap handle collisions in Java 8+?", "back": "Chaining; a bucket converts to a red-black tree past 8 entries for O(log n) worst case." },
-    { "front": "HashMap vs TreeMap?", "back": "HashMap: O(1), unordered. TreeMap: O(log n), sorted by key." }
+    { "front": "Default choices for List and Map?", "back": "ArrayList and HashMap. Use others only when you have a specific reason." },
+    { "front": "HashMap treeification threshold?", "back": "Java 8+: bucket chains > 8 become red-black trees. Worst-case O(log n) instead of O(n)." },
+    { "front": "HashMap vs ConcurrentHashMap vs Hashtable?", "back": "HashMap (single-threaded, fastest). ConcurrentHashMap (thread-safe, fine-grained locks). Hashtable (legacy, avoid)." },
+    { "front": "Fail-fast vs fail-safe iterators?", "back": "Fail-fast throws on concurrent modification (HashMap, ArrayList). Fail-safe iterates a snapshot (ConcurrentHashMap, CopyOnWriteArrayList)." },
+    { "front": "When use PriorityQueue?", "back": "When you repeatedly need the smallest/largest element. O(log n) offer/poll." }
   ],
   "quiz": [
-    { "q": "Which gives O(1) average lookup AND sorted keys?", "options": ["HashMap", "TreeMap", "Neither — you trade one for the other", "LinkedList"], "answer": 2, "explain": "HashMap is O(1) unordered; TreeMap is sorted but O(log n). You can't have both." },
-    { "q": "Java 8 HashMap buckets become trees after about…", "options": ["2 entries", "8 entries", "100 entries", "Never"], "answer": 1, "explain": "Treeification kicks in past 8 entries in a bucket." },
-    { "q": "Best map for high-concurrency reads/writes?", "options": ["HashMap", "Hashtable", "ConcurrentHashMap", "TreeMap"], "answer": 2, "explain": "ConcurrentHashMap offers fine-grained concurrency without locking the whole map." }
+    { "q": "Which offers O(1) average lookup with sorted iteration?", "options": ["HashMap", "TreeMap", "Neither — you trade one for the other", "LinkedList"], "answer": 2, "explain": "HashMap is fast but unsorted; TreeMap is sorted but O(log n). Can't have both." },
+    { "q": "Java 8 HashMap buckets convert to a tree at about…", "options": ["2 entries", "8 entries", "100 entries", "Never"], "answer": 1, "explain": "Chains > 8 entries become red-black trees." },
+    { "q": "Best map for high-concurrency reads/writes?", "options": ["HashMap", "Hashtable", "ConcurrentHashMap", "TreeMap"], "answer": 2, "explain": "Fine-grained locking outperforms the others under contention." },
+    { "q": "Modifying an ArrayList while iterating with a for-each loop…", "options": ["Works fine", "Throws ConcurrentModificationException", "Silently drops entries", "Deadlocks"], "answer": 1, "explain": "Fail-fast iterator detects the change." },
+    { "q": "For an in-memory LRU cache, the easiest Java choice is…", "options": ["HashSet", "LinkedHashMap with accessOrder=true", "Hashtable", "PriorityQueue"], "answer": 1, "explain": "LinkedHashMap + accessOrder + removeEldestEntry gives you LRU in ~10 lines." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Count word frequencies in a text using a HashMap." },
-    { "level": "Medium", "text": "Implement an LRU cache using LinkedHashMap's accessOrder." },
-    { "level": "Hard", "text": "Build a custom key class with correct equals/hashCode and verify map behavior." },
-    { "level": "Expert", "text": "Benchmark ArrayList vs LinkedList vs ArrayDeque for queue operations." }
+    { "level": "Easy", "text": "Count word frequencies in a paragraph using HashMap and merge/computeIfAbsent." },
+    { "level": "Easy", "text": "Use TreeMap to store 10 unsorted numbers → prove they iterate in sorted order." },
+    { "level": "Medium", "text": "Build an LRU cache using LinkedHashMap with accessOrder=true and removeEldestEntry." },
+    { "level": "Medium", "text": "Show that `HashMap.get(mutatedKey)` returns null after mutating the key's hashCode-affecting field." },
+    { "level": "Hard", "text": "Implement a custom Coord class as a HashMap key with correct equals/hashCode; verify 10,000 lookups all succeed." },
+    { "level": "Hard", "text": "Multi-threaded producer/consumer using ConcurrentHashMap counters." },
+    { "level": "Expert", "text": "Benchmark ArrayList vs LinkedList vs ArrayDeque for append, insert-at-head, iteration, and random access on 1M elements. Show which wins each workload." }
   ],
   "interviewQuestions": [
-    "ArrayList vs LinkedList — when use each?",
-    "How does HashMap work internally? What changed in Java 8?",
+    "ArrayList vs LinkedList — when would you pick each?",
+    "How does HashMap work internally?",
     "HashMap vs Hashtable vs ConcurrentHashMap?",
-    "Why must map keys override equals and hashCode?",
-    "Fail-fast vs fail-safe iterators?"
+    "Why must HashMap keys have proper `equals` and `hashCode`?",
+    "What's the difference between `HashMap`, `LinkedHashMap`, and `TreeMap`?",
+    "What are fail-fast vs fail-safe iterators?",
+    "When would you use `PriorityQueue`?",
+    "What did Java 8 change about HashMap internals?"
   ],
   "references": [
-    { "label": "Java Collections — Baeldung", "url": "https://www.baeldung.com/java-collections" }
+    { "label": "Java Collections — Baeldung", "url": "https://www.baeldung.com/java-collections" },
+    { "label": "Java Collections Framework Overview", "url": "https://docs.oracle.com/javase/tutorial/collections/index.html" }
   ]
 }

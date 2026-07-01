@@ -1,5 +1,7 @@
 // VOLUME 2 — Java (Java 8 to Latest LTS)
 const L = require("./lib");
+// Bridge that reads the same topic JSON the Flutter app uses.
+const { loadTopic, topicToChapter } = require("./topic_to_chapter");
 const {
   C, P, H1, H2, H3, bullet, num, callout, code, table, rule, chip,
   makeDoc, pageProps, save, Paragraph, TextRun, PageBreak, AlignmentType,
@@ -59,176 +61,18 @@ body.push(callout("note", [["Each topic ends with: ", { t: "✅ Summary · 🎯 
 body.push(callout("interview", ["A huge fraction of Java interviews are 'which version added X?' and 'how does HashMap/GC/the JVM work internally?'. This volume drills exactly those."]));
 
 // 1. Core Java
-body.push(H1("1. Core Java — JVM, JDK, JRE", "ch1"));
-body.push(callout("definition", ["Core Java is the language plus its runtime: the JVM executes bytecode, the JRE bundles the JVM with libraries to run apps, and the JDK adds the compiler and tools to build them."]));
-body.push(H2("Write once, run anywhere"));
-body.push(code([
-  ".java  --(javac)-->  .class bytecode  --(JVM)-->  native execution",
-  "JDK = JRE + javac + tools (build apps)",
-  "JRE = JVM + standard libraries (run apps)",
-  "JVM = the engine that runs bytecode on any OS",
-], "java toolchain"));
-body.push(callout("analogy", ["Bytecode is like sheet music: the same score (your .class files) plays on any instrument (any OS) as long as it has a musician who can read it (the JVM)."]));
-body.push(H2("Primitives vs objects"));
-body.push(table(["", "Primitive", "Object / reference"], [
-  ["Examples", "int, double, boolean", "String, List, your classes"],
-  ["Stored", "Value directly (stack)", "Reference to a heap object"],
-  ["Default", "0 / false", "null"],
-  ["Compared with", "==", "equals()"],
-], [1700, 3830, 3830]));
-body.push(callout("mistake", ["Comparing objects with ==. It compares references, not content: new String(\"a\") == new String(\"a\") is false. Use .equals() for value equality, and always override equals() and hashCode() together."]));
-body.push(callout("note", ["Java is always pass-by-value. For objects the reference is copied by value — you can mutate the pointed-to object, but reassigning the parameter does not affect the caller."]));
-body.push(...summary([
-  "JVM runs bytecode; JRE = JVM + libs; JDK = JRE + compiler/tools.",
-  "Primitives hold values; objects hold references to the heap.",
-  "Use equals()/hashCode() for value equality, not ==.",
-  "Java is pass-by-value (the reference value is copied for objects).",
-]));
-body.push(...interview([
-  "Difference between JDK, JRE and JVM?",
-  "Is Java pass-by-value or pass-by-reference?",
-  "Explain the equals()/hashCode() contract.",
-  "Why are Strings immutable, and what is the String pool?",
-  "What lives on the stack vs the heap?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Show == vs equals() differ for two new Strings with equal content." },
-  { level: "Medium", text: "Write an immutable Money class with value-based equals/hashCode." },
-  { level: "Hard", text: "Demonstrate pass-by-value by mutating vs reassigning an object parameter." },
-  { level: "Expert", text: "Implement an immutable generic Pair<A,B> with correct equals/hashCode/toString." },
-]));
-body.push(...realworld(["Every Spring/Android backend starts here: value objects (DTOs), correct equality for map keys, and immutability for thread-safety. Getting equals/hashCode wrong silently breaks HashMap lookups in production."]));
-body.push(...miniproject(["Build a small in-memory 'bank' with immutable Account value objects, demonstrating equality, the String pool, and pass-by-value with a transfer() method."]));
-body.push(...advanced([
-  "String interning and compact strings (Java 9+).",
-  "Autoboxing pitfalls and the Integer cache (-128..127).",
-  "Escape analysis letting the JIT stack-allocate short-lived objects.",
-]));
+body.push(...topicToChapter(loadTopic("level_02", "core"),
+  { chapterNumber: 1, bookmarkId: "ch1" }));
 
-// 2. Collections
-body.push(H1("2. Java Collections Framework", "ch2"));
-body.push(callout("definition", ["The Collections Framework is a unified set of interfaces (List, Set, Map, Queue) and implementations for storing and manipulating groups of objects efficiently."]));
-body.push(table(["Type", "Impl", "Order", "Lookup"], [
-  ["List", "ArrayList", "Insertion", "O(1) index"],
-  ["List", "LinkedList", "Insertion", "O(n)"],
-  ["Set", "HashSet", "None", "O(1)"],
-  ["Set", "TreeSet", "Sorted", "O(log n)"],
-  ["Map", "HashMap", "None", "O(1)"],
-  ["Map", "TreeMap", "Sorted by key", "O(log n)"],
-], [1300, 2700, 2700, 2660]));
-body.push(H2("How HashMap works"));
-body.push(code([
-  "bucket = hash(key) & (capacity - 1)",
-  "collision -> linked list, then a RED-BLACK TREE if a bucket > 8 (Java 8+)",
-  "load factor 0.75 reached -> resize (double capacity) & rehash",
-], "hashmap internals"));
-body.push(callout("interview", ["Java 8 changed HashMap buckets from linked lists to red-black trees once a bucket passes 8 entries, improving worst-case lookup from O(n) to O(log n). This is a very common interview detail."]));
-body.push(callout("mistake", ["Using a mutable object (or one without proper equals/hashCode) as a map key. If the key's hash changes after insertion, you can never find it again."]));
-body.push(...summary([
-  "Pick by workload: ArrayList for index access, HashMap for O(1) lookup.",
-  "HashMap chains collisions and treeifies long buckets (Java 8+).",
-  "TreeMap/TreeSet give sorted order at O(log n).",
-  "Use ConcurrentHashMap (not Hashtable) for concurrency.",
-]));
-body.push(...interview([
-  "ArrayList vs LinkedList — when use each?",
-  "How does HashMap work internally? What changed in Java 8?",
-  "HashMap vs Hashtable vs ConcurrentHashMap?",
-  "Why must keys override equals and hashCode?",
-  "Fail-fast vs fail-safe iterators?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Count word frequencies with a HashMap." },
-  { level: "Medium", text: "Build an LRU cache using LinkedHashMap accessOrder." },
-  { level: "Hard", text: "Implement a custom key class and verify HashMap behavior." },
-  { level: "Expert", text: "Benchmark ArrayList vs LinkedList vs ArrayDeque as a queue." },
-]));
-body.push(...realworld(["Caches, request de-duplication, and counting are everywhere; choosing HashMap vs TreeMap vs LinkedHashMap is a daily design decision in backend code."]));
-body.push(...miniproject(["Build a 'leaderboard' service: a TreeMap for ranked scores + a HashMap for O(1) player lookup, supporting top-N queries."]));
-body.push(...advanced([
-  "ConcurrentHashMap's bucket-level striping and CAS.",
-  "Immutable collections (List.of, Map.of) and defensive copies.",
-  "CopyOnWriteArrayList for read-heavy concurrent lists.",
-]));
+body.push(...topicToChapter(loadTopic("level_02", "collections"),
+  { chapterNumber: 2, bookmarkId: "ch2" }));
 
-// 3. Exceptions
-body.push(H1("3. Exception Handling", "ch3"));
-body.push(callout("definition", ["Exceptions are objects representing abnormal conditions. Throwable splits into Error (fatal — don't catch) and Exception, which splits into checked exceptions and unchecked RuntimeExceptions."]));
-body.push(table(["", "Checked", "Unchecked"], [
-  ["Base", "Exception (not Runtime)", "RuntimeException"],
-  ["Compiler", "Must catch or declare", "Not enforced"],
-  ["Examples", "IOException, SQLException", "NullPointer, IllegalArgument"],
-  ["Means", "Recoverable / expected", "Programming bug"],
-], [1500, 3930, 3930]));
-body.push(code([
-  "try (var in = new FileInputStream(\"f\")) {   // auto-closes",
-  "    return in.read();",
-  "} catch (IOException e) {",
-  "    throw new AppException(\"read failed\", e);  // wrap, keep cause",
-  "}",
-], "try-with-resources"));
-body.push(callout("mistake", ["Swallowing exceptions with an empty catch block hides real bugs. Never catch-and-ignore; never catch Throwable/Error; always preserve the cause when rethrowing."]));
-body.push(...summary([
-  "Checked = compiler-enforced, recoverable; unchecked = bugs.",
-  "try-with-resources auto-closes AutoCloseable resources.",
-  "Wrap-and-rethrow preserving the cause; fail fast.",
-  "Catch specific exceptions; never swallow.",
-]));
-body.push(...interview([
-  "Checked vs unchecked exceptions?",
-  "What problem does try-with-resources solve?",
-  "final vs finally vs finalize()?",
-  "Why is catching and ignoring exceptions bad?",
-  "How and when do you create custom exceptions?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Create a custom checked and a custom unchecked exception." },
-  { level: "Medium", text: "Refactor finally-close blocks to try-with-resources." },
-  { level: "Hard", text: "Write a retry wrapper with backoff on specific exceptions." },
-  { level: "Expert", text: "Demonstrate suppressed exceptions and read them." },
-]));
-body.push(...realworld(["Robust services wrap low-level exceptions (SQL, IO) into domain errors and map them to HTTP status codes — clean error contracts start with disciplined exception handling."]));
-body.push(...miniproject(["Build a file-processing CLI that validates input, wraps IO errors into a domain AppException, retries transient failures, and exits with meaningful codes."]));
-body.push(...advanced([
-  "Exception chaining and suppressed exceptions.",
-  "Why checked exceptions are debated (and avoided in many modern APIs).",
-  "Result/Either types as an alternative to exceptions.",
-]));
+body.push(...topicToChapter(loadTopic("level_02", "exceptions"),
+  { chapterNumber: 3, bookmarkId: "ch3" }));
 
-// 4. Generics
-body.push(H1("4. Generics", "ch4"));
-body.push(callout("definition", ["Generics parameterize types over other types, giving compile-time type safety and removing casts."]));
-body.push(code([
-  "class Box<T> { T value; T get() { return value; } }",
-  "// PECS: Producer Extends, Consumer Super",
-  "void copy(List<? extends Number> src, List<? super Number> dst) { ... }",
-], "generics"));
-body.push(callout("interview", ["PECS — Producer Extends, Consumer Super. Read from a ? extends T (producer); write to a ? super T (consumer)."]));
-body.push(callout("note", ["Generics use type erasure: type parameters exist at compile time and are erased at runtime. So no new T(), no generic arrays, and no instanceof List<String>."]));
-body.push(...summary([
-  "Generics add compile-time type safety and remove casts.",
-  "Bounded wildcards follow PECS.",
-  "Type erasure removes generic info at runtime.",
-  "Avoid raw types — they disable generic checks.",
-]));
-body.push(...interview([
-  "What problem do generics solve?",
-  "Explain PECS with an example.",
-  "What is type erasure and its consequences?",
-  "Why are raw types discouraged?",
-  "Can you create a generic array? Why not?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Generic max() over Comparable<T>." },
-  { level: "Medium", text: "Generic Stack<T> with push/pop/peek." },
-  { level: "Hard", text: "A copy method using PECS wildcards correctly." },
-  { level: "Expert", text: "Type-safe heterogeneous container keyed by Class<T>." },
-]));
-body.push(...realworld(["The entire Collections API is generic; well-designed library APIs use bounded wildcards so callers pass the widest possible types safely."]));
-body.push(...miniproject(["Build a generic, type-safe event bus where publishers and subscribers are checked at compile time."]));
-body.push(...advanced(["Reifiable vs non-reifiable types; bridge methods; recursive generic bounds (Enum<E extends Enum<E>>)."]));
+body.push(...topicToChapter(loadTopic("level_02", "generics"),
+  { chapterNumber: 4, bookmarkId: "ch4" }));
 
-// 5. Multithreading
 body.push(H1("5. Multithreading & Concurrency", "ch5"));
 body.push(callout("definition", ["Multithreading runs multiple threads concurrently within one process to use multiple cores and stay responsive. Threads share memory, so coordination is required."]));
 body.push(code([
@@ -616,5 +460,5 @@ const doc = makeDoc([
   { properties: pageProps("Volume 2 — Java"),
     children: [...toc(), ...body] },
 ]);
-const out = require("path").join(__dirname, "Volume-2-Java.docx");
+const out = require("path").join(__dirname, "../../docs/books/Volume-2-Java.docx");
 save(doc, out).then(() => console.log("WROTE", out));
