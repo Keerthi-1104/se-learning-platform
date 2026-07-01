@@ -1,0 +1,52 @@
+{
+  "id": "be.spring_boot",
+  "levelId": 7,
+  "title": "Spring Boot",
+  "xp": 60,
+  "estimatedMinutes": 40,
+  "objectives": [
+    "Explain 'convention over configuration'",
+    "Use starters, auto-configuration and profiles",
+    "Build a REST controller + JPA service quickly"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Spring Boot is an opinionated framework on top of Spring: it auto-configures beans based on classpath + properties, provides curated 'starter' dependencies, an embedded server, and production-ready features (Actuator) — so you can go from empty to running service in minutes." },
+    { "type": "code", "language": "java", "code": "@SpringBootApplication\npublic class App { public static void main(String[] a){ SpringApplication.run(App.class,a);} }\n\n@RestController @RequestMapping(\"/v1/users\")\nclass UserController {\n  private final UserRepo repo;\n  UserController(UserRepo r){ this.repo = r; }        // constructor DI\n  @GetMapping(\"/{id}\") User get(@PathVariable Long id){ return repo.findById(id).orElseThrow(); }\n}" },
+    { "type": "table", "headers": ["Starter", "Gives you"], "rows": [
+      ["spring-boot-starter-web", "MVC + Jackson + embedded Tomcat"],
+      ["spring-boot-starter-data-jpa", "JPA + Hibernate + HikariCP"],
+      ["spring-boot-starter-security", "Spring Security"],
+      ["spring-boot-starter-actuator", "Health, metrics, prometheus"],
+      ["spring-boot-starter-test", "JUnit 5 + Mockito + AssertJ"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Auto-configuration works via `@Conditional*` — beans are registered only if certain classes/properties are present. That's why adding `spring-boot-starter-data-jpa` automatically wires a DataSource, EntityManager and transaction manager from `application.properties`." },
+    { "type": "callout", "variant": "mistake", "markdown": "Field injection (`@Autowired` on a field): hard to test, hides dependencies. Use **constructor injection** — immutable, explicit, testable, and the Spring team's official recommendation." },
+    { "type": "callout", "variant": "tip", "markdown": "Use `@ConfigurationProperties` classes over scattered `@Value`. Use profiles (`application-prod.yml`) for env-specific config. Enable Actuator + Prometheus/OpenTelemetry from day one." }
+  ],
+  "flashcards": [
+    { "front": "Spring Boot vs Spring?", "back": "Boot adds auto-configuration, starters, embedded server, and Actuator on top of Spring." },
+    { "front": "Preferred DI style?", "back": "Constructor injection — explicit, immutable, testable." },
+    { "front": "What does @SpringBootApplication combine?", "back": "@Configuration + @EnableAutoConfiguration + @ComponentScan." }
+  ],
+  "quiz": [
+    { "q": "The recommended way to inject dependencies is…", "options": ["@Autowired on a field", "Constructor injection", "Setter injection", "Static access"], "answer": 1, "explain": "Constructor DI is explicit, immutable, testable." },
+    { "q": "Auto-configuration is driven by…", "options": ["Random selection", "@Conditional* on classpath and properties", "XML files", "The OS"], "answer": 1, "explain": "Beans register only when their conditions match." },
+    { "q": "Actuator provides…", "options": ["UI theming", "Health, metrics, info endpoints", "A database", "GC tuning"], "answer": 1, "explain": "Ops-facing endpoints for health, metrics, env, etc." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Build a Hello World REST controller in Spring Boot." },
+    { "level": "Medium", "text": "Add JPA with a User entity + repository + a CRUD endpoint." },
+    { "level": "Hard", "text": "Add validation (@Valid), global exception handler, and standard error DTO." },
+    { "level": "Expert", "text": "Enable Actuator + Prometheus + OpenTelemetry tracing across two services." }
+  ],
+  "interviewQuestions": [
+    "Spring vs Spring Boot?",
+    "How does auto-configuration work?",
+    "Field vs constructor injection?",
+    "What are Spring profiles for?",
+    "How do you expose health and metrics?"
+  ],
+  "references": [
+    { "label": "Spring Boot — reference", "url": "https://docs.spring.io/spring-boot/index.html" }
+  ]
+}

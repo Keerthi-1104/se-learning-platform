@@ -1,0 +1,52 @@
+{
+  "id": "be.kafka",
+  "levelId": 7,
+  "title": "Kafka",
+  "xp": 50,
+  "estimatedMinutes": 30,
+  "objectives": [
+    "Explain topics, partitions, offsets and consumer groups",
+    "Choose partitioning keys wisely",
+    "Reason about ordering and delivery guarantees"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Kafka is a distributed, append-only **log**. Producers write records to a **topic** split across **partitions**; consumers read via **consumer groups** at their own pace by tracking **offsets**. Records are retained by time/size, not until consumed." },
+    { "type": "code", "language": "text", "code": "topic 'orders' with 3 partitions:\n  P0: [r0 r1 r2 r3 ...]  offset per consumer group\n  P1: [r0 r1 r2 r3 ...]\n  P2: [r0 r1 r2 r3 ...]\nProducer records key=userId → same partition → per-user ordering\nConsumer group 'billing' has 3 consumers → each owns 1 partition" },
+    { "type": "table", "headers": ["Concept", "Meaning"], "rows": [
+      ["Partition", "Ordered log; unit of parallelism"],
+      ["Consumer group", "One record → one consumer in the group"],
+      ["Offset", "Consumer's position in a partition"],
+      ["Retention", "Time/size based; records don't disappear on read"],
+      ["Replication factor", "Copies of each partition on brokers"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Ordering is guaranteed **per partition**, not per topic. Choose your partition key so related records land on the same partition (e.g. `userId`). More consumers than partitions = idle consumers; fewer = fanned-out but not maxed." },
+    { "type": "callout", "variant": "mistake", "markdown": "Committing offsets before processing succeeds — you'll skip records on crash. Commit AFTER successful processing to get at-least-once; use idempotent processing to handle inevitable duplicates." },
+    { "type": "callout", "variant": "best", "markdown": "Use compacted topics for state (latest per key); use tiered storage for long retention. For exactly-once, use Kafka's transactional producer + read-committed consumer. Monitor consumer lag as a top-line SLI." }
+  ],
+  "flashcards": [
+    { "front": "What guarantees ordering in Kafka?", "back": "Per-partition ordering — records with the same key land on the same partition and stay ordered there." },
+    { "front": "How do consumer groups scale?", "back": "Kafka assigns partitions to consumers in the group; one partition → one consumer per group at a time." },
+    { "front": "Default delivery semantics?", "back": "At-least-once by default; exactly-once needs transactional producer + read-committed consumer." }
+  ],
+  "quiz": [
+    { "q": "Kafka guarantees ordering…", "options": ["Per topic", "Per partition", "Globally", "Never"], "answer": 1, "explain": "Only within a partition." },
+    { "q": "To parallelize a consumer group…", "options": ["Add consumers beyond partition count", "Add partitions and consumers together", "Merge topics", "Disable groups"], "answer": 1, "explain": "Partitions cap parallelism inside a group." },
+    { "q": "For durable state per key, use…", "options": ["A normal topic", "A compacted topic", "A regular queue", "SharedPreferences"], "answer": 1, "explain": "Compaction retains the latest record per key." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Produce and consume messages on a topic with 3 partitions." },
+    { "level": "Medium", "text": "Design a partition key for an orders topic with per-user ordering." },
+    { "level": "Hard", "text": "Implement at-least-once with idempotent DB upserts." },
+    { "level": "Expert", "text": "Enable exactly-once with transactional producer + read-committed consumer." }
+  ],
+  "interviewQuestions": [
+    "How does Kafka guarantee ordering?",
+    "Why partition by key?",
+    "How do consumer groups work?",
+    "At-least-once vs exactly-once — how do you get each?",
+    "How do you monitor Kafka health? (lag, ISR)"
+  ],
+  "references": [
+    { "label": "Apache Kafka — documentation", "url": "https://kafka.apache.org/documentation/" }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "id": "be.grpc",
+  "levelId": 7,
+  "title": "gRPC",
+  "xp": 40,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Describe gRPC's contract-first Protobuf model",
+    "Distinguish the four RPC types",
+    "Know when gRPC beats REST"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "gRPC is a high-performance RPC framework using HTTP/2, Protocol Buffers, and generated clients in ~10 languages. You define services in a .proto file; the tooling generates typed clients and stubs on both sides." },
+    { "type": "code", "language": "proto", "code": "syntax = \"proto3\";\nmessage OrderReq { string id = 1; }\nmessage OrderRes { string id = 1;  double total = 2; }\nservice OrderService {\n  rpc GetOrder (OrderReq) returns (OrderRes);\n  rpc StreamOrders (OrderReq) returns (stream OrderRes);   // server-stream\n}" },
+    { "type": "table", "headers": ["RPC type", "Direction"], "rows": [
+      ["Unary", "1 req → 1 res"],
+      ["Server streaming", "1 req → N res"],
+      ["Client streaming", "N req → 1 res"],
+      ["Bidirectional streaming", "N req ↔ N res"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "gRPC's edge: **binary Protobuf** (smaller/faster than JSON), **HTTP/2 multiplexing**, **generated clients** (no hand-written HTTP calls), and **first-class streaming**. Ideal for internal service-to-service; harder for browsers (needs gRPC-Web proxy)." },
+    { "type": "callout", "variant": "mistake", "markdown": "Breaking wire compatibility by renaming/renumbering Protobuf fields. Add new fields with new tags; never reuse an old tag. Removed fields should be marked `reserved`." },
+    { "type": "callout", "variant": "tip", "markdown": "Use gRPC for internal microservices and mobile-to-backend performance-critical paths; REST/GraphQL for public/browser APIs. gRPC-Web + Connect bridge gRPC to the browser when needed." }
+  ],
+  "flashcards": [
+    { "front": "gRPC data format and transport?", "back": "Protocol Buffers over HTTP/2." },
+    { "front": "Four gRPC RPC types?", "back": "Unary, server streaming, client streaming, bidirectional streaming." },
+    { "front": "Rule for evolving a .proto?", "back": "Never reuse a tag number; mark removed fields as reserved; add new fields with new tags." }
+  ],
+  "quiz": [
+    { "q": "gRPC serializes messages with…", "options": ["JSON", "XML", "Protocol Buffers (binary)", "Base64 strings"], "answer": 2, "explain": "Protobuf produces small, fast, schema-typed messages." },
+    { "q": "gRPC runs on top of…", "options": ["HTTP/1.1", "HTTP/2", "UDP raw", "MQTT"], "answer": 1, "explain": "HTTP/2 gives multiplexing and streaming." },
+    { "q": "gRPC is a strong fit for…", "options": ["Public browser-only APIs", "Internal service-to-service RPC + streaming", "Static file hosting", "Email"], "answer": 1, "explain": "Internal microservices benefit most." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Define a .proto with a unary GetOrder RPC and generate a client." },
+    { "level": "Medium", "text": "Implement server-side streaming for a live orders feed." },
+    { "level": "Hard", "text": "Add authentication via metadata (bearer token) + interceptors." },
+    { "level": "Expert", "text": "Expose the service to a browser using gRPC-Web + Connect." }
+  ],
+  "interviewQuestions": [
+    "What advantages does gRPC have over REST?",
+    "Four gRPC streaming modes?",
+    "How do you evolve a Protobuf schema safely?",
+    "How do you use gRPC from a browser?",
+    "How do you authenticate gRPC calls?"
+  ],
+  "references": [
+    { "label": "gRPC — official site", "url": "https://grpc.io" }
+  ]
+}

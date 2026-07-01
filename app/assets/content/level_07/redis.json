@@ -1,0 +1,54 @@
+{
+  "id": "be.redis",
+  "levelId": 7,
+  "title": "Redis",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Use Redis for caching, sessions and rate limiting",
+    "Know the main data structures",
+    "Choose eviction and persistence policies"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Redis is an in-memory data store with rich types (strings, hashes, lists, sets, sorted sets, streams). Sub-millisecond reads make it the default cache + rate-limit + session store, and its atomic ops enable clever patterns." },
+    { "type": "table", "headers": ["Type", "Example use"], "rows": [
+      ["String + TTL", "Cache value with expiry"],
+      ["Hash", "Session or object fields"],
+      ["List", "Simple queue (LPUSH/BRPOP)"],
+      ["Set", "Uniqueness (dedupe, followers)"],
+      ["Sorted Set", "Leaderboards, rate limiting"],
+      ["Stream", "Append-only log (Kafka-lite)"],
+      ["PubSub", "Fire-and-forget events"]
+    ]},
+    { "type": "code", "language": "text", "code": "// Cache-aside\nvalue = GET user:42        // hit?\nif not: value = db.load(); SET user:42 <value> EX 60\n\n// Rate limit (token bucket, atomic Lua script) …\n\n// Distributed lock (single-instance)\nSET lock:jobA <token> NX PX 30000    // NX = only if not set" },
+    { "type": "callout", "variant": "interview", "markdown": "Cache patterns to know: **cache-aside** (app loads DB on miss, writes to cache), **write-through** (write DB + cache together), **write-behind** (write cache, sync to DB later). Cache-aside is the default; watch for stampedes on hot keys (mitigate with request coalescing / TTL jitter)." },
+    { "type": "callout", "variant": "mistake", "markdown": "Using SETNX for distributed locking without a token + release check (someone else's expired lock gets released by you). Use the Redlock pattern for multi-node; for single-node use SET NX PX + a fencing token." },
+    { "type": "callout", "variant": "best", "markdown": "Choose an eviction policy (allkeys-lru for pure caches; volatile-ttl mixed). Set maxmemory. Persist with RDB snapshots + AOF for durability if used as a DB. Never store secrets in Redis in cleartext." }
+  ],
+  "flashcards": [
+    { "front": "Common Redis cache pattern?", "back": "Cache-aside: read from cache; on miss load DB, write to cache with TTL." },
+    { "front": "What is a sorted set used for?", "back": "Leaderboards, priority queues, rate-limit windows — score-ordered members with O(log N) ops." },
+    { "front": "Basic distributed lock command?", "back": "SET lock:key <token> NX PX <ms> — set only if absent, with an expiry." }
+  ],
+  "quiz": [
+    { "q": "Redis stores data primarily in…", "options": ["Disk only", "Memory, optionally persisted", "Object storage", "Network only"], "answer": 1, "explain": "In-memory speed is Redis's superpower." },
+    { "q": "Cache-aside means…", "options": ["Cache writes back to DB", "App loads DB on miss then caches", "Kernel caches everything", "No cache at all"], "answer": 1, "explain": "Application controls the cache; DB is source of truth." },
+    { "q": "Best structure for a leaderboard?", "options": ["List", "Hash", "Sorted Set", "PubSub"], "answer": 2, "explain": "Sorted sets keep members ordered by score." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Implement cache-aside for a hot GET endpoint with TTL." },
+    { "level": "Medium", "text": "Build a token-bucket rate limiter with a Lua script." },
+    { "level": "Hard", "text": "Build a leaderboard: add score, top-K, user rank via sorted sets." },
+    { "level": "Expert", "text": "Implement a Redlock-style distributed lock for a critical job." }
+  ],
+  "interviewQuestions": [
+    "Which cache pattern do you use and why?",
+    "How do you prevent cache stampedes?",
+    "Common Redis eviction policies?",
+    "How would you build a rate limiter with Redis?",
+    "Trade-offs of using Redis as a primary DB?"
+  ],
+  "references": [
+    { "label": "Redis — commands & docs", "url": "https://redis.io/docs/latest/" }
+  ]
+}

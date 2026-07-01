@@ -1,0 +1,49 @@
+{
+  "id": "be.jwt",
+  "levelId": 7,
+  "title": "JWT (Backend)",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Issue and validate JWTs on the server",
+    "Choose HMAC vs asymmetric signing",
+    "Handle expiry, rotation and revocation"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "On the backend, JWTs are self-contained, signed tokens the server issues on login and validates on every request. Because they're stateless, you don't need a session store — but revocation is harder." },
+    { "type": "table", "headers": ["Algorithm", "Signs with", "Best for"], "rows": [
+      ["HS256", "Shared secret (HMAC)", "Single-service apps"],
+      ["RS256/ES256", "Private key, verify with public key", "Multi-service; JWKS endpoint"]
+    ]},
+    { "type": "code", "language": "text", "code": "Login:\n  verify credentials -> issue access token (15 min) + refresh token (7 days)\nOn each request:\n  parse Authorization: Bearer <token>\n  verify signature + exp/iss/aud\n  extract sub (userId) and scopes/roles\nOn refresh:\n  validate refresh token -> rotate it -> issue new access token" },
+    { "type": "callout", "variant": "interview", "markdown": "For multi-service architectures, RS256 wins: services validate with the public key from a JWKS endpoint — no shared secret to leak. Include `iss`, `aud`, `exp`, `nbf`, and a token id (`jti`) so you can revoke individual tokens." },
+    { "type": "callout", "variant": "mistake", "markdown": "Trusting the `alg` field from the token header — attackers can set `alg: none` or downgrade RS256 to HS256 and forge tokens. Pin the algorithm server-side and reject anything else." },
+    { "type": "callout", "variant": "best", "markdown": "Keep access tokens short (5–15 min), refresh tokens longer with rotation, and use a small `jti` blocklist in Redis for revocation. Sign with RS256/ES256 in production; publish keys via JWKS with rotation." }
+  ],
+  "flashcards": [
+    { "front": "HS256 vs RS256?", "back": "HS256 uses a shared HMAC secret; RS256 uses a private key to sign + public key (JWKS) to verify — better for multi-service." },
+    { "front": "How do you revoke a JWT?", "back": "Short expiry + refresh rotation + optional jti blocklist in Redis." },
+    { "front": "Common JWT forgery attack?", "back": "alg:'none' or algorithm confusion; pin the expected algorithm server-side." }
+  ],
+  "quiz": [
+    { "q": "For multi-service verification you prefer…", "options": ["HS256 with a shared secret", "RS256 with a public key / JWKS", "No signing", "Base64 only"], "answer": 1, "explain": "Public-key verification avoids shared secrets across services." },
+    { "q": "Access tokens should typically be…", "options": ["Long-lived (30 days+)", "Short-lived with refresh tokens", "Never expire", "Stored in URLs"], "answer": 1, "explain": "Short lifetimes limit blast radius; refresh tokens renew." },
+    { "q": "The 'alg: none' attack is fixed by…", "options": ["Bigger keys", "Pinning the expected algorithm server-side", "Longer expiry", "Skipping signatures"], "answer": 1, "explain": "Never trust the token's alg header; enforce it explicitly." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Issue and verify an HS256 JWT with exp/sub claims." },
+    { "level": "Medium", "text": "Switch to RS256 + JWKS endpoint; validate in a resource server." },
+    { "level": "Hard", "text": "Implement refresh-token rotation with a Redis-backed jti blocklist." },
+    { "level": "Expert", "text": "Add key rotation: publish 2 keys in JWKS, roll signing key without downtime." }
+  ],
+  "interviewQuestions": [
+    "HS256 vs RS256/ES256?",
+    "How do you revoke JWTs?",
+    "What is JWKS and why use it?",
+    "How does the algorithm confusion attack work?",
+    "Access token vs refresh token vs ID token?"
+  ],
+  "references": [
+    { "label": "RFC 7519 — JSON Web Token", "url": "https://datatracker.ietf.org/doc/html/rfc7519" }
+  ]
+}

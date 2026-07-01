@@ -1,0 +1,54 @@
+{
+  "id": "be.kubernetes",
+  "levelId": 7,
+  "title": "Kubernetes",
+  "xp": 60,
+  "estimatedMinutes": 40,
+  "objectives": [
+    "Explain Kubernetes' core objects",
+    "Deploy an app with rolling updates",
+    "Reason about scaling, health and storage"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Kubernetes (K8s) is a container orchestrator: you declare the desired state (which apps, how many replicas, how they're networked), and controllers converge the cluster toward it — self-healing pods, rolling updates, autoscaling included." },
+    { "type": "table", "headers": ["Object", "Role"], "rows": [
+      ["Pod", "One (or few) containers sharing net/vol — the smallest unit"],
+      ["Deployment", "Declarative Pod replicas + rolling updates"],
+      ["Service", "Stable virtual IP/DNS for a set of Pods"],
+      ["Ingress", "L7 HTTP routing into the cluster"],
+      ["ConfigMap / Secret", "Non-secret / secret config injected into Pods"],
+      ["StatefulSet", "Pods with stable identity + storage (DBs)"],
+      ["HPA", "Horizontal Pod Autoscaler by CPU/metrics"]
+    ]},
+    { "type": "code", "language": "yaml", "code": "apiVersion: apps/v1\nkind: Deployment\nmetadata: { name: api }\nspec:\n  replicas: 3\n  selector: { matchLabels: { app: api } }\n  template:\n    metadata: { labels: { app: api } }\n    spec:\n      containers:\n      - name: api\n        image: registry/api:1.2.0\n        readinessProbe: { httpGet: { path: /health, port: 8080 } }\n        resources:\n          requests: { cpu: 100m, memory: 128Mi }\n          limits:   { cpu: 500m, memory: 512Mi }" },
+    { "type": "callout", "variant": "interview", "markdown": "Understand the difference between **liveness** (restart the pod if wedged) and **readiness** (remove from load balancer if not ready). Miss readiness → users see 500s during deploys. Also: set CPU/memory requests correctly or the scheduler misplaces pods." },
+    { "type": "callout", "variant": "mistake", "markdown": "Managing raw YAML by hand across environments. Use **Helm** or **Kustomize** to templatize and vary per env; commit manifests to git (GitOps with Argo CD/Flux) so cluster state is version-controlled and auditable." },
+    { "type": "callout", "variant": "best", "markdown": "One container concern per Pod; expose via Service; keep secrets in a manager (Vault/SOPS/Sealed Secrets) — not raw K8s Secrets; add HPA for stateless workloads; use PodDisruptionBudget for HA during upgrades." }
+  ],
+  "flashcards": [
+    { "front": "Pod vs Deployment vs Service?", "back": "Pod = runtime unit; Deployment = declarative replicas + rollouts; Service = stable network endpoint." },
+    { "front": "Liveness vs readiness probes?", "back": "Liveness restarts a wedged pod; readiness removes an unready pod from the Service load balancer." },
+    { "front": "How do you run a stateful DB on K8s?", "back": "StatefulSet + PersistentVolumeClaim for stable identity and storage." }
+  ],
+  "quiz": [
+    { "q": "The smallest deployable unit is a…", "options": ["Container", "Pod", "Deployment", "Node"], "answer": 1, "explain": "A Pod is one (or few) containers sharing net/vol." },
+    { "q": "To do a zero-downtime rollout you rely on…", "options": ["A DB restart", "readiness probes + rolling update", "kubectl delete", "Ingress"], "answer": 1, "explain": "Readiness prevents traffic to not-ready pods during rollout." },
+    { "q": "For declarative env-varying manifests use…", "options": ["Copy/paste YAML", "Helm / Kustomize + GitOps", "Manual kubectl edit", "Cron jobs"], "answer": 1, "explain": "Templated + version-controlled manifests keep envs sane." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Deploy an app to a local cluster (kind/minikube) with a Deployment + Service." },
+    { "level": "Medium", "text": "Add readiness/liveness probes and a rolling update." },
+    { "level": "Hard", "text": "Add HPA scaling on CPU + a PodDisruptionBudget." },
+    { "level": "Expert", "text": "Deploy via Argo CD from a Git repo with Kustomize overlays per env." }
+  ],
+  "interviewQuestions": [
+    "What is Kubernetes and what problem does it solve?",
+    "Pod vs Deployment vs Service vs StatefulSet?",
+    "Liveness vs readiness probes?",
+    "How do you keep secrets safe on K8s?",
+    "What is GitOps and why use it?"
+  ],
+  "references": [
+    { "label": "Kubernetes — concepts", "url": "https://kubernetes.io/docs/concepts/" }
+  ]
+}

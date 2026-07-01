@@ -1,0 +1,52 @@
+{
+  "id": "be.rest",
+  "levelId": 7,
+  "title": "REST APIs",
+  "xp": 50,
+  "estimatedMinutes": 30,
+  "objectives": [
+    "Design URLs, methods and status codes correctly",
+    "Version, paginate and secure a REST API",
+    "Follow the six REST constraints"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "REST (Representational State Transfer) is an architectural style: resources exposed at URLs, manipulated with HTTP verbs, returning representations (usually JSON). Its constraints are client-server, stateless, cacheable, layered, uniform interface, and (optional) code-on-demand." },
+    { "type": "code", "language": "http", "code": "GET    /v1/users              -> list\nGET    /v1/users/42           -> read one\nPOST   /v1/users              -> create\nPUT    /v1/users/42           -> replace\nPATCH  /v1/users/42           -> partial update\nDELETE /v1/users/42           -> remove\nGET    /v1/users/42/orders    -> nested resource" },
+    { "type": "table", "headers": ["Do", "Don't"], "rows": [
+      ["Nouns for resources (/orders)", "Verbs in URLs (/getOrders)"],
+      ["Correct status codes", "Always 200 + errorField"],
+      ["Version (/v1/)", "Ship breaking changes"],
+      ["Pagination + filtering", "Return the whole table"],
+      ["Idempotency keys on POST", "Duplicate charges on retry"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "REST maturity (Richardson's model): Level 0 = one URL/one verb (SOAP-ish); Level 1 = resources; Level 2 = HTTP verbs + status codes (where most APIs live); Level 3 = HATEOAS (hypermedia). Level 2 is 'good REST' in practice." },
+    { "type": "callout", "variant": "mistake", "markdown": "Building 'RPC-in-URL': POST /doAction, PUT /processStuff. That's not REST — it forfeits caching, discoverability, and correct semantics. Model actions as state transitions on resources." },
+    { "type": "callout", "variant": "best", "markdown": "Pagination via cursor (opaque next-token) beats offset for large sets. Support ?fields= projection to shrink payloads. Return 429 with Retry-After when rate-limited. Always include a request ID header for debugging." }
+  ],
+  "flashcards": [
+    { "front": "REST's six constraints?", "back": "Client-server, stateless, cacheable, layered, uniform interface, code-on-demand (optional)." },
+    { "front": "Which HTTP methods are idempotent?", "back": "GET, PUT, DELETE, HEAD, OPTIONS. POST and PATCH are not (generally)." },
+    { "front": "Cursor vs offset pagination?", "back": "Cursor uses an opaque token pointing to the next page — stable under inserts; offset shifts on writes." }
+  ],
+  "quiz": [
+    { "q": "Which is the best REST URL for updating a user?", "options": ["POST /updateUser?id=42", "PUT /v1/users/42", "GET /v1/users/update/42", "POST /v1/updateUser/42"], "answer": 1, "explain": "Nouns for resources; PUT for full replace on a specific resource." },
+    { "q": "Which method is NOT idempotent?", "options": ["GET", "PUT", "DELETE", "POST"], "answer": 3, "explain": "POST creates a new resource each call; PUT/DELETE are idempotent." },
+    { "q": "A rate-limited response should use…", "options": ["500", "403", "429 with Retry-After", "418"], "answer": 2, "explain": "429 Too Many Requests + Retry-After tells the client when to try again." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Design a REST endpoint set for a books catalog (CRUD + search)." },
+    { "level": "Medium", "text": "Add cursor pagination + filtering with ?field= projection." },
+    { "level": "Hard", "text": "Add idempotency keys to POST /orders and handle retries safely." },
+    { "level": "Expert", "text": "Design v1 → v2 migration with dual routes + deprecation headers + sunset dates." }
+  ],
+  "interviewQuestions": [
+    "State the REST constraints.",
+    "Which HTTP methods are idempotent?",
+    "How would you version a REST API?",
+    "Cursor vs offset pagination — trade-offs?",
+    "How do idempotency keys prevent duplicate charges?"
+  ],
+  "references": [
+    { "label": "Stripe API — reference REST design", "url": "https://stripe.com/docs/api" }
+  ]
+}

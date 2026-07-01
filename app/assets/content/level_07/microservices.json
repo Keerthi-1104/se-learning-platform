@@ -1,0 +1,51 @@
+{
+  "id": "be.microservices",
+  "levelId": 7,
+  "title": "Microservices",
+  "xp": 60,
+  "estimatedMinutes": 35,
+  "objectives": [
+    "Explain the microservice trade-off honestly",
+    "Handle service-to-service comms and data",
+    "Apply resilience patterns"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Microservices split a system into small, independently deployable services owning their own data. You trade in-process complexity for distributed-system complexity — teams can ship independently, but every call is a network call." },
+    { "type": "table", "headers": ["Wins", "Costs"], "rows": [
+      ["Independent deploys per team", "Distributed debugging"],
+      ["Per-service tech choice", "Cross-service data consistency"],
+      ["Scale hot services alone", "Network latency + failures"],
+      ["Blast radius contained", "Ops overhead (K8s, tracing)"]
+    ]},
+    { "type": "code", "language": "text", "code": "sync:   REST / gRPC       (request/response)\nasync:  Kafka / RabbitMQ  (events, decoupled)\nedge:   API Gateway       (auth, routing, rate limits)\nresilience: timeout · retry · circuit breaker · bulkhead\nobservability: logs · metrics · distributed traces (traceId propagated)" },
+    { "type": "callout", "variant": "interview", "markdown": "The eternal question: 'How do you handle transactions across services?' You don't — you use the **Saga pattern**: a sequence of local transactions with compensating actions on failure. Choreography (event-driven) or orchestration (a coordinator) — both valid; pick by team preference and observability needs." },
+    { "type": "callout", "variant": "mistake", "markdown": "Splitting too early ('microservices for a 5-person team'). You'll pay the distributed tax with no wins. Start with a well-modularized monolith; split when team/domain boundaries demand it." },
+    { "type": "callout", "variant": "best", "markdown": "One service owns its DB (no cross-service DB access). Publish events for state changes; use the Outbox pattern to make DB writes and event publishing atomic. Add a service mesh (Istio/Linkerd) for mTLS and traffic policy without app changes." }
+  ],
+  "flashcards": [
+    { "front": "Why do microservices scale teams?", "back": "Independent deploys — each team ships without coordinating the whole platform." },
+    { "front": "How do you handle cross-service transactions?", "back": "The Saga pattern: local transactions + compensating actions (choreography or orchestration)." },
+    { "front": "The Outbox pattern?", "back": "Write your domain change AND an outbox event in the same DB transaction; a relay publishes events reliably." }
+  ],
+  "quiz": [
+    { "q": "The biggest cost of microservices is…", "options": ["Slower CPUs", "Distributed-system complexity", "Less RAM", "Colorful UIs"], "answer": 1, "explain": "Every call is a network call; consistency and debugging get harder." },
+    { "q": "Cross-service transactions are typically handled by…", "options": ["Two-phase commit", "Sagas with compensations", "Global locks", "A single giant DB"], "answer": 1, "explain": "Sagas keep locality and avoid distributed 2PC." },
+    { "q": "Each microservice should own…", "options": ["Its own DB", "The shared DB", "Only the frontend", "No storage"], "answer": 0, "explain": "Database-per-service — no cross-service DB reads." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Split a monolith into two services (users + orders) with REST between them." },
+    { "level": "Medium", "text": "Add timeouts + retries + circuit breaker with Resilience4j." },
+    { "level": "Hard", "text": "Implement a Saga for order → payment → shipping with compensations." },
+    { "level": "Expert", "text": "Add the Outbox pattern with a Kafka relay so events are never lost." }
+  ],
+  "interviewQuestions": [
+    "When would you NOT choose microservices?",
+    "How do you handle cross-service transactions?",
+    "Sync vs async communication?",
+    "What is the Outbox pattern?",
+    "What is a circuit breaker and when to use it?"
+  ],
+  "references": [
+    { "label": "microservices.io — patterns", "url": "https://microservices.io" }
+  ]
+}

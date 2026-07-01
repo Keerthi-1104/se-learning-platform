@@ -1,0 +1,52 @@
+{
+  "id": "be.api_security",
+  "levelId": 7,
+  "title": "API Security",
+  "xp": 50,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Apply authN, authZ and transport security",
+    "Prevent the OWASP API Top 10 classics",
+    "Add rate limiting, CORS and input validation"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "API security is a stack: HTTPS everywhere, strong authentication (JWT/OAuth/mTLS), granular authorization on every endpoint, input validation, rate limiting, and monitoring for abuse." },
+    { "type": "table", "headers": ["Risk (OWASP API Top 10)", "Cause", "Fix"], "rows": [
+      ["BOLA (broken object-level auth)", "Trusting client-supplied IDs", "Check ownership server-side"],
+      ["Broken authentication", "Weak tokens / passwords", "Standard OAuth/OIDC; bcrypt"],
+      ["Excessive data exposure", "Returning whole objects", "Response DTOs; field allowlists"],
+      ["Rate limiting missing", "Unbounded requests", "Token bucket / sliding window"],
+      ["Mass assignment", "Binding raw input to models", "Input DTOs, allowlisted fields"],
+      ["Improper asset mgmt", "Old /v0 alive", "Retire endpoints; inventory"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "The #1 API bug in the wild is **BOLA/IDOR**: `GET /orders/42` returns any order because the server trusts the URL id. Fix: always check that the requester owns/can-access the resource, not just that they're logged in." },
+    { "type": "callout", "variant": "mistake", "markdown": "Client-only validation. Attackers bypass your app entirely; the server must revalidate every input. Also: putting secrets/tokens in URLs (they leak via logs and Referer)." },
+    { "type": "callout", "variant": "best", "markdown": "HTTPS (HSTS), short-lived JWTs, refresh-token rotation, per-user rate limits (token bucket), strict CORS allowlist, security headers, structured audit logging, and secret scanning in CI." }
+  ],
+  "flashcards": [
+    { "front": "What is BOLA/IDOR?", "back": "Broken Object-Level Authorization: the server acts on a client-supplied ID without checking ownership." },
+    { "front": "Where must input be validated?", "back": "Always on the server, regardless of client validation." },
+    { "front": "Common rate-limit algorithm?", "back": "Token bucket or sliding window, keyed per user/IP." }
+  ],
+  "quiz": [
+    { "q": "The most common API vulnerability is…", "options": ["SQL injection", "Broken object-level authorization (BOLA/IDOR)", "SSL misconfig", "CSS bugs"], "answer": 1, "explain": "OWASP API Top 10 #1: server trusts client-supplied IDs." },
+    { "q": "Rate limits are typically implemented with…", "options": ["Random rejection", "Token bucket / sliding window", "TCP window", "GC tuning"], "answer": 1, "explain": "Token bucket allows bursts but bounds sustained rate." },
+    { "q": "Where should secrets live?", "options": ["In client code", "In URL query strings", "In server-side secret manager / env", "In README"], "answer": 2, "explain": "Never ship secrets to clients or logs." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Add HTTPS + HSTS to a service." },
+    { "level": "Medium", "text": "Add per-user token-bucket rate limiting; return 429 + Retry-After." },
+    { "level": "Hard", "text": "Fix a BOLA bug: enforce ownership on GET /orders/:id." },
+    { "level": "Expert", "text": "Set up short-lived JWTs + refresh rotation + revocation list." }
+  ],
+  "interviewQuestions": [
+    "Name the OWASP API Top 10 and give one fix each.",
+    "What is BOLA/IDOR and how do you prevent it?",
+    "How do you rate-limit an API?",
+    "How do you handle secrets in a backend?",
+    "How do you audit and monitor API security?"
+  ],
+  "references": [
+    { "label": "OWASP API Security Top 10", "url": "https://owasp.org/API-Security/" }
+  ]
+}

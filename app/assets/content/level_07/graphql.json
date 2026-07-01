@@ -1,0 +1,52 @@
+{
+  "id": "be.graphql",
+  "levelId": 7,
+  "title": "GraphQL",
+  "xp": 40,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Explain queries, mutations and the schema",
+    "Understand the N+1 problem and DataLoader",
+    "Weigh GraphQL vs REST for your use case"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "GraphQL is a query language + runtime where the client specifies exactly what data it wants, and the server returns just that. One endpoint (`/graphql`), a typed schema, and three root operations: Query, Mutation, Subscription." },
+    { "type": "code", "language": "graphql", "code": "type User { id: ID!  name: String!  orders: [Order!]! }\ntype Order { id: ID!  total: Float! }\ntype Query { user(id: ID!): User }\ntype Mutation { placeOrder(userId: ID!, items: [String!]!): Order }\n\nquery { user(id: \"42\") { name  orders { total } } }" },
+    { "type": "table", "headers": ["", "REST", "GraphQL"], "rows": [
+      ["Endpoints", "Many nouns", "One /graphql"],
+      ["Over-fetching", "Common", "Client picks fields"],
+      ["Versioning", "URL v1/v2", "Deprecate fields"],
+      ["Caching", "HTTP caches natively", "App-level cache (Apollo/Relay)"],
+      ["N+1 risk", "Low", "High without DataLoader"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "The N+1 problem: resolving `orders` for 20 users fires 20 DB queries. Fix with **DataLoader** — batches keys within a tick and dedupes calls. This is the #1 GraphQL performance interview question." },
+    { "type": "callout", "variant": "mistake", "markdown": "Ignoring query cost/complexity: a client can request deeply nested lists and DoS your server. Enforce depth limits, complexity budgets, and persisted queries in production." },
+    { "type": "callout", "variant": "tip", "markdown": "GraphQL shines when clients (mobile, web, IoT) need different views of the same data. For simple CRUD or public APIs with strong HTTP caching, REST is often the right call." }
+  ],
+  "flashcards": [
+    { "front": "Three GraphQL root operations?", "back": "Query (read), Mutation (write), Subscription (real-time)." },
+    { "front": "What's the N+1 problem?", "back": "Resolving a list field triggers N separate downstream calls; fix with DataLoader batching." },
+    { "front": "Common GraphQL DoS defense?", "back": "Depth limits + query complexity budgets + persisted queries." }
+  ],
+  "quiz": [
+    { "q": "GraphQL usually exposes…", "options": ["Many endpoints", "One endpoint with a typed schema", "SQL directly", "Files only"], "answer": 1, "explain": "A single /graphql endpoint with a strongly typed schema." },
+    { "q": "The classic fix for GraphQL's N+1 problem is…", "options": ["More servers", "DataLoader batching", "REST", "Disable caching"], "answer": 1, "explain": "DataLoader batches and dedupes keys per request." },
+    { "q": "GraphQL is a poor fit when…", "options": ["Clients need flexible field selection", "You have many different clients", "The API is simple CRUD with heavy HTTP caching", "You want to deprecate fields gradually"], "answer": 2, "explain": "REST's HTTP caching often wins for simple public CRUD." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Write a schema + resolver for User { name, email } and query it." },
+    { "level": "Medium", "text": "Add a Mutation with input types and error handling." },
+    { "level": "Hard", "text": "Fix an N+1 in a nested list using DataLoader." },
+    { "level": "Expert", "text": "Add persisted queries + depth/complexity limits to a production GraphQL server." }
+  ],
+  "interviewQuestions": [
+    "GraphQL vs REST — when use each?",
+    "What is the N+1 problem and how do you fix it?",
+    "How do you handle authentication with GraphQL?",
+    "What are persisted queries?",
+    "Query vs Mutation vs Subscription?"
+  ],
+  "references": [
+    { "label": "GraphQL — official docs", "url": "https://graphql.org/learn/" }
+  ]
+}

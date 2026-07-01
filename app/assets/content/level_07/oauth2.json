@@ -1,0 +1,56 @@
+{
+  "id": "be.oauth2",
+  "levelId": 7,
+  "title": "OAuth2 (Backend)",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Distinguish OAuth2 roles and grant types",
+    "Choose the right flow for a client type",
+    "Add OpenID Connect for identity"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "OAuth 2.0 is an authorization delegation framework. The user grants a third-party client scoped access to their resources without sharing their password. **OpenID Connect (OIDC)** layers identity on top with an ID token." },
+    { "type": "table", "headers": ["Role", "Meaning"], "rows": [
+      ["Resource Owner", "The user"],
+      ["Client", "The app requesting access"],
+      ["Authorization Server", "Issues tokens (Google, Auth0, Keycloak)"],
+      ["Resource Server", "Your API, validates tokens"]
+    ]},
+    { "type": "table", "headers": ["Flow", "Use for"], "rows": [
+      ["Authorization Code + PKCE", "Web apps, mobile, SPAs (default)"],
+      ["Client Credentials", "Service-to-service (no user)"],
+      ["Device Code", "TVs, CLIs, IoT with limited input"],
+      ["Refresh Token", "Renew access tokens silently"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "The Implicit and Password grants are **deprecated**. Modern answer: 'Authorization Code + PKCE for user-facing apps, Client Credentials for machine-to-machine.' PKCE prevents authorization-code interception on public clients." },
+    { "type": "callout", "variant": "mistake", "markdown": "Storing client_secret in a mobile/SPA (public client) — attackers can extract it. Public clients use PKCE with no secret; only confidential (server) clients hold secrets." },
+    { "type": "callout", "variant": "best", "markdown": "Use a mature identity provider (Auth0, Okta, Keycloak, Cognito). Validate ID tokens with JWKS. Request minimal scopes. Rotate refresh tokens and detect reuse (evidence of theft)." }
+  ],
+  "flashcards": [
+    { "front": "OAuth2 roles?", "back": "Resource Owner (user), Client (app), Authorization Server (issues tokens), Resource Server (your API)." },
+    { "front": "Default flow for mobile/SPA?", "back": "Authorization Code with PKCE." },
+    { "front": "OpenID Connect vs OAuth2?", "back": "OIDC adds identity: an ID token that says who the user is." }
+  ],
+  "quiz": [
+    { "q": "The recommended flow for a mobile app is…", "options": ["Password grant", "Implicit", "Authorization Code + PKCE", "Device code"], "answer": 2, "explain": "PKCE protects the code exchange on public clients." },
+    { "q": "For pure service-to-service auth use…", "options": ["Password grant", "Client Credentials", "Authorization Code", "Implicit"], "answer": 1, "explain": "No user is involved — the client acts on its own behalf." },
+    { "q": "OIDC adds…", "options": ["A DB layer", "An ID token identifying the user", "Rate limiting", "CORS"], "answer": 1, "explain": "OIDC layers identity on OAuth2 via a signed ID token." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Configure a Resource Server that accepts JWTs from your IdP." },
+    { "level": "Medium", "text": "Add 'Sign in with Google' using Authorization Code + PKCE." },
+    { "level": "Hard", "text": "Build a service-to-service call using Client Credentials + audience-scoped tokens." },
+    { "level": "Expert", "text": "Implement refresh-token rotation with reuse detection." }
+  ],
+  "interviewQuestions": [
+    "Name the OAuth2 roles.",
+    "Which grant is default for mobile/SPA and why?",
+    "What does PKCE prevent?",
+    "OAuth2 vs OpenID Connect?",
+    "How do you detect stolen refresh tokens?"
+  ],
+  "references": [
+    { "label": "OAuth 2.0 Simplified", "url": "https://www.oauth.com" }
+  ]
+}

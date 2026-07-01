@@ -1,0 +1,51 @@
+{
+  "id": "be.rabbitmq",
+  "levelId": 7,
+  "title": "RabbitMQ",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Explain the AMQP producer→exchange→queue model",
+    "Choose the right exchange type",
+    "Handle acknowledgments, retries and DLQ"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "RabbitMQ is a message broker implementing AMQP. Producers send to an **exchange**; bindings route it to one or more **queues**; consumers ack messages as they process. Great for task queues and flexible routing." },
+    { "type": "table", "headers": ["Exchange type", "Routes by"], "rows": [
+      ["direct", "Exact routing key match"],
+      ["fanout", "Broadcast to all bound queues"],
+      ["topic", "Pattern like orders.eu.*"],
+      ["headers", "Header attributes"]
+    ]},
+    { "type": "code", "language": "text", "code": "Producer -> exchange('orders', type: topic)\n                       │  routing key: 'orders.eu.paid'\n                       ▼\n           binding 'orders.*.paid' → queue.billing\n           binding 'orders.eu.*'    → queue.eu_dashboard\nConsumer acks message → removed from queue\nNack + no-requeue → sent to DLX (dead letter exchange)" },
+    { "type": "callout", "variant": "interview", "markdown": "Kafka vs RabbitMQ: **Kafka** = ordered log for streaming/replay/high-throughput. **RabbitMQ** = flexible routing + per-message ack + task queues; simpler to operate for job systems. Different tools for different jobs." },
+    { "type": "callout", "variant": "mistake", "markdown": "Using auto-ack — a consumer crash loses in-flight messages. Use manual acks, set prefetch to bound in-flight work per consumer, and configure a Dead Letter Exchange for poisoned messages." },
+    { "type": "callout", "variant": "best", "markdown": "Idempotent consumers, retry with backoff via delayed exchange plugin, and DLQ + alarms so unprocessed messages surface. Mirror queues for HA in a cluster." }
+  ],
+  "flashcards": [
+    { "front": "AMQP flow?", "back": "Producer → Exchange → (bindings) → Queue → Consumer (with ack)." },
+    { "front": "Kafka vs RabbitMQ in one line?", "back": "Kafka: ordered log/streaming. RabbitMQ: flexible routing + task queues with per-message ack." },
+    { "front": "What is a DLX?", "back": "A dead-letter exchange that receives rejected/expired messages for later inspection or retry." }
+  ],
+  "quiz": [
+    { "q": "In RabbitMQ, producers send to a…", "options": ["Queue directly", "Exchange, which routes to queues", "Consumer", "Broker root"], "answer": 1, "explain": "Exchanges own routing; queues receive after binding." },
+    { "q": "For pattern routing like 'orders.eu.*' use…", "options": ["direct", "fanout", "topic", "headers"], "answer": 2, "explain": "Topic exchanges match patterns on the routing key." },
+    { "q": "A safe consumption pattern is…", "options": ["auto-ack + no retries", "manual ack + prefetch + DLX", "no ack + no timeouts", "single consumer only"], "answer": 1, "explain": "Manual acks + DLX prevent loss and handle poison messages." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Publish/consume messages via a direct exchange." },
+    { "level": "Medium", "text": "Add a topic exchange and route to two queues." },
+    { "level": "Hard", "text": "Add retry with exponential backoff via delayed exchange + DLX." },
+    { "level": "Expert", "text": "Set up a mirrored HA cluster and test failover." }
+  ],
+  "interviewQuestions": [
+    "Explain producer → exchange → queue.",
+    "When choose Kafka vs RabbitMQ?",
+    "What is a Dead Letter Exchange?",
+    "Manual vs auto ack?",
+    "How do you handle retries and idempotency?"
+  ],
+  "references": [
+    { "label": "RabbitMQ — tutorials", "url": "https://www.rabbitmq.com/getstarted.html" }
+  ]
+}

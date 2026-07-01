@@ -1,0 +1,52 @@
+{
+  "id": "be.spring_security",
+  "levelId": 7,
+  "title": "Spring Security",
+  "xp": 50,
+  "estimatedMinutes": 30,
+  "objectives": [
+    "Understand the security filter chain",
+    "Configure authN/authZ for a REST API",
+    "Protect endpoints with role-/method-based rules"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Spring Security is a battle-tested framework that plugs into Spring apps as a chain of servlet filters, handling authentication, authorization, session management, CSRF, CORS and common attacks by default." },
+    { "type": "code", "language": "java", "code": "@Configuration\nclass Sec {\n  @Bean SecurityFilterChain chain(HttpSecurity http) throws Exception {\n    return http\n      .csrf(c -> c.disable())                     // OK for stateless APIs\n      .authorizeHttpRequests(a -> a\n         .requestMatchers(\"/public/**\").permitAll()\n         .requestMatchers(\"/admin/**\").hasRole(\"ADMIN\")\n         .anyRequest().authenticated())\n      .oauth2ResourceServer(o -> o.jwt(Customizer.withDefaults()))\n      .build();\n  }\n}" },
+    { "type": "table", "headers": ["Concept", "Purpose"], "rows": [
+      ["Filter chain", "Every request passes through security filters"],
+      ["Authentication", "Who are you (JWT/session/OAuth2)"],
+      ["Authorization", "What can you do (roles/scopes/expressions)"],
+      ["UserDetailsService", "Load users for form/basic auth"],
+      ["@PreAuthorize", "Method-level rules"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Modern Spring Security is a lambda-DSL — no more WebSecurityConfigurerAdapter. For stateless JWT APIs, wire up `oauth2ResourceServer().jwt()` and let the built-in JWT filter validate tokens; use `@PreAuthorize(\"hasRole('ADMIN')\")` for method-level rules." },
+    { "type": "callout", "variant": "mistake", "markdown": "Disabling CSRF for a session-based browser app (leaves you open to CSRF attacks). Only disable CSRF for stateless API clients that don't use cookies for auth." },
+    { "type": "callout", "variant": "best", "markdown": "For SPAs/mobile: stateless JWT + Resource Server. Hash passwords with BCrypt. Never log tokens. Use `HttpSecurity.headers()` for security headers (HSTS, X-Content-Type-Options). Add rate-limit + brute-force protection at the edge." }
+  ],
+  "flashcards": [
+    { "front": "How does Spring Security intercept requests?", "back": "Via a chain of servlet filters (SecurityFilterChain)." },
+    { "front": "AuthN vs AuthZ?", "back": "Authentication = who you are; Authorization = what you can do." },
+    { "front": "Method-level rules use…", "back": "@PreAuthorize / @PostAuthorize with SpEL expressions." }
+  ],
+  "quiz": [
+    { "q": "Spring Security operates as…", "options": ["A separate DB", "A filter chain in front of the app", "A build plugin", "A CSS framework"], "answer": 1, "explain": "Filters process every request before controllers." },
+    { "q": "For JWT-based APIs you configure…", "options": ["FormLogin", "OAuth2 Resource Server + JWT", "CSRF tokens", "Cookies-only"], "answer": 1, "explain": "Resource Server validates tokens on each request." },
+    { "q": "You should DISABLE CSRF when…", "options": ["Always", "Never", "Stateless API without cookie-based auth", "Using BCrypt"], "answer": 2, "explain": "CSRF is only relevant when browsers send cookies automatically." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Secure /admin/** for role ADMIN; leave /public open." },
+    { "level": "Medium", "text": "Validate JWTs via Resource Server; map scopes to roles." },
+    { "level": "Hard", "text": "Add BCrypt password hashing + UserDetailsService with a JPA-backed user repo." },
+    { "level": "Expert", "text": "Implement per-method rules with @PreAuthorize + SpEL touching request attributes." }
+  ],
+  "interviewQuestions": [
+    "How does Spring Security's filter chain work?",
+    "How do you protect a REST API with JWTs?",
+    "@PreAuthorize vs URL-level rules?",
+    "When to disable CSRF?",
+    "How do you handle password hashing?"
+  ],
+  "references": [
+    { "label": "Spring Security — reference", "url": "https://docs.spring.io/spring-security/reference/" }
+  ]
+}
