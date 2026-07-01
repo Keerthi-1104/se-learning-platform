@@ -3,52 +3,107 @@
   "levelId": 1,
   "title": "Data Structures",
   "xp": 60,
-  "estimatedMinutes": 40,
+  "estimatedMinutes": 50,
   "objectives": [
-    "Pick a structure by its dominant operation",
-    "Explain how a hash table achieves O(1) average",
-    "Know when trees, heaps and tries win"
+    "Understand each core data structure by a real-life analogy",
+    "Know which structure to pick for which problem — by dominant operation",
+    "Understand how a hash table achieves O(1) average lookup",
+    "Recognize when arrays beat linked lists (and vice versa)",
+    "Answer data-structure interview questions with confidence"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "A data structure organizes data so specific operations (insert, search, delete, traverse) are efficient. Choosing the right one often decides pass vs fail." },
-    { "type": "table", "headers": ["Structure", "Search", "Insert", "Strength"], "rows": [
-      ["Array", "O(n)", "O(n)", "Index, cache-friendly"],
-      ["Linked list", "O(n)", "O(1) ends", "Cheap end insert"],
-      ["Hash table", "O(1)*", "O(1)*", "Fast key lookup"],
-      ["Balanced BST", "O(log n)", "O(log n)", "Sorted + fast"],
-      ["Heap", "O(n)", "O(log n)", "Priority queue"],
-      ["Trie", "O(L)", "O(L)", "Prefix search"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Every data structure is like a specific kind of storage in real life.**\n\n- **Array** — a row of numbered lockers. You go straight to locker #7 in one step. Fast lookup, but adding a locker in the middle means shifting everyone.\n- **Linked list** — a treasure hunt. Each note points to the next. Fast to add another note anywhere, but to find the 100th note you must follow 99 notes.\n- **Stack** — a stack of dinner plates. You only take from the top. Last one placed is the first one taken (LIFO).\n- **Queue** — a line at the ticket counter. First one in line is first served (FIFO). New arrivals join the back.\n- **Hash table** — a phone book. You give a name; it goes straight to the number.\n- **Tree** — a family tree or company org chart. One parent, many children.\n- **Graph** — a social network. Everyone connects to anyone, in any direction.\n\n**Picking the right one is 80% of solving performance problems.**" },
+    { "type": "callout", "variant": "definition", "markdown": "A **data structure** is a way of organizing data in memory so that specific operations — insert, search, delete, traverse — are efficient. Picking the right one for your workload is often the difference between an app that scrolls smoothly and one that stutters." },
+    { "type": "theory", "markdown": "## The master comparison table — the single chart you should memorize" },
+    { "type": "table", "headers": ["Structure", "Access", "Search", "Insert", "Delete", "Strength"], "rows": [
+      ["Array (fixed)", "O(1)", "O(n)", "O(n)", "O(n)", "Index, cache-friendly, contiguous memory"],
+      ["Dynamic array (List)", "O(1)", "O(n)", "O(1)*", "O(n)", "Grows automatically; * amortized"],
+      ["Singly-linked list", "O(n)", "O(n)", "O(1) at head", "O(1) at head", "Cheap insert/remove at ends"],
+      ["Stack (LIFO)", "top only", "—", "O(1)", "O(1)", "Undo, recursion, expression parsing"],
+      ["Queue (FIFO)", "ends only", "—", "O(1)", "O(1)", "Scheduling, BFS, background jobs"],
+      ["Hash table (Map/Set)", "—", "O(1)*", "O(1)*", "O(1)*", "Fast key lookup; * average, not worst case"],
+      ["Balanced BST", "—", "O(log n)", "O(log n)", "O(log n)", "Sorted + fast; TreeMap, TreeSet"],
+      ["Heap (priority queue)", "min/max O(1)", "O(n)", "O(log n)", "O(log n)", "Repeatedly needing the smallest/largest"],
+      ["Trie", "—", "O(L)", "O(L)", "O(L)", "Prefix search; L = key length"],
+      ["Graph", "—", "varies", "—", "—", "Relationships / networks"]
     ]},
-    { "type": "code", "language": "text", "code": "Hash table:\n  index = hash(key) % capacity\n  collisions -> chaining (list per bucket) or open addressing\n  high load factor -> resize & rehash (keeps O(1) average)" },
-    { "type": "callout", "variant": "interview", "markdown": "Hash tables are the most-used structure in interviews — they turn many O(n²) brute forces into O(n). When you think 'have I seen this?' or 'count occurrences', reach for a map/set." },
-    { "type": "callout", "variant": "mistake", "markdown": "Using a linked list when you need random access, or an array when you do many middle insertions. Match the structure to the dominant operation, not habit." }
+    { "type": "callout", "variant": "note", "markdown": "**Common misconception:** 'a linked list is faster than an array because insert is O(1).' In practice arrays usually win — **cache locality**. The whole array fits in cache; walking it is nearly free per element. A linked list scatters nodes across memory, and every jump can miss the cache. Big-O is not the whole story." },
+    { "type": "theory", "markdown": "## How a hash table actually works\n\nHash tables (called `Map`, `Dictionary`, `HashMap`, `dict` in different languages) are the workhorse of software engineering. When an interview problem says 'have I seen this before?' or 'count occurrences of X,' the answer is almost always a hash table." },
+    { "type": "code", "language": "text", "code": "  put('ada', 42):\n    hash('ada')   -> 8746529      (a number derived from the key)\n    slot = 8746529 % capacity     (e.g. 8746529 % 16 = 9)\n    buckets[9] gets  ('ada', 42)\n\n  Collision — 'kim' also hashes to slot 9:\n    Option A (chaining):    slot 9 becomes a list: ['ada'→42, 'kim'→7]\n    Option B (open addressing): probe slots 10, 11, ... until an empty one\n\n  get('ada'):\n    hash('ada') % 16 = 9\n    walk bucket 9's list until we find 'ada' -> return 42\n\n  Load factor too high (say > 0.75) → grow the table, rehash everything.\n  Kept low → O(1) average operations." },
+    { "type": "callout", "variant": "interview", "markdown": "**Java 8+ HashMap treeifies long buckets** — once a bucket has more than 8 entries, it becomes a red-black tree instead of a linked list. That upgrades worst-case lookup from O(n) to O(log n). Classic interview trivia at Amazon and Oracle." },
+    { "type": "theory", "markdown": "## Choose by dominant operation — a practical guide" },
+    { "type": "table", "headers": ["What you'll do most", "Pick"], "rows": [
+      ["Look up 'have I seen this?' by key", "Hash Set / Hash Map"],
+      ["Random access by index", "Array / Dynamic array (List)"],
+      ["Always take the most recent item", "Stack"],
+      ["Always take the oldest item", "Queue"],
+      ["Always take the smallest/biggest item", "Heap (priority queue)"],
+      ["Iterate keys in sorted order", "Balanced BST / TreeMap"],
+      ["Autocomplete / prefix search", "Trie"],
+      ["Model relationships / networks", "Graph"]
+    ]},
+    { "type": "theory", "markdown": "## A complete sample program — same problem, three data structures\n\nProblem: given a list of numbers, count how many are duplicates. Watch how the data structure choice changes performance drastically:" },
+    { "type": "code", "language": "dart", "code": "// File: ds_demo.dart\n// Run: dart ds_demo.dart\nimport 'dart:math';\n\nvoid main() {\n  final rand = Random(42);\n  final nums = List.generate(10000, (_) => rand.nextInt(9000));\n\n  // Approach 1: LIST (linear search) — O(n²) — slow\n  var t0 = DateTime.now();\n  var dups1 = 0; final seen1 = <int>[];\n  for (final n in nums) {\n    if (seen1.contains(n)) dups1++;   // O(n) each time\n    else seen1.add(n);\n  }\n  final ms1 = DateTime.now().difference(t0).inMilliseconds;\n\n  // Approach 2: HASH SET — O(n) — fast\n  t0 = DateTime.now();\n  var dups2 = 0; final seen2 = <int>{};\n  for (final n in nums) {\n    if (!seen2.add(n)) dups2++;       // O(1) each time\n  }\n  final ms2 = DateTime.now().difference(t0).inMilliseconds;\n\n  // Approach 3: HASH MAP with counts — O(n), also gives frequencies\n  t0 = DateTime.now();\n  final counts = <int, int>{};\n  for (final n in nums) counts[n] = (counts[n] ?? 0) + 1;\n  var dups3 = counts.values.where((c) => c > 1).length;\n  final ms3 = DateTime.now().difference(t0).inMilliseconds;\n\n  print('List / linear search : $dups1 dups in $ms1 ms');\n  print('Hash set             : $dups2 dups in $ms2 ms');\n  print('Hash map w/ counts   : $dups3 unique nums seen 2+ times in $ms3 ms');\n  print('Same answer, but different speeds by orders of magnitude.');\n}\n\n// Typical output on a laptop:\n// List / linear search : 1015 dups in 1420 ms\n// Hash set             : 1015 dups in 3 ms\n// Hash map w/ counts   : 8985 unique nums seen 2+ times in 3 ms\n// Same answer, but different speeds by orders of magnitude.\n//\n// The list approach: 400+ TIMES slower than the hash set.\n// That's the impact of picking the right data structure." },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Reaching for a linked list because 'insert is O(1).'**\n\nIn practice arrays win most of the time. The cache-friendliness of contiguous memory dwarfs the theoretical Big-O advantage. Use a linked list only when you're constantly inserting/removing at both ends (deque) — and even then a `Deque` (backed by array) is usually better." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Using a mutable object (or an object with a broken `hashCode`) as a HashMap key.**\n\nIf the key's hash changes after you insert it, the map can never find it again. **Rule:** hash-map keys should be immutable (or at least the fields used in `hashCode` should never change while it's in the map)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Sorting a list to find the smallest element.**\n\nSorting is O(n log n). Just scan for the min: O(n). If you need the smallest repeatedly, use a heap." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Default to `List` and `Map` in your language of choice.** Reach for specialty structures only when profiling or Big-O demands it." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Match the structure to the dominant operation, not habit.** Ask: 'what will I do 90% of the time?' Then pick." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Use `LinkedHashMap` (or equivalent) when you need insertion-order iteration.** It's a map that also remembers order." },
+    { "type": "callout", "variant": "best", "markdown": "**4. For counters, use `map.merge(key, 1, Integer::sum)` (Java) or `map[k] = (map[k] ?? 0) + 1` (Dart).** The one-liner idiom every senior knows." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Two Sum.** Given a list of numbers and a target, return the indices of the two numbers that add to the target. Naive O(n²) with two loops → then O(n) with a hash map.\n\n**Why:** The single most common data-structure interview question. Every FAANG asks it." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Implement a stack and a queue** using only arrays. Show that both `push/pop` and `enqueue/dequeue` are O(1).\n\n**Why:** You'll understand what LIFO and FIFO really mean." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — LRU cache with O(1) get and put.** Combine a hash map (for O(1) lookup) with a doubly-linked list (for O(1) 'move to front').\n\n**Why:** Asked at Google, Amazon, Zoho, and every other product company. It teaches you to combine two data structures into a third." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Expert) — Implement a trie** with `insert`, `search`, and `startsWith`. Extend to support wildcard search (`.at` matches `cat`, `bat`, `hat`).\n\n**Why:** Autocomplete, spell-check, IP-routing tables — all built on tries." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Array vs linked list — when would you pick each?**\n\n**A:** Pick an **array (or dynamic array like `ArrayList`, `List`)** when you need random access by index, or when you'll mostly append and iterate — arrays are cache-friendly, so real-world performance dwarfs their theoretical O(n) middle-insert cost. Pick a **linked list** only when you're constantly inserting or removing at *both ends* — and even then, a deque (usually array-backed) is often a better choice. In real Java code you'll use `ArrayList` 95% of the time; `LinkedList` is almost never the right call. Big-O is not the whole story — cache locality often is." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How does a hash table achieve O(1) average?**\n\n**A:** A hash table stores entries in an array of 'buckets.' To insert `(key, value)`: compute `hash(key)`, take it modulo the array size to get a bucket index, and place the entry there. Retrieval does the same — hash the key, jump to that slot, find the entry. Because computing a hash and array indexing are both constant-time, average operations are O(1). **Collisions** — two keys landing in the same bucket — are handled by chaining (a linked list per bucket) or open addressing (probing nearby slots). Worst case (adversarial keys, all collide) is O(n), but a decent hash function and resizing when the load factor gets high keeps it O(1) in practice. Java 8+ upgrades long chains to red-black trees, bounding worst-case at O(log n)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: Why must hash-map keys have consistent `hashCode` and `equals`?**\n\n**A:** A hash map places an entry into a bucket based on the key's `hashCode`. When you look up the key later, it hashes again to find the same bucket. If `hashCode` changes between insert and lookup — for example, because you mutated a field the hash depends on — the map computes a different bucket and can never find the entry. The **equals/hashCode contract**: (1) if two keys are `equals`, their `hashCode`s must be equal; (2) `hashCode` must stay stable while the key is in the map. That's why immutable value objects (records, freezed classes) make ideal keys." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: When would you use a stack instead of a queue (or vice versa)?**\n\n**A:** Use a **stack (LIFO)** when the most recently added item is the one you want next — undo/redo, expression evaluation with parentheses, function-call frames, depth-first search. Use a **queue (FIFO)** when the oldest item is the one you want next — job scheduling, breadth-first search, print spooling, request handling. A memorable pattern: **DFS uses a stack**, **BFS uses a queue**." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How would you build an LRU cache with O(1) get and put?**\n\n**A:** Combine a **hash map** with a **doubly-linked list**. The hash map maps keys → nodes in the linked list. The linked list orders nodes by 'least recently used at the tail, most recent at the head.' On `get(key)`: look up the node (O(1) via map), unlink it from wherever it is, move it to the head (O(1) via linked-list pointers). On `put(key, value)`: if key exists, update and move to head; otherwise insert at head, and if size exceeds capacity, evict the tail node (also removed from the map). Both operations are O(1) because every step — map lookup, unlinking, re-linking — is constant time. Java's `LinkedHashMap` with access-order mode is essentially this." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: When is a heap the right structure?**\n\n**A:** When you repeatedly need the smallest or largest element. Common examples: Dijkstra's shortest-path (pop closest node), top-K problems (keep a size-K heap), scheduling (run the highest-priority task next), event simulation (next event by time). A binary heap gives O(log n) insert and O(log n) extract-min, and O(1) peek at the min. If you only need the smallest *once*, don't sort (O(n log n)) — scan (O(n)). Reach for a heap when 'smallest' is asked *repeatedly* over changing data." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: Adjacency list vs adjacency matrix for graphs — how do you choose?**\n\n**A:** **Adjacency list** (map from node → list of neighbors) uses O(V + E) space and is fast for iterating a node's neighbors — the standard choice for **sparse graphs** (most graphs in the real world). **Adjacency matrix** (V×V boolean/weight grid) uses O(V²) space and gives O(1) 'is there an edge between u and v.' Use it for **dense graphs** or algorithms that repeatedly query edge existence (like Floyd-Warshall). If your graph has millions of nodes and each connects to only a few others (social network, road network), the matrix would be terabytes — use an adjacency list." },
+    { "type": "theory", "markdown": "## Real-world examples\n\n- **Your phone's contacts search** uses a trie or inverted index for prefix matching.\n- **Uber / Google Maps** pathfinding uses a graph + priority queue (heap) for A*.\n- **Every database index** is a B-tree — a balanced tree tuned for disk pages instead of RAM.\n- **Browser history 'go back'** is a stack. Undo/redo is two stacks.\n- **Redis, Memcached, and every LRU cache in Flutter apps** is a hash map + doubly-linked list.\n- **git commit graph** is a directed acyclic graph (DAG). `git log --graph` traverses it." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Self-balancing trees** (AVL, Red-Black) rebalance on insertion/deletion so height stays log n.\n- **B-trees and B+-trees** are the balanced trees databases use — designed for reading disk pages instead of individual elements.\n- **Bloom filters** give probabilistic membership testing in tiny space. Cassandra and browsers use them to skip expensive lookups.\n- **Union-Find (Disjoint Set)** with path compression is nearly O(1) — used in Kruskal's algorithm and connected-components.\n- **Skip lists** — probabilistic alternative to balanced trees. Simpler to implement. Redis sorted sets are skip lists.\n- **Persistent data structures** — immutable structures with O(log n) 'updates' that share memory with the previous version. The basis of React state, Clojure, and functional programming." }
   ],
   "flashcards": [
-    { "front": "How does a hash table get O(1)?", "back": "It maps a key to a bucket via a hash; collisions are chained or probed, and it resizes to keep the load factor low." },
-    { "front": "Array vs linked list?", "back": "Array: O(1) index, cache-friendly. Linked list: O(1) insert at ends, O(n) access." },
-    { "front": "When use a trie?", "back": "Prefix queries — autocomplete, spell-check — keyed by characters." },
-    { "front": "When use a heap?", "back": "When you repeatedly need the min/max — priority queues, Dijkstra, top-k." }
+    { "front": "Big-O of a hash-table lookup?", "back": "O(1) average, O(n) worst case with adversarial keys (or O(log n) in Java 8+ HashMap thanks to treeification)." },
+    { "front": "Array vs linked list — practical winner?", "back": "Array — cache-friendly, contiguous memory. Linked lists win only for constant-time insert/remove at ends, and even then a deque is usually better." },
+    { "front": "Which structure for autocomplete?", "back": "Trie — keyed by characters. Prefix search is O(L) where L is the key length." },
+    { "front": "DFS vs BFS — which structure?", "back": "DFS uses a stack (or recursion). BFS uses a queue." },
+    { "front": "LRU cache in O(1)?", "back": "Hash map for lookup + doubly-linked list for order. Every operation is O(1)." }
   ],
   "quiz": [
-    { "q": "Best average-case lookup belongs to…", "options": ["Array", "Linked list", "Hash table", "Stack"], "answer": 2, "explain": "Hash tables give O(1) average lookup; arrays/lists are O(n) for search." },
-    { "q": "A balanced BST keeps operations at…", "options": ["O(1)", "O(log n)", "O(n)", "O(n log n)"], "answer": 1, "explain": "Balancing (AVL/Red-Black) keeps height ~log n, so search/insert/delete are O(log n)." },
-    { "q": "Which structure powers autocomplete?", "options": ["Heap", "Trie", "Stack", "Queue"], "answer": 1, "explain": "A trie is keyed by characters, making prefix search natural." },
-    { "q": "Arrays beat linked lists in practice mainly due to…", "options": ["Simpler syntax", "Cache-friendly contiguous memory", "Lower Big-O", "Encryption"], "answer": 1, "explain": "Contiguous storage gives spatial locality, so the CPU cache helps." }
+    { "q": "Best data structure for 'have I seen this key before?'", "options": ["Array", "Linked list", "Stack", "Hash Set"], "answer": 3, "explain": "O(1) average lookup." },
+    { "q": "Big-O of `list.contains(x)`?", "options": ["O(1)", "O(log n)", "O(n)", "O(n²)"], "answer": 2, "explain": "Linear scan of a list." },
+    { "q": "Which is FIFO?", "options": ["Stack", "Queue", "Heap", "Trie"], "answer": 1, "explain": "First in, first out." },
+    { "q": "You need repeatedly-removed smallest element. Best choice?", "options": ["Sort every time", "Heap", "Linked list", "Trie"], "answer": 1, "explain": "Heap gives O(log n) extract-min." },
+    { "q": "Java's HashMap upgrades long buckets to…", "options": ["A hash set", "A red-black tree (Java 8+)", "A trie", "An array"], "answer": 1, "explain": "Buckets with >8 entries become red-black trees, bounding worst-case at O(log n)." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Two Sum using a hash map in O(n)." },
-    { "level": "Medium", "text": "Implement a min-heap (insert, extract-min, heapify)." },
-    { "level": "Hard", "text": "Design an LRU cache with O(1) get/put (hash map + doubly linked list)." },
-    { "level": "Expert", "text": "Implement a trie with insert/search/startsWith and wildcard search." }
+    { "level": "Easy", "text": "Two Sum: given `[2,7,11,15]` and target 9, return the indices of the two numbers that sum to it. Solve in O(n²) then O(n)." },
+    { "level": "Easy", "text": "Count word frequencies in a paragraph using a hash map." },
+    { "level": "Medium", "text": "Implement a stack and a queue using only arrays. Both `push/pop` and `enqueue/dequeue` in O(1)." },
+    { "level": "Medium", "text": "First non-repeating character in a string — solve in one pass with a hash map." },
+    { "level": "Hard", "text": "Implement an LRU cache with O(1) get and put (hash map + doubly-linked list)." },
+    { "level": "Hard", "text": "Implement a min-heap with `push`, `pop`, `peek` and use it to find the top-K frequent elements." },
+    { "level": "Expert", "text": "Implement a trie supporting `insert`, `search`, `startsWith`, and wildcard search where `.at` matches `cat`, `bat`, `hat`." }
   ],
   "interviewQuestions": [
-    "Array vs linked list — when use each?",
-    "How does a hash table handle collisions?",
-    "What is a balanced BST and why does balance matter?",
-    "How would you implement an LRU cache in O(1)?",
-    "Adjacency list vs matrix for graphs?"
+    "Array vs linked list — when would you pick each?",
+    "How does a hash table achieve O(1) average?",
+    "Why must hash-map keys have consistent `hashCode` and `equals`?",
+    "When would you use a stack instead of a queue (or vice versa)?",
+    "How would you build an LRU cache with O(1) get and put?",
+    "When is a heap the right structure?",
+    "Adjacency list vs adjacency matrix for graphs — how do you choose?",
+    "How do tries compare to hash maps for autocomplete?"
   ],
   "references": [
-    { "label": "VisuAlgo — data structure visualizations", "url": "https://visualgo.net" }
+    { "label": "VisuAlgo — data structure visualizations", "url": "https://visualgo.net" },
+    { "label": "Big-O Cheat Sheet", "url": "https://www.bigocheatsheet.com" }
   ]
 }

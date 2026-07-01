@@ -1,51 +1,105 @@
 {
   "id": "cs.encryption_hashing",
   "levelId": 1,
-  "title": "Encryption & Hashing",
+  "title": "Encryption vs Hashing vs Encoding",
   "xp": 50,
-  "estimatedMinutes": 25,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Separate encoding, hashing and encryption by purpose",
-    "Pick the right tool for passwords, integrity and confidentiality",
-    "Explain why salts matter"
+    "Cleanly separate the three concepts — encoding, hashing, encryption",
+    "Know which tool solves which problem — and which is NOT security",
+    "Understand why salted-slow hashes exist and when to use them",
+    "Explain symmetric vs asymmetric encryption and when each fits",
+    "Answer crypto interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "mistake", "markdown": "The most common security confusion: treating **encoding, hashing and encryption** as interchangeable. They solve completely different problems." },
+    { "type": "callout", "variant": "analogy", "markdown": "**Three completely different everyday things, each often confused with the others:**\n\n1. **Encoding is like Morse code.** Anyone with the chart can read it back. It's not a secret — it's just *a different way of writing the same message* so it survives some medium (radio, cables, URLs).\n2. **Hashing is like a fingerprint.** You take an entire person and produce a small unique smudge. You **cannot** reconstruct the person from the smudge — hashing is a one-way street. But two identical fingerprints prove two identical people.\n3. **Encryption is like writing in a code language.** You + your friend share a codebook (a key). Anyone else sees gibberish. If you have the key you can go both ways — encrypt and decrypt.\n\n**The single most common security mistake is treating these as interchangeable.** They solve completely different problems." },
+    { "type": "callout", "variant": "definition", "markdown": "- **Encoding** transforms data into a different format for safe transport or storage — reversible, no key needed. **Not security.**\n- **Hashing** produces a fixed-size one-way digest of any input — used for integrity and password storage. **You cannot reverse it.**\n- **Encryption** transforms data using a key so only holders of the key can read it — reversible with the key. **Provides confidentiality.**" },
     { "type": "table", "headers": ["", "Encoding", "Hashing", "Encryption"], "rows": [
-      ["Goal", "Format/transport", "Integrity / passwords", "Confidentiality"],
-      ["Reversible?", "Yes (no key)", "No (one-way)", "Yes (with key)"],
-      ["Examples", "Base64, UTF-8", "SHA-256, bcrypt", "AES, RSA"]
+      ["Goal", "Format/transport data", "Integrity, verify without storing", "Keep the content secret"],
+      ["Reversible?", "Yes — no key needed", "No — one-way", "Yes — with the right key"],
+      ["Key needed?", "No", "No (but salt for passwords!)", "Yes"],
+      ["Fixed output size?", "No — proportional to input", "Yes — always same size", "Same size as input (roughly)"],
+      ["Examples", "Base64, URL-encoding, UTF-8", "SHA-256, bcrypt, argon2", "AES-GCM, RSA, ChaCha20"],
+      ["Security use", "None — just formatting", "Password storage, checksums", "TLS traffic, disk encryption"]
     ]},
-    { "type": "callout", "variant": "analogy", "markdown": "Encoding is **Morse code** — anyone with the chart reads it back. Encryption is writing in a language only you and your friend share a key for." },
-    { "type": "theory", "markdown": "## Hashing\n- **One-way**: can't reverse it.\n- **Deterministic**: same input → same hash; tiny change → totally different (avalanche).\n- **Fixed length** regardless of input size." },
-    { "type": "callout", "variant": "mistake", "markdown": "Using fast hashes (MD5, SHA-1, plain SHA-256) for passwords — attackers brute-force billions/sec. Use slow, salted hashes: bcrypt, scrypt, argon2." },
-    { "type": "callout", "variant": "note", "markdown": "**Salt** = random per-password value added before hashing so identical passwords get different hashes and rainbow tables fail." },
-    { "type": "callout", "variant": "perf", "markdown": "Hybrid/envelope encryption: use slow asymmetric crypto once to share a fast symmetric key, then AES for the data — exactly what TLS and KMS do." }
+    { "type": "theory", "markdown": "## Encoding — the one that's NOT security\n\n**Base64** turns arbitrary bytes into printable ASCII so they can travel through systems that expect text — HTTP headers, email, JSON, etc. `SGVsbG8=` decodes back to `Hello`. Anyone can do it. No key. **This is not encryption.**\n\nThe rule: if you 'encoded' something with Base64, you have not made it secret. You've made it URL-friendly." },
+    { "type": "theory", "markdown": "## Hashing — one-way and deterministic\n\nA cryptographic hash function takes any input (a byte or a gigabyte) and produces a **fixed-size digest** (SHA-256 → 32 bytes) with three magic properties:\n\n1. **Deterministic** — same input → same output, always.\n2. **Fast** — takes microseconds.\n3. **One-way** — given only the hash, you can't get the input back.\n4. **Avalanche** — flipping one bit of the input changes half the bits of the output.\n\n**Uses:** file integrity checks, Git commit hashes, blockchain, digital signatures, password storage." },
+    { "type": "code", "language": "text", "code": "  Input:  'hello'\n  SHA-256: 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824\n\n  Input:  'hellO'   (one letter changed)\n  SHA-256: 60a137e2f4b0d5cd47b0a51d38fdff28de0d9bc123ab97c5e3fd5f2a5f8a5e8b\n  \n  Half the digest changed. That's the avalanche property.\n  You cannot compute 'hello' from either hash — no inverse function exists." },
+    { "type": "callout", "variant": "mistake", "markdown": "**The #1 crypto mistake: storing passwords with SHA-256 (or worse, MD5).**\n\nSHA-256 is *fast* — a modern GPU can try billions of guesses per second. If your DB leaks, attackers crack most passwords in hours. Passwords need a **slow, salted, memory-hard hash** designed for this: **bcrypt, scrypt, or argon2**. These take ~100 ms per guess — deliberately." },
+    { "type": "callout", "variant": "note", "markdown": "**What is a salt?** A random per-password value added before hashing. Two users with the same password ('password123') now get *different* hashes, so an attacker can't use a precomputed rainbow table. bcrypt/argon2 handle salting for you — you don't need to add your own." },
+    { "type": "theory", "markdown": "## Encryption — the reversible-with-a-key one\n\nThere are two families. Real systems use both together." },
+    { "type": "table", "headers": ["", "Symmetric (AES, ChaCha20)", "Asymmetric (RSA, ECC)"], "rows": [
+      ["Keys", "One shared secret", "Public + private pair"],
+      ["Speed", "Very fast (GB/s)", "Slow (kB/s)"],
+      ["Problem it solves", "Bulk encryption of data", "How to safely share the shared key"],
+      ["Analogy", "Same key locks + unlocks", "One key locks (public), only its partner unlocks (private)"],
+      ["Used for", "Files, database columns, TLS traffic after handshake", "TLS handshake, digital signatures, key exchange"]
+    ]},
+    { "type": "callout", "variant": "perf", "markdown": "**Hybrid encryption** — used by TLS, HTTPS, KMS, and virtually every real system: use slow asymmetric crypto ONCE to safely share a symmetric key. Then use the fast symmetric key for the actual data. This is exactly what a TLS handshake does." },
+    { "type": "theory", "markdown": "## A complete sample program — see all three side by side\n\nThis Dart program encodes, hashes, and encrypts the same message so you can see the different outputs. Notice: only the last one is 'secret.'" },
+    { "type": "code", "language": "dart", "code": "// File: crypto_demo.dart\n// Run: dart pub add crypto encrypt  &&  dart crypto_demo.dart\nimport 'dart:convert';\nimport 'package:crypto/crypto.dart';\nimport 'package:encrypt/encrypt.dart';\n\nvoid main() {\n  const message = 'my card is 4111-1111-1111-1111';\n\n  // --- ENCODING (Base64) — reversible, no key, not security ---\n  final b64 = base64Encode(utf8.encode(message));\n  print('Base64 encoded : $b64');\n  print('  decode back  : ${utf8.decode(base64Decode(b64))}');\n  print('  ↑ ANYONE can do this. Not secret.\\n');\n\n  // --- HASHING (SHA-256) — one-way, deterministic ---\n  final digest = sha256.convert(utf8.encode(message)).toString();\n  print('SHA-256 hash   : $digest');\n  print('  same length regardless of input;');\n  print('  cannot be reversed back to the message.');\n  print('  Good for: integrity checks. BAD for password storage.\\n');\n\n  // --- ENCRYPTION (AES-256 in GCM mode) — needs a key ---\n  final key = Key.fromSecureRandom(32);\n  final iv  = IV.fromSecureRandom(12);         // \"initialization vector\"\n  final enc = Encrypter(AES(key, mode: AESMode.gcm));\n  final ct  = enc.encrypt(message, iv: iv);\n\n  print('AES-GCM cipher : ${ct.base64}');\n  print('  needs the KEY to decrypt: ${enc.decrypt(ct, iv: iv)}');\n  print('  Without the key, the ciphertext is useless.');\n}\n\n// Typical output:\n// Base64 encoded : bXkgY2FyZCBpcyA0MTExLTExMTEtMTExMS0xMTEx\n//   decode back  : my card is 4111-1111-1111-1111\n//   ↑ ANYONE can do this. Not secret.\n// SHA-256 hash   : 8f2a54b5...   (64 hex chars)\n//   same length regardless of input;\n//   cannot be reversed back to the message.\n//   Good for: integrity checks. BAD for password storage.\n// AES-GCM cipher : xJ7L8...   (random-looking bytes)\n//   needs the KEY to decrypt: my card is 4111-1111-1111-1111\n//   Without the key, the ciphertext is useless." },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: 'Let me Base64-encode this password to hide it.'**\n\nBase64 is not hiding. Anyone with the token/URL decodes it in one line. Passwords go through bcrypt/argon2, not Base64." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Storing passwords as SHA-256 or MD5.**\n\nFast hashes. Attackers crack them at billions per second on a GPU. Use bcrypt/argon2, always salted." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Rolling your own encryption.**\n\nDon't. Even 'small' details — using AES-CBC without HMAC, reusing an IV, misusing a random source — quietly turn 'encrypted' into 'trivially breakable.' Use vetted libraries: NaCl (libsodium), your platform's KMS, or well-known encrypt/decrypt functions." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Reusing keys across environments.**\n\nProd + staging + dev must have different keys, generated separately. A dev-env leak should not compromise prod." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Passwords → salted bcrypt or argon2, no exceptions.** Never MD5, SHA-1, plain SHA-256, or 'let's just Base64 encode it.'" },
+    { "type": "callout", "variant": "best", "markdown": "**2. Files/DB columns → authenticated encryption (AES-GCM or ChaCha20-Poly1305).** These provide confidentiality AND integrity in one primitive." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Never reuse an IV / nonce with the same key.** In AES-GCM, IV reuse is catastrophic — it can leak the key stream." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Rotate keys regularly and put them in a KMS.** AWS KMS, Google KMS, or Vault. Never in git." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Compare hashes with constant-time comparison** (`crypto_hash_equals`) to avoid timing attacks that leak how many bytes matched." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — decode a Base64 string in one line.** Any language. Prove to yourself that Base64 is not security.\n\n**Why:** You'll never again treat Base64 as encryption." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — bcrypt round-trip with salt.** Hash 'password123' three times. Show that each hash is *different* (because of salting). Then verify — all three succeed.\n\n**Why:** Salting confuses beginners; this makes it concrete." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — AES-GCM file encryption.** Encrypt a file with AES-256-GCM. Store the IV in the output header. Decrypt back. Then modify one byte of the ciphertext and observe that decryption *fails* (GCM detects tampering).\n\n**Why:** You'll see integrity + confidentiality together, which is what real systems need." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Expert) — sign + verify with RSA.** Generate an RSA key pair. Sign a message with the private key. Verify with the public key. Then flip one byte of the message and show verification fails.\n\n**Why:** This is exactly how software updates, JWT RS256, and certificate signatures work." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What's the difference between encoding, hashing, and encryption?**\n\n**A:** They solve completely different problems. **Encoding** transforms data into a different format (like Base64) so it survives transport — anyone can reverse it without a key. It's not security. **Hashing** produces a fixed-size one-way digest of any input — same input always yields the same hash, but you can't reverse the hash back to the input. Used for integrity checks and password storage (with slow salted hashes like bcrypt). **Encryption** transforms data using a key so only holders of the key can read it — reversible with the key, gives confidentiality. Real systems mix all three: a login page uses TLS (encryption), stores passwords with bcrypt (hashing), and often Base64-encodes tokens for HTTP transport (encoding)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: Why is Base64 not encryption?**\n\n**A:** Base64 is a reversible representation of arbitrary bytes as printable characters. It has no key, no secret, no algorithm choice. `base64Decode(anyString)` returns the original bytes. It exists purely so binary data can live in text-only channels — HTTP headers, JSON strings, URLs, email. The single most common security mistake is 'I Base64-encoded my token so nobody can read it' — anyone can decode it in a fraction of a second. If you need confidentiality, use encryption; if you need integrity, use a hash or MAC." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: Why must passwords use bcrypt/argon2 instead of SHA-256?**\n\n**A:** SHA-256 is a fast general-purpose hash — a modern GPU can compute billions per second. If your database leaks (which happens all the time), an attacker can brute-force common passwords in hours. **bcrypt, scrypt, and argon2** are designed to be *deliberately slow* and memory-hard — a single verification takes ~100 ms and cannot be massively parallelized on GPUs. Brute forcing millions of accounts becomes economically infeasible. They also handle salting automatically, defeating rainbow-table attacks. If you're hashing a password, always use one of these — never a plain fast hash." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What's a salt, and why is it critical?**\n\n**A:** A salt is a random per-password value mixed into the hash. Without it, two users with the same password get identical hashes — an attacker who cracks one has cracked both. With salting, identical passwords produce different hashes, and **precomputed rainbow tables** (giant lookup tables of common passwords → hashes) become useless because the attacker would need a separate table for every possible salt. bcrypt and argon2 generate and embed the salt in the hash for you — you just call `hash(password)` and `verify(password, hash)`, and salting happens under the hood." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: Symmetric vs asymmetric encryption — when to use each?**\n\n**A:** **Symmetric** (AES, ChaCha20) uses a single shared secret; extremely fast (gigabytes per second) but requires both sides to already share the key. Best for bulk data — files, database columns, TLS traffic after the handshake. **Asymmetric** (RSA, ECC) uses a public+private key pair; anyone can encrypt with the public key, only the private-key holder can decrypt. Also enables digital signatures. Very slow (kilobytes per second), so unsuitable for bulk data. In real systems these combine: use slow asymmetric crypto ONCE to safely share a symmetric key over an insecure channel, then use the fast symmetric key for the actual data. That's exactly what TLS, PGP, KMS envelopes, and Signal all do." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: Why is 'roll your own crypto' considered dangerous?**\n\n**A:** Cryptography is a minefield of subtle mistakes that turn 'encrypted' into 'trivially broken.' Reusing an IV with AES-GCM leaks the key stream. AES-CBC without an HMAC allows padding oracle attacks. Non-constant-time comparison leaks how many bytes matched (timing attack). Bad random-number generation makes keys predictable. Even senior cryptographers occasionally slip. **Always use vetted, battle-tested libraries**: libsodium (NaCl), your platform's built-in crypto, or your cloud's KMS. The right level of engagement with crypto for most engineers is choosing the right primitive and calling the library — never implementing the primitive." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What is a digital signature?**\n\n**A:** A digital signature is created by hashing a message and then encrypting the hash with the sender's *private* key. Anyone with the sender's *public* key can decrypt to get the original hash, re-hash the message themselves, and verify they match. If they do, the message came from someone who holds the private key AND wasn't modified in transit. Digital signatures give you **integrity + authenticity + non-repudiation** — the signer can't later claim they didn't sign. They power software updates, JWT RS256 verification, TLS certificates, and cryptocurrencies. Signing is essentially 'hashing + asymmetric crypto in reverse.'" },
+    { "type": "theory", "markdown": "## Real-world examples\n\n- **Every HTTPS site** uses hybrid encryption: RSA/ECDHE (asymmetric) for the handshake, AES-GCM (symmetric) for the actual data.\n- **AWS KMS, Google KMS, and Vault** implement 'envelope encryption' — a small data-encryption key (DEK) encrypts your data, and a stronger master key (KEK) encrypts the DEK. Rotate the master without re-encrypting terabytes of data.\n- **Signal, WhatsApp, iMessage** use hybrid encryption + forward secrecy so past messages stay private even if today's key is stolen.\n- **Every 'confirm password' box** on the internet compares a fresh bcrypt/argon2 hash of what you typed to the stored hash. Nobody at the company knows your actual password — not even DBAs." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Authenticated encryption (AEAD)** — encryption + integrity together in one primitive (AES-GCM, ChaCha20-Poly1305). Always prefer over raw encryption modes.\n- **HMAC** — a keyed hash for message authentication codes. Used everywhere from AWS request signing to JWT HS256.\n- **Key derivation functions (KDFs)** — turn a password into an encryption key (PBKDF2, scrypt, argon2id). Same as password hashing but the output is used as a key.\n- **Post-quantum cryptography** — a future quantum computer breaks RSA and ECC. NIST is standardizing lattice-based replacements (Kyber, Dilithium). Migration is a decade-long project already underway.\n- **Format-preserving encryption** — encrypts a 16-digit card number to *another* 16-digit number. Useful for legacy systems that expect specific formats." }
   ],
   "flashcards": [
-    { "front": "Encoding vs hashing vs encryption?", "back": "Encoding = reversible formatting (no key). Hashing = one-way digest. Encryption = reversible with a key." },
-    { "front": "Why salt password hashes?", "back": "So identical passwords hash differently, defeating rainbow tables and precomputation." },
-    { "front": "Symmetric vs asymmetric?", "back": "Symmetric (AES) = one shared key, fast. Asymmetric (RSA/ECC) = public/private pair, enables key exchange + signatures." }
+    { "front": "Which of the three is NOT security?", "back": "Encoding — Base64, URL-encoding, UTF-8. Zero secrets involved." },
+    { "front": "Password storage — the right primitive?", "back": "Salted bcrypt or argon2. Never MD5 / SHA-1 / plain SHA-256." },
+    { "front": "Symmetric vs asymmetric?", "back": "Symmetric: one shared key, fast. Asymmetric: public+private pair, slow, enables key exchange + signatures." },
+    { "front": "What is hybrid encryption?", "back": "Asymmetric to share a key + symmetric for the bulk data. Used by TLS, KMS, Signal." },
+    { "front": "What is a salt?", "back": "Random per-password value that makes identical passwords hash to different digests, defeating rainbow tables." }
   ],
   "quiz": [
-    { "q": "Base64 is…", "options": ["Encryption", "Hashing", "Encoding (reversible, no key)", "A signature"], "answer": 2, "explain": "Base64 just reformats bytes to ASCII — anyone can decode it. It is not security." },
-    { "q": "Best choice for storing passwords?", "options": ["Plain text", "MD5", "Salted bcrypt/argon2", "Base64"], "answer": 2, "explain": "Slow, salted hashes resist brute force; fast hashes and encoding do not." },
-    { "q": "Which is one-way (not reversible)?", "options": ["AES", "Hashing", "Base64", "RSA"], "answer": 1, "explain": "Hashing cannot be reversed to the original input; encryption can with a key." }
+    { "q": "Base64 is…", "options": ["Encryption", "Hashing", "Encoding (reversible, no key)", "A signature scheme"], "answer": 2, "explain": "Just formatting — anyone can decode it." },
+    { "q": "You are storing user passwords. Best choice?", "options": ["Plaintext", "MD5", "SHA-256", "Salted bcrypt or argon2"], "answer": 3, "explain": "Deliberately slow, salted, designed for passwords." },
+    { "q": "Which is a ONE-WAY function?", "options": ["AES", "SHA-256", "Base64", "RSA"], "answer": 1, "explain": "You cannot reverse a hash. The others are reversible with a key (or without)." },
+    { "q": "TLS uses…", "options": ["Only symmetric", "Only asymmetric", "Hybrid — asymmetric handshake, symmetric bulk data", "None of these"], "answer": 2, "explain": "Slow asymmetric to agree on a fast symmetric session key." },
+    { "q": "Reusing an IV with AES-GCM is…", "options": ["Fine", "A catastrophic mistake that can leak the key stream", "Recommended", "Necessary"], "answer": 1, "explain": "GCM IVs must be unique per encryption with the same key." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Encode/decode a string to Base64 and URL-encoding; show round-trip equality." },
-    { "level": "Medium", "text": "Hash passwords with a salt using bcrypt; verify correct and reject wrong ones." },
-    { "level": "Hard", "text": "Encrypt and decrypt a file with AES-256-GCM, handling IV and auth tag." },
-    { "level": "Expert", "text": "Sign a message with RSA/ECDSA and verify with the public key." }
+    { "level": "Easy", "text": "Encode + decode a string to Base64. Prove that Base64 is round-trippable without any key." },
+    { "level": "Easy", "text": "Hash 'hello' with SHA-256. Then hash 'hellO'. Show that half the digest changes (avalanche)." },
+    { "level": "Medium", "text": "Hash 'password' with bcrypt three times. Show that all three hashes differ (salt) but each verifies." },
+    { "level": "Medium", "text": "Compare SHA-256 hashing speed vs bcrypt hashing speed. Time both on a laptop. The gap should be 1000x." },
+    { "level": "Hard", "text": "AES-256-GCM: encrypt a file, store the IV in the output, decrypt back. Then flip one byte of the ciphertext and confirm decryption throws." },
+    { "level": "Hard", "text": "Implement hybrid encryption: RSA to encrypt an AES key, AES to encrypt the message. Verify the receiver can decrypt both." },
+    { "level": "Expert", "text": "Sign a message with an RSA/ECDSA private key; verify with the public key. Then modify one byte of the message and show the verification fails." }
   ],
   "interviewQuestions": [
-    "Difference between encoding, hashing and encryption?",
+    "What's the difference between encoding, hashing, and encryption?",
     "Why is Base64 not encryption?",
-    "Why salt password hashes? What attack does it stop?",
-    "Why bcrypt/argon2 instead of SHA-256 for passwords?",
-    "What is a digital signature?"
+    "Why must passwords use bcrypt/argon2 instead of SHA-256?",
+    "What's a salt, and why is it critical?",
+    "Symmetric vs asymmetric encryption — when to use each?",
+    "Why is 'roll your own crypto' considered dangerous?",
+    "What is a digital signature?",
+    "What is hybrid encryption and why is it used everywhere?"
   ],
   "references": [
-    { "label": "OWASP Password Storage Cheat Sheet", "url": "https://cheatsheetseries.owasp.org" }
+    { "label": "OWASP Password Storage Cheat Sheet", "url": "https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html" },
+    { "label": "Cryptography Right Answers (Latacora)", "url": "https://latacora.singles/2018/04/03/cryptographic-right-answers.html" }
   ]
 }

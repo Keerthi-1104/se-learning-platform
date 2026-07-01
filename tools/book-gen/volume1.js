@@ -139,220 +139,28 @@ body.push(...topicToChapter(loadTopic("level_01", "tcp_udp"),
 body.push(...topicToChapter(loadTopic("level_01", "ssl_tls"),
   { chapterNumber: 7, bookmarkId: "ch7" }));
 
-// ============ 8. AUTHENTICATION & AUTHORIZATION (JWT, OAuth) ============
+// ============ 8. AUTHENTICATION & AUTHORIZATION ============
 body.push(...topicToChapter(loadTopic("level_01", "auth"),
   { chapterNumber: 8, bookmarkId: "ch8" }));
 
-// ============ 9. ENCRYPTION, HASHING, ENCODING ============
-body.push(H1("9. Encryption vs Hashing vs Encoding", "ch9"));
-body.push(callout("mistake", ["The single most common security confusion in interviews: treating encoding, hashing and encryption as interchangeable. They solve completely different problems."]));
-body.push(table(
-  ["", "Encoding", "Hashing", "Encryption"],
-  [
-    ["Goal", "Format/transport data", "Verify integrity / store passwords", "Confidentiality"],
-    ["Reversible?", "Yes (no key)", "No (one-way)", "Yes (with key)"],
-    ["Key needed?", "No", "No (salt, not key)", "Yes"],
-    ["Examples", "Base64, URL, UTF-8", "SHA-256, bcrypt, argon2", "AES, RSA, ChaCha20"],
-  ],
-  [1500, 2620, 2620, 2620],
-));
-body.push(H2("Encoding"));
-body.push(P("Encoding transforms data into another format for safe transport or storage — anyone can decode it. Base64 turns binary into ASCII (e.g., images in JSON, JWT parts). It is NOT security."));
-body.push(callout("analogy", ["Encoding is translating English to Morse code — anyone with the chart can read it back. Encryption is writing in a language only you and your friend share a key for."]));
-body.push(H2("Hashing"));
-body.push(bullet([{ t: "One-way: ", b: true }, "you cannot reverse a hash to the input."]));
-body.push(bullet([{ t: "Deterministic: ", b: true }, "same input → same hash; tiny input change → totally different hash (avalanche)."]));
-body.push(bullet([{ t: "Fixed length: ", b: true }, "any input size → fixed-size digest."]));
-body.push(callout("mistake", ["Using fast hashes (MD5, SHA-1, plain SHA-256) for passwords. They're built for speed, so attackers brute-force billions/sec. Use slow, salted hashes: bcrypt, scrypt, or argon2."]));
-body.push(callout("note", ["Salt = random per-password value added before hashing so identical passwords get different hashes and rainbow tables fail. Pepper = a secret added globally, stored separately."]));
-body.push(H2("Encryption"));
-body.push(bullet([{ t: "Symmetric (AES): ", b: true }, "one key encrypts & decrypts. Fast; great for bulk data at rest."]));
-body.push(bullet([{ t: "Asymmetric (RSA/ECC): ", b: true }, "public key encrypts, private key decrypts. Enables key exchange & digital signatures."]));
-body.push(callout("perf", ["Real systems combine them (hybrid/envelope encryption): use slow asymmetric crypto once to share a fast symmetric key, then AES for the data. This is exactly what TLS and AWS KMS do."]));
-body.push(...summary([
-  "Encoding = reversible formatting, no key, not security (Base64, UTF-8).",
-  "Hashing = one-way digest for integrity & passwords; salt it and use bcrypt/argon2.",
-  "Encryption = reversible with a key for confidentiality; symmetric (AES) is fast, asymmetric (RSA) enables key exchange/signatures.",
-  "Hybrid encryption uses asymmetric to exchange a symmetric key, then symmetric for data.",
-]));
-body.push(...interview([
-  "Difference between encoding, hashing and encryption?",
-  "Why is Base64 not encryption?",
-  "Why salt password hashes? What attack does it stop?",
-  "Why use bcrypt/argon2 instead of SHA-256 for passwords?",
-  "Symmetric vs asymmetric encryption — speed and use cases.",
-  "What is a digital signature and how does it use hashing + asymmetric keys?",
-  "What is a collision and why does it matter for hash functions?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Encode/decode a string to Base64 and URL-encoding; show round-trip equality." },
-  { level: "Medium", text: "Hash passwords with a salt using bcrypt; verify correct and reject wrong passwords." },
-  { level: "Hard", text: "Encrypt and decrypt a file with AES-256-GCM, handling IV and auth tag correctly." },
-  { level: "Expert", text: "Sign a message with an RSA/ECDSA private key and verify it with the public key." },
-]));
-body.push(...realworld([
-  "When you store credit-card or Aadhaar-like data, regulations require encryption at rest (AES via a KMS) and TLS in transit, while passwords are hashed (argon2) — never encrypted, because the server should never be able to recover them. Knowing which tool goes where is exactly what security reviewers check.",
-]));
-body.push(...miniproject([
-  "Build a 'CryptoBox' CLI with three subcommands: encode (Base64/hex), hash (argon2 password hashing + verify), and encrypt (AES-256-GCM file encryption with a passphrase-derived key via PBKDF2). The project forces you to use each tool for its correct purpose.",
-]));
-body.push(...advanced([
-  "Authenticated encryption (AES-GCM, ChaCha20-Poly1305) gives confidentiality + integrity together.",
-  "Key derivation functions (PBKDF2, scrypt, argon2) turn passwords into keys.",
-  "HMAC for message authentication; Merkle trees for tamper-evident logs/blockchains.",
-  "Post-quantum cryptography (lattice-based) is coming as quantum computers threaten RSA/ECC.",
-]));
+// ============ 9. JWT & OAUTH ============
+body.push(...topicToChapter(loadTopic("level_01", "jwt_oauth"),
+  { chapterNumber: 9, bookmarkId: "ch9_jwt" }));
 
-// ============ 10. DATA STRUCTURES ============
-body.push(H1("10. Data Structures", "ch10"));
-body.push(callout("definition", ["A data structure is a way of organizing data in memory so that specific operations (insert, search, delete, traverse) are efficient. Choosing the right one is often the difference between a passing and failing solution."]));
-body.push(H2("The master comparison table"));
-body.push(table(
-  ["Structure", "Access", "Search", "Insert", "Delete", "Strength"],
-  [
-    ["Array", "O(1)", "O(n)", "O(n)", "O(n)", "Index, cache-friendly"],
-    ["Dynamic array", "O(1)", "O(n)", "O(1)*", "O(n)", "Grows automatically"],
-    ["Linked list", "O(n)", "O(n)", "O(1)", "O(1)", "Cheap insert at ends"],
-    ["Stack (LIFO)", "—", "—", "O(1)", "O(1)", "Undo, recursion"],
-    ["Queue (FIFO)", "—", "—", "O(1)", "O(1)", "Scheduling, BFS"],
-    ["Hash table", "—", "O(1)*", "O(1)*", "O(1)*", "Fast key lookup"],
-    ["BST (balanced)", "O(log n)", "O(log n)", "O(log n)", "O(log n)", "Sorted + fast"],
-    ["Heap", "O(1) min", "O(n)", "O(log n)", "O(log n)", "Priority queue"],
-    ["Trie", "—", "O(L)", "O(L)", "O(L)", "Prefix search"],
-    ["Graph", "—", "varies", "—", "—", "Relationships"],
-  ],
-  [1500, 1380, 1240, 1240, 1240, 2760],
-));
-body.push(P("* amortized / average case. Hash tables degrade to O(n) on bad hashing; dynamic-array insert is O(1) amortized due to occasional resizes."));
-body.push(H2("How a hash table works"));
-body.push(code([
-  "index = hash(key) % capacity",
-  "buckets[index] -> store (key, value)",
-  "collision (two keys same index) ->",
-  "   chaining: linked list per bucket   OR",
-  "   open addressing: probe next slot",
-  "load factor too high -> resize & rehash (keeps O(1) average)",
-], "hash table"));
-body.push(callout("interview", ["Hash tables are the most-used structure in interviews — they turn many O(n²) brute forces into O(n). The moment you think 'have I seen this before?' or 'count occurrences', reach for a hash map/set."]));
-body.push(H2("Trees & graphs"));
-body.push(bullet([{ t: "Binary Search Tree: ", b: true }, "left < node < right; balanced variants (AVL, Red-Black) keep operations O(log n)."]));
-body.push(bullet([{ t: "Heap: ", b: true }, "complete binary tree where parent ≤ children (min-heap); backs priority queues and heapsort."]));
-body.push(bullet([{ t: "Trie: ", b: true }, "tree keyed by characters; powers autocomplete and spell-check."]));
-body.push(bullet([{ t: "Graph: ", b: true }, "nodes + edges; stored as adjacency list (sparse) or matrix (dense)."]));
-body.push(callout("mistake", ["Using a linked list when you need random access, or an array when you do many middle insertions. Match the structure to the dominant operation, not habit."]));
-body.push(...summary([
-  "Pick the structure by which operation dominates your workload.",
-  "Arrays = O(1) index + cache-friendly; linked lists = O(1) end insert, O(n) access.",
-  "Hash tables give O(1) average lookup and crush brute-force interview problems.",
-  "Trees/heaps give O(log n) ordered operations; tries excel at prefixes; graphs model relationships.",
-]));
-body.push(...interview([
-  "Array vs linked list — when use each?",
-  "How does a hash table achieve O(1)? How are collisions handled?",
-  "What is a balanced BST and why does balance matter?",
-  "Stack vs queue — give a real use for each.",
-  "How would you implement an LRU cache in O(1)?",
-  "When is a heap the right structure?",
-  "Adjacency list vs adjacency matrix for graphs?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Two Sum using a hash map in O(n)." },
-  { level: "Medium", text: "Implement a min-heap (insert, extract-min, heapify)." },
-  { level: "Hard", text: "Design an LRU cache with O(1) get/put (hash map + doubly linked list)." },
-  { level: "Expert", text: "Implement a trie with insert/search/startsWith and add wildcard search." },
-]));
-body.push(...realworld([
-  "Your phone's contact search uses a trie or inverted index; a game's pathfinding uses a graph + priority queue (heap) for A*; a database index is a B-tree (a disk-friendly balanced tree). Every product you use is a tour of data structures.",
-]));
-body.push(...miniproject([
-  "Build an 'Autocomplete Engine': load a dictionary into a trie, return the top-k completions for a prefix ranked by frequency (using a heap), and expose it as a tiny REST endpoint. Combines trie + heap + hashing.",
-]));
-body.push(...advanced([
-  "Self-balancing trees (AVL, Red-Black) and B/B+-trees used by databases & filesystems.",
-  "Bloom filters: probabilistic membership in tiny space (used by Cassandra, browsers).",
-  "Union-Find (disjoint set) with path compression for connectivity problems.",
-  "Skip lists as a simpler alternative to balanced trees (used by Redis sorted sets).",
-]));
+// ============ 10. ENCRYPTION, HASHING, ENCODING ============
+body.push(...topicToChapter(loadTopic("level_01", "encryption_hashing"),
+  { chapterNumber: 10, bookmarkId: "ch10" }));
 
-// ============ 11. ALGORITHMS ============
-body.push(H1("11. Algorithms", "ch11"));
-body.push(callout("definition", ["An algorithm is a finite, well-defined sequence of steps that transforms an input into a desired output. Good algorithms are correct, efficient, and as simple as the problem allows."]));
-body.push(H2("Core algorithm families"));
-body.push(table(
-  ["Family", "Idea", "Classic examples"],
-  [
-    ["Searching", "Find an element", "Linear, Binary search"],
-    ["Sorting", "Order elements", "Merge, Quick, Heap sort"],
-    ["Two pointers", "Scan from both ends/speeds", "Pair sum, palindrome"],
-    ["Sliding window", "Move a range over data", "Max subarray, longest substring"],
-    ["Recursion / D&C", "Solve subproblems, combine", "Merge sort, binary search"],
-    ["Greedy", "Locally optimal choice", "Interval scheduling, Huffman"],
-    ["Dynamic programming", "Cache overlapping subproblems", "Knapsack, edit distance"],
-    ["Backtracking", "Try, fail, undo", "N-Queens, Sudoku"],
-    ["Graph traversal", "Visit nodes systematically", "BFS, DFS, Dijkstra"],
-  ],
-  [1900, 3400, 4060],
-));
-body.push(H2("Binary search — the must-know"));
-body.push(code([
-  "lo = 0, hi = n - 1",
-  "while lo <= hi:",
-  "    mid = lo + (hi - lo) / 2     // avoids overflow",
-  "    if a[mid] == target: return mid",
-  "    elif a[mid] < target: lo = mid + 1",
-  "    else: hi = mid - 1",
-  "return -1            // O(log n), requires sorted input",
-], "binary search"));
-body.push(H2("Sorting at a glance"));
-body.push(table(
-  ["Algorithm", "Avg", "Worst", "Space", "Stable?"],
-  [
-    ["Quick sort", "O(n log n)", "O(n²)", "O(log n)", "No"],
-    ["Merge sort", "O(n log n)", "O(n log n)", "O(n)", "Yes"],
-    ["Heap sort", "O(n log n)", "O(n log n)", "O(1)", "No"],
-    ["Insertion", "O(n²)", "O(n²)", "O(1)", "Yes"],
-  ],
-  [2200, 1900, 1900, 1660, 1700],
-));
-body.push(callout("tip", ["Recognize the pattern, not the problem. 'Subarray/substring with a constraint' → sliding window. 'Sorted array / minimize the maximum' → binary search. 'Count of ways / optimal value' → DP. 'Shortest path' → BFS/Dijkstra. Pattern recognition is what fast interviewees actually do."]));
-body.push(H2("Recursion → DP"));
-body.push(P("Many problems have a naive exponential recursion that repeats work. Memoization (top-down) or tabulation (bottom-up) caches subproblem answers to make it polynomial. Fibonacci goes from O(2ⁿ) to O(n) this way."));
-body.push(callout("mistake", ["Jumping straight to code. Senior candidates first state the approach, the complexity, and edge cases (empty input, duplicates, overflow, single element) out loud — then code. Interviewers grade your process, not just the answer."]));
-body.push(...summary([
-  "Master a small set of patterns: binary search, two pointers, sliding window, BFS/DFS, greedy, DP, backtracking.",
-  "Recognize the pattern from the problem's wording and constraints.",
-  "Know sort/search complexities and when each sort is appropriate.",
-  "State approach + complexity + edge cases before coding.",
-]));
-body.push(...interview([
-  "Implement binary search and prove its O(log n).",
-  "Quick sort vs merge sort — trade-offs; which is stable?",
-  "When does DP apply? Memoization vs tabulation?",
-  "BFS vs DFS — when use each? Iterative vs recursive?",
-  "Explain a greedy choice that is provably optimal (e.g., interval scheduling).",
-  "How do you detect a cycle in a linked list / graph?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Reverse a linked list; find the middle with fast/slow pointers." },
-  { level: "Medium", text: "Longest substring without repeating characters (sliding window)." },
-  { level: "Hard", text: "Course schedule / topological sort with cycle detection." },
-  { level: "Expert", text: "Edit distance (Levenshtein) with DP; reconstruct the operations." },
-]));
-body.push(...realworld([
-  "Google Maps' routing is Dijkstra/A* on a graph of roads; your IDE's autocomplete ranking and 'did you mean?' use edit distance; video streaming uses greedy bitrate selection. Algorithms aren't academic — they're the product.",
-]));
-body.push(...miniproject([
-  "Build a 'Maze Solver & Visualizer': generate a random maze, then solve it with BFS (shortest path), DFS, and A*, animating the explored cells so you can see why BFS finds the shortest path and DFS doesn't.",
-]));
-body.push(...advanced([
-  "Amortized analysis (why dynamic-array push is O(1) average).",
-  "Randomized algorithms (quickselect, randomized quicksort) to dodge worst cases.",
-  "Bit manipulation tricks (XOR swap, counting set bits, subsets).",
-  "NP-completeness: recognize when a problem is intractable and you need heuristics.",
-]));
+// ============ 11. DATA STRUCTURES ============
+body.push(...topicToChapter(loadTopic("level_01", "data_structures"),
+  { chapterNumber: 11, bookmarkId: "ch11" }));
 
-// ============ 12. TIME & SPACE COMPLEXITY ============
-body.push(H1("12. Time & Space Complexity (Big-O)", "ch12"));
+// ============ 12. ALGORITHMS ============
+body.push(...topicToChapter(loadTopic("level_01", "algorithms"),
+  { chapterNumber: 12, bookmarkId: "ch12" }));
+
+// ============ 13. TIME & SPACE COMPLEXITY ============
+body.push(H1("13. Time & Space Complexity (Big-O)", "ch12"));
 body.push(callout("definition", ["Big-O notation describes how an algorithm's running time or memory grows as the input size n grows, ignoring constants and lower-order terms. It is the language of efficiency."]));
 body.push(H2("The growth-rate ladder (best → worst)"));
 body.push(table(
@@ -419,8 +227,8 @@ body.push(...advanced([
   "Cache-aware complexity: two O(n) loops can differ 10× due to memory access patterns.",
 ]));
 
-// ============ 13. OOP ============
-body.push(H1("13. Object-Oriented Programming", "ch13"));
+// ============ 14. OOP ============
+body.push(H1("14. Object-Oriented Programming", "ch13"));
 body.push(callout("definition", ["OOP organizes software as objects — bundles of data (fields) and behavior (methods) — interacting through well-defined interfaces. It's the dominant paradigm in Java, Kotlin, C# and Dart."]));
 body.push(H2("The four pillars"));
 body.push(table(
@@ -494,8 +302,8 @@ body.push(...advanced([
   "The Law of Demeter ('don't talk to strangers') to reduce coupling.",
 ]));
 
-// ============ 14. SOLID ============
-body.push(H1("14. SOLID Principles", "ch14"));
+// ============ 15. SOLID ============
+body.push(H1("15. SOLID Principles", "ch14"));
 body.push(callout("definition", ["SOLID is five object-oriented design principles (Robert C. Martin) that make code easier to extend, test and maintain by reducing coupling and increasing cohesion."]));
 body.push(table(
   ["Letter", "Principle", "One-line meaning"],
@@ -564,8 +372,8 @@ body.push(...advanced([
   "How over-applying SOLID causes needless abstraction ('astronaut architecture') — balance matters.",
 ]));
 
-// ============ 15. DESIGN PATTERNS ============
-body.push(H1("15. Design Patterns", "ch15"));
+// ============ 16. DESIGN PATTERNS ============
+body.push(H1("16. Design Patterns", "ch15"));
 body.push(callout("definition", ["Design patterns are reusable, named solutions to recurring design problems (from the 'Gang of Four'). They are a shared vocabulary — saying 'use a Factory here' communicates a whole design in two words."]));
 body.push(H2("The three families"));
 body.push(table(

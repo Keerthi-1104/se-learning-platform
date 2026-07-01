@@ -3,51 +3,103 @@
   "levelId": 1,
   "title": "Algorithms",
   "xp": 60,
-  "estimatedMinutes": 40,
+  "estimatedMinutes": 50,
   "objectives": [
-    "Recognize the pattern from a problem's wording",
-    "Implement binary search correctly",
-    "Know when DP, greedy and BFS/DFS apply"
+    "Understand what an algorithm actually is — with a real-life analogy",
+    "Recognize the 8 core algorithm patterns interviewers actually test",
+    "Implement binary search correctly (with the off-by-one traps handled)",
+    "Know when to reach for greedy, DP, BFS/DFS, or divide-and-conquer",
+    "Answer algorithm interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "An algorithm is a finite, well-defined sequence of steps that turns input into a desired output. Good ones are correct, efficient, and as simple as the problem allows." },
-    { "type": "table", "headers": ["Family", "Idea", "Examples"], "rows": [
-      ["Two pointers", "Scan from both ends", "Pair sum, palindrome"],
-      ["Sliding window", "Move a range over data", "Longest substring"],
-      ["Divide & conquer", "Split, solve, combine", "Merge sort"],
-      ["Greedy", "Locally optimal choice", "Interval scheduling"],
-      ["Dynamic programming", "Cache overlapping subproblems", "Knapsack, edit distance"],
-      ["Graph traversal", "Visit nodes systematically", "BFS, DFS, Dijkstra"]
+    { "type": "callout", "variant": "analogy", "markdown": "**An algorithm is just a recipe.**\n\n- A **cake recipe** tells you the steps in order: mix eggs, add flour, bake at 180°C for 30 minutes. Follow it, get a cake.\n- A **good** recipe is efficient (short, uses common ingredients), correct (produces cake, not soup), and clear (a stranger can follow it).\n- A **bad** recipe wastes ingredients, has vague steps, or takes hours when 30 minutes would do.\n\nThat's an algorithm. It's a finite, well-defined sequence of steps that turns input into a desired output.\n\n**And the whole reason interviews test algorithms** isn't because you'll implement quicksort at work — it's because your ability to *decompose a fuzzy problem into clear steps* is exactly the skill that makes you an engineer." },
+    { "type": "callout", "variant": "definition", "markdown": "An **algorithm** is a finite, well-defined sequence of steps that transforms an input into a desired output. Good algorithms are **correct** (they solve the problem), **efficient** (fast in time and space), and **as simple as the problem allows.**" },
+    { "type": "theory", "markdown": "## The 8 algorithm patterns that cover 90% of interviews\n\nSenior engineers don't memorize algorithms — they **recognize patterns**. When you see a new problem, ask 'which of these 8 shapes is it?' You'll usually know the answer in 30 seconds." },
+    { "type": "table", "headers": ["Pattern", "The clue in the problem", "Example"], "rows": [
+      ["Two pointers", "'Sorted array' + 'pair sum' or 'palindrome'", "Find two numbers that sum to target"],
+      ["Sliding window", "'Subarray/substring with constraint'", "Longest substring without repeats"],
+      ["Binary search", "'Sorted' or 'monotonic property' + 'find minimum X such that...'", "First bad version"],
+      ["Divide & conquer", "'Split, solve smaller, combine'", "Merge sort, binary search"],
+      ["Greedy", "'Locally optimal choice = globally optimal'", "Interval scheduling, coin change"],
+      ["Dynamic programming", "'Count of ways' / 'best value' / overlapping subproblems", "Fibonacci, knapsack, edit distance"],
+      ["Backtracking", "'All combinations / permutations' with constraints", "N-Queens, Sudoku, generate subsets"],
+      ["Graph traversal", "'Reach', 'shortest path', 'connected components'", "BFS, DFS, Dijkstra"]
     ]},
-    { "type": "code", "language": "text", "code": "Binary search (sorted input, O(log n)):\n  lo=0, hi=n-1\n  while lo <= hi:\n    mid = lo + (hi-lo)/2   // avoids overflow\n    if a[mid]==target: return mid\n    elif a[mid]<target: lo=mid+1\n    else: hi=mid-1\n  return -1" },
-    { "type": "callout", "variant": "tip", "markdown": "Recognize the pattern, not the problem. 'Subarray with a constraint' → sliding window. 'Sorted / minimize the max' → binary search. 'Count of ways / optimal value' → DP. 'Shortest path' → BFS/Dijkstra." },
-    { "type": "callout", "variant": "mistake", "markdown": "Jumping straight to code. State the approach, the complexity, and edge cases (empty, duplicates, overflow) out loud first — interviewers grade your process." }
+    { "type": "theory", "markdown": "## Binary search — the algorithm you MUST know cold\n\nGiven a sorted array, find whether target `x` exists. Naive scan: O(n). Binary search: O(log n)." },
+    { "type": "code", "language": "dart", "code": "// The safe, off-by-one-proof template for binary search:\nint binarySearch(List<int> a, int target) {\n  int lo = 0, hi = a.length - 1;\n  while (lo <= hi) {\n    // (lo + hi) ~/ 2 can overflow for very large arrays. This is safer:\n    final mid = lo + (hi - lo) ~/ 2;\n    if      (a[mid] == target) return mid;\n    else if (a[mid] <  target) lo = mid + 1;   // target is to the right\n    else                       hi = mid - 1;   // target is to the left\n  }\n  return -1;   // not found\n}" },
+    { "type": "callout", "variant": "tip", "markdown": "**When to reach for binary search:** any time the problem hints at *monotonicity*. Not just sorted arrays — 'find the smallest capacity that finishes the job in D days,' 'find the earliest version that has the bug,' 'find the peak in a mountain array.' The property being monotonic (yes-yes-yes-no-no or no-no-no-yes-yes) is enough." },
+    { "type": "theory", "markdown": "## Sorting — the trade-offs you should know" },
+    { "type": "table", "headers": ["Algorithm", "Average", "Worst", "Space", "Stable?"], "rows": [
+      ["Quick sort", "O(n log n)", "O(n²)", "O(log n)", "No"],
+      ["Merge sort", "O(n log n)", "O(n log n)", "O(n)", "Yes"],
+      ["Heap sort", "O(n log n)", "O(n log n)", "O(1)", "No"],
+      ["Insertion sort", "O(n²)", "O(n²)", "O(1)", "Yes"]
+    ]},
+    { "type": "callout", "variant": "note", "markdown": "**Stable sort** means: equal elements keep their original relative order. Matters when you sort by multiple keys — e.g., sort by name (unstable), then by age (stable). Only the stable sort preserves the name order for people of the same age.\n\nJava's `Collections.sort` and Python's `sorted` are stable (Timsort). C++'s `std::sort` is *not* stable — use `std::stable_sort` if you need it." },
+    { "type": "theory", "markdown": "## Recursion → dynamic programming — the mental leap\n\nMany problems have a naive recursive solution that recomputes the same subproblem millions of times. Adding a cache turns exponential-time into polynomial-time." },
+    { "type": "code", "language": "dart", "code": "// Fibonacci — naive recursion. O(2^n). n=45 already takes forever.\nint fibSlow(int n) => n < 2 ? n : fibSlow(n-1) + fibSlow(n-2);\n\n// Same idea + memoization → O(n). n=1000 is instant.\nfinal cache = <int, int>{};\nint fibFast(int n) {\n  if (n < 2) return n;\n  return cache[n] ??= fibFast(n-1) + fibFast(n-2);\n}\n\n// Or bottom-up (tabulation) — also O(n), no recursion at all.\nint fibIter(int n) {\n  var a = 0, b = 1;\n  for (var i = 0; i < n; i++) { final t = a + b; a = b; b = t; }\n  return a;\n}\n\n// The idea generalizes:\n//   NAIVE recursion + repeated subproblems → cache them → linear time.\n// That's memoization (top-down DP) or tabulation (bottom-up DP)." },
+    { "type": "theory", "markdown": "## A complete sample program — see binary search + linear side by side\n\nThis Dart program searches for a value both ways and shows the huge speed difference on large inputs:" },
+    { "type": "code", "language": "dart", "code": "// File: search_demo.dart\n// Run: dart search_demo.dart\nimport 'dart:math';\n\nint linearSearch(List<int> a, int target) {\n  for (var i = 0; i < a.length; i++) {\n    if (a[i] == target) return i;\n  }\n  return -1;\n}\n\nint binarySearch(List<int> a, int target) {\n  int lo = 0, hi = a.length - 1;\n  while (lo <= hi) {\n    final mid = lo + (hi - lo) ~/ 2;\n    if      (a[mid] == target) return mid;\n    else if (a[mid] <  target) lo = mid + 1;\n    else                       hi = mid - 1;\n  }\n  return -1;\n}\n\nvoid main() {\n  final n = 10000000;                       // 10 million entries\n  final list = List.generate(n, (i) => i);  // sorted 0..n-1\n  final target = n - 3;                     // near the end (worst case for linear)\n\n  var t = DateTime.now();\n  for (var i = 0; i < 100; i++) linearSearch(list, target);   // 100 runs\n  final linMs = DateTime.now().difference(t).inMilliseconds;\n\n  t = DateTime.now();\n  for (var i = 0; i < 100; i++) binarySearch(list, target);\n  final binMs = DateTime.now().difference(t).inMilliseconds;\n\n  print('100 linear searches of 10,000,000 items: $linMs ms');\n  print('100 binary searches of 10,000,000 items: $binMs ms');\n  print('Speedup: ~${(linMs / max(binMs, 1)).toStringAsFixed(0)}x');\n}\n\n// Typical output on a laptop:\n//   100 linear searches of 10,000,000 items: 5340 ms\n//   100 binary searches of 10,000,000 items: 1 ms\n//   Speedup: ~5000x\n//\n// Both find the SAME index. But binary search only reads log₂(10M) ≈ 24 elements per search.\n// Linear search reads up to 10 million.\n// That's the power of picking the right algorithm on the right data." },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Jumping straight to code.**\n\nSeniors first say the approach out loud, state the Big-O, name edge cases (empty input, duplicates, overflow, single element), *then* code. Interviewers grade your process, not just your answer. Silent typing is the fastest way to fail." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Off-by-one errors in binary search.**\n\n`lo <= hi` vs `lo < hi`, `mid + 1` vs `mid`, `hi = mid` vs `hi = mid - 1` — every combination behaves differently. **Pick one template, learn it, use it everywhere.** The one in the sample program above is safe." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: 'DP is intimidating so I'll try brute force.'**\n\nMany DP problems are actually straightforward: 'find the recurrence, then cache subproblems.' Practice the shape once (Fibonacci → knapsack → edit distance) and it becomes recognizable." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. State approach + complexity + edge cases OUT LOUD before coding.** Even in interviews with automated scoring." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Use library sorts and searches unless there's a reason not to.** `sort()`, `binarySearch()`, hash maps — languages give you optimized, tested versions." },
+    { "type": "callout", "variant": "best", "markdown": "**3. When you don't know the shape, ask: 'have I seen this before?' If yes, hash set. If sorted, binary search. If subarray, sliding window. If graph, BFS/DFS.** Pattern recognition is what fast interviewees actually do." },
+    { "type": "callout", "variant": "best", "markdown": "**4. For DP, write the recurrence first, then memoize.** Don't try to jump to the tabulated version until the recursion is right." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Reverse a linked list.** The single most-asked interview problem after Two Sum. Iteratively (three pointers) is easier than recursively.\n\n**Why:** Teaches you to manipulate pointers cleanly." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Longest substring without repeating characters.** Sliding window with a hash set. The window grows to include new chars, shrinks when a repeat appears.\n\n**Why:** This is the sliding-window template — recognize it and dozens of variants become trivial." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — Course schedule (detect cycle in a directed graph).** Topological sort with DFS, or Kahn's algorithm with BFS.\n\n**Why:** Every dependency problem — build systems, prerequisites, Excel formula evaluation — is topological sort." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Expert) — Edit distance (Levenshtein).** Dynamic programming: `dp[i][j]` = min edits to turn `s[0..i]` into `t[0..j]`. Try to also *reconstruct* the operations.\n\n**Why:** This is the pattern behind spell check, DNA sequence alignment, and 'did you mean' suggestions." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: How does binary search work, and what's its complexity?**\n\n**A:** Binary search finds an element in a **sorted** array by repeatedly halving the search range. Look at the middle element: if it matches, done. If it's too small, discard the left half; too large, discard the right half. Each step halves the remaining range. Starting from n elements, after k steps you have n/2ᵏ left; you stop when that's 1, giving k ≈ log₂(n). So the complexity is **O(log n) time, O(1) space** for the iterative version (O(log n) space if recursive). The property that makes it work — repeated halving of a range — generalizes beyond sorted arrays to any *monotonic* property, which is why binary search shows up in problems like 'find the earliest bad build' or 'minimum capacity to finish in D days.'" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: When does dynamic programming apply, and what's the difference between memoization and tabulation?**\n\n**A:** DP applies when a problem has two properties: **overlapping subproblems** (the naive recursion solves the same sub-instance many times) and **optimal substructure** (an optimal solution can be built from optimal solutions to subproblems). The first tells you caching is worth it; the second tells you DP is the right shape at all. **Memoization** (top-down) starts from the original problem, recurses down, and caches each subproblem's answer the first time it's computed. **Tabulation** (bottom-up) fills a table from the smallest subproblem up to the original — no recursion, often faster because there's no call-stack overhead. Memoization is easier to write when you already have a recursion; tabulation is a bit faster and gives finer control." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: BFS vs DFS — when do you choose each?**\n\n**A:** **BFS (Breadth-First Search)** uses a queue and explores level by level — nearest nodes first. Use it when you want the **shortest path in an unweighted graph** (the first time you reach a node, it's by the shortest path). Also good for 'find something within K steps.' **DFS (Depth-First Search)** uses a stack (or recursion) and dives as deep as possible before backtracking. Use it for detecting cycles, topological sort, and exhaustive exploration (all paths, all combinations). For weighted graphs (shortest path with costs), use **Dijkstra** — it's BFS + priority queue. Memorize the pairing: **BFS = queue = shortest**; **DFS = stack = explore**." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: Quick sort vs merge sort — how do you choose?**\n\n**A:** Both are O(n log n) average. **Quick sort** is usually faster in practice (better cache locality, in-place), but its **worst case is O(n²)** on pathological inputs (already-sorted, all-equal). Randomized pivot selection makes worst case very unlikely. **Merge sort** guarantees O(n log n) worst case, is **stable** (preserves relative order of equal elements), and works well on linked lists — but it needs O(n) extra space. Rule of thumb: use quick sort for arrays where average speed matters and you can tolerate worst-case (or use randomized pivots); use merge sort when stability matters or worst-case guarantees are required. Real libraries usually use a hybrid — **Timsort** in Python/Java combines merge sort and insertion sort." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What is greedy, and when does it actually work?**\n\n**A:** A greedy algorithm makes the locally optimal choice at each step — 'take the biggest coin now, deal with the rest later.' It's fast (usually linear) but only works when the local choice is provably safe: taking it doesn't rule out an optimal solution. **Classical examples that work**: activity selection (pick the earliest-ending interval), Kruskal's / Prim's MST, Dijkstra's shortest path, Huffman coding. **Classical examples that don't**: 0/1 knapsack (greedy fails, need DP), coin change with arbitrary denominations. **The way to prove greedy works** is an exchange argument: show that swapping the greedy choice for any alternative doesn't improve the answer." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How do you detect a cycle in a linked list or graph?**\n\n**A:** For a **linked list** use **Floyd's tortoise and hare**: two pointers, slow moves one step at a time, fast moves two. If they ever meet, there's a cycle. If fast reaches null, there isn't. O(n) time, O(1) space — beautifully simple. For a **directed graph** use DFS and track three colors per node: white (unvisited), gray (currently on the DFS stack), black (fully processed). If DFS ever reaches a gray node, you found a back-edge → cycle. For an **undirected graph** use DFS or Union-Find — an edge to any already-visited non-parent node indicates a cycle. All three are O(V + E)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: How would you approach a completely unfamiliar algorithm problem in an interview?**\n\n**A:** Four steps out loud: (1) **Restate the problem** in your own words and confirm you understood — this catches ambiguity early. (2) **Walk through a small example** by hand — this reveals the underlying pattern. (3) **State a naive solution first with its Big-O** — even if it's slow, having a working baseline stops you from getting stuck at zero. (4) **Look for the pattern** — sorted? Try binary search. Have-I-seen-this? Hash set. Subarray with constraint? Sliding window. Then improve step by step, stating each optimization's new Big-O. Interviewers grade your *process* far more than getting to the optimal answer on the first try. Silence is your worst enemy." },
+    { "type": "theory", "markdown": "## Real-world examples\n\n- **Google Maps / Uber routing** uses Dijkstra or A* over a graph of roads with weighted edges (travel time).\n- **Your IDE's autocomplete ranking** uses a trie for prefix matching plus a small ML model for ranking.\n- **'Did you mean X?' spell suggestions** use edit distance (a classic DP).\n- **Every social-network feed 'people you may know'** uses BFS over the friendship graph, capped at 2-3 hops.\n- **Streaming services** greedily pick the highest bit-rate that fits your current bandwidth.\n- **Every OS scheduler** is essentially priority-queue scheduling — a heap." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Amortized analysis** — a dynamic-array `push_back` is O(n) in the worst case (when it resizes), but O(1) *amortized* because expensive operations happen rarely.\n- **Randomized algorithms** — quickselect (O(n) average find-Kth), randomized quicksort (dodges adversarial inputs).\n- **Bit manipulation tricks** — XOR swap, `n & -n` to isolate the lowest set bit, `__builtin_popcount` for population count.\n- **NP-completeness** — some problems (TSP, SAT, subset sum) have no known polynomial algorithm. Recognize them so you don't waste time hunting for one; instead reach for approximations or heuristics.\n- **Approximation algorithms** — for NP-hard problems, guaranteed 'within X% of optimal' solutions in polynomial time.\n- **Streaming algorithms** — process data in one pass with sublinear memory (Bloom filter, HyperLogLog for cardinality)." }
   ],
   "flashcards": [
-    { "front": "When does DP apply?", "back": "When a problem has overlapping subproblems and optimal substructure — cache subresults (memoization/tabulation)." },
-    { "front": "BFS vs DFS?", "back": "BFS finds shortest paths in unweighted graphs (queue); DFS explores deep (stack/recursion), good for cycles/topo sort." },
-    { "front": "Requirement for binary search?", "back": "The input must be sorted (or monotonic in the property you search)." }
+    { "front": "Binary search complexity?", "back": "O(log n) time, O(1) space (iterative). Requires a sorted or monotonic input." },
+    { "front": "When does DP apply?", "back": "Overlapping subproblems + optimal substructure. Cache them (memoization) or fill bottom-up (tabulation)." },
+    { "front": "BFS vs DFS?", "back": "BFS = queue = shortest path in unweighted graph. DFS = stack = deep exploration, cycles, topo sort." },
+    { "front": "Quick sort vs merge sort?", "back": "Quick: faster in practice, in-place, unstable, worst-case O(n²). Merge: guaranteed O(n log n), stable, needs O(n) extra space." },
+    { "front": "How to detect a cycle in a linked list?", "back": "Floyd's tortoise + hare — one slow pointer, one fast. If they meet, there's a cycle." }
   ],
   "quiz": [
-    { "q": "Binary search runs in…", "options": ["O(1)", "O(log n)", "O(n)", "O(n log n)"], "answer": 1, "explain": "It halves the search space each step." },
-    { "q": "'Longest substring without repeating characters' suggests…", "options": ["Sliding window", "Binary search", "Dijkstra", "Heap sort"], "answer": 0, "explain": "A moving range over the string with a seen-set is the sliding-window pattern." },
-    { "q": "Which finds the shortest path in an unweighted graph?", "options": ["DFS", "BFS", "Quick sort", "Greedy coin change"], "answer": 1, "explain": "BFS explores level by level, so the first time it reaches a node is the shortest path." },
-    { "q": "Memoization turns naive Fibonacci from…", "options": ["O(n) to O(1)", "O(2^n) to O(n)", "O(n) to O(n^2)", "O(log n) to O(n)"], "answer": 1, "explain": "Caching subproblem results removes the exponential repeated work." }
+    { "q": "Binary search on a 1,000,000-element sorted array does about…", "options": ["1,000,000 comparisons", "500,000 comparisons", "20 comparisons", "100 comparisons"], "answer": 2, "explain": "log₂(10⁶) ≈ 20." },
+    { "q": "Sorted array + 'find pair summing to target' suggests…", "options": ["DP", "Two pointers or hash map", "BFS", "Backtracking"], "answer": 1, "explain": "Two pointers on a sorted array works in O(n)." },
+    { "q": "Shortest path in an unweighted graph — which algorithm?", "options": ["DFS", "BFS", "Quick sort", "Backtracking"], "answer": 1, "explain": "BFS finds shortest path level-by-level." },
+    { "q": "Which sort is stable AND guaranteed O(n log n) worst case?", "options": ["Quick sort", "Insertion sort", "Merge sort", "Heap sort"], "answer": 2, "explain": "Merge sort. Quick isn't stable and worst-case is O(n²). Heap sort isn't stable." },
+    { "q": "'All possible combinations of X' calls for…", "options": ["Greedy", "Binary search", "Backtracking", "Union-Find"], "answer": 2, "explain": "Backtracking systematically explores + prunes." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Reverse a linked list; find the middle with fast/slow pointers." },
-    { "level": "Medium", "text": "Longest substring without repeating characters (sliding window)." },
+    { "level": "Easy", "text": "Reverse a linked list iteratively (three-pointer method)." },
+    { "level": "Easy", "text": "Find the middle of a linked list using fast/slow pointers in one pass." },
+    { "level": "Medium", "text": "Longest substring without repeating characters (sliding window + hash set)." },
+    { "level": "Medium", "text": "Binary search — but return the index of the FIRST occurrence (rather than any occurrence)." },
     { "level": "Hard", "text": "Course schedule / topological sort with cycle detection." },
-    { "level": "Expert", "text": "Edit distance (Levenshtein) with DP; reconstruct the operations." }
+    { "level": "Hard", "text": "Given a mountain array (strictly ascends then strictly descends), find the peak in O(log n)." },
+    { "level": "Expert", "text": "Edit distance (Levenshtein): minimum insertions/deletions/substitutions to turn `s` into `t`. Reconstruct the sequence of operations." }
   ],
   "interviewQuestions": [
-    "Implement binary search and prove it's O(log n).",
-    "Quick sort vs merge sort — trade-offs; which is stable?",
-    "When does DP apply? Memoization vs tabulation?",
-    "BFS vs DFS — when use each?",
-    "How do you detect a cycle in a linked list?"
+    "How does binary search work, and what's its complexity?",
+    "When does dynamic programming apply, and what's the difference between memoization and tabulation?",
+    "BFS vs DFS — when do you choose each?",
+    "Quick sort vs merge sort — how do you choose?",
+    "What is greedy, and when does it actually work?",
+    "How do you detect a cycle in a linked list or graph?",
+    "How would you approach a completely unfamiliar algorithm problem in an interview?",
+    "Explain the pattern behind sliding window."
   ],
   "references": [
-    { "label": "NeetCode patterns", "url": "https://neetcode.io" }
+    { "label": "NeetCode patterns", "url": "https://neetcode.io" },
+    { "label": "Cracking the Coding Interview (canonical prep)", "url": "https://www.crackingthecodinginterview.com" }
   ]
 }
