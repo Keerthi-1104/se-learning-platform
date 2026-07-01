@@ -1,0 +1,52 @@
+{
+  "id": "devops.fastlane",
+  "levelId": 12,
+  "title": "Fastlane",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Automate mobile signing + upload + screenshots",
+    "Use match for shared iOS signing",
+    "Compose lanes for common tasks"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "**Fastlane** is a set of Ruby tools for mobile automation: manage certificates + provisioning profiles (**match**), upload to TestFlight / Play (**deliver / supply**), generate screenshots, and orchestrate multi-step tasks in **lanes**." },
+    { "type": "code", "language": "ruby", "code": "# Fastfile\nplatform :ios do\n  lane :beta do\n    match(type: 'appstore')             # sync certs/profiles from a private git repo\n    build_app(scheme: 'Runner')\n    upload_to_testflight\n  end\nend\nplatform :android do\n  lane :beta do\n    gradle(task: 'bundleRelease')\n    upload_to_play_store(track: 'internal', aab: '../build/app/outputs/bundle/release/app-release.aab')\n  end\nend" },
+    { "type": "table", "headers": ["Tool", "Purpose"], "rows": [
+      ["match", "Team-shared iOS certs & profiles via a private git repo"],
+      ["deliver", "Upload iOS metadata + build → App Store Connect"],
+      ["supply", "Upload Android metadata + AAB → Play Console"],
+      ["snapshot / screengrab", "Automate localized store screenshots"],
+      ["pilot", "Manage TestFlight testers + builds"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**match** solved the biggest iOS pain: shared team signing. It stores encrypted certs + profiles in a private git repo; every developer / CI runs `fastlane match` and gets the same setup. Combined with the App Store Connect API key you get near-zero-touch iOS builds." },
+    { "type": "callout", "variant": "mistake", "markdown": "Committing the match encryption password or the API key file. Store the passphrase as a secret in your CI provider; keep the private-key file as a masked file secret and delete it after the job." },
+    { "type": "callout", "variant": "tip", "markdown": "Wrap common flows in named lanes (`beta`, `promote`, `screenshots`) and call them from CI (`fastlane ios beta`). Local devs can run the same lanes — one truth for release recipes." }
+  ],
+  "flashcards": [
+    { "front": "What does match do?", "back": "Shares iOS certs/profiles across a team via an encrypted private git repo, so every dev/CI is in sync." },
+    { "front": "supply vs deliver?", "back": "supply → Play Store (Android). deliver → App Store Connect (iOS)." },
+    { "front": "What are lanes?", "back": "Named recipes in the Fastfile (`lane :beta do ... end`) callable from CI or dev." }
+  ],
+  "quiz": [
+    { "q": "match manages…", "options": ["Play Store", "Shared iOS signing across team + CI", "Android keystores only", "Screenshots"], "answer": 1, "explain": "Encrypted git repo of certs/profiles." },
+    { "q": "For Play upload use…", "options": ["deliver", "supply", "screengrab", "match"], "answer": 1, "explain": "supply is the Play publisher." },
+    { "q": "Best pattern for CI callouts?", "options": ["Inline scripts", "Named lanes reused by CI + devs", "Copy-paste steps", "Manual runs"], "answer": 1, "explain": "One source of truth in the Fastfile." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Add a Fastfile with `ios beta` and `android beta` lanes." },
+    { "level": "Medium", "text": "Set up match with a private git repo for team signing." },
+    { "level": "Hard", "text": "Automate localized screenshots via snapshot + fastlane deliver." },
+    { "level": "Expert", "text": "Combine Fastlane inside GitHub Actions + Codemagic with the same lanes shared." }
+  ],
+  "interviewQuestions": [
+    "What is Fastlane and its main tools?",
+    "How does match work?",
+    "supply vs deliver?",
+    "How do you keep the match passphrase safe?",
+    "How does Fastlane integrate with CI providers?"
+  ],
+  "references": [
+    { "label": "Fastlane docs", "url": "https://docs.fastlane.tools" }
+  ]
+}

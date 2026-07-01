@@ -1,0 +1,45 @@
+{
+  "id": "devops.codemagic",
+  "levelId": 12,
+  "title": "Codemagic",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Set up Codemagic for Flutter iOS + Android",
+    "Manage code signing without manual pain",
+    "Distribute to Play + App Store from one place"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "**Codemagic** is a hosted CI/CD purpose-built for Flutter (also RN and native). Config as `codemagic.yaml` at repo root; handles macOS iOS builds without you owning a Mac, plus Play / App Store submission." },
+    { "type": "code", "language": "yaml", "code": "workflows:\n  release:\n    name: Release\n    instance_type: mac_mini_m2\n    environment:\n      flutter: stable\n      groups: [ appstore_creds, playstore_creds ]\n    scripts:\n      - flutter pub get\n      - flutter test\n      - flutter build ipa --export-options-plist=$CM_BUILD_DIR/ios/ExportOptions.plist\n      - flutter build appbundle\n    publishing:\n      app_store_connect: { auth: integration, submit_to_testflight: true }\n      google_play:       { credentials: $GCP_JSON, track: internal }" },
+    { "type": "callout", "variant": "interview", "markdown": "Codemagic's edge over GitHub Actions is **mobile-first ergonomics**: iOS signing, App Store Connect API integration, screenshots via Fastlane, and per-workflow macOS instances without the Actions macOS minute cost." },
+    { "type": "callout", "variant": "mistake", "markdown": "Uploading `.p12` and provisioning profiles as raw secrets and letting them expire without rotation. Use Codemagic's built-in **App Store Connect API integration** (no distribution certs needed) — smoother renewals." },
+    { "type": "callout", "variant": "tip", "markdown": "Split workflows: `pr_check` (fast, no signing), `nightly` (App Distribution), `release` (Play + TestFlight from tag). Keep secrets in **groups** and share across workflows via `groups:`." }
+  ],
+  "flashcards": [
+    { "front": "Codemagic's config file?", "back": "codemagic.yaml at repo root." },
+    { "front": "Codemagic's edge for iOS?", "back": "Hosted macOS + App Store Connect API integration + built-in signing." },
+    { "front": "How to organize workflows?", "back": "pr_check, nightly (App Distribution), release (Play + TestFlight from tag)." }
+  ],
+  "quiz": [
+    { "q": "Codemagic is primarily targeted at…", "options": ["Backend Java", "Flutter/mobile CI/CD", "Web scraping", "Data pipelines"], "answer": 1, "explain": "Mobile-first CI/CD (though it does more)." },
+    { "q": "For iOS signing, the smoothest approach is…", "options": ["Manual .p12 upload", "App Store Connect API integration", "No signing", "Print certs"], "answer": 1, "explain": "The API integration handles renewals well." },
+    { "q": "Best workflow split for a mobile team?", "options": ["One giant workflow", "pr_check + nightly + release", "None", "Only prod"], "answer": 1, "explain": "Right stage, right frequency." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Add codemagic.yaml with a PR-check workflow that runs `flutter test`." },
+    { "level": "Medium", "text": "Add a release workflow that uploads to TestFlight + Play Internal." },
+    { "level": "Hard", "text": "Manage 3 flavors (dev/staging/prod) with separate signing + Firebase configs." },
+    { "level": "Expert", "text": "Add store screenshot automation via Fastlane + upload." }
+  ],
+  "interviewQuestions": [
+    "Codemagic vs GitHub Actions for Flutter?",
+    "How does Codemagic handle iOS signing?",
+    "How do you organize codemagic.yaml workflows?",
+    "How do you share secrets across workflows?",
+    "How do you cache dependencies?"
+  ],
+  "references": [
+    { "label": "Codemagic docs", "url": "https://docs.codemagic.io" }
+  ]
+}

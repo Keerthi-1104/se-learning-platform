@@ -1,0 +1,52 @@
+{
+  "id": "devops.docker",
+  "levelId": 12,
+  "title": "Docker (DevOps view)",
+  "xp": 50,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Use Docker to build reproducible CI environments",
+    "Bake images with the right base + cache",
+    "Ship images to a registry with security scanning"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "For DevOps, Docker is your **portable build/run environment**. You ship the app + its runtime as one image; CI, staging and prod use the same artifact — solving 'works on my machine' for both dev and ops." },
+    { "type": "code", "language": "docker", "code": "# CI image with cached deps\nFROM eclipse-temurin:21-jdk AS build\nWORKDIR /src\nCOPY pom.xml .           # dep manifest first\nRUN mvn -B -o dependency:go-offline\nCOPY . .\nRUN mvn -B package -DskipTests\n\nFROM eclipse-temurin:21-jre-alpine\nCOPY --from=build /src/target/*.jar /app/app.jar\nUSER 1000\nENTRYPOINT [\"java\",\"-jar\",\"/app/app.jar\"]" },
+    { "type": "table", "headers": ["Practice", "Why"], "rows": [
+      ["Multi-stage build", "Tiny final image; leave build tools behind"],
+      ["Order layers by change frequency", "Cache hits on rebuilds"],
+      ["Non-root USER + read-only FS", "Reduce blast radius"],
+      ["Pin base by digest", "Reproducible builds"],
+      ["Scan (Trivy / Grype)", "Catch CVEs before push"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "For CI/CD, images are your **hermetic build environment**. Push each build's image to a registry with a mutable + immutable tag (`v1.2.3` + `sha-abc123`), scan for CVEs, and promote the SAME image from staging to prod — never rebuild for prod." },
+    { "type": "callout", "variant": "mistake", "markdown": "Rebuilding for each environment. Every rebuild risks non-determinism (deps updated, base image drift). Build once → promote the same digest across environments." },
+    { "type": "callout", "variant": "tip", "markdown": "Use buildx for multi-arch (amd64 + arm64) and BuildKit cache mounts for even faster CI. Store images in a private registry (ECR/GCR/GHCR); enable image signing (cosign) if you care about supply chain." }
+  ],
+  "flashcards": [
+    { "front": "Build once, promote everywhere?", "back": "Build one image, tag it, promote the SAME digest through staging → prod. Never rebuild for prod." },
+    { "front": "Registry tagging strategy?", "back": "Immutable tag (sha-abc) + mutable version tag (v1.2.3); always promote by digest." },
+    { "front": "Fastest CI docker builds?", "back": "Order layers by change frequency, use BuildKit cache mounts, and multi-stage builds." }
+  ],
+  "quiz": [
+    { "q": "For hermetic prod deploys…", "options": ["Rebuild for prod", "Promote same digest across envs", "Rebuild nightly", "Recompile at boot"], "answer": 1, "explain": "Same digest guarantees identical artifact." },
+    { "q": "Best base for a small Java runtime?", "options": ["Full Ubuntu", "eclipse-temurin JRE alpine / distroless", "Windows Server", "None"], "answer": 1, "explain": "Tiny + secure." },
+    { "q": "For multi-arch use…", "options": ["buildx", "sudo", "npm", "gzip"], "answer": 0, "explain": "buildx builds for arm64 + amd64." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Write a Dockerfile for your Spring Boot app; run it locally." },
+    { "level": "Medium", "text": "Push to GHCR from GitHub Actions with a versioned + immutable tag." },
+    { "level": "Hard", "text": "Add Trivy scanning and fail build on HIGH/CRITICAL CVEs." },
+    { "level": "Expert", "text": "Multi-arch build with buildx + cosign signing." }
+  ],
+  "interviewQuestions": [
+    "Why 'build once, promote everywhere'?",
+    "How do you keep images small and secure?",
+    "How do you scan images?",
+    "How do you cache in CI?",
+    "Multi-arch builds — how?"
+  ],
+  "references": [
+    { "label": "Docker BuildKit", "url": "https://docs.docker.com/build/buildkit/" }
+  ]
+}

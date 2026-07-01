@@ -1,0 +1,51 @@
+{
+  "id": "devops.app_store_connect",
+  "levelId": 12,
+  "title": "App Store Connect",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Ship an IPA through App Store Connect",
+    "Automate with the App Store Connect API",
+    "Comply with privacy nutrition + review guidelines"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "**App Store Connect** is Apple's dashboard for iOS/iPadOS/macOS submissions: metadata, screenshots, IAP config, TestFlight, phased rollout, App Review, and analytics." },
+    { "type": "table", "headers": ["Concept", "Purpose"], "rows": [
+      ["Bundle ID + identifier", "Uniquely identifies the app"],
+      ["Certificates + provisioning profiles", "Signing"],
+      ["App Store Connect API key", "Automation without user password"],
+      ["Privacy nutrition labels", "Declared per data category"],
+      ["Phased release", "Auto-ramp production release over 7 days"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "The senior touches: **use the App Store Connect API key** (not user credentials) for automation, wire it into Fastlane / Codemagic; declare **privacy nutrition** honestly (Apple checks); use **phased release** for stability signals. **App Review** cares about: crashes on submit build, sign-in-with-Apple parity when using other social logins, and clarity of purpose." },
+    { "type": "callout", "variant": "mistake", "markdown": "Ignoring the current **iOS minimum deployment target** required by Apple (usually latest N-1 or N-2). Also: submitting an IPA that crashes on Apple's reviewer's device — always test the archive build, not just debug." },
+    { "type": "callout", "variant": "best", "markdown": "Automate: Codemagic / Fastlane submits to TestFlight → wait for processing → move to internal TestFlight testers → after N days promote to App Store submission. Store metadata (screenshots, description) in a `deliver` metadata folder in git — reviewable + versioned." }
+  ],
+  "flashcards": [
+    { "front": "Best auth for App Store Connect automation?", "back": "App Store Connect API key (not user account credentials)." },
+    { "front": "Phased release duration?", "back": "7 days, auto-ramping. Can be paused." },
+    { "front": "Common review rejection reasons?", "back": "Crashes on reviewer device, missing Sign in with Apple parity, purpose unclear, IAP not implemented per rules." }
+  ],
+  "quiz": [
+    { "q": "For CI automation prefer…", "options": ["User password", "App Store Connect API key", "SSH", "Nothing"], "answer": 1, "explain": "API key is stable + rotatable." },
+    { "q": "Phased release ramps up over…", "options": ["1 hour", "7 days", "30 days", "Never"], "answer": 1, "explain": "Automatic 7-day ramp." },
+    { "q": "Store metadata (screenshots/desc) is best kept…", "options": ["Only in the web UI", "In a git-versioned deliver folder", "In your Slack", "None"], "answer": 1, "explain": "Versioned + reviewable via Fastlane deliver." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Upload a manually-built IPA via Transporter." },
+    { "level": "Medium", "text": "Automate submission via Fastlane + App Store Connect API key." },
+    { "level": "Hard", "text": "Configure phased release + monitor stability signals." },
+    { "level": "Expert", "text": "Automate metadata + screenshots + submission fully from CI." }
+  ],
+  "interviewQuestions": [
+    "How do you automate App Store submissions?",
+    "What is phased release?",
+    "How do you handle privacy labels?",
+    "Most common review rejections?",
+    "How do you manage signing across a team?"
+  ],
+  "references": [
+    { "label": "App Store Connect Help", "url": "https://developer.apple.com/help/app-store-connect/" }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "id": "devops.git_flow",
+  "levelId": 12,
+  "title": "Git Flow (& alternatives)",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Explain classic Git Flow branches",
+    "Compare with Trunk-Based and GitHub Flow",
+    "Choose a branching strategy for your team"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "A **branching strategy** defines how teams manage feature work, releases and hotfixes in git. Classic **Git Flow** uses long-lived develop + release branches; **GitHub Flow** and **Trunk-Based Development** favor short-lived branches merging to a single main." },
+    { "type": "table", "headers": ["Strategy", "Branches", "Best for"], "rows": [
+      ["Git Flow", "main, develop, feature/*, release/*, hotfix/*", "Scheduled releases (versioned SDKs)"],
+      ["GitHub Flow", "main + feature/*", "Web apps with continuous deploy"],
+      ["Trunk-Based", "main only + short-lived feature branches", "High-velocity CD teams"],
+      ["Release branches", "main + release/x.y", "Mobile apps (versioned releases)"]
+    ]},
+    { "type": "code", "language": "text", "code": "Mobile-friendly Trunk-Based + release branches:\n  main                (always deployable)\n   ├── feat/x         (short-lived, days)\n   ├── feat/y         (short-lived, days)\n   └── release/8.1    (cut from main; only fixes cherry-picked back)\n\n  Feature flags gate incomplete work in main." },
+    { "type": "callout", "variant": "interview", "markdown": "Modern high-velocity teams don't use Git Flow — the long-lived `develop` branch adds friction. They use Trunk-Based with **feature flags** to hide unfinished work + short-lived branches merged within a day. Git Flow still fits SDK/versioned-library or on-prem-release cycles." },
+    { "type": "callout", "variant": "mistake", "markdown": "Long-lived feature branches → nightmare merges. If a branch lives >1 week, break it up. If features aren't ready, gate them behind flags in main." },
+    { "type": "callout", "variant": "tip", "markdown": "For mobile apps: main (deployable) + short-lived feature branches + a release/x.y branch cut per release. Cherry-pick hotfixes to the release branch, tag store submissions, keep main moving." }
+  ],
+  "flashcards": [
+    { "front": "What is Trunk-Based Development?", "back": "All work integrates to main via short-lived branches (usually < 1 day)." },
+    { "front": "Why avoid long-lived feature branches?", "back": "Painful merges and integration risk — gate incomplete features with flags instead." },
+    { "front": "Best strategy for mobile releases?", "back": "Trunk-based + a release/x.y branch cut per store submission; cherry-pick hotfixes." }
+  ],
+  "quiz": [
+    { "q": "Which is favored by modern high-velocity teams?", "options": ["Git Flow", "Trunk-Based + feature flags", "One giant branch", "Multiple develops"], "answer": 1, "explain": "Short-lived branches + flags scale better with CD." },
+    { "q": "Long-lived feature branches lead to…", "options": ["Faster releases", "Painful merges and integration risk", "Better isolation", "Nothing bad"], "answer": 1, "explain": "Divergence compounds; use flags." },
+    { "q": "Mobile release cadence typically uses…", "options": ["Only main", "main + release/x.y branches for store cuts", "10 develop branches", "No branching"], "answer": 1, "explain": "Cut a release branch to stabilize while main keeps moving." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Set up a mobile-friendly branching model: main + release/x.y." },
+    { "level": "Medium", "text": "Cherry-pick a hotfix from main into an active release branch." },
+    { "level": "Hard", "text": "Introduce feature flags to hide an incomplete refactor in main." },
+    { "level": "Expert", "text": "Migrate a Git Flow repo to Trunk-Based without a re-history." }
+  ],
+  "interviewQuestions": [
+    "Git Flow vs GitHub Flow vs Trunk-Based?",
+    "When does Git Flow still make sense?",
+    "How do feature flags relate to branching?",
+    "How do you manage mobile release branches?",
+    "How do you avoid painful merges?"
+  ],
+  "references": [
+    { "label": "Trunk-Based Development", "url": "https://trunkbaseddevelopment.com" }
+  ]
+}

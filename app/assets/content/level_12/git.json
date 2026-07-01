@@ -1,0 +1,52 @@
+{
+  "id": "devops.git",
+  "levelId": 12,
+  "title": "Git & GitHub",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Collaborate through PRs with clean history",
+    "Use branches, rebase, cherry-pick and reflog fluently",
+    "Enforce quality via GitHub features"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "Git is a distributed version-control system tracking snapshots (commits) as an immutable graph. GitHub adds cloud hosting, pull requests, actions, and code review — the standard collaboration platform for most teams." },
+    { "type": "code", "language": "bash", "code": "# Everyday flow\ngit switch -c feat/auth-refresh\n# ...edit code, commit small, often\ngit commit -m \"auth: refresh token before expiry\"\ngit push -u origin feat/auth-refresh\n# open PR on GitHub -> review -> merge (squash)\n\n# Rescue tools\ngit reflog                 # every HEAD move you made\ngit cherry-pick <sha>      # pluck a single commit\ngit revert  <sha>          # undo a commit safely (no history rewrite)" },
+    { "type": "table", "headers": ["GitHub feature", "Purpose"], "rows": [
+      ["Pull Request", "Code review + discussion + CI gate"],
+      ["Branch protection rules", "Require reviews / passing CI / signed commits"],
+      ["CODEOWNERS", "Auto-request review from area owners"],
+      ["Environments + secrets", "Scoped secrets for CI deploys"],
+      ["Dependabot / CodeQL", "Automated deps + security scanning"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Senior habits: **small commits with imperative subject lines**, one logical change per PR, squash-merge on default, protect main with 'require passing CI + 1 approval'. Rebase your feature branch to keep the graph linear; never force-push to shared branches." },
+    { "type": "callout", "variant": "mistake", "markdown": "Force-pushing to `main` (or any shared branch) — rewrites teammates' history and can lose work. If you must fix a public branch, use `git revert`. Reserve `push --force-with-lease` for your own feature branches." },
+    { "type": "callout", "variant": "best", "markdown": "Configure the repo: branch protection, CODEOWNERS, PR templates, required CI status checks. Use `gh` CLI for scripted operations. Store secrets in GitHub Actions env/environment, never in git." }
+  ],
+  "flashcards": [
+    { "front": "How do you recover a lost commit?", "back": "`git reflog` → find the SHA → `git checkout` or `git reset --hard <sha>`." },
+    { "front": "revert vs reset?", "back": "revert creates a new commit undoing changes (safe on shared history); reset moves HEAD (rewrites history)." },
+    { "front": "Force-push safely?", "back": "Use `--force-with-lease` on your own feature branches; never on shared/protected ones." }
+  ],
+  "quiz": [
+    { "q": "Best way to undo a bad commit on `main` after merge?", "options": ["git reset --hard", "git revert <sha>", "Delete the repo", "Force push"], "answer": 1, "explain": "Revert is safe for shared history." },
+    { "q": "Lost commits are typically recoverable via…", "options": ["reflog", "reset", "fetch", "clone"], "answer": 0, "explain": "reflog logs HEAD moves." },
+    { "q": "Protecting `main` should require…", "options": ["Force pushes", "Passing CI + review + signed", "Nothing", "Public admin"], "answer": 1, "explain": "Standard branch protection settings." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Open a PR from a feature branch, request review, squash-merge." },
+    { "level": "Medium", "text": "Rewrite messy commits with interactive rebase before opening the PR." },
+    { "level": "Hard", "text": "Recover a lost branch via reflog after a bad `reset --hard`." },
+    { "level": "Expert", "text": "Configure branch protection + CODEOWNERS + a required CI matrix for the repo." }
+  ],
+  "interviewQuestions": [
+    "reset vs revert vs restore?",
+    "How do you recover lost work?",
+    "What is CODEOWNERS?",
+    "Rebase vs merge for feature branches?",
+    "How do you keep a clean PR history?"
+  ],
+  "references": [
+    { "label": "Pro Git (free)", "url": "https://git-scm.com/book" }
+  ]
+}

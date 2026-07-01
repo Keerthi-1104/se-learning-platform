@@ -1,0 +1,49 @@
+{
+  "id": "devops.testflight",
+  "levelId": 12,
+  "title": "TestFlight",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Distribute iOS beta builds via TestFlight",
+    "Manage internal + external testers",
+    "Automate uploads via Fastlane pilot / Codemagic"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "**TestFlight** is Apple's official beta distribution for iOS/iPadOS/macOS. Internal (up to 100 users, instant) or external (up to 10,000 users, requires a light beta app review) — with expiry (typically 90 days), feedback collection, and crash logs." },
+    { "type": "table", "headers": ["Tier", "Users", "Review?", "Turnaround"], "rows": [
+      ["Internal testers", "up to 100 team members", "None", "Instant after processing"],
+      ["External testers (individual)", "up to 10,000", "Yes (beta review)", "Hours to a day"],
+      ["Public link", "Anyone with link (up to 10k)", "Yes", "Same as external"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "TestFlight's edge: real App Store install experience, real crash logs to Xcode + Crashlytics, and a **feedback surface built into iOS**. Combined with Fastlane's `pilot` you get one-command uploads: `fastlane pilot upload`." },
+    { "type": "callout", "variant": "mistake", "markdown": "Not filling in beta app review info (test account, contact) — Apple rejects external builds for missing info faster than for real issues. Also: 90-day expiry surprises testers — plan renewal builds." },
+    { "type": "callout", "variant": "tip", "markdown": "Segment testers into groups (QA, marketing, VIP customers) and target releases per group. Auto-notify testers of new builds. Ask for feedback in-app for high-signal input." }
+  ],
+  "flashcards": [
+    { "front": "Internal vs external TestFlight?", "back": "Internal: ≤100 team members, no review. External: ≤10,000 users, requires beta review." },
+    { "front": "TestFlight expiry?", "back": "Typically 90 days from build upload — plan renewal builds." },
+    { "front": "Automation?", "back": "fastlane pilot upload / Codemagic / GitHub Actions actions." }
+  ],
+  "quiz": [
+    { "q": "External TestFlight requires…", "options": ["Nothing", "A light beta app review", "Full App Store review", "Root access"], "answer": 1, "explain": "Apple reviews beta builds too, faster." },
+    { "q": "TestFlight builds expire in about…", "options": ["1 day", "90 days", "1 year", "Never"], "answer": 1, "explain": "Roughly 90 days." },
+    { "q": "For automation use…", "options": ["Copy-paste IPAs manually", "fastlane pilot / codemagic / gh-actions", "USB stick", "Nothing"], "answer": 1, "explain": "Automated uploads are standard." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Upload a build to TestFlight via App Store Connect." },
+    { "level": "Medium", "text": "Segment testers into 'qa' + 'beta'; target a release to one group." },
+    { "level": "Hard", "text": "Automate uploads via Fastlane pilot in CI." },
+    { "level": "Expert", "text": "Auto-promote a nightly TestFlight build to external testers after N days of clean stability." }
+  ],
+  "interviewQuestions": [
+    "TestFlight internal vs external?",
+    "How do you automate TestFlight uploads?",
+    "How do you gather beta feedback?",
+    "Expiry handling?",
+    "Play Internal vs TestFlight?"
+  ],
+  "references": [
+    { "label": "TestFlight", "url": "https://developer.apple.com/testflight/" }
+  ]
+}

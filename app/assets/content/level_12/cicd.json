@@ -1,0 +1,52 @@
+{
+  "id": "devops.cicd",
+  "levelId": 12,
+  "title": "CI / CD",
+  "xp": 50,
+  "estimatedMinutes": 25,
+  "objectives": [
+    "Distinguish CI vs CD vs CD (deployment vs delivery)",
+    "Design a mobile pipeline: lint → test → build → sign → distribute",
+    "Add safety: env promotion, approvals, rollback"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "**CI (Continuous Integration)** merges code to main frequently and runs automated tests on every push. **CD** can mean two things: **Continuous Delivery** (build is always production-ready; humans click to deploy) or **Continuous Deployment** (every merged change auto-deploys)." },
+    { "type": "code", "language": "text", "code": "Canonical mobile pipeline:\n  push -> checkout -> deps cache -> analyze / lint\n       -> unit + widget tests\n       -> build (Android AAB / iOS IPA) with per-flavor keys\n       -> sign (upload / distribute) artifacts\n       -> [approval gate]\n       -> promote: internal → beta → production" },
+    { "type": "table", "headers": ["Stage", "Common gates"], "rows": [
+      ["CI", "Green tests + lint + coverage"],
+      ["Build", "Reproducible + versioned"],
+      ["Test-env deploy", "Auto on merge to main"],
+      ["Staging deploy", "Manual approval or nightly"],
+      ["Prod deploy", "Approval + change window + rollback plan"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "A mature mobile pipeline has three signals that gate promotion: **tests green, static analysis clean, and a stability floor** (crash-free % from the current shipped version). Regression on any of those blocks promotion — this is what turns 'we ship weekly' into 'we ship safely, weekly'." },
+    { "type": "callout", "variant": "mistake", "markdown": "Baking secrets into pipeline logs. Use masked secrets, never `echo $TOKEN`, and rotate credentials on team member turnover. Also: mutable version tags (`v1`) — pin actions/images by SHA in security-sensitive workflows." },
+    { "type": "callout", "variant": "best", "markdown": "Fast pipelines beat perfect ones — target <10 min from push to signal. Cache dependencies, run tests in parallel, split unit vs integration, run heavier jobs post-merge on main." }
+  ],
+  "flashcards": [
+    { "front": "Continuous Delivery vs Deployment?", "back": "Delivery = always production-ready; humans click to deploy. Deployment = every merged change auto-deploys." },
+    { "front": "Three signals gating mobile promotion?", "back": "Tests green + static analysis clean + crash-free % stable." },
+    { "front": "Why pin actions/images by SHA?", "back": "Mutable tags (like v1) can silently change, injecting new/malicious code." }
+  ],
+  "quiz": [
+    { "q": "Under Continuous Deployment…", "options": ["Every merged change auto-deploys", "Only Fridays", "Humans deploy weekly", "Never"], "answer": 0, "explain": "Fully automated all the way to prod." },
+    { "q": "Target CI feedback time for mobile is…", "options": ["Hours", "<10 minutes", "Days", "None"], "answer": 1, "explain": "Fast feedback maintains flow." },
+    { "q": "Best pipeline-secrets practice?", "options": ["Echo in logs", "Masked secrets + rotation + never log", "Store in git", "Share via chat"], "answer": 1, "explain": "Masking + rotation is table stakes." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Add a CI job that runs `flutter analyze` and unit tests on every PR." },
+    { "level": "Medium", "text": "Add a nightly build job that produces signed AAB + IPA artifacts." },
+    { "level": "Hard", "text": "Add promotion pipeline: main → App Distribution nightly → Play Internal weekly → Prod on tag." },
+    { "level": "Expert", "text": "Add crash-free % gate that blocks production promotion." }
+  ],
+  "interviewQuestions": [
+    "CI vs CD (both meanings)?",
+    "How would you design a mobile CI/CD pipeline?",
+    "How do you speed up a slow pipeline?",
+    "How do you gate production promotion?",
+    "How do you handle rollback?"
+  ],
+  "references": [
+    { "label": "DORA — DevOps Research", "url": "https://dora.dev" }
+  ]
+}

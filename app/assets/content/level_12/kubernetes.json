@@ -1,0 +1,52 @@
+{
+  "id": "devops.kubernetes",
+  "levelId": 12,
+  "title": "Kubernetes (DevOps view)",
+  "xp": 60,
+  "estimatedMinutes": 35,
+  "objectives": [
+    "Templatize manifests with Helm / Kustomize",
+    "Deploy via GitOps (Argo CD / Flux)",
+    "Roll out safely with health checks + progressive delivery"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "For DevOps, Kubernetes is your **container orchestrator + rollout engine**. You declare desired state in YAML/Helm; controllers converge, do rolling updates, restart bad pods, and autoscale — but only if you set the right probes and resource requests." },
+    { "type": "code", "language": "yaml", "code": "# k8s Deployment (essentials)\nspec:\n  replicas: 3\n  strategy: { type: RollingUpdate,\n              rollingUpdate: { maxUnavailable: 0, maxSurge: 1 } }\n  template:\n    spec:\n      containers:\n      - name: api\n        image: ghcr.io/org/api@sha256:abc...\n        readinessProbe: { httpGet: { path: /health, port: 8080 } }\n        livenessProbe:  { httpGet: { path: /alive,  port: 8080 } }\n        resources:\n          requests: { cpu: 100m, memory: 128Mi }\n          limits:   { cpu: 500m, memory: 512Mi }" },
+    { "type": "table", "headers": ["Layer", "Tool"], "rows": [
+      ["Templating", "Helm charts (versioned, values.yaml)"],
+      ["Overlays per env", "Kustomize"],
+      ["GitOps deploy", "Argo CD / Flux (repo = truth)"],
+      ["Progressive delivery", "Argo Rollouts / Flagger (canary, blue-green)"],
+      ["Secrets", "SealedSecrets / SOPS / External Secrets"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Modern K8s stack = **GitOps**. The desired state of the cluster lives in git; Argo CD / Flux continuously reconcile. Deployments become PRs — reviewable, auditable, and easy to roll back by reverting the commit." },
+    { "type": "callout", "variant": "mistake", "markdown": "Missing readiness probes = 500 storms during rollouts. Missing PodDisruptionBudget = evictions take out too many replicas. Missing resource requests = CPU-starved pods + noisy neighbors. Fix the trio before shipping anything to prod." },
+    { "type": "callout", "variant": "best", "markdown": "Progressive delivery with canary (5% → 25% → 100%) tied to SLO checks (error rate + latency) auto-rolls back on regression. Combined with GitOps + immutable digests, deploys become boring — which is the goal." }
+  ],
+  "flashcards": [
+    { "front": "GitOps in one sentence?", "back": "Cluster state is a function of a git repo; Argo CD / Flux continuously converge cluster to repo." },
+    { "front": "Trio you need before prod?", "back": "Readiness/liveness probes + PDB + resource requests/limits." },
+    { "front": "Progressive delivery pattern?", "back": "Canary in stages (5→25→100%) with automatic rollback on SLO regression." }
+  ],
+  "quiz": [
+    { "q": "Under GitOps the cluster state is…", "options": ["Whatever kubectl applied last", "Reconciled from a git repo", "Manual only", "Random"], "answer": 1, "explain": "Repo = source of truth." },
+    { "q": "Missing readiness probes cause…", "options": ["Nothing", "500 storms during rollouts", "Faster deploys", "Better latency"], "answer": 1, "explain": "Traffic goes to pods that aren't ready." },
+    { "q": "For safe rollouts prefer…", "options": ["kubectl apply -f big.yaml manually", "Argo Rollouts / Flagger canary tied to SLOs", "Restart cluster", "Delete pods"], "answer": 1, "explain": "Progressive delivery with auto-rollback." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Deploy an app to kind with Deployment + Service + probes." },
+    { "level": "Medium", "text": "Templatize with Kustomize; two overlays (dev, prod)." },
+    { "level": "Hard", "text": "Deploy via Argo CD from a git repo; test rollback via revert." },
+    { "level": "Expert", "text": "Add Argo Rollouts canary tied to SLO checks (error rate + latency)." }
+  ],
+  "interviewQuestions": [
+    "What is GitOps and why use it?",
+    "Trio needed before prod deploys?",
+    "Progressive delivery vs plain rolling update?",
+    "How do you handle secrets in K8s + git?",
+    "How do you monitor deployment health?"
+  ],
+  "references": [
+    { "label": "Argo CD", "url": "https://argo-cd.readthedocs.io" }
+  ]
+}

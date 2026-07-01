@@ -1,0 +1,50 @@
+{
+  "id": "devops.play_console",
+  "levelId": 12,
+  "title": "Google Play Console",
+  "xp": 30,
+  "estimatedMinutes": 15,
+  "objectives": [
+    "Ship an AAB via internal → closed → open → production tracks",
+    "Use staged rollouts + Play App Signing",
+    "Automate uploads via the Play Publisher API"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "The **Google Play Console** is the operator dashboard for Android apps: submissions, tracks (internal/closed/open/production), staged rollouts, Play App Signing, crash + ANR reports, and Play policies." },
+    { "type": "table", "headers": ["Track", "Audience", "Typical use"], "rows": [
+      ["Internal", "≤100 testers, instant", "Daily builds for QA"],
+      ["Closed", "Selected users", "Beta with specific groups"],
+      ["Open", "Anyone opting in", "Public beta"],
+      ["Production", "Everyone", "Live release (staged rollout)"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "Two Play essentials: **AAB only** (APKs no longer accepted since Aug 2021) and **Play App Signing** (Google holds the signing key; you upload with an upload key). AAB + Play delivers per-device optimized APKs (smaller downloads) automatically." },
+    { "type": "callout", "variant": "mistake", "markdown": "Missing target-API-level updates. Google raises the required target SDK yearly; apps not on the current bar can't ship updates. Also: bumping versionCode by inconsistent amounts across CI runs — always monotonically increasing." },
+    { "type": "callout", "variant": "best", "markdown": "Always use staged rollout (5% → 20% → 50% → 100%) with Play Vitals + Crashlytics monitoring. Automate uploads via the Play Publisher API (Fastlane's `supply` or Codemagic's built-in publishing)." }
+  ],
+  "flashcards": [
+    { "front": "Track promotion order?", "back": "Internal → Closed → Open → Production." },
+    { "front": "AAB vs APK?", "back": "Google Play accepts AAB only (since Aug 2021); it generates optimized per-device APKs automatically." },
+    { "front": "Play App Signing?", "back": "Google holds the app signing key; you upload with an upload key; key rotation + recovery are managed." }
+  ],
+  "quiz": [
+    { "q": "Google Play accepts…", "options": ["APK only", "AAB only", "Both interchangeably", "ZIP"], "answer": 1, "explain": "AAB has been mandatory since Aug 2021." },
+    { "q": "For a safe production release use…", "options": ["Full rollout instantly", "Staged rollout with monitoring", "No monitoring", "Manual copy to devices"], "answer": 1, "explain": "5→20→50→100% with Vitals + Crashlytics." },
+    { "q": "Play App Signing means…", "options": ["Google holds signing key + you upload with upload key", "You share your keystore publicly", "No signing needed", "Play removes signing"], "answer": 0, "explain": "Google-managed signing key + your upload key." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Upload an AAB to the Internal track via the console." },
+    { "level": "Medium", "text": "Automate uploads via Fastlane supply + a service account JSON." },
+    { "level": "Hard", "text": "Configure staged rollout at 5% + halt/resume based on Vitals." },
+    { "level": "Expert", "text": "Migrate an app onto Play App Signing without losing upload continuity." }
+  ],
+  "interviewQuestions": [
+    "Track promotion order + audiences?",
+    "AAB vs APK — why AAB now?",
+    "Play App Signing — how does it work?",
+    "How do you automate uploads?",
+    "Staged rollout best practices?"
+  ],
+  "references": [
+    { "label": "Play Console Help", "url": "https://support.google.com/googleplay/android-developer" }
+  ]
+}

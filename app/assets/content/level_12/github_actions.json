@@ -1,0 +1,52 @@
+{
+  "id": "devops.github_actions",
+  "levelId": 12,
+  "title": "GitHub Actions",
+  "xp": 40,
+  "estimatedMinutes": 20,
+  "objectives": [
+    "Write a workflow with jobs + steps + matrices",
+    "Cache dependencies and reuse composite actions",
+    "Use environments + secrets safely"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "definition", "markdown": "**GitHub Actions** is GitHub's built-in CI/CD: YAML workflows in `.github/workflows/` triggered by events (push, PR, schedule, manual). Jobs run in parallel on hosted or self-hosted runners; steps use reusable **actions** from the marketplace or your own repos." },
+    { "type": "code", "language": "yaml", "code": "name: Flutter CI\non: { push: { branches: [main] }, pull_request: {} }\njobs:\n  test:\n    runs-on: ubuntu-latest\n    strategy: { matrix: { channel: [stable] } }\n    steps:\n      - uses: actions/checkout@v4\n      - uses: subosito/flutter-action@v2\n        with: { channel: ${{ matrix.channel }} }\n      - run: flutter pub get\n      - run: flutter analyze\n      - run: flutter test --coverage" },
+    { "type": "table", "headers": ["Feature", "Why"], "rows": [
+      ["Reusable workflows", "DRY across many repos"],
+      ["Composite actions", "Bundle steps into a reusable action"],
+      ["Matrix builds", "Test across versions/OS/flavors"],
+      ["Environments", "Scoped secrets + required reviewers"],
+      ["Concurrency", "Cancel superseded runs on the same branch"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "The senior touches: **cache Flutter/Gradle/Pods** (huge speedup), **concurrency: cancel-in-progress** to save minutes on PR churn, **environments with required reviewers** for prod deploys, and **OIDC-based cloud auth** (no long-lived cloud keys in secrets)." },
+    { "type": "callout", "variant": "mistake", "markdown": "Referencing third-party actions by `@main` or `@v1` — a tag maintainer can push a compromised commit. Pin by **commit SHA** for security-sensitive workflows (`uses: some/action@abc123…`)." },
+    { "type": "callout", "variant": "best", "markdown": "Use `env` for non-secret config; **secrets** for credentials (masked automatically); Environments for gated deploys. Add `permissions:` at workflow level to grant only what's needed." }
+  ],
+  "flashcards": [
+    { "front": "Where do workflows live?", "back": ".github/workflows/*.yml — YAML files triggered by events." },
+    { "front": "How to pin an action safely?", "back": "By commit SHA (`uses: some/action@abc123…`), not by mutable tag/branch." },
+    { "front": "How to speed up mobile CI?", "back": "Cache pub/Gradle/Pods, run tests in parallel, cancel superseded PR runs via `concurrency`." }
+  ],
+  "quiz": [
+    { "q": "Matrix builds are for…", "options": ["Deleting jobs", "Running across versions/OS/flavors in parallel", "Debug logs only", "Encrypting"], "answer": 1, "explain": "Test/build across multiple axes." },
+    { "q": "For safe cloud auth in Actions use…", "options": ["Long-lived cloud keys in secrets", "OIDC federation (no long-lived keys)", "Nothing", "Public URLs"], "answer": 1, "explain": "OIDC federates GitHub identity to cloud IAM." },
+    { "q": "To auto-cancel superseded PR runs use…", "options": ["`concurrency: cancel-in-progress`", "delete workflow", "manual cancel", "no CI"], "answer": 0, "explain": "The concurrency key handles it." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Write a workflow that runs `flutter analyze` and tests on PR + push." },
+    { "level": "Medium", "text": "Cache pub/Gradle; measure job time before/after." },
+    { "level": "Hard", "text": "Add a release workflow that builds signed AAB + IPA on tag." },
+    { "level": "Expert", "text": "OIDC-federate GitHub → GCP; upload artifacts without long-lived keys." }
+  ],
+  "interviewQuestions": [
+    "How does GitHub Actions structure workflows?",
+    "How do you speed up CI jobs?",
+    "How do you handle secrets safely?",
+    "Reusable workflow vs composite action?",
+    "Why pin actions by SHA?"
+  ],
+  "references": [
+    { "label": "GitHub Actions docs", "url": "https://docs.github.com/en/actions" }
+  ]
+}
