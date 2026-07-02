@@ -2,48 +2,100 @@
   "id": "arch.foundation",
   "levelId": 6,
   "title": "Foundation Layer",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "xp": 40,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Identify what belongs in the foundation",
-    "Keep foundation code framework-agnostic",
-    "Avoid leaking foundation concerns into features"
+    "Understand the Foundation layer via a real-life analogy",
+    "See what belongs in `core/` vs a feature",
+    "Design a solid `Result<T, E>` + `Failure` typed-error system",
+    "Configure Dio interceptors, logging, and env config properly",
+    "Answer foundation-layer interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "The Foundation layer is the bedrock of an app: cross-cutting utilities and infrastructure — logging, error types, network client, storage, config, DI, feature flags — used by every feature but owning no domain rules." },
-    { "type": "table", "headers": ["Belongs in foundation", "Does NOT belong"], "rows": [
-      ["Result/Failure types, logger", "User, Order, Cart entities"],
-      ["Configured Dio/http client", "Auth business rules"],
-      ["Storage (Hive/secure) helpers", "Feature-specific state"],
-      ["Feature-flag reader, env config", "UI screens"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of the Foundation Layer as the FOUNDATION SLAB and utility trunks of a building.**\n\n- Every apartment (feature) sits on the same concrete slab. Every apartment plugs into the same electricity, water, sewage, and gas lines. Nobody re-pours their own slab. Nobody drills a new well.\n- **The Foundation Layer is that shared infrastructure for your app:** the configured HTTP client, the typed error hierarchy, the logging pipeline, the local storage wrapper, the environment config, the DI setup, the app-wide extensions.\n- **What belongs here:** anything used by MULTIPLE features that is NOT a feature itself. `AppLogger`, `AppException`, `Result<T, E>`, `EnvConfig`, `Dio` with interceptors, `SecureStorage`, `Analytics` client.\n- **What does NOT belong here:** business logic (`RegisterUser`), UI (screens), domain models (`User`, `Order`). Those are features or `shared/`.\n\n**Why this matters:** in a well-organized app, features come and go, get rewritten, get deleted. The foundation stays stable for years. If you get the foundation right (typed errors, logging, HTTP interceptors), features become clean and testable. If you get it wrong, every feature invents its own error handling, its own retries, its own logging format — and the app slowly grinds to a swamp of copy-pasted infrastructure code." },
+    { "type": "callout", "variant": "definition", "markdown": "**The Foundation Layer** (often called `core/` in Flutter apps) contains cross-cutting infrastructure used by every feature: typed error hierarchy (`Failure`, `AppException`), `Result<T, E>` for functional error handling, HTTP client configuration (Dio + interceptors), logging pipeline, environment config (`EnvConfig` from `.env` or Firebase Remote Config), local storage wrappers (`SecureStorage`, `Hive` boxes), analytics client, and app-wide extensions. It has ZERO feature imports and ZERO business logic — pure infrastructure." },
+    { "type": "theory", "markdown": "## What belongs in the Foundation Layer" },
+    { "type": "table", "headers": ["Category", "Files", "Notes"], "rows": [
+      ["**Typed errors**", "`Failure`, `AppException`, `NetworkFailure`, `AuthFailure`", "Sealed hierarchy; every layer speaks these"],
+      ["**Result type**", "`Result<T, E>` — `Ok(T)` or `Err(E)`", "Functional alternative to try/catch"],
+      ["**HTTP client**", "`Dio` factory + `AuthInterceptor`, `LoggingInterceptor`, `RetryInterceptor`", "One configured instance shared everywhere"],
+      ["**Logger**", "`AppLogger` wrapping `log` package or Sentry", "Structured logging with levels"],
+      ["**Environment config**", "`EnvConfig` reading `--dart-define` or `.env`", "One place for all environment values"],
+      ["**Local storage**", "Wrappers over Hive, SharedPreferences, SecureStorage", "Feature code never talks to Hive directly"],
+      ["**DI setup**", "`setupDI()` composition root", "Registers services and shared instances"],
+      ["**Extensions**", "`context.theme`, `int.spacing`, `String.capitalize`", "Reusable across features"],
+      ["**Constants**", "App-wide constants (base URLs by env, timeouts)", ""],
+      ["**Result type + async utilities**", "`Future<Result<T, F>> guard(...)`", "Wraps `try/catch` into `Result`"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "A stable foundation is why features can move fast. When network, error handling, DI, config and logging are solved once and centrally, every new feature reuses them and looks the same shape — code review becomes easier." },
-    { "type": "callout", "variant": "mistake", "markdown": "Letting a feature type sneak into foundation ('Foundation depends on `Cart`'). Foundation must know nothing about specific domains — otherwise it becomes a dumping ground and prevents reuse." }
+    { "type": "theory", "markdown": "## Sample program — a solid `Result<T, F>` + typed error hierarchy" },
+    { "type": "code", "language": "dart", "code": "// lib/core/errors/failure.dart — every layer speaks this hierarchy\nsealed class Failure {\n  const Failure(this.message);\n  final String message;\n}\n\nclass NetworkFailure extends Failure { const NetworkFailure(super.message); }\nclass ServerFailure  extends Failure { const ServerFailure(super.message, this.statusCode); final int statusCode; }\nclass AuthFailure    extends Failure { const AuthFailure(super.message); }\nclass NotFoundFailure extends Failure { const NotFoundFailure(super.message); }\nclass ValidationFailure extends Failure {\n  const ValidationFailure(super.message, this.fields);\n  final Map<String, String> fields;\n}\nclass UnknownFailure extends Failure { const UnknownFailure(super.message); }\n\n// lib/core/result/result.dart — Ok(T) or Err(E)\nsealed class Result<T, E> {\n  const Result();\n\n  bool get isOk => this is Ok<T, E>;\n  bool get isErr => this is Err<T, E>;\n\n  R fold<R>({required R Function(T value) ok, required R Function(E error) err}) =>\n      switch (this) {\n        Ok<T, E>(:final value) => ok(value),\n        Err<T, E>(:final error) => err(error),\n      };\n\n  Result<R, E> map<R>(R Function(T) fn) => switch (this) {\n    Ok<T, E>(:final value) => Ok(fn(value)),\n    Err<T, E>(:final error) => Err(error),\n  };\n}\n\nclass Ok<T, E>  extends Result<T, E> { const Ok(this.value);  final T value; }\nclass Err<T, E> extends Result<T, E> { const Err(this.error); final E error; }\n\n// lib/core/result/guard.dart — wrap try/catch into Result\nFuture<Result<T, Failure>> guard<T>(Future<T> Function() action) async {\n  try {\n    return Ok(await action());\n  } on DioException catch (e) {\n    return Err(_dioToFailure(e));\n  } on Exception catch (e) {\n    return Err(UnknownFailure(e.toString()));\n  }\n}\n\nFailure _dioToFailure(DioException e) => switch (e.response?.statusCode) {\n  401 => const AuthFailure('Not authenticated'),\n  404 => NotFoundFailure(e.message ?? 'Not found'),\n  int status when status >= 500 => ServerFailure('Server error', status),\n  _ => NetworkFailure(e.message ?? 'Network error'),\n};\n\n// ============ Consumers use Result end-to-end ============\n// Repository:\nclass UserRepositoryImpl implements UserRepository {\n  UserRepositoryImpl(this._api);\n  final Dio _api;\n\n  @override\n  Future<Result<User, Failure>> getById(int id) =>\n      guard(() async {\n        final r = await _api.get('/users/$id');\n        return User.fromJson(r.data);\n      });\n}\n\n// ViewModel:\nclass UserViewModel extends ChangeNotifier {\n  UserViewModel(this._repo);\n  final UserRepository _repo;\n  User? user;\n  Failure? error;\n\n  Future<void> load(int id) async {\n    (await _repo.getById(id)).fold(\n      ok:  (u) => user = u,\n      err: (e) => error = e,\n    );\n    notifyListeners();\n  }\n}\n\n// UI:\nswitch (vm.error) {\n  case AuthFailure(): _navigateToLogin();\n  case NotFoundFailure(): _showNotFound();\n  case ServerFailure(:final statusCode): _showServerError(statusCode);\n  case NetworkFailure(): _showOfflineBanner();\n  case ValidationFailure(:final fields): _highlightErrors(fields);\n  case UnknownFailure() || null: _showGeneric();\n}\n\n// Notice: every layer speaks the SAME typed-error language.\n// No random Exception messages leaking. The compiler enforces exhaustive handling." },
+    { "type": "theory", "markdown": "## HTTP foundation — Dio + interceptors" },
+    { "type": "code", "language": "dart", "code": "// lib/core/network/dio_factory.dart\nDio createDio({required EnvConfig env, required AuthService auth, required AppLogger log}) {\n  final dio = Dio(BaseOptions(\n    baseUrl: env.apiBaseUrl,\n    connectTimeout: const Duration(seconds: 15),\n    receiveTimeout: const Duration(seconds: 30),\n    headers: {'Content-Type': 'application/json'},\n  ));\n\n  dio.interceptors.addAll([\n    // Attach auth token to every request\n    InterceptorsWrapper(\n      onRequest: (options, handler) {\n        final token = auth.token;\n        if (token != null) options.headers['Authorization'] = 'Bearer $token';\n        handler.next(options);\n      },\n    ),\n\n    // Log requests + responses (only in dev)\n    if (kDebugMode) LogInterceptor(requestBody: true, responseBody: true),\n\n    // Retry on transient failures\n    RetryInterceptor(\n      dio: dio,\n      maxRetries: 3,\n      retryDelays: const [Duration(seconds: 1), Duration(seconds: 3), Duration(seconds: 5)],\n    ),\n\n    // Refresh token on 401 (advanced — omitted for brevity)\n  ]);\n\n  return dio;\n}" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Feature-specific code in `core/`.** `core/user_helpers.dart` — user is a feature concept. Move it. `core/` = zero domain concepts." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Untyped exceptions.** Every `throw Exception('something failed')` is a bug waiting to happen. Use the `Failure` hierarchy; the compiler enforces handling." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Direct `print()` calls.** Never in production. Route through `AppLogger` which can be swapped for Sentry/Crashlytics." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: One Dio per screen.** Wasteful, no shared interceptors. ONE `Dio` factory, registered as a singleton." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Env values hard-coded.** `'https://api.example.com'` inside your code. Use `--dart-define` + `EnvConfig` — one place, flip flavor with a build flag." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Typed `Failure` hierarchy + `Result<T, F>`.** The single biggest quality improvement for an error-heavy codebase." },
+    { "type": "callout", "variant": "best", "markdown": "**2. One Dio, configured with interceptors.** Auth, logging, retry, error normalization." },
+    { "type": "callout", "variant": "best", "markdown": "**3. `AppLogger` — everything routes through it.** Level-based, environment-aware, easy to swap for Sentry." },
+    { "type": "callout", "variant": "best", "markdown": "**4. `EnvConfig` — one class per environment.** Dev, staging, prod. Loaded from `--dart-define`." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Extensions in `core/extensions/`.** `context.theme`, `int.px`, `String.capitalize`." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Zero feature imports.** `grep -R 'features/' lib/core/` should return nothing." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Failure hierarchy.** Build the sealed `Failure` class + subclasses; write a `_dioToFailure` helper." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Result<T, F>.** Implement with `fold`, `map`, `flatMap`; use in one Repository." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Dio interceptors.** Add auth + logging + retry; verify every request has the token." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — EnvConfig via `--dart-define`.** `flutter run --dart-define=API_URL=https://staging.api` reads into `EnvConfig.apiBaseUrl`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Handle 401 with token refresh.** Interceptor catches 401, refreshes token, retries the original request. Full loop, no infinite recursion." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is the Foundation Layer?**\n\n**A:** The Foundation Layer (commonly `core/`) is the cross-cutting infrastructure every feature depends on: typed error hierarchy, `Result<T, E>` type, HTTP client factory with interceptors, logging pipeline, environment config, local storage wrappers, DI setup, extensions. It has **zero domain logic** (no User / Order / business rules) and **zero feature imports**. Features depend on Foundation; Foundation depends on nothing feature-specific. Think of it as the concrete slab of the building — every apartment sits on it. The Foundation Layer's quality determines whether features become clean and testable or every feature reinvents error handling and logging." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What's a `Result<T, E>` type and why use it?**\n\n**A:** `Result<T, E>` is a sealed union representing 'either a value of type T (`Ok(value)`) OR an error of type E (`Err(error)`)'. It's the functional alternative to exception-based error handling. **Why:** (1) The compiler forces you to handle both branches (`.fold(ok:..., err:...)`) — no forgotten error paths. (2) Errors are TYPED (`Err<Failure>`), not opaque `Exception`s. (3) No `try/catch` scattered through the codebase — errors flow like values. (4) Callers can `.map` and `.flatMap` over Results to build pipelines. Pairs perfectly with a sealed `Failure` hierarchy. Rust, Kotlin, Scala all have this pattern; Dart doesn't ship it but a dozen lines gives you the same." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What is a typed `Failure` hierarchy?**\n\n**A:** A **sealed** class hierarchy representing every kind of failure your app can encounter: `NetworkFailure`, `AuthFailure`, `NotFoundFailure`, `ServerFailure`, `ValidationFailure`, `UnknownFailure`. Every layer (Repository, Use Case, ViewModel) speaks THIS language — nobody throws random `Exception('something went wrong')`. **Advantages:** (1) Compiler enforces exhaustive handling in `switch` (Dart 3 sealed classes). (2) UI can react DIFFERENTLY to each failure — auth failure → login screen; network failure → retry banner; validation → highlight fields. (3) Analytics tag failures by type. (4) Logs become searchable ('all AuthFailures in the last hour'). This ONE pattern alone lifts the quality of a codebase." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you configure a shared HTTP client?**\n\n**A:** ONE `Dio` factory registered as a singleton in DI, configured with a stack of **interceptors**: **(1) `AuthInterceptor`** attaches `Authorization: Bearer <token>` to every request from `AuthService.token`. **(2) `LoggingInterceptor`** logs requests + responses in dev builds only. **(3) `RetryInterceptor`** retries transient failures with exponential backoff. **(4) `TokenRefreshInterceptor`** intercepts 401, refreshes the token, retries the original request (careful with re-entrance!). **(5) Base URL from `EnvConfig`**, not hard-coded. Every feature uses this ONE `Dio` — no feature creates its own. Repositories inject `Dio` via constructor; get_it/Riverpod registers the factory once at startup." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What is `EnvConfig` and why is it important?**\n\n**A:** A class holding ALL environment-varying values in ONE place: `apiBaseUrl`, `firebaseProjectId`, `sentryDsn`, `enableAnalytics`, feature flags. Loaded from **`--dart-define`** at build time (`flutter run --dart-define=API_URL=https://prod.api.com`) or from a `.env` file (with the `flutter_dotenv` package). **Why:** (1) NO hard-coded URLs anywhere in the code. (2) Flavor switching by flag, not by find-and-replace. (3) Secrets don't get committed. (4) Different values per environment (dev/staging/prod) without code changes. **Pattern:** `EnvConfig(apiUrl: const String.fromEnvironment('API_URL'))` — compile-time constant, tree-shaken if unused. Register in DI; every service reads from it, never hard-codes." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What should NOT be in the Foundation Layer?**\n\n**A:** **(1) Domain models** — `User`, `Order`, `Product` belong in features (they're feature-specific business objects). **(2) Business rules** — 'a user must be 18+ to register' is a Use Case. **(3) Screens / widgets that are feature-specific** — those go in the feature's `presentation/`. **(4) Feature-specific state** — `CartViewModel` is a cart feature concern. **(5) DTOs** — those belong in the feature's data layer. **(6) Anything with feature-specific dependencies** — `NotificationService` for a Chat feature belongs in that feature, not `core/`. **Rule:** if it's used by MULTIPLE features AND has no domain concepts, it's Foundation. Otherwise it's a feature or `shared/`." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: Why route logs through an `AppLogger` instead of `print`?**\n\n**A:** **(1) Levels** — `AppLogger.debug/info/warn/error` — filter by severity in production. **(2) Swappable backend** — dev prints to console; production sends to Sentry / Crashlytics / Firebase Analytics. **(3) Structured data** — attach userId, feature name, request ID; searchable in log aggregators. **(4) Off in production** — `print` sends everything to stdout even in release; `AppLogger` respects `kReleaseMode`. **(5) Privacy** — automatic PII masking (email, tokens). **Pattern:** `abstract class AppLogger` with `ConsoleLogger` (dev) and `SentryLogger` (prod) implementations, wired via DI. Feature code just calls `logger.info('Order placed', {'orderId': id})` — never `print`." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every production Flutter app** — the Foundation Layer exists whether you call it that or not.\n- **`freezed` for sealed hierarchies** — generates equality + `copyWith` for Failure classes.\n- **`fpdart` for `Either<L, R>`** — a batteries-included Result implementation.\n- **`multiple_result` package** — lightweight Result<T, E>.\n- **`dio_smart_retry`** — pre-built retry interceptor.\n- **Sentry Flutter SDK** — the AppLogger's usual production backend.\n- **Firebase Remote Config + EnvConfig** — combine build-time constants with runtime feature flags.\n- **This SE Learning Platform's own `core/content/content_service.dart`** — is a foundation-layer service." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`Result<T, E>` vs `Either<L, R>`** — same idea; `Either` is more general (used for anything with 2 branches).\n- **`Freezed` for sealed unions** — `@freezed sealed class Failure` gets `when`/`maybeWhen`/`map` generated.\n- **Interceptor ordering** — logging before retry; retry before token refresh; token refresh before auth interceptor for the retry.\n- **Circular DI risk** — `AuthInterceptor` needs `AuthService`; `AuthService` doesn't need `Dio`. Break the loop with a `Provider<Dio>` that constructs it lazily.\n- **`GetIt.registerLazySingleton`** — heavy foundation services (`SecureStorage`) built on first access.\n- **`Isolate.run` + Foundation** — some foundation services (crypto, image decode) run in isolates; pass primitives.\n- **Testing foundation** — every core service should have unit tests with 100% coverage; it's the foundation!\n- **`crashlytics_flutter` + logging** — capture unhandled exceptions to Firebase.\n- **Env-per-flavor** — `--dart-define-from-file=env/dev.json` for cleaner multi-flavor builds.\n- **`meta` annotations** — `@Sealed`, `@immutable`, `@internal` for API clarity." }
   ],
   "flashcards": [
-    { "front": "Foundation's rule of thumb?", "back": "Cross-cutting, framework-agnostic infra used everywhere; no domain rules." },
-    { "front": "Examples of foundation code?", "back": "Logger, Result/Failure types, network client, storage helpers, config, feature flags." },
-    { "front": "What must foundation never import?", "back": "Feature-specific domain types or UI screens." }
+    { "front": "Foundation Layer?", "back": "Cross-cutting infra: typed errors, Result<T, F>, Dio + interceptors, logger, env config, storage wrappers, DI." },
+    { "front": "Result<T, E>?", "back": "Sealed Ok(T) | Err(E). Compiler forces exhaustive handling; no unhandled errors." },
+    { "front": "Failure hierarchy?", "back": "Sealed class: NetworkFailure, AuthFailure, ServerFailure, ValidationFailure, ... — every layer speaks it." },
+    { "front": "One Dio or many?", "back": "ONE, configured with interceptors, registered as singleton." },
+    { "front": "EnvConfig?", "back": "One class holding env-varying values; loaded via --dart-define or .env; no hard-coded URLs." },
+    { "front": "Foundation rule?", "back": "Zero feature imports. Zero business logic. Pure infrastructure." }
   ],
   "quiz": [
-    { "q": "Which belongs in the foundation?", "options": ["User entity", "Configured HTTP client + logger", "Cart use case", "Home screen"], "answer": 1, "explain": "Cross-cutting infra belongs there; domain does not." },
-    { "q": "A red flag in the foundation is…", "options": ["A logger", "Importing a specific feature's entity", "Small utilities", "A Result type"], "answer": 1, "explain": "Foundation must remain domain-agnostic." },
-    { "q": "Foundation should be…", "options": ["Domain-heavy", "Framework-agnostic and reusable", "UI-only", "Test-only"], "answer": 1, "explain": "Reusable across features and apps." }
+    { "q": "Belongs in Foundation Layer?", "options": ["Business rules", "Typed errors + Dio + logger + env config", "Feature screens", "Domain models"], "answer": 1, "explain": "Cross-cutting infra only." },
+    { "q": "Result<T, E>?", "options": ["A widget", "Sealed Ok/Err; forces exhaustive handling", "Deprecated", "A stream"], "answer": 1, "explain": "Functional error handling." },
+    { "q": "Failure sealed class enables…", "options": ["Nothing", "Compiler-checked exhaustive UI switches over errors", "Runtime magic", "GC"], "answer": 1, "explain": "Dart 3 sealed matching." },
+    { "q": "Number of Dio instances?", "options": ["One per screen", "One shared, configured with interceptors", "Zero", "One per feature"], "answer": 1, "explain": "Shared interceptors." },
+    { "q": "Env values via…", "options": ["Hard-coded strings", "--dart-define + EnvConfig class", "print", "GlobalKey"], "answer": 1, "explain": "Build-time constants." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Add a shared Result<T> + Failure type to foundation and adopt in one repo." },
-    { "level": "Medium", "text": "Move a duplicated Dio setup into a foundation NetworkClient." },
-    { "level": "Hard", "text": "Extract logging behind an abstraction so tests use a fake logger." },
-    { "level": "Expert", "text": "Ship the foundation as a separate package and adopt it in two apps." }
+    { "level": "Easy", "text": "Build a sealed Failure hierarchy with 5 concrete subclasses." },
+    { "level": "Easy", "text": "Route AppLogger.info everywhere; verify no bare print() remains." },
+    { "level": "Medium", "text": "Implement Result<T, E> with fold + map; use in one Repository." },
+    { "level": "Medium", "text": "Configure Dio with Auth + Logging + Retry interceptors." },
+    { "level": "Hard", "text": "EnvConfig read from --dart-define; toggle base URL between dev + prod." },
+    { "level": "Hard", "text": "Token-refresh interceptor: catch 401, refresh, retry original request. Avoid infinite loop." },
+    { "level": "Expert", "text": "Sentry wired via AppLogger interface; verify unhandled exceptions get captured." }
   ],
   "interviewQuestions": [
-    "What is the foundation layer?",
-    "What does NOT belong in the foundation?",
-    "How does a good foundation speed up feature work?",
-    "How do you keep foundation reusable across apps?",
-    "Foundation vs core vs shared — how do you name them?"
+    "What is the Foundation Layer?",
+    "What's a Result<T, E> type and why use it?",
+    "What is a typed Failure hierarchy?",
+    "How do you configure a shared HTTP client?",
+    "What is EnvConfig and why is it important?",
+    "What should NOT be in the Foundation Layer?",
+    "Why route logs through an AppLogger instead of print?"
   ],
   "references": [
-    { "label": "Google — Guide to app architecture", "url": "https://developer.android.com/topic/architecture" }
+    { "label": "Dio interceptors", "url": "https://pub.dev/packages/dio#interceptors" },
+    { "label": "Sentry Flutter", "url": "https://docs.sentry.io/platforms/flutter/" }
   ]
 }

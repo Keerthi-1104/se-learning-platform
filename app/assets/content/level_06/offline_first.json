@@ -1,50 +1,107 @@
 {
   "id": "arch.offline_first",
   "levelId": 6,
-  "title": "Offline-first Architecture",
+  "title": "Offline-First Architecture",
   "xp": 50,
-  "estimatedMinutes": 25,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Design an app that works without network",
-    "Read/write through a local source of truth",
-    "Sync in the background with conflict rules"
+    "Understand offline-first via a real-life analogy",
+    "Design the read path: UI observes local DB; refresh writes to local",
+    "Handle the write path: optimistic updates + queued mutations",
+    "Reconcile conflicts and manage sync state",
+    "Answer offline-first interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Offline-first treats the **local database as the source of truth**. The UI reads and writes locally; a background sync layer talks to the server. Users get instant feedback and the app keeps working with no connection." },
-    { "type": "code", "language": "text", "code": "UI --(observe)--> Local DB (source of truth)\n         |\n         v\n    Sync engine <---> Network\n    - read-through:   fetch → cache → emit\n    - write-through:  write local → enqueue outbox → push" },
-    { "type": "table", "headers": ["Pattern", "Idea"], "rows": [
-      ["Read-through", "Fetch on miss, cache, emit"],
-      ["Write-through / outbox", "Persist locally + queue for server"],
-      ["Background sync", "Periodic/triggered flush with retries"],
-      ["Conflict resolution", "Last-write-wins, merge, or CRDT"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of offline-first as a Xerox photocopier at a busy office.**\n\n- Every time an important document comes in from HQ (the server), the office IMMEDIATELY makes a photocopy and files it locally. From now on, when anyone needs it, they grab the LOCAL COPY — instant. Nobody has to fax HQ every time.\n- When the local copy MIGHT be stale, the office quietly checks HQ IN THE BACKGROUND and updates the photocopy if needed. The user never waits.\n- When the OFFICE is offline (elevator broken, no fax line), everyone STILL works — from the local copies. Any changes THEY make are written into a 'to-fax' outbox, which auto-sends when the fax line is back.\n\n**In code:** the local database (Hive / Isar / SQLite) is the SINGLE SOURCE OF TRUTH for what the UI shows. The UI observes it via a `Stream`; it never touches the network directly. When you want fresh data, the Repository fetches from the API and WRITES to local — the Stream re-emits, UI refreshes automatically. Offline? Local Stream still emits from cache. On reconnect? Background sync fires; local updates; UI updates.\n\n**Why this matters:** offline-first is what makes Slack, Notion, Signal, Instagram feel INSTANT. There's no spinner between 'I tapped' and 'data appears' because the data was already there. It's arguably the single biggest UX pattern in modern mobile." },
+    { "type": "callout", "variant": "definition", "markdown": "**Offline-first architecture** treats the LOCAL DATABASE as the single source of truth for what the UI displays. Network fetches WRITE to local; UI reads from local via reactive streams. Mutations are applied OPTIMISTICALLY to local first, then queued and synced to the server. The app is FULLY USABLE offline, and reconnect just fires background sync. Contrasts with **online-first** where the UI waits for the network on every action (spinner-first). Pioneered by Slack, Notion, Signal, Instagram." },
+    { "type": "theory", "markdown": "## The two paths — read and write" },
+    { "type": "code", "language": "text", "code": "READ path:\n\n    UI  ◄── Stream<List<Order>>  ── Local DB (Hive/Isar)\n                                        ▲\n                                        │ writes\n                                        │\n              background refresh  ─────►│\n                                        │\n                              Remote API (Retrofit/Dio)\n\n    UI observes LOCAL. Repository refreshes to LOCAL. Stream re-emits → UI updates.\n    Offline? UI still gets data from local. Zero spinner, zero waiting.\n\n\nWRITE path:\n\n    UI dispatch → Repository → Optimistic write to Local (Stream emits immediately)\n                                        │\n                                        ▼\n                            Add to sync outbox\n                                        │\n                                        ▼\n                             SyncWorker (background)\n                                        │\n                                        ▼\n                             Remote API (Retrofit/Dio)\n                                        │\n                       success → mark outbox entry synced + drop\n                       failure → retry with backoff\n                       conflict → run reconciliation → update local + emit\n\n    User feels instant. Server catches up when possible.\n    Failed sync? Optionally show a small 'sync error' badge; retry automatically." },
+    { "type": "theory", "markdown": "## Sample program — offline-first Order repository" },
+    { "type": "code", "language": "dart", "code": "// Uses Isar (or Hive) for local storage. UI observes via Stream.\n\nabstract class OrderRepository {\n  Stream<List<Order>> watchAll();      // UI subscribes here\n  Future<void> refresh();              // pull-to-refresh calls this\n  Future<void> place(Cart cart);       // optimistic write\n}\n\nclass OrderRepositoryImpl implements OrderRepository {\n  OrderRepositoryImpl(this._remote, this._local, this._outbox, this._connectivity, this._sync);\n  final OrderRemoteDataSource _remote;\n  final OrderLocalDataSource _local;\n  final OutboxDao _outbox;\n  final ConnectivityService _connectivity;\n  final SyncWorker _sync;\n\n  @override\n  Stream<List<Order>> watchAll() => _local.watchAll();\n\n  @override\n  Future<void> refresh() async {\n    if (!await _connectivity.isOnline) return;   // offline? try later.\n    try {\n      final fresh = await _remote.fetchAll();\n      await _local.replaceAll(fresh);              // Stream re-emits.\n    } catch (_) { /* silent — UI already has cached data */ }\n  }\n\n  @override\n  Future<void> place(Cart cart) async {\n    // 1. Build a local order marked 'pending'.\n    final draft = Order.newDraft(cart, syncStatus: SyncStatus.pending);\n\n    // 2. Optimistic write — UI updates INSTANTLY via the Stream.\n    await _local.upsert(draft);\n\n    // 3. Queue the mutation in the outbox.\n    await _outbox.enqueue(PlaceOrderMutation(draft));\n\n    // 4. Kick off sync (fire-and-forget). WorkManager / periodic timer will\n    //    also run this every N minutes when we're online.\n    _sync.tryRunAll();\n  }\n}\n\n// The SyncWorker\nclass SyncWorker {\n  SyncWorker(this._outbox, this._remote, this._local, this._connectivity);\n\n  final OutboxDao _outbox;\n  final OrderRemoteDataSource _remote;\n  final OrderLocalDataSource _local;\n  final ConnectivityService _connectivity;\n\n  Future<void> tryRunAll() async {\n    if (!await _connectivity.isOnline) return;\n\n    final pending = await _outbox.pendingOrdered();\n    for (final mutation in pending) {\n      try {\n        final serverOrder = await _remote.place(mutation.order);\n        await _local.upsert(serverOrder.copyWith(syncStatus: SyncStatus.synced));\n        await _outbox.markSynced(mutation.id);\n      } on ConflictException catch (e) {\n        // Server has a newer version; reconcile.\n        final resolved = _reconcile(mutation.order, e.serverVersion);\n        await _local.upsert(resolved);\n        await _outbox.markSynced(mutation.id);\n      } catch (_) {\n        // Network / server error — backoff. Outbox stays; retry next tick.\n      }\n    }\n  }\n\n  Order _reconcile(Order local, Order server) {\n    // Simple last-write-wins for demo. Real apps use CRDTs or merge rules.\n    return server.updatedAt.isAfter(local.updatedAt) ? server : local;\n  }\n}\n\n// The UI just observes and displays:\nclass OrdersScreen extends StatelessWidget {\n  const OrdersScreen({super.key});\n  @override\n  Widget build(BuildContext c) => StreamBuilder<List<Order>>(\n    stream: getIt<OrderRepository>().watchAll(),\n    builder: (_, snap) {\n      final orders = snap.data ?? [];\n      return RefreshIndicator(\n        onRefresh: getIt<OrderRepository>().refresh,\n        child: ListView(children: orders.map((o) => OrderTile(o)).toList()),\n      );\n    },\n  );\n}" },
+    { "type": "theory", "markdown": "## Sync-status states — what the UI shows" },
+    { "type": "table", "headers": ["`syncStatus`", "Meaning", "UI hint"], "rows": [
+      ["`pending`", "Written locally, not yet synced", "Small clock icon or dot"],
+      ["`syncing`", "Currently being sent to server", "Small spinner"],
+      ["`synced`", "Confirmed by server; canonical", "No hint (default)"],
+      ["`failed`", "Sync failed after N retries", "Warning icon + tap-to-retry"],
+      ["`conflict`", "Server has diverging version", "Merge UI or auto-reconcile"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "Offline-first isn't 'add caching' — it's a different mental model. The UI never blocks on the network. That flips your architecture: repositories emit Streams from the local store, and network is a background concern that eventually syncs." },
-    { "type": "callout", "variant": "mistake", "markdown": "Silently dropping user writes when offline. Enqueue them in a durable outbox and surface pending/failed state; never lie to the user about a save that didn't reach the server." }
+    { "type": "callout", "variant": "interview", "markdown": "**The insight worth quoting:** offline-first isn't a feature — it's an architectural PATTERN that changes every layer. The UI observes local. The Repository writes-through. The Sync layer runs independently. Adding it to an existing online-first app is a MAJOR refactor. Designing for it from day one is table stakes for modern apps." },
+    { "type": "theory", "markdown": "## Conflict-resolution strategies" },
+    { "type": "table", "headers": ["Strategy", "How it works", "Best for"], "rows": [
+      ["**Last-write-wins**", "Compare timestamps; newer wins", "Notes, drafts — simple, users rarely mind"],
+      ["**Server-wins**", "Server always overrides local", "Read-heavy content (news, catalogs)"],
+      ["**Client-wins**", "Client always overrides server", "User's own private data (rare)"],
+      ["**Field-level merge**", "Merge non-conflicting fields; UI prompt for conflicts", "Rich documents (Google Docs)"],
+      ["**CRDT (Conflict-free Replicated Data Type)**", "Data structure that auto-merges", "Collaborative apps (Figma, Notion)"],
+      ["**User-driven merge**", "Present both versions; user picks", "Critical data (banking, healthcare)"]
+    ]},
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: UI reads from network directly.** Then offline breaks. All UI reads go through the Repository's local stream." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: No optimistic writes.** User taps 'like' → spinner appears → HTTP round-trip → UI finally updates. Bad UX. Update local instantly; sync in the background." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: No sync outbox for writes.** Offline → write attempt fails → UI shows an error → user retries manually. Fix: enqueue in the outbox; sync when online." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: No sync-status per entity.** UI can't distinguish 'synced' from 'in-flight'. Add `syncStatus` field; show subtle badges." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: No conflict-resolution strategy.** First conflict destroys user data. Even 'last-write-wins' is better than nothing — but decide DELIBERATELY." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Local DB (Isar/Hive/SQLite) is the single source of truth.** UI observes it; Repository writes through." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Optimistic writes with sync outbox.** UI feels instant; sync happens whenever possible." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Idempotent operations.** A sync that fails halfway must be safe to retry — use unique IDs, upserts not inserts." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Sync status per entity.** `pending`, `syncing`, `synced`, `failed`, `conflict`. UI shows subtle hints." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Background sync via WorkManager (Android) / BGProcessing (iOS).** Retries with exponential backoff." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Design conflict resolution up front.** Pick a strategy per data type; document it." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Show connectivity + sync state subtly.** Offline banner; per-item pending dot." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Reactive read path.** DAO returns `Stream<List<X>>`; UI observes; refresh writes to local; stream re-emits." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Optimistic like button.** Tap → local flip → sync to server → server confirms. On error → revert." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Sync outbox.** `OutboxDao` for pending mutations; `SyncWorker` drains it when online." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Conflict handling.** Two devices edit the same note; last-write-wins with timestamp." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — CRDT for a collaborative counter.** Two devices increment offline; both reconcile to sum on merge." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is offline-first architecture?**\n\n**A:** Offline-first treats the LOCAL DATABASE as the single source of truth for what the UI displays. The UI observes local via a reactive Stream; network fetches WRITE to local; the UI never reads from the network directly. Mutations are applied OPTIMISTICALLY to local, then queued and synced to the server in the background. The app is fully usable offline; reconnect just fires background sync. Contrast: 'online-first' apps wait for the network on every action, showing a spinner. Offline-first is what makes Slack, Notion, Instagram, Signal feel instant — the data was already local." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What's the read path in offline-first?**\n\n**A:** **UI observes local DB via a Stream** (Hive/Isar watchers, Room's Flow, Firestore's snapshot listeners). The Stream emits the current list of entities. UI renders. **Refresh action** (pull-to-refresh, initial load, WorkManager tick) calls the Repository's `refresh()` method. **Repository** fetches from remote → converts DTOs to entities → writes to LOCAL. Local Stream re-emits with the fresh data. UI updates. **Offline?** Repository can't fetch; UI still shows cached data from local. Zero spinner between 'user opened screen' and 'user sees content'." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What's the write path with optimistic updates?**\n\n**A:** User taps 'place order'. **(1) Build a local entity** marked `syncStatus: pending`. **(2) Write to local DB** — Stream emits immediately, UI updates without any network call. User feels instant. **(3) Enqueue the mutation** in an outbox table (`OutboxDao.enqueue(mutation)`). **(4) Fire the sync worker** (in-process now; also runs periodically via WorkManager). **(5) SyncWorker** iterates the outbox, sends each mutation to the server. On success → update local entity to `syncStatus: synced`. On conflict → reconcile per your strategy. On network error → keep in outbox; retry with backoff. **Trade-off:** the user might briefly see a `pending` badge that later resolves to `synced` or `failed`. That's the UX cost of offline-first — usually worth it." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you handle conflicts?**\n\n**A:** Six common strategies: **(1) Last-write-wins** — compare timestamps; newer wins. Simple; good for notes/drafts. **(2) Server-wins** — server always overrides. Fine for read-heavy content (news, catalogs). **(3) Client-wins** — user's data always wins. Rare. **(4) Field-level merge** — merge non-overlapping fields; ask user for overlapping ones. Good for rich documents (Google Docs). **(5) CRDT (Conflict-free Replicated Data Type)** — data structures that mathematically auto-merge (counters, sets, sequences). Used by Figma, Notion collaborative editing. **(6) User-driven merge** — present both versions; user picks. Best for critical data (banking transfers). **Rule:** pick a strategy PER DATA TYPE up front. Not deciding = 'first conflict destroys user data'." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What is a sync outbox?**\n\n**A:** A local DB table that stores PENDING MUTATIONS — writes the user made offline that need to be sent to the server. Each row records the mutation type, the entity ID, the intended payload, a retry counter, and an optional error. **The SyncWorker** iterates it, sends each to the server, marks synced (or increments retry) on completion. Persistent across app restarts — reopen the app tomorrow, it still knows what needs syncing. Also useful for **audit trail** ('here's every mutation user X ever made offline'). Idempotency is key — retries must be safe. Use unique client-generated IDs; server dedupes." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How does WorkManager fit into offline-first?**\n\n**A:** WorkManager (Android) or BGProcessingTask (iOS) runs the `SyncWorker` in the background: on network availability, periodically (every 30 min say), on boot. **Why:** the sync doesn't depend on the app being open. User closed the app after placing an offline order; WorkManager wakes up when Wi-Fi returns and drains the outbox. **Idempotent constraint check:** the WorkManager job runs the SyncWorker; SyncWorker calls Repository.sync which processes outbox. If nothing is pending, quick no-op. Backoff is essential — don't hammer the server on repeated failures. In modern Flutter this is via the `workmanager` plugin on Android and `background_fetch` on iOS." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: When is offline-first overkill?**\n\n**A:** **(1) Pure real-time apps** — live sports scores, stock prices — data has NO offline value; freshness is everything. **(2) Fire-and-forget interactions** — analytics events, telemetry — no UI depends on the response. **(3) Tiny apps** — a 3-screen configuration wizard doesn't need offline. **(4) Server-authoritative critical actions** — payment confirmations, medical dosing — you need real-time server acknowledgment, not optimistic local. **Rule:** offline-first has real engineering cost (sync outbox, conflict resolution, more state per entity). Adopt it when the UX gain (instant feel, works offline) justifies the cost. For most consumer content apps, it's absolutely worth it. For a payment gateway, less so." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Slack, Discord, Signal, Telegram** — offline-first messaging.\n- **Notion, Google Docs, Figma, Miro** — offline-first collaborative documents with CRDTs.\n- **Instagram, Twitter/X, TikTok** — reads cached; scrolling instant.\n- **Todo apps (Things, TickTick)** — canonical offline-first UX.\n- **Firebase Firestore** — the SDK does most of the offline plumbing for you.\n- **Isar/PowerSync/Drift** — Flutter libraries that specialize in offline-first patterns.\n- **Smart Consumer** — the barcode scanner + product cache is a natural offline-first use case." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **PowerSync + Supabase / Firestore** — production-grade sync engines with conflict resolution built in.\n- **Isar `.watch()` streams** — very fast; ideal for offline-first Flutter.\n- **CRDTs libraries** — `automerge_flutter`, `yjs` (JS but embeddable).\n- **Delta sync** — only send CHANGES since last successful sync (compact + fast).\n- **Server-Sent Events / WebSockets** — for realtime post-sync updates.\n- **Firestore's built-in offline persistence** — enable with `FirebaseFirestore.instance.settings = Settings(persistenceEnabled: true)`.\n- **Optimistic UI patterns in Riverpod** — use `AsyncNotifier` + `state = AsyncData(newLocal)` immediately, then sync.\n- **Vector clocks / Lamport timestamps** — theoretical background for conflict resolution.\n- **Idempotent operations at the DB level** — `upsert` (INSERT OR REPLACE) beats `insert` for sync-safety.\n- **Analytics on sync health** — % of syncs succeeding, average latency, outbox depth over time.\n- **Battery vs freshness trade-off** — aggressive sync drains battery; measure and tune interval." }
   ],
   "flashcards": [
-    { "front": "What is the source of truth in offline-first?", "back": "The local database. The UI reads/writes locally; sync is a background concern." },
-    { "front": "Write-through with outbox?", "back": "Persist the change locally AND queue it for the server, retrying on network." },
-    { "front": "How handle a sync conflict?", "back": "Choose a policy: last-write-wins, per-field merge, or CRDT — and surface it to the user when needed." }
+    { "front": "Offline-first?", "back": "Local DB is single source of truth. UI observes it. Refresh writes to local. Mutations optimistic + outbox for sync." },
+    { "front": "Read path?", "back": "UI observes Stream<List<T>> from local DB. Repository refreshes to local. Stream re-emits → UI updates." },
+    { "front": "Write path?", "back": "Optimistic local write + outbox entry → SyncWorker sends when online → mark synced." },
+    { "front": "Sync status?", "back": "pending / syncing / synced / failed / conflict. UI shows subtle hints per state." },
+    { "front": "Conflict strategies?", "back": "Last-write-wins, server-wins, field merge, CRDT, user-driven." },
+    { "front": "Requires?", "back": "Idempotent operations. Reactive local streams. Background sync (WorkManager)." }
   ],
   "quiz": [
-    { "q": "In offline-first, the UI reads from…", "options": ["Network only", "The local DB (source of truth)", "SharedPreferences", "In-memory only"], "answer": 1, "explain": "Local store is authoritative; the UI never blocks on network." },
-    { "q": "A safe way to handle offline writes is…", "options": ["Silently drop them", "Persist + enqueue in an outbox, retry", "Wait until online", "Show a fake success"], "answer": 1, "explain": "Durable queue + retries + honest UI status." },
-    { "q": "Conflict resolution examples include…", "options": ["Only rebooting", "Last-write-wins, merge, CRDT", "Only clearing cache", "Random pick"], "answer": 1, "explain": "Pick a policy consistent with your data." }
+    { "q": "UI reads from…", "options": ["Network directly", "Local DB via Stream", "In-memory only", "SharedPreferences"], "answer": 1, "explain": "Single source of truth = local." },
+    { "q": "Optimistic write?", "options": ["Wait for server first", "Update local immediately + queue sync", "Skip local", "Only online"], "answer": 1, "explain": "Instant feel." },
+    { "q": "Sync outbox?", "options": ["Random cache", "Persistent table of pending mutations", "Firebase only", "In-memory list"], "answer": 1, "explain": "Survives app kills." },
+    { "q": "Two devices edit same note simultaneously — best strategy?", "options": ["Ignore", "Pick a conflict-resolution strategy up front (last-write-wins or CRDT)", "Server crash", "Delete both"], "answer": 1, "explain": "Design deliberately." },
+    { "q": "WorkManager use?", "options": ["UI updates", "Background sync when network returns", "Storage", "Auth"], "answer": 1, "explain": "Drains the outbox reliably." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Add read-through caching to one repository." },
-    { "level": "Medium", "text": "Implement write-through with a durable outbox that retries on connectivity." },
-    { "level": "Hard", "text": "Add optimistic UI + rollback on server rejection." },
-    { "level": "Expert", "text": "Design a merge/CRDT strategy for two devices editing the same record." }
+    { "level": "Easy", "text": "Reactive read: UI observes Stream<List<User>>; refresh writes local; UI updates." },
+    { "level": "Easy", "text": "Add syncStatus (enum) to your entity; UI shows a dot for pending." },
+    { "level": "Medium", "text": "Optimistic like: local flip → server sync → revert on error." },
+    { "level": "Medium", "text": "Build a small OutboxDao + SyncWorker; drain when online." },
+    { "level": "Hard", "text": "Last-write-wins conflict resolution with timestamps." },
+    { "level": "Hard", "text": "WorkManager job that runs sync every 30 min or on network reconnect." },
+    { "level": "Expert", "text": "Implement a G-counter CRDT for collaborative counting; verify two-device convergence." }
   ],
   "interviewQuestions": [
-    "What does offline-first mean at the architecture level?",
-    "Why is the local DB the source of truth?",
-    "How do you handle offline writes safely?",
-    "Strategies for conflict resolution?",
-    "How do you surface sync/failure state to users?"
+    "What is offline-first architecture?",
+    "What's the read path in offline-first?",
+    "What's the write path with optimistic updates?",
+    "How do you handle conflicts?",
+    "What is a sync outbox?",
+    "How does WorkManager fit into offline-first?",
+    "When is offline-first overkill?"
   ],
   "references": [
-    { "label": "Google — Offline-first", "url": "https://developer.android.com/topic/architecture/data-layer/offline-first" }
+    { "label": "Offline-first — CQRS/ES ideas applied to mobile", "url": "https://offlinefirst.org" },
+    { "label": "Isar — reactive queries", "url": "https://pub.dev/packages/isar" }
   ]
 }

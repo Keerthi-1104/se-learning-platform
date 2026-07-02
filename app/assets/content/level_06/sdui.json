@@ -1,50 +1,97 @@
 {
   "id": "arch.sdui",
   "levelId": 6,
-  "title": "Server-Driven UI",
-  "xp": 50,
-  "estimatedMinutes": 25,
+  "title": "Server-Driven UI (SDUI)",
+  "xp": 40,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Explain what SDUI ships from the server",
-    "Design a widget schema and renderer",
-    "Weigh SDUI's power vs its risks"
+    "Understand Server-Driven UI via a real-life analogy",
+    "See when to reach for SDUI (and when not to)",
+    "Design a small SDUI JSON schema + client renderer",
+    "Know the trade-offs vs static UI + config",
+    "Answer SDUI interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Server-Driven UI (SDUI) means the server sends a description of a screen (JSON) — a tree of typed components with props and actions — that the client renders with pre-built widgets. UI changes without a new app release." },
-    { "type": "code", "language": "json", "code": "{\n  \"type\": \"Column\",\n  \"children\": [\n    { \"type\": \"Text\", \"text\": \"Welcome!\", \"style\": \"h1\" },\n    { \"type\": \"Button\", \"label\": \"Continue\",\n      \"action\": { \"type\": \"navigate\", \"route\": \"/home\" } }\n  ]\n}" },
-    { "type": "table", "headers": ["Win", "Cost / risk"], "rows": [
-      ["A/B, promos, layout tweaks with no release", "Only supported widgets can appear"],
-      ["Personalize per user/segment", "Versioning: old clients must degrade"],
-      ["One backend can serve iOS/Android/web", "Security review of actions is critical"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Server-Driven UI (SDUI) as a live TV broadcast vs a pre-recorded DVD.**\n\n- **Static UI** = a pre-recorded DVD. What you burned into the app at build time is exactly what plays. Want to change the intro? Ship a new DVD (release). Fans wait for the update, install it, and finally see the change.\n- **Server-Driven UI** = a LIVE broadcast. The TV set (your app) is a generic RECEIVER — knows how to render buttons, text, images, lists. But WHAT to render (layout, order, contents) is decided by the studio in real time and beamed over. Change the intro? Update the broadcast — every viewer sees it INSTANTLY, no download.\n\n**In code:** the server returns not just DATA but the WHOLE SCREEN LAYOUT as JSON: 'here's a Column, first item is a Text with these props, second is a Button with this label and this action'. The client walks the JSON and renders corresponding Flutter widgets. Change the JSON on the server → every app updates immediately.\n\n**Why teams reach for SDUI:** content-heavy apps (e-commerce, banking home screens, insurance product pages) change LAYOUT constantly. Ship a new banner, reorder cards, change hero image copy — all without an app release. Marketing teams want autonomy; app-release cycles are too slow.\n\n**Why teams REGRET SDUI:** it's easy to overreach. Non-UI screens (chat, camera, video) can't be SDUI — they need specific widgets and code. Deeply-nested JSON becomes unmaintainable. Every widget your server can emit MUST exist in the client — schema drift causes crashes. Complex logic can't live in JSON. Debugging is harder. Testing is harder. **Use SDUI SURGICALLY, on specific screens that benefit — not everywhere.**" },
+    { "type": "callout", "variant": "definition", "markdown": "**Server-Driven UI (SDUI)** is an architectural pattern where the server returns the UI STRUCTURE (widgets, layout, content) as data — typically JSON — and the client renders it dynamically. The client is a generic 'renderer' with a fixed vocabulary of components (Text, Column, Card, Button); the server composes them into screens. Enables changing UI without a client release. Popular in high-content flavors of apps: e-commerce home screens, banking dashboards, personalized feeds, in-app landing pages. Trade-offs are real; use surgically." },
+    { "type": "theory", "markdown": "## Sample program — a tiny SDUI JSON + renderer" },
+    { "type": "code", "language": "json", "code": "// Server response for a home screen\n{\n  \"screen\": {\n    \"type\": \"column\",\n    \"padding\": 16,\n    \"children\": [\n      {\n        \"type\": \"text\",\n        \"content\": \"Welcome back, Ada!\",\n        \"style\": \"headline\"\n      },\n      { \"type\": \"spacer\", \"size\": 8 },\n      {\n        \"type\": \"card\",\n        \"backgroundColor\": \"#f6f8ff\",\n        \"padding\": 16,\n        \"child\": {\n          \"type\": \"column\",\n          \"children\": [\n            { \"type\": \"text\", \"content\": \"Your points balance\" },\n            { \"type\": \"text\", \"content\": \"1,240\", \"style\": \"display\" },\n            {\n              \"type\": \"button\",\n              \"label\": \"Redeem now\",\n              \"action\": { \"type\": \"navigate\", \"route\": \"/redeem\" }\n            }\n          ]\n        }\n      },\n      { \"type\": \"list\", \"itemsFromApi\": \"/api/products/featured\" }\n    ]\n  }\n}" },
+    { "type": "code", "language": "dart", "code": "// Client-side renderer — walks the JSON tree, returns Flutter widgets.\nWidget renderNode(BuildContext context, Map<String, dynamic> node) {\n  return switch (node['type']) {\n    'column' => Column(\n      children: (node['children'] as List)\n          .map<Widget>((c) => renderNode(context, Map<String, dynamic>.from(c)))\n          .toList(),\n    ),\n    'text' => Text(\n      node['content'] as String,\n      style: _styleFor(node['style']),\n    ),\n    'spacer' => SizedBox(height: (node['size'] as num).toDouble()),\n    'card' => Card(\n      color: _colorFromHex(node['backgroundColor']),\n      child: Padding(\n        padding: EdgeInsets.all((node['padding'] as num).toDouble()),\n        child: renderNode(context, Map<String, dynamic>.from(node['child'])),\n      ),\n    ),\n    'button' => FilledButton(\n      onPressed: () => _dispatchAction(context, node['action']),\n      child: Text(node['label'] as String),\n    ),\n    'list' => _RemoteList(url: node['itemsFromApi'] as String),\n    _ => const SizedBox.shrink(),   // unknown type — gracefully skip\n  };\n}\n\nvoid _dispatchAction(BuildContext c, Map<String, dynamic> action) {\n  switch (action['type']) {\n    case 'navigate':\n      c.push(action['route'] as String);\n    case 'showSnackbar':\n      ScaffoldMessenger.of(c).showSnackBar(SnackBar(content: Text(action['message'])));\n    case 'openUrl':\n      launchUrl(Uri.parse(action['url'] as String));\n    default:\n      debugPrint('unknown action: ${action['type']}');\n  }\n}\n\n// The screen widget just fetches JSON + renders.\nclass HomeSduiScreen extends StatelessWidget {\n  const HomeSduiScreen({super.key});\n\n  @override\n  Widget build(BuildContext context) => Scaffold(\n    appBar: AppBar(title: const Text('Home')),\n    body: FutureBuilder<Map<String, dynamic>>(\n      future: dio.get('/api/screens/home').then((r) => r.data),\n      builder: (c, snap) {\n        if (!snap.hasData) return const CircularProgressIndicator();\n        return renderNode(c, snap.data!['screen']);\n      },\n    ),\n  );\n}" },
+    { "type": "theory", "markdown": "## When to use SDUI (and when not to)" },
+    { "type": "table", "headers": ["Good fit", "Bad fit"], "rows": [
+      ["E-commerce home screens (banners, product rows, promotions)", "Chat / messaging (specific widgets, real-time)"],
+      ["Banking dashboards (varying by user segment)", "Camera / video / media capture"],
+      ["Feature-flag-driven landing pages", "Games"],
+      ["Personalized product feeds (Netflix rows)", "Complex forms with rich validation"],
+      ["A/B testing UI variants", "Deeply interactive UI (drawing, editing)"],
+      ["Marketing-driven promo pages", "Anything that must work offline"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "Big consumer apps (Airbnb Epoxy/BloxUI, Instagram, Zomato) use SDUI for the home feed and promo modules so growth teams ship UI daily. The client is a strict renderer: unknown components are ignored or degraded, never executed as code." },
-    { "type": "callout", "variant": "mistake", "markdown": "Letting the server ship logic — arbitrary conditionals, scripting, or 'run this expression' payloads. That's an app-store violation risk (native code from a server) and a security hole." },
-    { "type": "callout", "variant": "tip", "markdown": "Version your schema, whitelist actions, and reject unknown component types. Keep a fallback native screen for critical flows so SDUI never becomes a single point of failure." }
+    { "type": "callout", "variant": "interview", "markdown": "**The pragmatic rule:** SDUI shines when the UI must change FREQUENTLY without app releases AND the layouts are simple (text, images, cards, lists). It fails when logic is complex, interactions are rich, or the screen must work offline. Use it on 5-20% of screens in a mature app — never wholesale." },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Trying to SDUI everything.** Some screens NEED specific widgets and code. Force everything into JSON → your renderer becomes a mini Flutter re-implementation with 30% of the features and 100% of the bugs." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Server sends types the client doesn't know.** New widget on server → old app crashes. Version your schema; render unknowns as invisible (fallback) or degrade gracefully." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Business logic in JSON.** `if user.premium then show button` embedded in JSON. Trying to run that in JSON is a distributed nightmare. Send TWO JSONs (one per condition) or preprocess server-side." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: No offline strategy.** SDUI requires the JSON; if the network's out, the screen is blank. Cache the last known JSON per screen." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Deeply nested JSON.** 10-level trees are unmaintainable. Break into named 'components' the server references." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Small vocabulary.** 15-25 component types max. Not 100." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Version the schema.** Server includes a version; client checks and can degrade older versions." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Cache the last JSON per screen.** Offline sees something." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Actions as a small enum.** `navigate`, `open_url`, `show_snackbar`, `emit_analytics`. Not arbitrary code." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Preview tooling.** A tool for designers/PMs to preview SDUI JSON without shipping. Netflix and Uber have these." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Use static UI as fallback.** If SDUI fetch fails, render a hard-coded default. Never blank." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Small vocabulary renderer.** Column, Text, Button, Spacer. Render a JSON tree." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Actions.** Add `navigate` and `open_url` actions. Test with a mocked server response." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Nested cards.** Card containing Column containing Text + Button. Verify layout." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Cache + fallback.** Cache latest JSON per screen; on offline serve cached; if empty serve hard-coded default." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Analytics integration.** Every widget emits an impression event; buttons emit click events. Server-side changes track new UI variants." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is Server-Driven UI?**\n\n**A:** Server-Driven UI (SDUI) is a pattern where the server returns the UI STRUCTURE — widgets, layout, content — as data (typically JSON). The client is a generic 'renderer' that walks the JSON and returns corresponding native widgets (Column, Text, Card, Button). **Why:** change the UI without an app release. Marketing changes the promo banner → deploy new JSON → every app updates instantly. **Trade-off:** the client's vocabulary is fixed at build time; the server can only compose what the client already knows how to render. Used by Netflix (row-based home), Uber (adaptive booking screens), Airbnb (personalized listing views), Amazon (home page)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: When would you use SDUI, and when NOT?**\n\n**A:** **Use for:** e-commerce home screens (banners, product rows), banking dashboards (per-segment layouts), personalized feeds (Netflix rows), promotional landing pages, A/B testing UI variants, feature-flag-driven content. **DON'T use for:** chat/messaging (real-time-specific widgets), camera/video capture (needs specific code), games (fully custom), complex forms with rich validation logic, drawing/editing UIs, anything that must work offline for extended periods. **Rule:** SDUI shines for CONTENT-HEAVY, SIMPLE-LAYOUT screens that change frequently. Fails for interactive, offline, or logic-heavy screens. Use it on 5-20% of screens in a mature app — surgically, not everywhere." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do you handle schema evolution in SDUI?**\n\n**A:** Version the schema — server includes `schemaVersion: '2.1'`. Client checks compatibility. **Strategies:** **(1) Backward compatibility** — new versions add fields but old clients ignore unknowns and still render. **(2) Client version check** — if server says v3 and client only supports v2, either serve a v2-compatible fallback OR show 'please update the app'. **(3) Feature-flag transitions** — a feature emits both old and new schema for a transition period; older clients see the old shape. **Rule:** don't break old clients. Every field addition should be optional or have a sensible default. Removing widget types requires care — remove after tracking client versions." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What are common SDUI mistakes?**\n\n**A:** **(1) SDUI-everything** — trying to render chat, camera, drawing tools via JSON. The renderer becomes a bad reimplementation of Flutter. **(2) Business logic in JSON** — 'if premium show button, else show upgrade' inline in the JSON tree. Preprocess server-side; send TWO responses instead. **(3) No fallback UI** — network down → blank screen. Cache the last JSON per screen. **(4) Unbounded widget vocabulary** — if the server can emit 100 widget types, the client needs to support 100. Keep it to 15-25. **(5) Actions that are arbitrary code** — sanitize the action verb enum. Never eval anything from the server. **(6) No preview tooling for designers** — they'll want to iterate; give them a preview." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How does SDUI handle offline?**\n\n**A:** By caching the last known JSON per screen. On network fetch, serve the cached JSON immediately (instant render), refresh in the background, replace if changed. If cache is empty AND offline, serve a HARD-CODED fallback screen (a simple `Text('Please connect and try again')`). Never show blank. **For deeply offline apps** (Slack, Notion), SDUI is a poor fit — the LOGIC that composed the JSON is server-side. **Rule:** SDUI is 'thin client' by design; it needs a network. If offline usage matters, either don't SDUI the screen or accept degraded offline UX." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What's the trade-off vs feature flags + static UI?**\n\n**A:** **Feature flags + static UI** — you ship every possible layout in the app; the server flips flags to enable variants. Simple, reliable, works offline. Trade-off: to add a NEW layout you need an app release. **SDUI** — the server sends whatever layout it wants. New layouts without app releases. Trade-off: complex renderer, schema drift, offline pain. **Rule:** feature flags for FINITE variants ('show banner A or banner B'), SDUI for INFINITE variants ('any layout composed of known primitives'). Most apps use BOTH — feature flags for known-shape configuration, SDUI for content-heavy screens that change often. Rarely one or the other exclusively." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What companies use SDUI in production?**\n\n**A:** **Netflix** — the row-based home is largely SDUI; personalization decides which rows and in which order. **Airbnb** — listing search results, home page, personalized recommendations. **Uber / Uber Eats** — booking screens adapt per market and time. **Amazon / Flipkart** — home page and category pages are heavily SDUI. **DoorDash** — the customer feed. **Facebook / Instagram** — home feed rendering is close to SDUI (Reels layout, story tray). **Banking apps** — some Wells Fargo / Chase screens. **The pattern:** these are all content-heavy consumer apps where PM/marketing needs autonomy from engineering release cycles. Not used at all in Slack, Signal, Notion, WhatsApp — apps with rich interaction and offline expectations." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Netflix Falcor / Hawkins** — the framework Netflix built for SDUI.\n- **Airbnb Epoxy + DLS** — server-driven listing framework.\n- **Uber's RIB architecture** — includes SDUI-like patterns.\n- **`shorebird`** — a Flutter code-push service (over-the-air Dart updates; a related pattern).\n- **`flutter_sdui` community package** — small starter library.\n- **NOT used** in messaging (Slack, Signal), collaborative docs (Notion), or games.\n- **Firebase Remote Config** — a lightweight variant: config-driven UI without full SDUI." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **JSON schema evolution** — additive changes are safe; removals need coordination.\n- **Action sanitization** — never eval anything; use a fixed action-verb enum.\n- **Preview tools** — internal tools for designers to preview SDUI JSON without shipping (Netflix has this).\n- **A/B testing** — server serves different JSON per variant; SDUI shines here.\n- **Compile-time contracts** — some teams generate Dart types from a JSON schema (via `json_serializable`) — same JSON, typed accessors.\n- **Micro-frontends** — enterprise-scale SDUI where each 'section' is owned by a different team.\n- **`shorebird` for code push** — an alternative: ship new Dart at runtime, no SDUI ceremony.\n- **`flutter_dynamic_widget`** — a package that dynamically renders JSON-defined widgets.\n- **Analytics per SDUI variant** — critical to measure whether new layouts perform better.\n- **Performance** — parsing large JSON blocks the UI; cache aggressively, decode lazily.\n- **Security** — never trust user-visible strings from the server as safe URLs; validate action targets against an allowlist." }
   ],
   "flashcards": [
-    { "front": "What is SDUI?", "back": "The server sends a UI description (JSON tree of components); the client renders it with pre-built widgets." },
-    { "front": "Main SDUI wins?", "back": "Ship UI changes / A/B tests / personalization without new app releases." },
-    { "front": "What must the client NOT do with SDUI?", "back": "Execute arbitrary server-sent code — only render whitelisted components/actions." }
+    { "front": "SDUI?", "back": "Server returns UI STRUCTURE as JSON; client renders it dynamically. Change UI without an app release." },
+    { "front": "Good fit?", "back": "E-commerce home screens, banking dashboards, personalized feeds, promo landing pages." },
+    { "front": "Bad fit?", "back": "Chat, camera, video, forms with logic, offline-heavy apps, games." },
+    { "front": "Schema evolution?", "back": "Version it. Additive-only. Old clients ignore unknowns and render." },
+    { "front": "Offline?", "back": "Cache last JSON per screen. Hard-coded fallback if cache empty." },
+    { "front": "Alternative?", "back": "Feature flags + static UI = simpler, less flexible. Often use both." }
   ],
   "quiz": [
-    { "q": "SDUI moves which decision to the server?", "options": ["Language runtime", "Screen layout & content", "Auth secrets", "GC settings"], "answer": 1, "explain": "Server describes the screen; client renders it." },
-    { "q": "A key rule for safe SDUI is…", "options": ["Ship JavaScript from the server", "Whitelist component types and actions", "Store passwords in the payload", "Skip versioning"], "answer": 1, "explain": "Only known-safe components render; unknown ones degrade." },
-    { "q": "Best fit for SDUI?", "options": ["Payment cryptography", "Home feed / promo modules", "OS-level drivers", "Compiler"], "answer": 1, "explain": "High-churn UI benefits most; core critical flows stay native." }
+    { "q": "SDUI ships…", "options": ["Data only", "UI STRUCTURE as JSON (widgets + layout)", "Icons only", "Text only"], "answer": 1, "explain": "That's the whole idea." },
+    { "q": "SDUI good for…", "options": ["Chat and camera", "E-commerce home / banking dashboards / promo pages", "Games", "Drawing tools"], "answer": 1, "explain": "Content-heavy, layout-changing screens." },
+    { "q": "Schema drift risk?", "options": ["None", "Server sends type client doesn't know — crashes", "Automatic", "Rare"], "answer": 1, "explain": "Version and degrade gracefully." },
+    { "q": "Offline story?", "options": ["Impossible", "Cache last JSON per screen; fallback UI when empty", "Blank screen", "Firebase only"], "answer": 1, "explain": "Never blank." },
+    { "q": "vs Feature Flags?", "options": ["Same thing", "Flags for finite variants; SDUI for infinite composable variants", "Deprecated", "Server-only"], "answer": 1, "explain": "Often used together." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Define a JSON schema for Text/Column/Button and render it." },
-    { "level": "Medium", "text": "Add actions (navigate, api_call) with a whitelist and safe defaults." },
-    { "level": "Hard", "text": "Add schema versioning + graceful degradation for unknown components." },
-    { "level": "Expert", "text": "Introduce A/B routing where the server chooses layout variants for a segment." }
+    { "level": "Easy", "text": "Small renderer: Column + Text + Button. Render a static JSON tree." },
+    { "level": "Easy", "text": "Add spacer, card, image nodes to the vocabulary." },
+    { "level": "Medium", "text": "Actions: navigate + open_url + show_snackbar." },
+    { "level": "Medium", "text": "Cache last JSON per screen; on offline render cached." },
+    { "level": "Hard", "text": "Version the schema; render fallback for unknown types." },
+    { "level": "Hard", "text": "Emit analytics events for every widget impression and click." },
+    { "level": "Expert", "text": "Build a preview tool (web + desktop) for designers to iterate SDUI JSON without shipping." }
   ],
   "interviewQuestions": [
-    "What is SDUI and what does it ship?",
-    "When would you use SDUI vs a native screen?",
-    "How do you keep SDUI safe?",
-    "How do you handle schema versioning?",
-    "Who's using SDUI in production?"
+    "What is Server-Driven UI?",
+    "When would you use SDUI, and when NOT?",
+    "How do you handle schema evolution in SDUI?",
+    "What are common SDUI mistakes?",
+    "How does SDUI handle offline?",
+    "What's the trade-off vs feature flags + static UI?",
+    "What companies use SDUI in production?"
   ],
   "references": [
-    { "label": "Airbnb — SDUI (talk)", "url": "https://www.youtube.com/results?search_query=airbnb+server+driven+ui" }
+    { "label": "Airbnb — Server-Driven UI (Epoxy)", "url": "https://medium.com/airbnb-engineering/server-driven-ui-3f7b9a9c93e6" },
+    { "label": "shorebird — Flutter code push", "url": "https://shorebird.dev" }
   ]
 }
