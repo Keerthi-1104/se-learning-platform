@@ -2,44 +2,88 @@
   "id": "sm.getx",
   "levelId": 5,
   "title": "GetX",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 35,
+  "estimatedMinutes": 25,
   "objectives": [
-    "Explain GetX's all-in-one approach",
-    "Use reactive .obs state and Obx",
-    "Weigh GetX's convenience against its trade-offs"
+    "Understand GetX via a real-life analogy",
+    "See its all-in-one design (state + routing + DI + snackbars)",
+    "Use `Obx`, `.obs`, `GetxController` correctly",
+    "Recognize why the community is divided on GetX",
+    "Answer GetX interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "GetX is an all-in-one package combining state management, dependency injection, and routing with minimal boilerplate. Reactive state uses .obs variables and the Obx widget rebuilds automatically." },
-    { "type": "code", "language": "dart", "code": "class CounterController extends GetxController {\n  var count = 0.obs;\n  void inc() => count++;\n}\nfinal c = Get.put(CounterController());\nObx(() => Text('${c.count}'));   // auto-rebuilds\nGet.to(NextPage());              // routing w/o context" },
-    { "type": "callout", "variant": "interview", "markdown": "GetX's appeal is speed of development: reactive state, DI and navigation without BuildContext, in very little code. Its criticism: it encourages tight coupling/global singletons, hides magic, and can make large apps harder to test and reason about." },
-    { "type": "callout", "variant": "mistake", "markdown": "Using Get.to/Get.find as global access everywhere creates hidden dependencies that hurt testability. If you use GetX, still keep logic in controllers and inject them deliberately." },
-    { "type": "callout", "variant": "tip", "markdown": "GetX is great for prototypes and small apps where velocity matters. For large, team-maintained codebases, many teams prefer Riverpod/BLoC for explicitness and testability." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of GetX as a Swiss Army knife with 47 tools.**\n\n- One package gives you **state management, routing, dependency injection, dialogs, snackbars, translations, storage, HTTP** — everything a small app needs, in one API surface. `Get.to(page)`, `Get.snackbar(...)`, `Get.put(controller)`, `.obs`.\n- **The upside:** rapid prototyping is FAST. A tutorial-video app that would take 3 hours with Riverpod + go_router + provider takes 1 hour with GetX. Everything is one `.dart` import away.\n- **The downside:** you're buying into ONE framework's opinion on everything. GetX also relies heavily on global static state (`Get.find<T>()` walks a global registry). Some patterns fight Flutter's own idioms (`Get.to(page)` bypasses go_router's declarative navigation). Testing is harder because the global registry needs manual setup/teardown.\n\n**The community is split**: fans love the speed, critics point at architectural drift and the maintainer's controversial takes on Flutter idioms. **Best fit:** solo devs on tight deadlines, tutorial/course projects, indie apps. **Not the best fit:** large teams, apps with strict architectural conventions, codebases meant to last 5+ years. Know it exists — you'll meet it in tutorials and freelance projects." },
+    { "type": "callout", "variant": "definition", "markdown": "**GetX** is an all-in-one package (`get:` on pub.dev) covering state management, navigation, dependency injection, and utility (snackbars, dialogs, i18n, storage). Reactive state via `.obs` observables + `Obx(() => …)` widgets. Named/imperative routing via `Get.to(page)` / `Get.toNamed('/route')`. DI via `Get.put(controller)` and `Get.find<T>()`. Very concise; controversial architecturally." },
+    { "type": "theory", "markdown": "## The three GetX pillars" },
+    { "type": "table", "headers": ["Pillar", "API", "Purpose"], "rows": [
+      ["**State**", "`.obs`, `Obx(() => …)`, `GetxController`", "Reactive state that rebuilds on `.value` change"],
+      ["**Navigation**", "`Get.to(page)`, `Get.toNamed('/foo')`, `Get.back()`", "Imperative nav that skips `BuildContext`"],
+      ["**DI**", "`Get.put(controller)`, `Get.find<T>()`, `Get.lazyPut(...)`", "Global registry — access any controller anywhere"]
+    ]},
+    { "type": "theory", "markdown": "## Sample program — GetX counter in ~25 lines" },
+    { "type": "code", "language": "dart", "code": "// pubspec: get: ^4.6.6\nimport 'package:flutter/material.dart';\nimport 'package:get/get.dart';\n\n// 1. Controller — plain class holding .obs state\nclass CounterController extends GetxController {\n  final count = 0.obs;                // RxInt — reactive observable\n\n  void increment() => count.value++;   // triggers Obx rebuild\n  void reset() => count.value = 0;\n}\n\n// 2. Root — use GetMaterialApp instead of MaterialApp for routing/snackbar hooks\nvoid main() => runApp(GetMaterialApp(home: HomePage()));\n\nclass HomePage extends StatelessWidget {\n  const HomePage({super.key});\n\n  @override\n  Widget build(BuildContext context) {\n    final c = Get.put(CounterController());   // create + register in global DI\n\n    return Scaffold(\n      appBar: AppBar(title: const Text('GetX demo')),\n      body: Center(\n        // Obx auto-rebuilds when any .obs read inside it changes.\n        child: Obx(() => Text('${c.count.value}', style: const TextStyle(fontSize: 40))),\n      ),\n      floatingActionButton: Column(\n        mainAxisAlignment: MainAxisAlignment.end,\n        children: [\n          FloatingActionButton(\n            heroTag: 'inc',\n            onPressed: c.increment,\n            child: const Icon(Icons.add),\n          ),\n          const SizedBox(height: 8),\n          FloatingActionButton(\n            heroTag: 'nav',\n            onPressed: () => Get.to(() => const DetailPage()),\n            child: const Icon(Icons.arrow_forward),\n          ),\n        ],\n      ),\n    );\n  }\n}\n\nclass DetailPage extends StatelessWidget {\n  const DetailPage({super.key});\n\n  @override\n  Widget build(BuildContext context) {\n    // Access the SAME controller from anywhere — no BuildContext, no ref\n    final c = Get.find<CounterController>();\n    return Scaffold(\n      appBar: AppBar(title: const Text('Detail')),\n      body: Center(\n        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [\n          Obx(() => Text('shared count: ${c.count.value}',\n            style: const TextStyle(fontSize: 24))),\n          FilledButton(\n            onPressed: () {\n              c.reset();\n              Get.snackbar('Reset', 'Count is back to 0');\n            },\n            child: const Text('Reset + show snackbar'),\n          ),\n        ]),\n      ),\n    );\n  }\n}" },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Forgetting `Obx` around reactive UI.** Reading `.value` outside an `Obx` widget → no rebuild. Wrap in `Obx(() => …)` whenever you display an `.obs` value." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Using `MaterialApp` instead of `GetMaterialApp`.** Named routes, snackbars, dialogs, and translations all rely on `GetMaterialApp` at the root. Without it, half the API silently no-ops." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: `Get.find<T>()` before `Get.put<T>()`.** Runtime `Get.find` throws if the controller isn't registered. Use `Get.lazyPut` for lazy or bind via `Bindings` to enforce lifecycle." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Mixing GetX navigation with go_router.** Two navigation systems fighting → weird back-stack bugs. Pick ONE per module." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Assuming controllers survive process death.** They don't — restart-only state. Use `GetStorage` (part of GetX ecosystem) or wire to Hive for persistence." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Use `Bindings` to organize DI.** Per-route binding classes register controllers just-in-time when the route mounts." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Prefer `Get.lazyPut(() => Controller())`** over eager `Get.put` for controllers that aren't needed on launch." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Restrict `.obs` to view-model fields.** Don't `.obs` every field in every model — over-observability = performance regressions." },
+    { "type": "callout", "variant": "best", "markdown": "**4. If the team is large, don't pick GetX.** Its opinions and global registry hurt maintainability at scale." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Test controllers as plain Dart objects.** `test('count increments', () => expect(CounterController().count.value, 0));` — that part IS clean." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — CounterController.** Build the sample; add reset and decrement." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Two-screen shared state.** Share the same controller between Home and Detail via `Get.find`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Snackbar + dialog.** `Get.snackbar(...)`, `Get.defaultDialog(...)` from a button, no BuildContext needed." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Bindings pattern.** `HomeBinding extends Bindings` registers `HomeController` when the route mounts; unregisters on pop." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Migrate to Riverpod.** Take a small GetX screen and rewrite in Riverpod. Compare LOC, testability, coupling." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is GetX?**\n\n**A:** GetX is an all-in-one Flutter package covering state management (`.obs` observables + `Obx` widgets), navigation (`Get.to(page)`, `Get.back()`, named routes), dependency injection (`Get.put`, `Get.find`, `Get.lazyPut`), and utility (`Get.snackbar`, `Get.dialog`, i18n, storage) — all under a single import. Concise API, no `BuildContext` required for most operations. **Popular for:** rapid prototyping, tutorial videos, indie/solo projects. **Controversial for:** relying on global static state, some non-idiomatic Flutter patterns, maintainer's disagreements with Flutter team on best practices. Understand it because you'll meet it in tutorials and freelance projects." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How does GetX handle state?**\n\n**A:** Two flavors. **Reactive:** wrap a value with `.obs` (`final count = 0.obs;`) to make it an `Rx<int>` observable. Read `count.value` inside an `Obx(() => Text('$count'))` — the widget auto-rebuilds when `.value` changes. **Simple (`GetBuilder`):** an imperative alternative where you call `update()` on the controller to trigger a rebuild of subscribers. Both use a `GetxController` as the container. The reactive `.obs` flavor is more common; `GetBuilder` is used when the team wants explicit rebuild triggers." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What's the trade-off with GetX's global registry?**\n\n**A:** `Get.find<CounterController>()` walks a global static registry that `Get.put(CounterController())` populated. **Upside:** no `BuildContext` needed, controllers accessible from anywhere (utility functions, isolates, tests). **Downside:** (1) **hidden coupling** — a screen implicitly depends on a controller registered somewhere else; grep is your only tool. (2) **Testing setup/teardown** — tests must manually `Get.reset()` between cases or state leaks. (3) **Not compile-safe** — `Get.find<Foo>()` before `Get.put<Foo>()` throws at runtime, not build. Modern alternatives (Riverpod) provide DI without the global registry — that's the main structural critique of GetX." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: GetX vs Riverpod — when to pick which?**\n\n**A:** **GetX** — solo dev, tight deadline, one-package convenience. Fastest to write. Trade-off is architectural drift over time. **Riverpod** — larger team, longer-term app, wants compile-time safety, testability, clean architecture. More setup, worth it. **My rule:** for a new project I know will grow — Riverpod. For a hackathon or a 2-week freelance job — GetX is defensible. If the team is already on GetX, don't rewrite; the migration cost usually dwarfs the benefit. Zealous rewrites cause more bugs than architectural drift does." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What are `Bindings` in GetX?**\n\n**A:** A `Bindings` class registers controllers just-in-time when a route mounts (and can dispose them on pop). Usage: `Get.to(() => HomePage(), binding: HomeBinding())`, and `class HomeBinding extends Bindings { void dependencies() { Get.lazyPut(() => HomeController()); }}`. **Purpose:** organize DI per route so controllers aren't all registered globally at startup. This is GetX's answer to the 'when does my controller get created' question — the answer is 'when the binding fires'. Best practice in any non-trivial GetX app; without bindings, you end up with a big `main()` full of `Get.put(...)` calls, which is a maintenance disaster." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What are common GetX anti-patterns?**\n\n**A:** **(1) Bypassing declarative navigation.** GetX's `Get.to(page)` conflicts with modern `go_router`. Pick one. **(2) Sharing controllers across unrelated screens** — the global registry makes it easy to accidentally couple things. **(3) `Get.put` at app root for every controller** — bloats startup, retains everything even if unused. Use `Get.lazyPut` + Bindings. **(4) `.obs` on every field** — every reactive value triggers an Obx cycle; over-observability tanks performance. **(5) Testing without `Get.reset()` between cases** — state bleeds across tests. All of these have Riverpod-side equivalents that the framework prevents structurally; in GetX you must self-discipline." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Solo indie apps + hackathons** — GetX's velocity is hard to beat.\n- **Tutorial YouTube channels** — nearly ubiquitous.\n- **Freelance projects** — client says 'make it fast' → GetX is defensible.\n- **Firebase-heavy CRUD apps** — GetX makes the plumbing quick.\n- **Almost never in FAANG / big-team production** — architectural constraints usually win out." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`GetX<T>` widget** — an alternative to `Obx` that lifecycle-manages the controller.\n- **`GetBuilder<T>`** — imperative rebuild via `update()` (not reactive).\n- **`Workers`** — react to changes: `ever`, `once`, `debounce`, `interval`.\n- **`GetConnect`** — GetX's built-in HTTP client (rarely used vs `dio`).\n- **`GetStorage`** — key-value persistence (competes with `hive` and `shared_preferences`).\n- **`GetService`** — a controller that survives navigation (a singleton service).\n- **`Get.reset()`** — clear the DI registry; essential in tests.\n- **`Get.parameters`** — read query params from named routes.\n- **`Rx<T>`** — the generic observable; wraps any value.\n- **`.value` vs `.call()`** — `count.value` and `count()` are both getters." }
   ],
   "flashcards": [
-    { "front": "What three things does GetX combine?", "back": "State management, dependency injection, and routing." },
-    { "front": "How does reactive GetX state work?", "back": "Mark variables .obs and wrap UI in Obx(); it rebuilds when they change." },
-    { "front": "Main criticism of GetX?", "back": "Encourages global singletons/tight coupling and 'magic', hurting testability at scale." }
+    { "front": "What is GetX?", "back": "All-in-one Flutter package: state + nav + DI + snackbars + more, in one API." },
+    { "front": "Reactive state?", "back": "`.obs` observable + `Obx(() => …)` widget — auto-rebuild on `.value` change." },
+    { "front": "DI mechanism?", "back": "Global registry: `Get.put(controller)` + `Get.find<T>()` anywhere in the app." },
+    { "front": "Root widget?", "back": "GetMaterialApp (not MaterialApp) — enables nav, snackbar, dialog APIs." },
+    { "front": "Best fit?", "back": "Solo devs, hackathons, tutorial projects, indie apps. Not big teams." },
+    { "front": "Bindings?", "back": "Per-route DI setup — registers controllers when a route mounts, disposes on pop." }
   ],
   "quiz": [
-    { "q": "GetX is best described as…", "options": ["Only state management", "An all-in-one state + DI + routing package", "A database", "A test framework"], "answer": 1, "explain": "It bundles several concerns into one package." },
-    { "q": "Reactive GetX UI uses…", "options": ["BlocBuilder", "Obx with .obs variables", "Selector", "setState"], "answer": 1, "explain": "Obx rebuilds when observed .obs values change." },
-    { "q": "A common GetX criticism is…", "options": ["Too much boilerplate", "Hidden global coupling / testability", "No routing", "No state"], "answer": 1, "explain": "Global access patterns reduce testability and clarity." }
+    { "q": "Observable syntax?", "options": ["StreamController", ".obs + Obx(() => …)", "notifyListeners", "setState"], "answer": 1, "explain": "Wrap value + Obx." },
+    { "q": "Root widget for GetX nav/snackbar?", "options": ["MaterialApp", "GetMaterialApp", "Scaffold", "Container"], "answer": 1, "explain": "GetMaterialApp enables the extras." },
+    { "q": "Get.find works because…", "options": ["Compile-time DI", "Global static registry populated by Get.put", "InheritedWidget", "Reflection"], "answer": 1, "explain": "Coupling downside." },
+    { "q": "Bindings help with…", "options": ["Nothing", "Per-route DI lifecycle", "Global styles", "Routing only"], "answer": 1, "explain": "Register controllers just-in-time." },
+    { "q": "Best fit?", "options": ["Big-team production", "Solo/hackathon/freelance", "Web only", "Backend"], "answer": 1, "explain": "Trade-off is architectural." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Build a reactive counter with GetxController + Obx." },
-    { "level": "Medium", "text": "Use GetX routing and DI (Get.put/Get.find) for two screens." },
-    { "level": "Hard", "text": "Refactor a GetX app to inject controllers explicitly for testability." },
-    { "level": "Expert", "text": "Compare a GetX feature vs the same feature in Riverpod and discuss trade-offs." }
+    { "level": "Easy", "text": "Counter controller with .obs + Obx." },
+    { "level": "Easy", "text": "Get.snackbar + Get.defaultDialog from a button." },
+    { "level": "Medium", "text": "Share a controller across 2 screens via Get.find." },
+    { "level": "Medium", "text": "Bindings class for a route — registers controller on mount, disposes on pop." },
+    { "level": "Hard", "text": "Wire GetX with go_router — decide the boundary; document trade-offs." },
+    { "level": "Hard", "text": "Test a GetX controller — remember Get.reset() between cases." },
+    { "level": "Expert", "text": "Migrate one GetX screen to Riverpod; compare LOC + testability." }
   ],
   "interviewQuestions": [
-    "What does GetX combine and how?",
-    "How does reactive GetX state work?",
-    "What are the criticisms of GetX?",
-    "When is GetX a good fit?",
-    "GetX vs Riverpod/BLoC?"
+    "What is GetX?",
+    "How does GetX handle state?",
+    "What's the trade-off with GetX's global registry?",
+    "GetX vs Riverpod — when to pick which?",
+    "What are Bindings in GetX?",
+    "What are common GetX anti-patterns?"
   ],
   "references": [
-    { "label": "GetX package", "url": "https://pub.dev/packages/get" }
+    { "label": "GetX on pub.dev", "url": "https://pub.dev/packages/get" },
+    { "label": "GetX documentation", "url": "https://github.com/jonataslaw/getx/blob/master/README.md" }
   ]
 }

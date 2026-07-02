@@ -3,49 +3,92 @@
   "levelId": 5,
   "title": "MobX",
   "xp": 40,
-  "estimatedMinutes": 20,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Explain observables, actions and reactions",
-    "Use transparent reactive tracking",
-    "Compare MobX's auto-tracking to explicit approaches"
+    "Understand MobX via a real-life analogy",
+    "Distinguish `@observable`, `@computed`, `@action`",
+    "Use `Observer` widgets and code-gen (`build_runner`)",
+    "Know when MobX fits (and when Riverpod is simpler)",
+    "Answer MobX interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "MobX is a reactive state library built on three concepts: observables (tracked state), actions (mutate state), and reactions (auto-run when observed state changes). It tracks dependencies transparently." },
-    { "type": "code", "language": "dart", "code": "// (with mobx_codegen)\n@observable int count = 0;\n@action void increment() => count++;\n// UI: Observer(builder: (_) => Text('$count'))  // auto-tracks count" },
-    { "type": "callout", "variant": "interview", "markdown": "MobX's magic is transparent reactive tracking: an Observer rebuilds automatically when any observable it READ during build changes — you don't wire up listeners manually. This minimizes boilerplate but relies on code generation." },
-    { "type": "table", "headers": ["Concept", "Role"], "rows": [
-      ["Observable", "State that is tracked"],
-      ["Action", "Mutates observables"],
-      ["Computed", "Derived value, cached"],
-      ["Reaction/Observer", "Runs/rebuilds on change"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of MobX as a spreadsheet you dropped into your app.**\n\n- Cell A1 has a number (an `@observable` — 'value that anyone can watch').\n- Cell B1 is `=A1*2` (a `@computed` — derived automatically; re-evaluates when A1 changes).\n- You edit A1 through a **formula bar** (an `@action` — the only sanctioned way to mutate values).\n- Any chart connected to B1 auto-refreshes when A1 → B1 → chart cascades.\n\n**MobX brings this reactive-spreadsheet model to Flutter.** You mark data as observable, mark methods that mutate it as actions, and the framework's dependency tracker figures out what needs to re-run when. Widgets wrapped in `Observer(() => …)` are the 'charts' — they rebuild when any observable they read changes.\n\n**Why teams pick MobX:** developers coming from Vue/Angular/MobX-React find it immediately familiar. The reactivity model is genuinely elegant — no ceremony of events + reducers, no `.watch/read` API to memorize. Just read observables in a builder; they'll update.\n\n**Trade-off:** requires code generation (`build_runner`), which slows the dev loop. Community is smaller than Riverpod's or Bloc's, so ecosystem support is thinner." },
+    { "type": "callout", "variant": "definition", "markdown": "**MobX** is a transparent reactive state library from the JS/TS ecosystem, ported to Dart via `mobx` + `mobx_codegen`. You declare `@observable` fields, `@computed` getters, and `@action` methods on a store; wrap widgets in `Observer` to auto-rebuild when the observables they read change. Requires `build_runner` for the code-gen (`*.g.dart` files)." },
+    { "type": "theory", "markdown": "## The three annotations" },
+    { "type": "table", "headers": ["Annotation", "What it does", "Example"], "rows": [
+      ["**`@observable`**", "Marks a field as reactive. Reads are tracked; writes trigger reactions.", "`@observable int count = 0;`"],
+      ["**`@computed`**", "A derived value automatically recomputed when observables change.", "`@computed int get doubled => count * 2;`"],
+      ["**`@action`**", "The sanctioned way to mutate observables. Batches changes into one reaction.", "`@action void increment() => count++;`"]
     ]},
-    { "type": "callout", "variant": "mistake", "markdown": "Mutating observables outside an @action (warnings/inconsistency) or expecting Observer to rebuild for state it didn't read during build. Read the observable inside the Observer's builder." },
-    { "type": "callout", "variant": "tip", "markdown": "MobX feels natural to developers from a Vue/MobX-JS background. It needs build_runner codegen; weigh that against Riverpod/BLoC which Flutter teams adopt more widely today." }
+    { "type": "theory", "markdown": "## Sample program — counter with MobX" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml:\n//   dependencies:\n//     mobx: ^2.3.0\n//     flutter_mobx: ^2.2.0\n//   dev_dependencies:\n//     build_runner: ^2.4.0\n//     mobx_codegen: ^2.6.0\n\n// FILE: counter_store.dart\nimport 'package:mobx/mobx.dart';\npart 'counter_store.g.dart';\n\nclass CounterStore = _CounterStore with _$CounterStore;\n\nabstract class _CounterStore with Store {\n  @observable\n  int count = 0;\n\n  @computed\n  int get doubled => count * 2;\n\n  @action\n  void increment() => count++;\n\n  @action\n  void reset() => count = 0;\n}\n\n// Run:  dart run build_runner build --delete-conflicting-outputs\n// This generates counter_store.g.dart with the reactive machinery.\n\n// FILE: main.dart\nimport 'package:flutter/material.dart';\nimport 'package:flutter_mobx/flutter_mobx.dart';\nimport 'counter_store.dart';\n\nfinal store = CounterStore();\n\nvoid main() => runApp(const MaterialApp(home: HomePage()));\n\nclass HomePage extends StatelessWidget {\n  const HomePage({super.key});\n\n  @override\n  Widget build(BuildContext context) => Scaffold(\n    appBar: AppBar(title: const Text('MobX counter')),\n    body: Center(\n      // Observer rebuilds when ANY observable it reads changes.\n      child: Observer(builder: (_) => Column(\n        mainAxisAlignment: MainAxisAlignment.center,\n        children: [\n          Text('count: ${store.count}', style: const TextStyle(fontSize: 30)),\n          Text('doubled: ${store.doubled}', style: const TextStyle(fontSize: 20)),\n        ],\n      )),\n    ),\n    floatingActionButton: FloatingActionButton(\n      onPressed: store.increment,\n      child: const Icon(Icons.add),\n    ),\n  );\n}" },
+    { "type": "theory", "markdown": "## Reactions — automatic side effects" },
+    { "type": "code", "language": "dart", "code": "// Beyond Observer widgets, MobX has three programmatic reactions:\n\n// (1) autorun — runs immediately, then whenever any observable it reads changes\nautorun((_) => print('count is now ${store.count}'));\n\n// (2) reaction — declaratively watch a projection\nreaction<int>(\n  (_) => store.count,               // observed\n  (val) => print('count changed to $val'),  // callback\n);\n\n// (3) when — one-shot: fire the callback the first time predicate is true\nwhen((_) => store.count > 10, () => print('reached 10!'));\n\n// All three return a Dispose function you should call to prevent leaks:\nfinal dispose = autorun((_) => print(store.count));\n// ... later:\ndispose();" },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Mutating outside `@action`.** MobX warns you when observables are modified outside an action. Wrap mutations in `@action` methods or `runInAction(() => ...)` for one-offs." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Forgetting to run `build_runner`.** Every time you add/change observable fields, regenerate: `dart run build_runner build --delete-conflicting-outputs`. Otherwise you'll get compile errors about missing `_$CounterStore` mixin." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: `Observer` around a huge subtree.** It rebuilds on any observable read. Move `Observer` DOWN to the smallest widget that actually cares." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Not disposing reactions.** `autorun`, `reaction`, `when` all return a dispose function — call it in your widget's `dispose()`. Otherwise memory leaks pile up." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Global `final store = Store()` in production.** Fine for tutorials; in real apps, inject via GetIt or provider so tests can swap it out." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Use `@computed` for derived values.** Automatic caching + only re-evaluates when its inputs change." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Group mutations in `@action`.** All writes inside one action → one reaction cycle instead of many." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Small `Observer` wrappers.** One widget = one Observer; avoid one giant Observer around the whole screen." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Dispose reactions.** Every `autorun`/`reaction`/`when` returns a dispose function; call it." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Inject the store via DI (GetIt/Provider).** Not global final. Testable." },
+    { "type": "callout", "variant": "best", "markdown": "**6. For new apps in 2026, consider Riverpod first.** MobX's reactivity is elegant, but Riverpod delivers similar ergonomics without codegen." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — CounterStore.** Build the sample; add `decrement` and observe `doubled` re-computing." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — TodoStore.** `@observable` list of todos; `@computed` counts (total, completed); `@action` add/remove/toggle." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Async @action.** Use `@action` on an async fetch that sets `loading`, `data`, `error` observables." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — `reaction` for side effects.** Toast whenever a `count` observable exceeds 10, disposed properly." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Migrate a MobX screen to Riverpod.** Compare LOC, codegen overhead, dev-loop speed." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is MobX?**\n\n**A:** MobX is a **transparent reactive state library** ported from JS/TS. You declare **`@observable`** fields (values you can watch), **`@computed`** getters (derived values that auto-recompute), and **`@action`** methods (the sanctioned way to mutate observables). Widgets wrapped in `Observer(builder: (_) => ...)` auto-rebuild when any observable they read inside the builder changes. Requires code generation via `build_runner` + `mobx_codegen`. The mental model is a reactive spreadsheet: change one cell, dependents refresh automatically. Popular with teams from Vue/Angular/MobX-React backgrounds who find the reactivity familiar." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: `@observable` vs `@computed` vs `@action`?**\n\n**A:** **`@observable`** — a mutable field that MobX tracks. Reads register a dependency; writes trigger reactions. Only meaningful with an `@action`-wrapped mutation. **`@computed`** — a derived value expressed as a getter. MobX caches it and re-evaluates only when the observables it depends on change. Think of it as a smart cache. **`@action`** — a method that mutates observables. Wrapping mutations in `@action` batches related writes into a single reaction cycle (huge perf benefit) and enforces the 'writes only through actions' invariant. **Rule:** state → `@observable`, derived → `@computed`, mutation → `@action`." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How does `Observer` know what to rebuild?**\n\n**A:** When `Observer(builder: (_) => ...)`'s builder runs, MobX's tracker records EVERY `@observable` field and `@computed` getter accessed during that call. It builds a dependency graph. Later, when any of those observables is mutated (via an `@action`), MobX marks the affected Observer widgets dirty and rebuilds them. **Result:** you don't manually declare 'I depend on X, Y, Z'; MobX figures it out from your code. **Trade-off:** the graph is invisible — if a widget is unexpectedly rebuilding too often, you have to reason about which observables it might be reading. In practice this is elegant and rarely surprising." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What are `autorun`, `reaction`, and `when`?**\n\n**A:** Programmatic reactions — side effects that run when observables change, outside of widget rendering. **`autorun((_) => …)`** runs immediately and whenever any observable it reads changes. Perfect for logging or persisting to disk. **`reaction((_) => selector, (val) => callback)`** — declaratively watch a specific projection; fires only when the projected value changes. More surgical than autorun. **`when((_) => predicate, () => callback)`** — one-shot: fires the callback the FIRST time the predicate becomes true, then auto-disposes. Great for 'wait until user logs in, then navigate'. **All three return a dispose function you must call** to prevent leaks." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: MobX vs Riverpod — key differences?**\n\n**A:** Both are elegant reactive state libraries. **MobX** — automatic dependency tracking via observers reading observables; requires codegen. Familiar to Vue/Angular/JS-MobX teams. **Riverpod** — explicit dependency via `ref.watch(provider)`; no codegen required (though there's optional generation). Compile-safe, `AsyncValue` built-in, better test story via `ProviderContainer`. **My rule:** for a new Flutter app, Riverpod's ergonomics are close enough to MobX's without the codegen tax. For a team already skilled in MobX from other frameworks, MobX is fine. Don't rewrite working MobX code just because Riverpod is trendier — but for greenfield, Riverpod wins." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What are common MobX pitfalls?**\n\n**A:** **(1) Mutating outside an `@action`** — MobX warns; batch writes into one action for perf. **(2) Forgetting `build_runner`** — the `_$Store` mixin doesn't exist until you generate it. **(3) Huge `Observer` widgets** — every observable read anywhere in the builder triggers rebuild; keep Observers small. **(4) Leaking reactions** — `autorun` etc. return dispose functions; call them in `dispose()`. **(5) Global `final store = Store()`** — untestable; inject via DI. **(6) Nested observables** — a `List` of observables needs `ObservableList<T>`, not `List<T>`. Similarly `ObservableMap<K, V>` and `ObservableSet<T>`." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: How do you test MobX?**\n\n**A:** Because stores are plain Dart classes, unit-testing them is trivial:\n```dart\ntest('increment', () {\n  final s = CounterStore();\n  s.increment();\n  expect(s.count, 1);\n});\n```\nNo widgets, no framework machinery. For reactions, you can attach an `autorun`/`reaction`/`when` inside the test and verify the callback fires. **For widget tests**, wrap the widget under test in an `Observer` and pump; MobX integrates naturally with Flutter's testing framework. **Downside:** you can't mock the dependency graph cleanly — testing that widget X rebuilds when store Y changes requires actually running the reactive machinery, which is a heavier test than Bloc's `blocTest`." },
+    { "type": "theory", "branded": true, "markdown": "## Real-world usage\n\n- **Teams from Vue/Angular/MobX-React** — familiar mental model.\n- **Small-to-medium apps** where developers prefer implicit reactivity.\n- **Wonderous** (a Google-showcase Flutter app) — uses MobX.\n- **Some enterprise Alibaba apps** — MobX is popular in Chinese Flutter ecosystem.\n- **Portfolios / educational content** — MobX's spreadsheet model is a great teaching aid." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`ObservableList<T>` / `ObservableMap<K, V>` / `ObservableSet<T>`** — reactive collections.\n- **`ObservableFuture<T>` / `ObservableStream<T>`** — wrap async work; `status: pending / fulfilled / rejected`.\n- **`ObservableStream.map(...)`** — reactive stream operators.\n- **`runInAction(() => …)`** — one-off action wrapper (no `@action` annotation needed).\n- **`Store` mixin** — the base for stores; provides tracking machinery.\n- **`mobx_codegen`** — the code generator; regenerate on every observable change.\n- **`equatable` on stores** — not typical; MobX stores are usually mutable identity-based.\n- **`GetIt` for DI** — the common pairing for MobX injection.\n- **`asyncAction`** — modern replacement for wrapping `Future` bodies.\n- **`mobxSideEffectRunner`** — hook side effects into widget lifecycle." }
   ],
   "flashcards": [
-    { "front": "MobX's three core concepts?", "back": "Observables (tracked state), actions (mutations), reactions (auto-run on change)." },
-    { "front": "How does Observer know to rebuild?", "back": "It tracks which observables were read during build and rebuilds when they change." },
-    { "front": "What is a computed in MobX?", "back": "A cached derived value recomputed only when its dependencies change." }
+    { "front": "MobX three annotations?", "back": "@observable (mutable field), @computed (derived getter), @action (mutation)." },
+    { "front": "Reactive widget wrapper?", "back": "Observer(builder: (_) => …) — auto-tracks reads, rebuilds on changes." },
+    { "front": "Programmatic reactions?", "back": "autorun, reaction, when — all return dispose functions." },
+    { "front": "Codegen requirement?", "back": "build_runner + mobx_codegen — regenerate on every observable change." },
+    { "front": "MobX vs Riverpod?", "back": "MobX = automatic dep tracking + codegen. Riverpod = explicit watch + no codegen + compile-safe." },
+    { "front": "Reactive collections?", "back": "ObservableList/Map/Set — not raw List/Map/Set." }
   ],
   "quiz": [
-    { "q": "MobX state that is tracked is called an…", "options": ["Action", "Observable", "Reducer", "Event"], "answer": 1, "explain": "Observables are the tracked state." },
-    { "q": "An Observer rebuilds when…", "options": ["Any state changes", "An observable it read during build changes", "A timer fires", "Always"], "answer": 1, "explain": "Tracking is based on what was read during build." },
-    { "q": "You should mutate observables inside…", "options": ["build()", "@action", "a reducer", "a widget constructor"], "answer": 1, "explain": "Actions batch and validate mutations." }
+    { "q": "Mutations should be wrapped in…", "options": ["setState", "@action or runInAction", "notifyListeners", "Bloc"], "answer": 1, "explain": "Batches into one reaction." },
+    { "q": "Widgets auto-rebuild via…", "options": ["StreamBuilder", "Observer(builder: (_) => …)", "BlocBuilder", "setState"], "answer": 1, "explain": "MobX's Flutter binding." },
+    { "q": "Derived value?", "options": ["@observable", "@computed getter", "@action", "@override"], "answer": 1, "explain": "Auto-cached + re-evaluated." },
+    { "q": "Codegen tool?", "options": ["freezed", "build_runner + mobx_codegen", "json_serializable only", "None"], "answer": 1, "explain": "*.g.dart files." },
+    { "q": "Reactions must be…", "options": ["Ignored", "Disposed via returned function", "Global", "Rebuilt"], "answer": 1, "explain": "Or you leak." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Counter with @observable + @action + Observer." },
-    { "level": "Medium", "text": "Add a @computed derived value and display it." },
-    { "level": "Hard", "text": "Model async loading with ObservableFuture." },
-    { "level": "Expert", "text": "Use a reaction to trigger side effects (e.g., persist on change)." }
+    { "level": "Easy", "text": "CounterStore with @observable/@computed/@action; run build_runner." },
+    { "level": "Easy", "text": "Observe with Observer widget; watch the doubled @computed update automatically." },
+    { "level": "Medium", "text": "TodoStore: ObservableList<Todo>; add/remove/toggle actions." },
+    { "level": "Medium", "text": "Async @action loading a user; show status via ObservableFuture." },
+    { "level": "Hard", "text": "reaction to show a snackbar when count > 10; dispose properly." },
+    { "level": "Hard", "text": "Inject the store via GetIt; write a test that swaps it with a fake." },
+    { "level": "Expert", "text": "Migrate a small MobX screen to Riverpod; compare LOC + codegen overhead." }
   ],
   "interviewQuestions": [
-    "Explain MobX observables, actions and reactions.",
-    "How does transparent reactive tracking work?",
-    "What is a computed value?",
-    "Why mutate only inside actions?",
-    "MobX vs BLoC/Riverpod?"
+    "What is MobX?",
+    "@observable vs @computed vs @action?",
+    "How does Observer know what to rebuild?",
+    "What are autorun, reaction, and when?",
+    "MobX vs Riverpod — key differences?",
+    "What are common MobX pitfalls?",
+    "How do you test MobX?"
   ],
   "references": [
-    { "label": "MobX.dart", "url": "https://mobx.netlify.app" }
+    { "label": "MobX docs — Dart", "url": "https://mobx.netlify.app" },
+    { "label": "mobx + flutter_mobx on pub.dev", "url": "https://pub.dev/packages/flutter_mobx" }
   ]
 }

@@ -85,105 +85,21 @@ body.push(...topicToChapter(loadTopic("level_05", "cubit"),
 body.push(...topicToChapter(loadTopic("level_05", "riverpod"),
   { chapterNumber: 4, bookmarkId: "ch4" }));
 
-// 5 GetX
-body.push(...chapter({
-  id: "ch5", title: "5. GetX",
-  def: "GetX is an all-in-one package combining state management, dependency injection and routing with minimal boilerplate; reactive .obs state + Obx auto-rebuild.",
-  blocks: [
-    code(["class C extends GetxController { var count = 0.obs; void inc()=>count++; }",
-      "final c = Get.put(C());",
-      "Obx(()=>Text('${c.count}'));",
-      "Get.to(NextPage());  // no context"], "dart"),
-    callout("interview", ["GetX's appeal is velocity — reactive state, DI and navigation without BuildContext in very little code. Its criticism: it encourages global singletons/tight coupling and hidden 'magic', which hurts testability and clarity at scale."]),
-  ],
-  summary: ["GetX bundles state + DI + routing.", ".obs + Obx give reactive rebuilds.", "Fast to write; navigation without context.", "Risks global coupling/testability at scale."],
-  interview: ["What does GetX combine?", "How does reactive GetX work?", "Criticisms of GetX?", "When is GetX a good fit?", "GetX vs Riverpod/BLoC?"],
-  coding: [
-    { level: "Easy", text: "Reactive counter with GetxController + Obx." },
-    { level: "Medium", text: "Routing + DI across two screens." },
-    { level: "Hard", text: "Refactor GetX app for explicit, testable injection." },
-    { level: "Expert", text: "Compare a feature in GetX vs Riverpod; discuss trade-offs." }],
-  realworld: ["GetX is popular for rapid MVPs and solo projects where development speed outweighs long-term architectural concerns."],
-  miniproject: ["Build a small notes app entirely in GetX (state + routes + DI), then list what you'd change for a large team."],
-  advanced: ["GetX bindings & lazyPut, workers (ever/debounce), why some teams avoid GetX in large codebases."],
-}));
+// 5. GetX
+body.push(...topicToChapter(loadTopic("level_05", "getx"),
+  { chapterNumber: 5, bookmarkId: "ch5" }));
 
-// 6 Redux
-body.push(...chapter({
-  id: "ch6", title: "6. Redux",
-  def: "Redux is a predictable state container with a single immutable store: the UI dispatches actions, pure reducers compute the next state, and the UI rebuilds from it.",
-  blocks: [
-    code(["int reducer(int state, action) => action is Increment ? state+1 : state;",
-      "final store = Store<int>(reducer, initialState: 0);",
-      "store.dispatch(Increment());"], "dart"),
-    table(["Piece", "Role"], [
-      ["Store", "Single state tree"],
-      ["Action", "Describes what happened"],
-      ["Reducer", "Pure (state,action)→state"],
-      ["Middleware", "Side effects (async/logging)"]], [2600, 6560]),
-    callout("interview", ["Redux's three principles: single source of truth, read-only state (change only via actions), changes by pure reducers. This makes state predictable, traceable, and time-travel-debuggable."]),
-  ],
-  summary: ["Single immutable store; actions → pure reducers → state.", "Reducers must be pure; side effects in middleware.", "Most ceremony of all approaches.", "Best for very large, auditable state."],
-  interview: ["Explain the Redux flow.", "The three Redux principles?", "Why must reducers be pure?", "Where do side effects go?", "When is Redux worth it?"],
-  coding: [
-    { level: "Easy", text: "Counter store + action + reducer." },
-    { level: "Medium", text: "Async loading via thunk middleware." },
-    { level: "Hard", text: "Combine reducers for a multi-feature tree." },
-    { level: "Expert", text: "Time-travel debugging by replaying actions." }],
-  realworld: ["Teams migrating from React/Redux web apps sometimes use Redux in Flutter to keep one mental model across platforms."],
-  miniproject: ["Build a todo app with flutter_redux: actions, combined reducers, and thunk for persistence."],
-  advanced: ["Redux middleware (thunk/epics), reselect-style memoized selectors, devtools time travel."],
-}));
+// 6. Redux
+body.push(...topicToChapter(loadTopic("level_05", "redux"),
+  { chapterNumber: 6, bookmarkId: "ch6" }));
 
-// 7 MobX
-body.push(...chapter({
-  id: "ch7", title: "7. MobX",
-  def: "MobX is a reactive library built on observables (tracked state), actions (mutations) and reactions (auto-run on change), with transparent dependency tracking.",
-  blocks: [
-    code(["@observable int count = 0;",
-      "@action void increment() => count++;",
-      "Observer(builder: (_) => Text('$count'));  // auto-tracks count"], "dart"),
-    callout("interview", ["MobX's magic is transparent reactive tracking: an Observer rebuilds when any observable it READ during build changes — no manual listeners. Low boilerplate, but it relies on build_runner codegen."]),
-  ],
-  summary: ["Observables + actions + reactions.", "Observer auto-rebuilds on read observables.", "Computed values are cached derivations.", "Low boilerplate but needs codegen."],
-  interview: ["MobX core concepts?", "How does transparent tracking work?", "What is a computed?", "Why mutate only in actions?", "MobX vs BLoC/Riverpod?"],
-  coding: [
-    { level: "Easy", text: "Counter with observable/action/Observer." },
-    { level: "Medium", text: "Add a @computed derived value." },
-    { level: "Hard", text: "Async loading with ObservableFuture." },
-    { level: "Expert", text: "Use a reaction to persist on change." }],
-  realworld: ["Developers from the JS/MobX or Vue world adopt MobX.dart for its familiar transparent reactivity."],
-  miniproject: ["Build a cart with MobX: observable items, computed total, and a reaction that saves to storage."],
-  advanced: ["Reactions (autorun/when/reaction), strict mode, store composition."],
-}));
+// 7. MobX
+body.push(...topicToChapter(loadTopic("level_05", "mobx"),
+  { chapterNumber: 7, bookmarkId: "ch7" }));
 
-// 8 Comparison
-body.push(...chapter({
-  id: "ch8", title: "8. Comparison & Best Practices",
-  def: "There is no universally best state manager — only the best fit for your app size, team and complexity. The goal is always: separate UI from logic, rebuild granularly, keep state testable.",
-  blocks: [
-    table(["Approach", "Boilerplate", "Testability", "Best for"], [
-      ["setState", "None", "Low", "Local widget state"],
-      ["Provider", "Low", "Medium", "Small/medium shared"],
-      ["Riverpod", "Low-Med", "High", "Most apps; compile-safe"],
-      ["BLoC/Cubit", "Medium", "High", "Large event-driven teams"],
-      ["GetX", "Very low", "Low-Med", "Prototypes/small"],
-      ["Redux", "High", "High", "Very large/auditable"],
-      ["MobX", "Low (codegen)", "Medium", "Reactive-tracking fans"]], [2100, 1900, 2000, 3360]),
-    callout("interview", ["Strong answer to 'which one?': 'It depends — setState for local UI; Riverpod or BLoC for most production apps; I avoid one-size-fits-all and always separate logic from UI and rebuild granularly regardless of the tool.'"]),
-    callout("best", ["Universal rules: logic out of widgets; immutable state; rebuild only what changed; model async as loading/error/data; make state unit-testable without the widget tree."]),
-  ],
-  summary: ["No universal winner — match the tool to the app.", "Riverpod/BLoC are the safe production defaults.", "GetX for speed; Redux for very large auditable state.", "Universal best practices beat tool choice."],
-  interview: ["Which do you prefer and why?", "How do you choose for a new app?", "Compare BLoC, Riverpod, Provider.", "Best practices across ALL approaches?", "Can you mix approaches?"],
-  coding: [
-    { level: "Easy", text: "Pick approaches for 3 scenarios with justification." },
-    { level: "Medium", text: "Same feature in Provider and Riverpod; compare." },
-    { level: "Hard", text: "One feature in BLoC and Redux; compare." },
-    { level: "Expert", text: "Write a team decision guide mapping app traits → approach." }],
-  realworld: ["Mature apps mix: setState for trivial local bits, Riverpod/BLoC for shared domain state. Consistency within a feature matters more than a single global winner."],
-  miniproject: ["Build one app (a todo or notes feature) implemented three ways — Provider, Riverpod, BLoC — and write a comparison memo."],
-  advanced: ["Server-state libraries (e.g. query caching), state restoration, performance profiling of rebuilds across approaches."],
-}));
+// 8. Comparison & Decision Framework
+body.push(...topicToChapter(loadTopic("level_05", "comparison"),
+  { chapterNumber: 8, bookmarkId: "ch8" }));
 
 // Revision
 body.push(H1("Volume 5 Revision Cheat Sheet", "cheat"));

@@ -1,53 +1,118 @@
 {
   "id": "sm.comparison",
   "levelId": 5,
-  "title": "Comparison & Best Practices",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "title": "Comparison & Decision Framework",
+  "xp": 45,
+  "estimatedMinutes": 35,
   "objectives": [
-    "Compare all approaches on key axes",
-    "Pick the right tool for a given app",
-    "Apply universal state best practices"
+    "Compare Provider / Bloc / Cubit / Riverpod / GetX / Redux / MobX",
+    "Pick the right tool based on team, project, timeline, and complexity",
+    "Recognize migration paths between libraries",
+    "Answer 'which state management do you use?' in interviews without being religious about it",
+    "Understand the three-tier model: ephemeral / app / server state"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "There is no universally 'best' state manager — only the best fit for your app size, team, and complexity. The goal is the same everywhere: separate UI from logic, rebuild granularly, and keep state testable." },
-    { "type": "table", "headers": ["Approach", "Boilerplate", "Testability", "Best for"], "rows": [
-      ["setState", "None", "Low", "Local widget state"],
-      ["Provider", "Low", "Medium", "Small/medium shared state"],
-      ["Riverpod", "Low-Med", "High", "Most apps; compile-safe DI"],
-      ["BLoC/Cubit", "Medium", "High", "Large, event-driven teams"],
-      ["GetX", "Very low", "Low-Med", "Prototypes/small apps"],
-      ["Redux", "High", "High", "Very large, auditable state"],
-      ["MobX", "Low (codegen)", "Medium", "Reactive/auto-tracking fans"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of state management libraries as woodworking tools in your workshop.**\n\n- **`setState`** is the hand chisel — precise, cheap, right for detail work you do once. Building furniture with only a chisel is torture; refusing to touch a chisel because you have a table saw is silly.\n- **Provider** is the reliable hand plane — smooth, well-understood, teaches you the grain of the wood (InheritedWidget). A generation of Flutter devs grew up with it.\n- **Riverpod** is the modern power planer — same job, faster, safer, no `BuildContext` scraping the surface.\n- **Bloc / Cubit** is the CNC router — expensive setup, staggeringly precise output. Overkill for a shelf; essential for a mass-produced kitchen.\n- **GetX** is the multi-tool with 47 attachments — you can build anything, but veterans watch you use it and wince.\n- **Redux** is the industrial mill — designed for a factory floor, imported from React's factory town, quiet in Flutter today.\n- **MobX** is the reactive band saw — cuts along the grain automatically. Elegant, requires learning its rhythms and paying the codegen tax.\n\n**None of these are wrong.** They're tools with different personalities. The senior engineer picks based on team, project scope, and timeline — not brand loyalty. This chapter gives you that decision framework." },
+    { "type": "callout", "variant": "definition", "markdown": "**State management decision** is the discipline of matching a library's trade-offs to your project's constraints — team size, timeline, complexity, testability needs, existing conventions. The goal isn't to find the 'best' library; it's to make a defensible choice you can explain, live with, and ship. This chapter provides the framework for that choice." },
+    { "type": "theory", "markdown": "## The three tiers — start here" },
+    { "type": "table", "headers": ["Tier", "Example", "Best tool"], "rows": [
+      ["**Ephemeral (UI) state**", "Form field text, expanded flag, animation controller", "`setState` — nothing else"],
+      ["**App (shared) state**", "User profile, cart, theme, feature flags", "Riverpod / Bloc / Provider"],
+      ["**Server (remote) state**", "API results, live streams, cached DB queries", "Riverpod `AsyncNotifier` + Repository, or Bloc + Repository"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "A great answer to 'which state management?' is: 'It depends — setState for local UI, Riverpod or BLoC for most production apps (testable, scalable), and I avoid one-size-fits-all. I separate logic from UI and rebuild granularly regardless of the tool.'" },
-    { "type": "callout", "variant": "best", "markdown": "Universal best practices: keep business logic out of widgets; make state immutable; rebuild only what changed (Selector/select/Consumer); model async as loading/error/data; and make state unit-testable without the widget tree." },
-    { "type": "callout", "variant": "tip", "markdown": "You can mix approaches: setState for trivial local state and Riverpod/BLoC for shared domain state in the same app. Consistency within a feature matters more than picking one global winner." }
+    { "type": "callout", "variant": "interview", "markdown": "**The senior answer** to 'which state management do you use?' — **'It depends on the tier. Ephemeral state stays with setState. Shared app state and server state go through a proper library — I default to Riverpod for new apps, but I've shipped production Bloc and Provider codebases too.'** No religion; project-fit thinking. That answer alone signals 3+ YoE." },
+    { "type": "theory", "markdown": "## The seven-library comparison" },
+    { "type": "table", "headers": ["Library", "Strengths", "Weaknesses", "Pick when"], "rows": [
+      ["**setState**", "Zero deps, immediate, built-in", "Doesn't scale beyond widget-local state", "Ephemeral state ONLY"],
+      ["**Provider**", "Simple, official baseline, easy learning curve", "BuildContext-tied, runtime `ProviderNotFoundException`, no built-in async model", "Existing codebases; migrating gradually"],
+      ["**Riverpod**", "Compile-safe, no BuildContext, `AsyncValue`, easy tests, `autoDispose`, `.family`", "Learning curve if new to reactive patterns", "**Default for new apps in 2026**"],
+      ["**Bloc**", "Strict unidirectional flow, event audit log, `blocTest`, transformers for debounce/cancel", "Boilerplate — events + states + handlers", "Large teams; audit / compliance apps; complex event flows"],
+      ["**Cubit**", "Bloc's discipline without events; lighter", "No event audit trail; harder to add transformers later", "Simpler feature-scoped state within Bloc-adopting teams"],
+      ["**GetX**", "All-in-one (state + nav + DI + snackbars); fastest to write", "Global registry; opinionated; fights Flutter idioms; controversial", "Solo devs, hackathons, freelance, tutorials"],
+      ["**Redux**", "Time-travel debugging; ported audit-heavy React apps", "Heavy ceremony (actions/reducers/middleware); rare in Flutter today", "Porting a Redux React app; strict compliance"],
+      ["**MobX**", "Elegant automatic reactivity; familiar to Vue/Angular devs", "Requires codegen (`build_runner`); smaller community", "Teams from MobX-React background"]
+    ]},
+    { "type": "theory", "markdown": "## The decision flowchart" },
+    { "type": "code", "language": "text", "code": "START — 'What kind of state?'\n │\n ├─ Widget-local only? ──────────────────→ setState ✅ done.\n │\n └─ Shared across widgets / async / server:\n     │\n     ├─ Team already uses X (Provider/Bloc/GetX/MobX)?\n     │       └─ Yes → KEEP X. Don't rewrite; not worth the churn.\n     │\n     └─ Greenfield project:\n         │\n         ├─ Solo / hackathon / freelance / <2 weeks?\n         │       └─ GetX is defensible for velocity.\n         │\n         ├─ Large team / audit-heavy / event-log needs?\n         │       └─ Bloc + Cubit (mix for feature-scoped simplicity).\n         │\n         ├─ From React/Vue/Angular background?\n         │       └─ MobX feels familiar.\n         │\n         └─ Otherwise (the 80% case) → Riverpod ✅.\n\nRule: 'What's the smallest tool that solves my problem?'\nRule: 'Do I need to explain this choice to a new hire in one paragraph?'\nIf yes to both — you've picked well." },
+    { "type": "theory", "markdown": "## Migration paths — when they actually make sense" },
+    { "type": "table", "headers": ["From", "To", "Ease", "Justified when"], "rows": [
+      ["setState", "Riverpod", "Easy — screen-by-screen", "State crosses two+ widgets and prop drilling gets ugly"],
+      ["Provider", "Riverpod", "1:1 mechanical — same author", "Adding a new large feature; Provider is limiting you"],
+      ["Bloc/Cubit", "Riverpod", "Feasible per feature", "Team wants to simplify; not urgent"],
+      ["GetX", "Riverpod / Bloc", "Rewrite-heavy — different DI model", "Team growing past solo-dev size"],
+      ["Redux", "Bloc", "Mostly mechanical", "Simplifying while preserving discipline"],
+      ["MobX", "Riverpod", "Moderate — different mental model", "Getting rid of build_runner dependency"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**A rewrite is almost never worth it on its own.** Migrate WHILE adding a new feature that would benefit from the new library. That way the effort has a business justification, and you contain the risk to the new feature. Big-bang state-management rewrites are one of the most common productivity sinkholes in Flutter shops." },
+    { "type": "theory", "markdown": "## Interview cheat-sheet — quotable one-liners" },
+    { "type": "code", "language": "text", "code": "'When would you pick X over Y?'\n │\n Riverpod vs Provider:\n   'Riverpod is Provider without BuildContext + with compile-safety and\n    AsyncValue baked in. Same author. Riverpod for new apps.'\n\n Riverpod vs Bloc:\n   'Riverpod is more ergonomic — less boilerplate. Bloc gives you the event\n    audit trail. Big teams that value strict conventions still pick Bloc.'\n\n Bloc vs Cubit:\n   'Same package. Cubit for simple state; Bloc when you need transformers\n    (debounce, restartable) or named-event logs. They coexist happily.'\n\n Anything vs GetX:\n   'GetX ships everything in one package. Fast to write, hard to test at scale.\n    Fine for hackathons and freelance; large teams outgrow it.'\n\n Redux in Flutter:\n   'Rare — Bloc gives similar discipline with less ceremony. Redux fits when\n    porting a React app or under strict audit requirements.'\n\n MobX:\n   'Elegant reactive model, requires codegen. Feels familiar coming from\n    Vue/Angular. Riverpod covers most needs without codegen.'" },
+    { "type": "theory", "markdown": "## Common mistakes across libraries" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Picking based on GitHub stars.** Popularity is a signal, not a rule. What matters is fit to YOUR project and team." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Rewriting a working codebase.** The number of Flutter projects that shipped with 'let's migrate from Provider to Riverpod first' → never shipped anything is embarrassing." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: One-size-fits-all.** Even within one app, use `setState` for local UI + a library for shared state. Don't put every checkbox in Riverpod." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Ignoring the team's existing skills.** A team fluent in Bloc will ship faster in Bloc than in the trendiest new library. Skills > frameworks." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Skipping the Repository pattern.** All libraries benefit from separating server state (Repository) from UI state (state library). Skipping this couples network to widgets — the pain grows exponentially." },
+    { "type": "theory", "markdown": "## Best practices — universal" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Always separate the three tiers.** setState for ephemeral, library for app, Repository + library for server." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Immutable state + copyWith / Freezed / Equatable.** Mutations must produce new state objects, else equality checks skip legitimate rebuilds." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Narrow subscriptions.** `.select` (Riverpod), `Selector` (Provider), `BlocSelector` (Bloc) — rebuild only when the field you care about changes." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Repository owns server state.** Blocs/Notifiers observe it. Never Retrofit calls from a Bloc directly." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Test state without widgets.** `ProviderContainer` (Riverpod), `blocTest` (Bloc), plain Dart unit tests (MobX, GetX). If you can only test with `pumpWidget`, your architecture has drift." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Adopt code-gen where the ecosystem supports it.** `@riverpod`, `@freezed` — a few extra seconds on save saves hours of hand-written boilerplate." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Choose for 3 scenarios.** Write down which library you'd pick for: (a) a hackathon shopping app, (b) a banking transaction app, (c) an internal analytics dashboard. Justify each in 1 sentence." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Same feature, two libraries.** Build a counter in setState AND Riverpod. Compare LOC, testability, mental effort." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Migrate one screen.** Take a Provider-based screen from a real project; port to Riverpod. Note every surprise." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Write a 200-word Architecture Decision Record (ADR).** 'This project uses X because…'. Include team background, project scope, timeline, alternatives considered. This IS the senior deliverable." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Mixed architecture.** Design an app that uses BOTH Bloc (for auth flow with named events) AND Cubit (for simple screen state). Draw the boundary clearly." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Which state management do you use and why?**\n\n**A:** 'It depends on the tier. For ephemeral widget-local state I use `setState` — no ceremony. For app-shared state and server state, I default to **Riverpod** for new projects because it's compile-safe, works without `BuildContext`, has `AsyncValue` built-in, and tests without pumping widgets. I've shipped production apps in **Bloc** too — its stricter event-driven discipline suits large teams and audit-heavy domains. For legacy Provider codebases I keep them on Provider; the rewrite is rarely worth it. Rule: pick based on team, project scope, and timeline — not framework fashion.' — This answer signals seniority without being religious." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What are the three tiers of state?**\n\n**A:** **(1) Ephemeral / UI state** — belongs to one widget: form field text, expanded/collapsed flag, animation progress. Managed with `setState`. **(2) App / shared state** — multiple widgets need it: user profile, cart, theme, feature flags. Managed with Riverpod / Bloc / Provider. **(3) Server / remote state** — comes from network / DB; the server holds the truth. Cached locally to feel fast. Managed via Repository + Riverpod's `AsyncNotifier` or Bloc's async event handlers. **Getting the tiers right matters more than which library.** Putting server state in `setState` re-fetches every rebuild; putting ephemeral state in a global store creates ugly coupling." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How would you migrate a Provider codebase to Riverpod?**\n\n**A:** Feature-by-feature, WHILE adding new functionality that would benefit from Riverpod's ergonomics. Steps: **(1) Wrap the app in `ProviderScope`** at the root — coexists with Provider fine. **(2) Convert one screen's model** from `ChangeNotifier` → `Notifier`, its provider from `ChangeNotifierProvider` → `NotifierProvider`, its widget from `Consumer<T>` → `ConsumerWidget` + `ref.watch/read`. **(3) Test the converted screen thoroughly.** **(4) Repeat.** **Don't do a big-bang rewrite** — the pattern is nearly 1:1 (same author) but every screen has some subtle context around `Provider.of` that needs review. The migration justifies itself faster if you're already touching that code for a new feature." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: When would you use plain `setState` in a real app?**\n\n**A:** For widget-local UI state that no other widget needs to know: text-field input while typing, an expanded/collapsed panel, a hover state, an animation controller's progress, a modal's dismissed flag. Anything where the state's LIFETIME matches ONE widget. Overusing `setState` for cross-widget state creates callback-drilling hell; underusing it for local UI state adds ceremony that helps no one. **Rule:** if the state lives in one widget forever and no one outside needs it, `setState`. Anything shared → library." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What's the role of a Repository in state management?**\n\n**A:** A Repository owns the single source of truth for a data type (User, Order, Product). It combines multiple data sources — Retrofit/Dio API, local Room/Isar/Hive cache, in-memory cache — and exposes ONE clean async API to the state layer (`Stream<User> watchUser(id)`, `Future<void> refresh()`, `Future<void> update(user)`). The state library (Bloc / Riverpod / whatever) OBSERVES the Repository, translates its data into UI state. **Why crucial:** (1) testable — swap the real Repo with a fake in tests without touching state code. (2) reusable — multiple state layers share one Repo. (3) separation of concerns — state is transient UI logic; data storage is domain logic. **This layer is library-agnostic** — it works with any state solution." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What are common state-management anti-patterns?**\n\n**A:** **(1) Prop drilling** — passing callbacks 10 levels deep because you refuse to use a state library. **(2) Everything in a global store** — including UI-local checkbox toggles that don't need to be shared. **(3) Skipping the Repository** — coupling Retrofit calls directly to Blocs / Notifiers. **(4) One giant reducer / notifier / bloc** for the whole app — split by feature. **(5) Not testing state** — if state changes are only verified via widget tests, your architecture has widget-coupling drift. **(6) Rewriting from scratch to adopt the trendy new library** — an unshipped app teaches nobody. **(7) Zealous framework advocacy** — 'Riverpod is objectively best' or 'Bloc is the only serious choice' — both are wrong; both are tools." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: Can you use multiple state libraries in one app?**\n\n**A:** Yes, and sometimes should. Common patterns: **(1) Cubit for simple feature state + Bloc for complex event-driven flows** — same package, coexist trivially. **(2) Provider for a legacy feature + Riverpod for new work** — perfectly fine while migrating; wrap the whole app in `ProviderScope`, keep the old Provider tree working. **(3) `setState` for local UI + Riverpod for shared state** — everyone does this whether they say so or not. **What to avoid:** picking three libraries because 'why not' — every additional dep is training cost for new engineers and one more thing to keep up-to-date. Rule: use multiple libraries when there's a REASON, not by accident." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q8: How do you decide what to put in the state vs computed at build time?**\n\n**A:** Put in state: **user intent** (what the user has done), **data from the server**, **long-lived UI decisions** (selected filter, sort order). Compute at build: **derived views** of state (`state.items.length`, `state.items.where(unpaid)`), **theme colors**, **format strings**. **Rule:** state is what you'd save + restore across app kill. Derived values shouldn't be stored — they can always be recomputed. **Corollary:** for reactive libraries, use `@computed` (MobX), `AsyncValue.select` (Riverpod), or `BlocSelector` for derived views so the derivation stays close to the state." },
+    { "type": "theory", "markdown": "## Real-world usage across the industry\n\n- **New Flutter apps in 2024–26** — Riverpod is the modern default; Bloc a strong runner-up.\n- **Enterprise / banking / healthcare** — Bloc, for the audit trail and strict discipline.\n- **Solo indie / freelance / tutorials** — GetX or Riverpod.\n- **Wonderous, Now In Android (Kotlin equivalent), reference apps** — often Bloc.\n- **Legacy Flutter apps 2019–2022** — Provider dominates.\n- **Alibaba, TenCent, Chinese Flutter ecosystem** — heavy MobX + GetX presence.\n- **Google internal Flutter** — mostly Bloc + Repository pattern." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Architecture Decision Records (ADRs)** — document 'we chose X because…' in the repo; onboarding gold.\n- **Feature flags for gradual migration** — one screen at a time on the new library.\n- **Testing patterns are universal** — Repository + fake DataSources beats mocking a state library.\n- **`InheritedNotifier` / `InheritedModel`** — sometimes the right answer is a small custom InheritedWidget; not everything needs a library.\n- **`ValueNotifier` + `ValueListenableBuilder`** — Flutter's built-in mini state store; underrated for one-off state.\n- **`Riverpod + go_router` together** — the modern default stack for new Flutter apps.\n- **`Bloc + get_it + go_router` together** — the enterprise stack.\n- **`GetX` all-in-one** — its own stack.\n- **Migration ADRs** — write the 'here's why we chose to migrate' doc before you start; forces clarity of thought." }
   ],
   "flashcards": [
-    { "front": "Which approaches are most testable?", "back": "Riverpod, BLoC/Cubit, and Redux — logic is separated and easily unit-tested." },
-    { "front": "Best default for most production apps?", "back": "Riverpod or BLoC — scalable, testable, with clear UI/logic separation." },
-    { "front": "Universal best practice?", "back": "Separate logic from UI, immutable state, granular rebuilds, testable logic." }
+    { "front": "Three tiers of state?", "back": "Ephemeral (setState), App-shared (Riverpod/Bloc/Provider), Server (Repository + async state)." },
+    { "front": "Default for new apps in 2026?", "back": "Riverpod. Bloc a strong second for big teams." },
+    { "front": "When Bloc over Cubit?", "back": "Need event transformers (debounce/restartable) or named-event audit log." },
+    { "front": "When GetX?", "back": "Solo devs, hackathons, freelance, tutorials. Not big teams." },
+    { "front": "When Redux in Flutter?", "back": "Rare — porting a React app or strict compliance / audit needs." },
+    { "front": "Rule to migrate?", "back": "Never a big-bang rewrite. Migrate WHILE adding a feature that benefits from the new library." }
   ],
   "quiz": [
-    { "q": "The best state management is…", "options": ["Always BLoC", "Always Provider", "Whatever fits the app/team/complexity", "Always GetX"], "answer": 2, "explain": "Fit beats dogma; there's no universal winner." },
-    { "q": "Which is best for quick prototypes?", "options": ["Redux", "GetX", "BLoC", "Manual InheritedWidget"], "answer": 1, "explain": "GetX minimizes boilerplate for speed." },
-    { "q": "A universal best practice is…", "options": ["Logic inside widgets", "Mutable global state", "Granular rebuilds + immutable state", "Rebuild the whole screen"], "answer": 2, "explain": "Granular rebuilds and immutability apply to every approach." }
+    { "q": "Ephemeral state uses…", "options": ["Riverpod", "Bloc", "setState", "Redux"], "answer": 2, "explain": "No ceremony needed." },
+    { "q": "Modern default for new apps?", "options": ["Provider", "Riverpod", "GetX", "Redux"], "answer": 1, "explain": "Compile-safe, ergonomic." },
+    { "q": "For very strict audit trails?", "options": ["setState", "Bloc (or Redux)", "GetX", "MobX"], "answer": 1, "explain": "Named events = audit log." },
+    { "q": "Rewriting from Provider to Riverpod on day 1?", "options": ["Great idea", "Usually not worth it — migrate while adding a new feature", "Always required", "Blocked by law"], "answer": 1, "explain": "Big-bang rewrites are a productivity sinkhole." },
+    { "q": "Repository purpose?", "options": ["Widget helper", "Single source of truth for a data type; combines API + cache; state layer observes it", "Only for testing", "Style tokens"], "answer": 1, "explain": "Library-agnostic domain layer." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "List which approach you'd pick for 3 app scenarios and why." },
-    { "level": "Medium", "text": "Build the same todo feature in Provider and Riverpod; compare." },
-    { "level": "Hard", "text": "Implement one feature in BLoC and Redux; compare boilerplate and testability." },
-    { "level": "Expert", "text": "Write a decision guide for your team mapping app traits to a recommended approach." }
+    { "level": "Easy", "text": "Write down which library you'd pick for 3 different projects; justify in one sentence each." },
+    { "level": "Easy", "text": "Draw the decision flowchart from memory — team, timeline, complexity nodes." },
+    { "level": "Medium", "text": "Build the same counter in setState AND Riverpod; compare LOC and testability." },
+    { "level": "Medium", "text": "Write a 200-word ADR justifying the state-management choice for your current project." },
+    { "level": "Hard", "text": "Migrate one Provider screen to Riverpod; note every surprise." },
+    { "level": "Hard", "text": "Design a mixed architecture: Bloc for auth + Cubit for feature state; draw the boundary." },
+    { "level": "Expert", "text": "Take a real Provider codebase; do a feature-by-feature migration plan; estimate effort per screen." }
   ],
   "interviewQuestions": [
-    "Which state management do you prefer and why?",
-    "How do you choose a state approach for a new app?",
-    "Compare BLoC, Riverpod and Provider.",
-    "What best practices apply to ALL approaches?",
-    "Can you mix multiple approaches in one app?"
+    "Which state management do you use and why?",
+    "What are the three tiers of state?",
+    "How would you migrate a Provider codebase to Riverpod?",
+    "When would you use plain setState in a real app?",
+    "What's the role of a Repository in state management?",
+    "What are common state-management anti-patterns?",
+    "Can you use multiple state libraries in one app?",
+    "How do you decide what to put in state vs computed at build time?"
   ],
   "references": [
-    { "label": "Flutter — State management options", "url": "https://docs.flutter.dev/data-and-backend/state-mgmt/options" }
+    { "label": "State management overview — Flutter docs", "url": "https://docs.flutter.dev/data-and-backend/state-mgmt" },
+    { "label": "Choose your state management — Flutter docs", "url": "https://docs.flutter.dev/data-and-backend/state-mgmt/options" }
   ]
 }

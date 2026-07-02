@@ -3,49 +3,89 @@
   "levelId": 5,
   "title": "Redux",
   "xp": 40,
-  "estimatedMinutes": 20,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Explain the single-store, action, reducer model",
-    "Understand pure reducers and unidirectional flow",
-    "Know when Redux's structure pays off"
+    "Understand Redux via a real-life analogy",
+    "See the store / actions / reducers pattern",
+    "Handle async with `redux_thunk` or `redux_saga`",
+    "Know when Redux fits Flutter (and when it doesn't)",
+    "Answer Redux interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Redux is a predictable state container with a single immutable store. The UI dispatches actions; pure reducers compute the next state from (currentState, action); the UI rebuilds from the new state." },
-    { "type": "code", "language": "dart", "code": "// action -> reducer -> new state -> UI\nint reducer(int state, dynamic action) =>\n  action is Increment ? state + 1 : state;\nfinal store = Store<int>(reducer, initialState: 0);\nstore.dispatch(Increment());" },
-    { "type": "callout", "variant": "interview", "markdown": "Redux's three principles: a single source of truth (one store), state is read-only (change only by dispatching actions), and changes are made by pure reducers. This makes state changes predictable, traceable and time-travel-debuggable." },
-    { "type": "table", "headers": ["Piece", "Role"], "rows": [
-      ["Store", "Holds the single state tree"],
-      ["Action", "Describes what happened"],
-      ["Reducer", "Pure (state, action) → new state"],
-      ["Middleware", "Side effects (async, logging)"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Redux as a bank's single central ledger.**\n\n- Every transaction (action) — deposit, withdraw, transfer — is written into ONE authoritative ledger book (the STORE) via a strict process. Nothing is ever crossed out; every change is a new entry computed from 'previous balance + this action = new balance' (a REDUCER — a pure function).\n- Anyone can look up a balance (SUBSCRIBE), but only the ledger can update the ledger. Two tellers can never both write '+$100' at the same time; every action is serialized and applied one-by-one.\n- If auditors need to know 'why is this account at $500?', they replay actions in order: 'starts at 0 → +200 → +100 → +200 → $500'. Every change is traceable.\n\n**Redux moved from React to Flutter (via `flutter_redux`) — and mostly stayed on React.** The Bloc/Cubit ecosystem gives you the same unidirectional flow with less ceremony, and Riverpod covers most needs cleanly. **Redux in Flutter is now rare** — mostly seen in teams that ported a React app or want strict predictability. Worth understanding as the ancestor pattern of BLoC and modern Flux-style architectures." },
+    { "type": "callout", "variant": "definition", "markdown": "**Redux** is a Flux-derived pattern with a single global **Store**. Actions (plain objects describing 'what happened') flow through **reducers** (pure functions: `(state, action) => newState`) to produce a new state. UI subscribes to the store and rebuilds on state change. Async is handled by **middleware** (`redux_thunk` for function-actions, `redux_saga` for generator-based sagas). In Flutter, uses `flutter_redux` for `StoreProvider` + `StoreConnector` widgets." },
+    { "type": "theory", "markdown": "## The three concepts" },
+    { "type": "table", "headers": ["Concept", "What it is", "Example"], "rows": [
+      ["**Store**", "Holds the whole app's state as ONE object", "`Store<AppState>(reducer, initialState: AppState.empty())`"],
+      ["**Action**", "Immutable description of 'something happened'", "`class Increment {}` — plain Dart class"],
+      ["**Reducer**", "Pure function: `(state, action) => newState`", "`(s, a) => a is Increment ? s + 1 : s`"]
     ]},
-    { "type": "callout", "variant": "mistake", "markdown": "Putting side effects or mutations in reducers — reducers must be pure (no API calls, no mutation). Side effects belong in middleware (e.g., thunk/epics)." },
-    { "type": "callout", "variant": "tip", "markdown": "Redux brings the most ceremony. It shines for very large apps needing strict, auditable, time-travelable state. For most Flutter apps, BLoC/Riverpod give similar predictability with less boilerplate." }
+    { "type": "theory", "markdown": "## Sample program — counter with Redux" },
+    { "type": "code", "language": "dart", "code": "// pubspec: flutter_redux: ^0.10.0, redux: ^5.0.0\nimport 'package:flutter/material.dart';\nimport 'package:redux/redux.dart';\nimport 'package:flutter_redux/flutter_redux.dart';\n\n// 1. State — usually a big class; here just an int for simplicity\ntypedef AppState = int;\n\n// 2. Actions — plain Dart classes\nsealed class CounterAction {}\nclass Increment extends CounterAction {}\nclass Decrement extends CounterAction {}\nclass Reset extends CounterAction {}\n\n// 3. Reducer — pure function: previous state + action -> new state\nAppState reducer(AppState state, dynamic action) {\n  return switch (action) {\n    Increment() => state + 1,\n    Decrement() => state - 1,\n    Reset() => 0,\n    _ => state,\n  };\n}\n\nvoid main() {\n  final store = Store<AppState>(reducer, initialState: 0);\n  runApp(MyApp(store: store));\n}\n\nclass MyApp extends StatelessWidget {\n  const MyApp({super.key, required this.store});\n  final Store<AppState> store;\n\n  @override\n  Widget build(BuildContext context) => StoreProvider<AppState>(\n    store: store,\n    child: const MaterialApp(home: HomePage()),\n  );\n}\n\nclass HomePage extends StatelessWidget {\n  const HomePage({super.key});\n\n  @override\n  Widget build(BuildContext context) => Scaffold(\n    appBar: AppBar(title: const Text('Redux counter')),\n    body: Center(\n      // Subscribe: rebuild when the projected value changes.\n      child: StoreConnector<AppState, int>(\n        converter: (store) => store.state,\n        builder: (context, count) => Text('$count', style: const TextStyle(fontSize: 40)),\n      ),\n    ),\n    floatingActionButton: StoreConnector<AppState, VoidCallback>(\n      converter: (store) => () => store.dispatch(Increment()),\n      builder: (context, onPressed) => FloatingActionButton(\n        onPressed: onPressed,\n        child: const Icon(Icons.add),\n      ),\n    ),\n  );\n}" },
+    { "type": "theory", "markdown": "## Async with `redux_thunk`" },
+    { "type": "code", "language": "dart", "code": "// pubspec: redux_thunk: ^0.4.0\nimport 'package:redux_thunk/redux_thunk.dart';\n\n// A thunk is a function-shaped action. Instead of dispatching a plain object,\n// you dispatch a function that receives the store and can dispatch multiple\n// actions over time (loading → data | error).\n\nThunkAction<AppState> fetchUser(int id) {\n  return (Store<AppState> store) async {\n    store.dispatch(UserLoading());\n    try {\n      final user = await api.getUser(id);\n      store.dispatch(UserLoaded(user));\n    } catch (e) {\n      store.dispatch(UserError(e.toString()));\n    }\n  };\n}\n\n// Wire the middleware at store creation:\nfinal store = Store<AppState>(\n  reducer,\n  initialState: AppState.empty(),\n  middleware: [thunkMiddleware],   // enables ThunkAction\n);\n\n// From UI:\nstore.dispatch(fetchUser(42));\n\n// For more complex async flows, use `redux_saga` — generator-based sagas\n// that model long-running workflows (retry loops, cancellation, race)." },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Mutating state inside the reducer.** Reducers must be PURE — return a NEW state, don't mutate the input. Use `copyWith`, spread operators, or Freezed." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Doing side effects in reducers.** Reducers must be pure functions: same input → same output, no I/O, no `Random`, no `DateTime.now()`. Side effects go in middleware (thunks or sagas)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Rebuilding the whole app on any state change.** Use `StoreConnector<S, VM>` with a proper converter + `distinct: true` so widgets rebuild only when their PROJECTED value changes." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: One giant reducer.** Split by feature with `combineReducers([counterReducer, cartReducer, authReducer])` — each handles its slice of the state tree." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Redux for a small app.** For a 3-screen app, Redux's ceremony is overkill. It shines only at scale." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Use `Freezed` for state + `copyWith`.** Immutable state + generated equality is a huge win." },
+    { "type": "callout", "variant": "best", "markdown": "**2. `combineReducers` to split by feature.** Never one mega-reducer." },
+    { "type": "callout", "variant": "best", "markdown": "**3. `StoreConnector` + `distinct: true`.** Rebuilds only when the projected VM changes." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Side effects in middleware.** Thunks for simple async, sagas for complex flows." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Log every action via `LoggingMiddleware`.** The audit trail is Redux's biggest advantage." },
+    { "type": "callout", "variant": "best", "markdown": "**6. For new Flutter apps, don't pick Redux.** Use Bloc/Cubit or Riverpod — same benefits, less ceremony." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Counter Redux.** Build the sample." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Combined reducers.** Add a `theme` slice; use `combineReducers`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Thunk for async user fetch.** Loading / loaded / error actions." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Time-travel debugger.** Log every action with `LoggingMiddleware`; add an undo/redo action." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Migrate to Cubit/Riverpod.** Take a small Redux screen and rewrite; measure LOC + rebuild scope." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is Redux and where does it come from?**\n\n**A:** Redux is a Flux-derived predictable-state-container pattern originally from the React/JavaScript world (2015). It centers on: **(1) A single Store** holding the whole app state as ONE immutable object. **(2) Actions** — plain objects/classes describing 'what happened' (`Increment`, `FetchUserSucceeded(user)`). **(3) Pure Reducers** — `(state, action) => newState` functions with no side effects. Async is handled by middleware (thunks, sagas). Ported to Flutter as `flutter_redux` + `redux`. **Why it exists:** to make state changes predictable, traceable, and time-travelable. Every state has a causal chain of actions you can log, replay, or step through in debugger." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What are the three principles of Redux?**\n\n**A:** **(1) Single source of truth** — the entire app state lives in ONE store; no scattered ChangeNotifiers, no local mutable widgets holding globally-relevant state. **(2) State is read-only** — the only way to change state is to dispatch an action; UI never mutates state directly. **(3) Changes are made by pure reducers** — reducers take the previous state + an action and return a new state, without side effects or I/O. Together these three make state changes fully deterministic: given the initial state and a sequence of actions, you can reconstruct every intermediate state. This is what enables Redux DevTools' time-travel debugging." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What's a reducer?**\n\n**A:** A pure function `(state, action) => newState` that computes the next state given the previous one and an action. Must be: **(1) Pure** — same input → same output; no I/O, no `Random`, no `DateTime.now`. **(2) Non-mutating** — return a new state object, don't modify the input. **(3) Total** — handle every possible action (unknown ones return state unchanged). Big apps split reducers by feature and combine them: `combineReducers([counterReducer, authReducer, cartReducer])`. Each handles a slice of the top-level state tree. **Pure functions are trivially testable** — that's the design payoff." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you handle async in Redux?**\n\n**A:** Reducers must be pure, so async goes in **middleware**. **`redux_thunk`** — a `ThunkAction` is a function that receives the store and can dispatch multiple actions over time:\n```dart\nThunkAction<AppState> fetchUser(int id) => (store) async {\n  store.dispatch(UserLoading());\n  try {\n    store.dispatch(UserLoaded(await api.get(id)));\n  } catch (e) { store.dispatch(UserError(e.toString())); }\n};\n```\n**`redux_saga`** — generator-based sagas that model complex flows (retries, cancellation, race conditions). Bigger learning curve; better for complex apps. **Rule:** thunks for simple 'load → data' flows; sagas for orchestrations. **Bloc's `on<Event>` handlers are the modern equivalent** — same idea, less ceremony." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: Redux vs Bloc — how do they compare?**\n\n**A:** Very similar architecturally: both are unidirectional (UI → Action/Event → new State → UI), both use immutable state, both are highly testable. **Differences:** **Redux** — one global store, one big state tree, actions typed as plain objects, reducers as pure functions, async in middleware. Heavy but predictable. **Bloc** — one bloc per feature (not one store), each bloc has its own event stream + state, async handled directly in `on<Event>` handlers. Less centralized, more idiomatic to Flutter. **My take:** Bloc is Redux 'redesigned for Flutter'. Both give you audit trails and unidirectional flow; Bloc feels less ceremonial. If you're starting a new Flutter app that WOULD have been Redux in React → use Bloc. If you're porting an existing Redux React app → maybe `flutter_redux` for continuity, then plan a migration." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: When would you pick Redux in Flutter today?**\n\n**A:** Honestly, rarely. Bloc/Cubit gives you the same unidirectional discipline with less ceremony and better Flutter integration. Riverpod's `Notifier` gives you audit trails via `ProviderObserver`. So Redux in Flutter is mostly justified by: **(1) Porting a React app** — team already knows Redux DevTools, actions, reducers; keeping the mental model reduces migration risk. **(2) Strict FE architecture policy** — some enterprises standardize on 'Flux-style Redux everywhere' across React + Flutter + Angular. **(3) Extremely audit-heavy compliance requirements** where you want the exact 'every state change is an action in a global log' guarantee. **For a normal new Flutter project** → Bloc or Riverpod. Redux's overhead isn't worth it." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Ported React apps** — companies moving from React Native to Flutter often keep Redux mental model.\n- **Enterprise apps** with strict audit requirements.\n- **Financial / healthcare software** where predictable state matters.\n- **Educational purposes** — Redux's clarity makes it a great teaching tool for one-way data flow.\n- **New Flutter apps** — rarely Redux; almost always Bloc or Riverpod instead." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`combineReducers([...])`** — split reducers by feature.\n- **`middleware`** — thunks, sagas, logging, crash reporting.\n- **`LoggingMiddleware`** — audit-trail logger for every action.\n- **Redux DevTools** — Chrome extension for time-travel debugging (works via `redux_dev_tools` in Flutter).\n- **`Store.onChange`** stream — subscribe programmatically outside widgets.\n- **`selector: (state) => state.slice`** — pure projection for `StoreConnector`.\n- **`distinct: true`** — skip rebuilds when the projected VM is `==`.\n- **`redux_saga`** — Dart port of the JS saga library; generator-based long-running effects.\n- **Freezed for state** — sealed classes + `copyWith` + generated equality.\n- **Migration to Bloc** — usually 1:1: Action → Event, Reducer → Bloc handler, Middleware → async in handler." }
   ],
   "flashcards": [
-    { "front": "Redux's three principles?", "back": "Single source of truth, read-only state, changes via pure reducers." },
-    { "front": "What must a reducer be?", "back": "Pure — (state, action) → new state, no side effects or mutation." },
-    { "front": "Where do side effects go?", "back": "In middleware (thunks/epics), not reducers." }
+    { "front": "Three Redux principles?", "back": "Single source of truth, state is read-only, changes via pure reducers." },
+    { "front": "Reducer signature?", "back": "(state, action) => newState. Pure. No side effects." },
+    { "front": "Async in Redux?", "back": "Middleware — thunks (function-actions) or sagas (generator-based)." },
+    { "front": "Widget subscribes via?", "back": "StoreConnector<S, VM> with converter + optional distinct:true." },
+    { "front": "Modern Flutter equivalent?", "back": "Bloc — same unidirectional flow, less ceremony." },
+    { "front": "When Redux in Flutter?", "back": "Rarely — usually only when porting a React app or with strict audit needs." }
   ],
   "quiz": [
-    { "q": "Redux state changes only via…", "options": ["Direct mutation", "Dispatching actions to pure reducers", "setState", "Global variables"], "answer": 1, "explain": "Read-only state changes through dispatched actions + reducers." },
-    { "q": "A reducer must be…", "options": ["Async", "Pure", "A widget", "A Stream"], "answer": 1, "explain": "Reducers are pure functions; side effects go to middleware." },
-    { "q": "Async/side effects in Redux live in…", "options": ["Reducers", "Middleware", "The store", "Actions"], "answer": 1, "explain": "Middleware handles async and side effects." }
+    { "q": "Reducers must be…", "options": ["Async", "Pure — no side effects", "Global", "Widgets"], "answer": 1, "explain": "Same input → same output." },
+    { "q": "Async in Redux via…", "options": ["Reducers", "Middleware (thunks/sagas)", "Widgets", "InheritedWidget"], "answer": 1, "explain": "Reducers stay pure." },
+    { "q": "Widget subscribes via…", "options": ["Provider.of", "StoreConnector<S, VM>", "setState", "GlobalKey"], "answer": 1, "explain": "flutter_redux widget." },
+    { "q": "Modern Flutter alternative that's much less ceremonial?", "options": ["setState", "Bloc / Riverpod", "GetX", "Reflection"], "answer": 1, "explain": "Same idea; better ergonomics." },
+    { "q": "Splitting reducers by feature?", "options": ["Impossible", "combineReducers([...])", "Store nesting", "Bloc"], "answer": 1, "explain": "Redux composition API." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Counter with a store, action and reducer." },
-    { "level": "Medium", "text": "Add async data loading via middleware (thunk)." },
-    { "level": "Hard", "text": "Combine reducers for a multi-feature state tree." },
-    { "level": "Expert", "text": "Implement time-travel debugging by replaying actions." }
+    { "level": "Easy", "text": "Counter Redux: Increment/Decrement/Reset actions + reducer." },
+    { "level": "Medium", "text": "Split store: counter + theme + user; combineReducers." },
+    { "level": "Medium", "text": "ThunkAction to fetch a user; dispatch Loading/Loaded/Error." },
+    { "level": "Hard", "text": "LoggingMiddleware that prints every action." },
+    { "level": "Hard", "text": "Use Freezed for AppState + copyWith in reducers." },
+    { "level": "Expert", "text": "Migrate a small Redux screen to Bloc; measure LOC + subjective clarity." }
   ],
   "interviewQuestions": [
-    "Explain the Redux data flow.",
-    "What are the three Redux principles?",
-    "Why must reducers be pure?",
-    "Where do side effects go?",
-    "When is Redux worth its boilerplate?"
+    "What is Redux and where does it come from?",
+    "What are the three principles of Redux?",
+    "What's a reducer?",
+    "How do you handle async in Redux?",
+    "Redux vs Bloc — how do they compare?",
+    "When would you pick Redux in Flutter today?"
   ],
   "references": [
-    { "label": "flutter_redux", "url": "https://pub.dev/packages/flutter_redux" }
+    { "label": "flutter_redux on pub.dev", "url": "https://pub.dev/packages/flutter_redux" },
+    { "label": "Redux (JS) principles — still the best explainer", "url": "https://redux.js.org/understanding/thinking-in-redux/three-principles" }
   ]
 }
