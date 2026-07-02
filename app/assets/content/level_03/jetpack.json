@@ -2,51 +2,108 @@
   "id": "android.jetpack",
   "levelId": 3,
   "title": "Jetpack Components",
-  "xp": 50,
-  "estimatedMinutes": 30,
+  "xp": 45,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Explain what Jetpack is and its main libraries",
-    "Use ViewModel + LiveData/Flow for lifecycle-safe state",
-    "Describe Jetpack Compose's declarative model"
+    "Understand Jetpack via a real-life analogy",
+    "Know the four Jetpack pillars: Foundation, Architecture, Behavior, UI",
+    "Master ViewModel + LiveData/StateFlow + Lifecycle-aware components",
+    "Use Navigation, Paging, Room, WorkManager confidently",
+    "Answer Jetpack interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Android Jetpack is a suite of libraries that handle boilerplate and follow best practices: lifecycle-aware components, navigation, persistence, background work, and the modern Compose UI toolkit." },
-    { "type": "table", "headers": ["Library", "Solves"], "rows": [
-      ["ViewModel", "Hold UI state across config changes"],
-      ["LiveData / Flow", "Lifecycle-aware observable data"],
-      ["Lifecycle", "React to lifecycle safely"],
-      ["Navigation", "Single-activity in-app navigation"],
-      ["Room", "SQLite with compile-time checks"],
-      ["Compose", "Declarative UI toolkit"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of a big-box hardware store (Home Depot, Bunnings) for Android developers.**\n\n- Before Jetpack (2018), Android was a workshop where you built your own everything: your own state-holder that survived rotation, your own hand-rolled SQLite wrapper, your own back-stack manager. Every team's kitchen was a bit different. Bugs were rampant.\n- **Jetpack is the hardware store.** Google went to every serious Android team and said 'what's the pre-built solution that most of you keep re-inventing?' Then they put those solutions on the shelves: **Room** (SQLite done right), **ViewModel** (rotation-proof state), **LiveData / StateFlow** (observable state), **Navigation** (nav graphs + back-stack), **Paging** (endless lists), **WorkManager** (guaranteed background work), **Hilt** (dependency injection), **Compose** (modern UI).\n- Everything comes with an aisle number (`androidx.<name>`), quality control (Google-maintained, tested), and works with the rest of the store (they compose).\n\n**Jetpack replaced the messy 2010s Android era with a clean, documented, opinionated toolkit.** Modern Android job interviews assume you use Jetpack — asking 'how do you survive rotation?' expects 'ViewModel' as the first word." },
+    { "type": "callout", "variant": "definition", "markdown": "**Android Jetpack** is a suite of Google-maintained libraries (`androidx.*`), tools, and guidance that helps you follow best practices. Launched at Google I/O 2018, it consolidated the fragmented Android Support Library era into one coherent umbrella with **four categories**: Foundation, Architecture, Behavior, and UI." },
+    { "type": "theory", "markdown": "## The four Jetpack pillars" },
+    { "type": "table", "headers": ["Pillar", "What it covers", "Key libraries"], "rows": [
+      ["**Foundation**", "Backwards compatibility and testing", "AppCompat, Android KTX, Multidex, Test"],
+      ["**Architecture**", "Robust app structure & data flow", "**ViewModel, LiveData, Lifecycle**, Room, Navigation, Paging, WorkManager, DataStore, Hilt"],
+      ["**Behavior**", "Interaction with system services", "Permissions, Notifications, Sharing, Media, Camera"],
+      ["**UI**", "The visible layer", "**Compose**, Fragment, Animation, Emoji, Layout"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "**ViewModel** survives configuration changes (rotation), so UI state isn't lost. It exposes state via LiveData/StateFlow that the UI observes — the backbone of MVVM on Android." },
-    { "type": "callout", "variant": "note", "markdown": "Jetpack Compose replaces XML layouts with composable functions: UI is a function of state. When state changes, Compose recomposes only what changed." },
-    { "type": "callout", "variant": "tip", "markdown": "Adopt the recommended architecture: UI → ViewModel → Repository → data sources, with unidirectional data flow. Jetpack libraries are designed to snap together this way." }
+    { "type": "callout", "variant": "interview", "markdown": "**The most-interviewed Jetpack combination:** ViewModel + StateFlow (or LiveData) + Repository + Room + Coroutines. If you can explain that stack cleanly — how data flows from Room through a repository to a ViewModel and out to the UI as observable state — you have the modern Android answer to about 40% of Android interview questions." },
+    { "type": "theory", "markdown": "## The Architecture components deep-dive" },
+    { "type": "table", "headers": ["Component", "Purpose", "Killer property"], "rows": [
+      ["**ViewModel**", "Hold UI state & business logic", "Survives config changes; scoped to Activity/Fragment/NavGraph"],
+      ["**LiveData**", "Lifecycle-aware observable", "Only emits to STARTED/RESUMED owners; retired in favor of StateFlow in new code"],
+      ["**StateFlow / SharedFlow**", "Coroutine-based observable state", "Cold/hot flows, backpressure-aware, works with `collectAsState()` in Compose"],
+      ["**Lifecycle**", "Observe an Activity/Fragment's state", "Underpins the whole architecture — every -aware component observes it"],
+      ["**Navigation**", "Declarative nav graph", "Type-safe args, back-stack, deep-linking, multi-tab back-stacks"],
+      ["**Paging 3**", "Load & display large lists", "Handles pagination, network+DB, retries, placeholders"],
+      ["**Room**", "SQLite ORM", "Compile-time SQL validation; Flow/LiveData return types"],
+      ["**WorkManager**", "Guaranteed background work", "Constraints (network, charging), retries, survives reboot"],
+      ["**DataStore**", "Async KV / typed data", "Coroutine-native replacement for SharedPreferences"],
+      ["**Hilt**", "Dependency injection", "Dagger simplified for Android's lifecycles"]
+    ]},
+    { "type": "theory", "markdown": "## The canonical Jetpack sample — ViewModel + StateFlow + Repository" },
+    { "type": "code", "language": "kotlin", "code": "// File: HomeViewModel.kt — the modern Android state pattern\nimport androidx.lifecycle.ViewModel\nimport androidx.lifecycle.viewModelScope\nimport kotlinx.coroutines.flow.*\nimport kotlinx.coroutines.launch\n\n// 1. Repository — the SINGLE source of truth for User data. Combines net + DB.\nclass UserRepository(\n  private val dao: UserDao,          // Room DAO\n  private val api: UserApi,          // Retrofit\n) {\n  // Room DAOs can return a Flow — emits new data whenever the table changes\n  fun observeUsers(): Flow<List<User>> = dao.observeUsers()\n\n  suspend fun refresh() {\n    val fresh = api.fetchUsers()      // network on IO by default\n    dao.upsertAll(fresh)              // Flow above will re-emit\n  }\n}\n\n// 2. UI state — a data class the UI consumes as one unit\ndata class HomeUi(\n  val users: List<User> = emptyList(),\n  val loading: Boolean = false,\n  val error: String? = null,\n)\n\n// 3. ViewModel — survives rotation; state exposed as StateFlow\nclass HomeViewModel(private val repo: UserRepository) : ViewModel() {\n  private val loading = MutableStateFlow(false)\n  private val error   = MutableStateFlow<String?>(null)\n\n  val ui: StateFlow<HomeUi> = combine(\n    repo.observeUsers(),   // Flow<List<User>>\n    loading,\n    error,\n  ) { users, isLoading, err -> HomeUi(users, isLoading, err) }\n    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUi(loading = true))\n\n  fun refresh() {\n    viewModelScope.launch {\n      loading.value = true\n      error.value = null\n      try { repo.refresh() } catch (e: Exception) { error.value = e.message }\n      loading.value = false\n    }\n  }\n}\n\n// 4. Consuming from a Fragment — modern Flow collection\n// override fun onViewCreated(view: View, savedInstanceState: Bundle?) {\n//   viewLifecycleOwner.lifecycleScope.launch {\n//     repeatOnLifecycle(Lifecycle.State.STARTED) {\n//       vm.ui.collect { state ->\n//         binding.progress.isVisible = state.loading\n//         binding.error.isVisible = state.error != null\n//         binding.error.text = state.error\n//         adapter.submitList(state.users)\n//       }\n//     }\n//   }\n// }\n\n// This one screen touches: ViewModel, viewModelScope, Coroutines, Flow, StateFlow,\n// Room (via Flow-returning DAO), Retrofit, Hilt (would inject the repository),\n// Lifecycle-aware collection with repeatOnLifecycle. All Jetpack." },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Instantiating a ViewModel with `ViewModel()`.** Direct construction creates a new instance every rotation — losing all state. Fix: use `by viewModels()` (Fragment/Activity) or `by activityViewModels()` (shared). These use the correct `ViewModelProvider` internally." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Collecting a StateFlow with `launch { flow.collect { ... } }` in a Fragment.** This survives past `onDestroyView`, wasting work and possibly crashing. Fix: wrap with `repeatOnLifecycle(STARTED)` so collection pauses when the view isn't visible." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Storing a Context or View reference in a ViewModel.** ViewModel outlives the Activity; holding its Context leaks the Activity. Use `AndroidViewModel(app)` if you truly need an Application context." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Using LiveData for cold data streams.** LiveData is designed for state, not events (its 'last value' replay behavior is wrong for one-shot events). Modern replacements: `StateFlow` for state, `SharedFlow` for events, or SingleLiveEvent wrapper." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Skipping the Repository layer.** ViewModel talking directly to Retrofit and Room mixes concerns and makes testing painful. A Repository owns the merge policy (network + cache) and gives the ViewModel one clean API." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Follow the recommended architecture:** UI → ViewModel → Repository → Data Sources (Room / Retrofit). One direction of data flow." },
+    { "type": "callout", "variant": "best", "markdown": "**2. UI state is one data class.** Emit a single `HomeUi` from ViewModel — not five separate LiveDatas. Reduces re-render churn and makes the UI a pure function of state." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Use `viewModelScope` and `lifecycleScope` for coroutines.** They auto-cancel on VM/lifecycle destruction — no manual job management needed." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Use `repeatOnLifecycle(STARTED)` for Flow collection in Fragments.** Pauses when hidden; resumes when visible; cleans up on destroy." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Inject dependencies with Hilt.** Google's opinionated Dagger for Android; less boilerplate, lifecycle-aware scopes." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Prefer StateFlow / SharedFlow to LiveData in new code.** Better coroutine integration, richer operators, works identically well in Compose." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — ViewModel counter.** ViewModel with a `count: StateFlow<Int>`. Fragment observes and displays. Rotate — count survives.\n\n**Why:** Sanity check the whole ViewModel + StateFlow flow." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Room + Flow + ViewModel.** Room DB with User entity; DAO returns `Flow<List<User>>`; ViewModel exposes it; Fragment consumes.\n\n**Why:** Full modern data-flow pipeline." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Navigation graph.** Two fragments, typed args via Safe Args, back button works. Add a deep link.\n\n**Why:** Real navigation patterns." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Paging 3 list.** Load 10K users from an API into a paginated RecyclerView; show placeholders.\n\n**Why:** Real production lists use Paging." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Full architecture.** UI + ViewModel + Repository + Room + Retrofit, wired with Hilt, with unit tests for the ViewModel using a fake Repository.\n\n**Why:** Interview reveal — this is the app you can talk about in every senior interview." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is Android Jetpack?**\n\n**A:** Jetpack is Google's opinionated suite of libraries, tools, and guidance for building modern Android apps. Launched at Google I/O 2018, it consolidated the fragmented Android Support Library era into one umbrella with four categories: **Foundation** (backwards compatibility, testing), **Architecture** (ViewModel, LiveData, Room, WorkManager, Navigation, Hilt), **Behavior** (permissions, notifications, sharing), **UI** (Compose, Fragment, animation). Libraries live under the `androidx.*` package namespace. Jetpack replaced the '2010s wild-west' era where every team hand-rolled state management, DB wrappers, and background workers, giving Android a coherent, tested, documented toolkit. Modern interviews assume Jetpack fluency." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What is a ViewModel and what problem does it solve?**\n\n**A:** A ViewModel is a class that holds UI state and business logic, scoped to an Activity, Fragment, or NavGraph. Its killer property: it **survives configuration changes** (rotation, dark mode, locale) that would normally destroy the Activity. So the user rotates the phone → the Activity is destroyed and recreated → the new Activity gets the SAME ViewModel instance → all state is preserved. Before ViewModel, we hacked this with `onSaveInstanceState` bundles (limited size) or `Fragment.setRetainInstance(true)` (fragile). ViewModel + coroutines + `viewModelScope` also handles cancellation cleanly — the scope is cancelled when the ViewModel is finally destroyed. To also survive process death, wrap with `SavedStateHandle`." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: LiveData vs StateFlow — which to use?**\n\n**A:** **LiveData** (Jetpack, 2017) — lifecycle-aware observable holding a single value. Auto-pauses when the observer is not STARTED/RESUMED, no leak worries. Easy to use, main-thread only, replay-based semantics. **StateFlow** (Kotlin Coroutines, 2020) — coroutine-native observable, part of Kotlin Flow. Richer operators (`map`, `combine`, `debounce`), thread-flexible, better testability. **Recommendation for new code:** StateFlow (or SharedFlow for events). It composes cleanly with Compose (`collectAsState()`), other Flow-returning APIs (Room, DataStore), and coroutines. LiveData is fine to keep in existing codebases but Google's samples increasingly use Flow. **Key gotcha:** collect StateFlow with `repeatOnLifecycle(STARTED)` in Fragments — the equivalent of LiveData's automatic lifecycle awareness." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What is the recommended architecture (Google's official)?**\n\n**A:** A three-layer, one-way flow:\n- **UI layer** — Activities/Fragments/Compose observe state from a ViewModel and emit user events back. Dumb; renders from state.\n- **Domain layer** *(optional)* — use-cases / interactors that hold business logic when it doesn't fit cleanly in the data or UI layer.\n- **Data layer** — Repositories are the single source of truth for a data type. Each Repository combines one or more DataSources (Room, Retrofit, DataStore, in-memory cache). It exposes reactive streams (Flow / LiveData / suspend fun).\n\n**Data flows down (Repo → VM → UI), events flow up (UI → VM → Repo).** One-way. This makes state predictable, testable, and easy to reason about. It's essentially MVVM/MVI in Android form." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What's `viewModelScope` and how does it work?**\n\n**A:** `viewModelScope` is a `CoroutineScope` extension property on `ViewModel`. Any coroutine launched with `viewModelScope.launch { ... }` runs on `Dispatchers.Main.immediate` by default and is automatically **cancelled** when the ViewModel is cleared (i.e. when its owner is finally destroyed, not on rotation). This eliminates the classic bug: launching a coroutine that finishes AFTER the Activity dies, updating a dead view. **Pair with `lifecycleScope`** (on Activity/Fragment) for UI-observation coroutines that must stop when the UI is destroyed. Rule of thumb: business logic → `viewModelScope`; UI observation → `lifecycleScope` + `repeatOnLifecycle`." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: When would you use WorkManager vs a Service vs a Coroutine?**\n\n**A:** **Coroutine (viewModelScope/lifecycleScope)** — short work tied to a UI: network fetch, DB read, animation. Cancels with the UI. **Service (foreground)** — user-visible ongoing work: music playback, active tracking, an in-progress upload with a notification. **WorkManager** — deferrable, guaranteed background work that must survive process death and app restarts: uploading a log file when Wi-Fi is available, nightly data sync, exporting to CSV. WorkManager handles constraints (network, charging), retries, backoff, and survives reboots. Since Android 8, background Services are heavily restricted — WorkManager is the modern replacement for most of them." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What are Jetpack's `lifecycle-aware` components?**\n\n**A:** Any component that observes the lifecycle of a `LifecycleOwner` (Activity/Fragment) and reacts automatically. Instead of you calling `component.onStart()` / `onStop()`, the component observes and reacts. Examples: **LiveData** — stops emitting to observers below STARTED; **`lifecycleScope`** — cancels coroutines on DESTROY; **`repeatOnLifecycle(STARTED)`** — restarts a Flow collection on each STARTED transition; **Camera / Location** components — automatically bind/unbind. **How to build one:** implement `DefaultLifecycleObserver` and register with a `Lifecycle.addObserver(this)`. This pattern eliminates a huge class of 'forgot to cleanup' bugs." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q8: What is the Navigation component and why use it?**\n\n**A:** Jetpack Navigation replaces manual `FragmentTransaction` code with a **declarative nav graph** (XML or Kotlin DSL) that lists every destination and every action (edge) between them. Benefits: (1) **Safe Args** — typed argument classes generated from the graph, no more string-keyed extras. (2) **Automatic back-stack** management including `popUpTo` and inclusive-pop semantics. (3) **Deep linking** declared in the graph with URI patterns. (4) Multi-back-stack support for bottom-nav apps. (5) Works with fragments AND Compose destinations (`androidx.navigation:navigation-compose`). Since 2021 it's the recommended way to structure any Activity + Fragments app." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every modern Android production app** uses at minimum: ViewModel, Lifecycle, and a Repository pattern.\n- **`androidx.compose`** — Jetpack Compose is now the recommended UI toolkit for new apps.\n- **Google's Now In Android app** — the canonical reference architecture using every Jetpack library.\n- **Play Store apps you've used** — Instagram, WhatsApp, Reddit, Signal all use various Jetpack libraries.\n- **Enterprise / MNC codebases** — TCS/Infosys/Accenture Android projects often gradually migrated to Jetpack architecture components; being able to lead that migration is a senior-level skill.\n- **Interview theme** — 'walk me through your app's architecture' — Jetpack is the vocabulary you use to answer." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`AndroidViewModel(application)`** — a ViewModel with a safe `Application` context.\n- **`SavedStateHandle`** — inject it into a ViewModel constructor; makes state survive process death (backed by the saved-instance bundle).\n- **`by viewModels { factory }`** — provide a custom `ViewModelProvider.Factory` when your ViewModel has constructor args.\n- **Hilt integration** — `@HiltViewModel` + constructor injection; Hilt provides the factory automatically.\n- **CompositionLocal in Compose** — Compose's equivalent of Lifecycle-aware dependency provision.\n- **`SharedFlow`** for events (non-replayed by default; use `MutableSharedFlow(extraBufferCapacity=1)` for one-shot events).\n- **`stateIn` operator** — turn a cold Flow into a hot StateFlow with a sharing policy (`WhileSubscribed`, `Lazily`, `Eagerly`).\n- **Testing** — Jetpack ships test artifacts: `androidx.arch.core:core-testing` for LiveData/InstantTaskExecutorRule, coroutine `TestScope`, Room in-memory DB for DAO tests." }
   ],
   "flashcards": [
-    { "front": "Why does ViewModel survive rotation?", "back": "It's scoped to the lifecycle owner and retained across configuration changes, preserving UI state." },
-    { "front": "What is Jetpack Compose's core idea?", "back": "UI = a function of state; composables recompose when their state changes." },
-    { "front": "Recommended Android architecture layers?", "back": "UI → ViewModel → Repository → data sources, with unidirectional data flow." }
+    { "front": "Four Jetpack pillars?", "back": "Foundation, Architecture, Behavior, UI." },
+    { "front": "ViewModel's killer property?", "back": "Survives config changes (rotation), scoped to Activity/Fragment/NavGraph." },
+    { "front": "LiveData vs StateFlow?", "back": "StateFlow is preferred in new code — coroutine-native, richer, Compose-friendly. LiveData is fine for existing code." },
+    { "front": "Recommended architecture?", "back": "UI → ViewModel → Repository → DataSource. One-way data flow." },
+    { "front": "How to collect Flow safely in a Fragment?", "back": "lifecycleScope.launch { repeatOnLifecycle(STARTED) { flow.collect(...) } }." },
+    { "front": "WorkManager use case?", "back": "Guaranteed deferrable background work with constraints (network, charging), surviving reboots." }
   ],
   "quiz": [
-    { "q": "ViewModel's main benefit is…", "options": ["Faster networking", "Surviving configuration changes with UI state", "Encrypting data", "Drawing pixels"], "answer": 1, "explain": "It retains state across rotation/recreation." },
-    { "q": "Jetpack Compose UI is…", "options": ["XML-based", "A function of state (declarative)", "Written in C++", "Server-rendered"], "answer": 1, "explain": "Composable functions describe UI for the current state." },
-    { "q": "Which Jetpack library handles in-app navigation?", "options": ["Room", "Navigation component", "WorkManager", "Hilt"], "answer": 1, "explain": "The Navigation component manages single-activity navigation." }
+    { "q": "ViewModel survives…", "options": ["Process death only", "Configuration changes", "Both — always", "Neither"], "answer": 1, "explain": "Config changes automatically; pair with SavedStateHandle for process death." },
+    { "q": "Modern preferred observable for state?", "options": ["LiveData", "StateFlow", "RxJava BehaviorSubject", "MutableList"], "answer": 1, "explain": "Coroutine-native, richer operators, Compose-friendly." },
+    { "q": "Collect a Flow safely in a Fragment with…", "options": ["Any launch", "repeatOnLifecycle(STARTED)", "onDestroyView", "GlobalScope.launch"], "answer": 1, "explain": "Ensures collection pauses when view is not visible." },
+    { "q": "Recommended architecture layers?", "options": ["UI + Repo", "UI + ViewModel + Repository + DataSource", "MVC only", "None"], "answer": 1, "explain": "One-way data flow, testable." },
+    { "q": "Deferrable guaranteed background work?", "options": ["Service", "AlarmManager", "WorkManager", "Thread"], "answer": 2, "explain": "WorkManager is the modern API for it." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Create a ViewModel exposing a counter via StateFlow and observe it." },
-    { "level": "Medium", "text": "Build a screen with the Navigation component and pass arguments." },
-    { "level": "Hard", "text": "Implement a small MVVM screen: UI → ViewModel → Repository." },
-    { "level": "Expert", "text": "Build the same screen in Compose with state hoisting and recomposition awareness." }
+    { "level": "Easy", "text": "Build a counter ViewModel exposing `StateFlow<Int>`, observed by a Fragment." },
+    { "level": "Easy", "text": "Add SavedStateHandle so the counter survives process death." },
+    { "level": "Medium", "text": "Wire Room DAO returning `Flow<List<User>>` → Repository → ViewModel → UI." },
+    { "level": "Medium", "text": "Set up Navigation with 2 fragments, Safe Args typed arguments, and a deep link." },
+    { "level": "Hard", "text": "Add Paging 3 to a list backed by a Retrofit endpoint." },
+    { "level": "Hard", "text": "Inject repositories with Hilt (`@HiltViewModel` + `@Inject`)." },
+    { "level": "Expert", "text": "Build the canonical Jetpack app: UI + VM + Repo + Room + Retrofit + Hilt + tests." }
   ],
   "interviewQuestions": [
     "What is Android Jetpack?",
-    "Why use a ViewModel? How does it survive rotation?",
-    "LiveData vs StateFlow?",
-    "What is Jetpack Compose and how does recomposition work?",
-    "Describe the recommended app architecture."
+    "What is a ViewModel and what problem does it solve?",
+    "LiveData vs StateFlow — which to use?",
+    "What is the recommended architecture (Google's official)?",
+    "What's viewModelScope and how does it work?",
+    "When would you use WorkManager vs a Service vs a Coroutine?",
+    "What are Jetpack's lifecycle-aware components?",
+    "What is the Navigation component and why use it?"
   ],
   "references": [
-    { "label": "Android — Jetpack", "url": "https://developer.android.com/jetpack" }
+    { "label": "Android Jetpack — overview", "url": "https://developer.android.com/jetpack" },
+    { "label": "Guide to app architecture", "url": "https://developer.android.com/topic/architecture" }
   ]
 }

@@ -1,50 +1,117 @@
 {
   "id": "android.coroutines",
   "levelId": 3,
-  "title": "Coroutines",
+  "title": "Coroutines & Flow",
   "xp": 50,
-  "estimatedMinutes": 30,
+  "estimatedMinutes": 45,
   "objectives": [
-    "Write async code with suspend functions",
-    "Use dispatchers and structured concurrency",
-    "Collect Flows safely on Android"
+    "Understand coroutines via a real-life analogy",
+    "Distinguish `suspend fun`, `launch`, `async`, and dispatchers",
+    "Master structured concurrency and cancellation",
+    "Use Flow, StateFlow, and SharedFlow correctly",
+    "Answer coroutine interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Kotlin coroutines are lightweight, suspendable computations for asynchronous code that reads sequentially. A suspend function can pause without blocking a thread." },
-    { "type": "code", "language": "kotlin", "code": "viewModelScope.launch {              // structured: tied to ViewModel\n  val user = withContext(Dispatchers.IO) { api.getUser() } // off main\n  _state.value = user                 // back on main automatically\n}" },
-    { "type": "table", "headers": ["Dispatcher", "Use for"], "rows": [
-      ["Main", "UI updates"],
-      ["IO", "Network / disk"],
-      ["Default", "CPU-bound work"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of a restaurant with a smart waiter.**\n\n- **The bad old way (threads / callbacks):** you order a pizza. The waiter walks to the kitchen and STANDS there, blocking, waiting for the pizza. Meanwhile, dozens of other diners can't order because there aren't enough waiters. Solution? Hire more waiters (threads). Threads are expensive — each one costs ~1MB of memory and CPU time to schedule. A busy restaurant runs out.\n- **The coroutine way:** when the waiter drops off your order, they clip a colored slip to the ticket saying 'come back to *this* table when the pizza is ready'. Then the SAME waiter walks off to take other orders. When the pizza is ready, ANY free waiter picks up your slip, delivers your pizza, and continues where the first waiter left off. The waiter never blocks — they SUSPEND — waiting for the pizza is 'someone else's problem'.\n- **`suspend fun`** = a function that can pause without blocking a waiter/thread. **`launch`** = starting a task (the ticket in the kitchen). **`async/await`** = a task you'll come back to for the result. **Dispatchers** = which pool of waiters (Main = the one talking to customers; IO = the ones going to storage; Default = the ones doing CPU work).\n\n**Why this matters on Android:** the UI thread is your one and only 'customer-facing waiter'. If it blocks (waits for network, DB, disk), the screen freezes and the user leaves. Coroutines let you write code that LOOKS blocking (`val user = api.fetch()`) but actually doesn't — the coroutine suspends, the UI thread stays free, and when the network responds, the coroutine resumes right where it left off." },
+    { "type": "callout", "variant": "definition", "markdown": "**Coroutines** are a Kotlin language feature (with runtime library `kotlinx.coroutines`) for writing asynchronous, non-blocking code that reads like sequential code. A **coroutine** is a suspendable computation — it can pause (`suspend`) at defined points and resume later on the same or a different thread. **Structured concurrency** ensures parent scopes wait for their children and cancellation propagates automatically." },
+    { "type": "theory", "markdown": "## The core vocabulary" },
+    { "type": "table", "headers": ["Term", "What it is"], "rows": [
+      ["**`suspend fun`**", "A function that CAN pause without blocking. Only callable from other suspend fns or a coroutine builder."],
+      ["**`launch { ... }`**", "Fire-and-forget coroutine. Returns a `Job`."],
+      ["**`async { ... }.await()`**", "Coroutine that returns a value. Use when you want the result."],
+      ["**`CoroutineScope`**", "A container. Any coroutine launched in it is 'child' of the scope; cancelling the scope cancels all children."],
+      ["**Dispatcher**", "The thread pool a coroutine runs on: `Dispatchers.Main`, `IO`, `Default`, `Unconfined`."],
+      ["**`viewModelScope`**", "A scope tied to a ViewModel's lifetime. Auto-cancels on `onCleared`."],
+      ["**`lifecycleScope`**", "A scope tied to a Lifecycle owner (Activity/Fragment). Auto-cancels on `onDestroy`."],
+      ["**`Flow<T>`**", "A cold, coroutine-based stream. Emits multiple values over time."],
+      ["**`StateFlow<T>`**", "Hot, always-has-a-value observable. Like an observable variable."],
+      ["**`SharedFlow<T>`**", "Hot, broadcast-style; for events."]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "**Structured concurrency**: coroutines launched in a scope (viewModelScope, lifecycleScope) are automatically cancelled when the scope ends — no leaked work after a screen closes. This is a key advantage over raw callbacks/threads." },
-    { "type": "callout", "variant": "mistake", "markdown": "Doing blocking I/O on Dispatchers.Main (freezes the UI), or collecting a Flow without a lifecycle-aware collector (repeatOnLifecycle), which wastes work while the UI is in the background." },
-    { "type": "callout", "variant": "tip", "markdown": "Flow is the coroutine-native reactive stream. Use StateFlow for UI state and collect it with repeatOnLifecycle(STARTED) so collection pauses when the screen isn't visible." }
+    { "type": "theory", "markdown": "## Dispatchers — which pool of waiters" },
+    { "type": "table", "headers": ["Dispatcher", "Use for", "How many threads"], "rows": [
+      ["`Dispatchers.Main`", "UI updates, touching Views/LiveData", "One (the UI thread)"],
+      ["`Dispatchers.IO`", "Network, disk, DB, file I/O — anything that BLOCKS on I/O", "64+ (grows on demand)"],
+      ["`Dispatchers.Default`", "CPU-heavy work: parsing, sorting, image resizing", "= number of CPU cores"],
+      ["`Dispatchers.Unconfined`", "Advanced/testing — not for app code", "Whatever calls it"],
+      ["`Dispatchers.Main.immediate`", "Same as Main but skips a dispatch if you're already there", "One"]
+    ]},
+    { "type": "code", "language": "kotlin", "code": "// Move to a dispatcher for blocking work, then come back to Main for UI\nviewModelScope.launch {\n  val users = withContext(Dispatchers.IO) { api.fetchUsers() }   // network on IO\n  ui.value = users                                                 // back on Main automatically\n}\n\n// Room and Retrofit ALREADY handle this — they run their internal work\n// on IO by themselves. So you rarely need withContext() explicitly." },
+    { "type": "theory", "markdown": "## Structured concurrency — the killer feature" },
+    { "type": "code", "language": "kotlin", "code": "// Without structured concurrency (bad old thread days):\n// You launch a background task. You forget to cancel it. It runs after\n// the Activity dies. It touches views. It NPE's. You lose sleep.\n\n// With structured concurrency:\nviewModelScope.launch {          // parent scope\n  val a = async { api.fetchA() } // child 1\n  val b = async { api.fetchB() } // child 2\n  ui.value = merge(a.await(), b.await())\n}\n// If ANY child throws → the parent is cancelled → all siblings cancel.\n// If the ViewModel is destroyed → viewModelScope cancels → both async's cancel.\n// You cannot LEAK a coroutine. The tree of coroutines is guaranteed to unwind together." },
+    { "type": "theory", "markdown": "## Flow — a stream of values" },
+    { "type": "code", "language": "kotlin", "code": "// Cold flow — nothing runs until you collect\nfun tick(): Flow<Int> = flow {\n  var i = 0\n  while (true) { emit(i++); delay(1000) }\n}\n\n// Operators — transform / combine / filter\nfun search(query: Flow<String>, api: Api): Flow<List<Result>> =\n  query\n    .debounce(300)                       // wait for typing to pause\n    .distinctUntilChanged()              // skip duplicates\n    .filter { it.length >= 2 }\n    .flatMapLatest { api.search(it) }   // cancel previous search when new one arrives\n    .flowOn(Dispatchers.IO)              // upstream runs on IO; collectors get results on collector's dispatcher\n\n// Collect in a Fragment safely\nviewLifecycleOwner.lifecycleScope.launch {\n  repeatOnLifecycle(Lifecycle.State.STARTED) {\n    search(queryFlow, api).collect { results -> adapter.submit(results) }\n  }\n}" },
+    { "type": "theory", "markdown": "## StateFlow & SharedFlow — hot flows" },
+    { "type": "code", "language": "kotlin", "code": "// StateFlow — one always-present value; perfect for UI state\nprivate val _ui = MutableStateFlow(HomeUi(loading = true))\nval ui: StateFlow<HomeUi> = _ui.asStateFlow()\n\n_ui.value = _ui.value.copy(users = list, loading = false)\n\n// SharedFlow — broadcast; perfect for one-shot events (nav, snackbar)\nprivate val _events = MutableSharedFlow<Event>(extraBufferCapacity = 1)\nval events: SharedFlow<Event> = _events.asSharedFlow()\n\nfun onSaveClicked() {\n  viewModelScope.launch { _events.emit(Event.NavigateBack) }\n}\n\n// Rule of thumb:\n//   StateFlow = state that's ALWAYS current (form fields, list, loading flag)\n//   SharedFlow = fire-once events (navigate, show toast) — no replay by default" },
+    { "type": "theory", "markdown": "## Complete sample program — real-world coroutine flow" },
+    { "type": "code", "language": "kotlin", "code": "// File: SearchViewModel.kt\nclass SearchViewModel(private val api: Api) : ViewModel() {\n\n  private val query = MutableStateFlow(\"\")\n\n  // Reactive: as the user types, results update\n  val results: StateFlow<List<Result>> = query\n    .debounce(300)\n    .distinctUntilChanged()\n    .filter { it.length >= 2 }\n    .flatMapLatest { q ->\n      // Cold flow: emits Loading, then Data (or Error)\n      flow {\n        try { emit(api.search(q)) }\n        catch (e: Exception) { emit(emptyList()) }\n      }\n    }\n    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())\n\n  fun onQuery(q: String) { query.value = q }\n}\n\n// Fragment side\nviewLifecycleOwner.lifecycleScope.launch {\n  repeatOnLifecycle(Lifecycle.State.STARTED) {\n    launch { vm.results.collect { adapter.submitList(it) } }\n  }\n}\n\n// What this achieves:\n// - Debounces typing (300ms of quiet before firing a request)\n// - Skips duplicates\n// - Cancels the previous search when the user types a new letter (flatMapLatest)\n// - Multiplexes to any Fragment that observes\n// - Cancels EVERYTHING if the ViewModel is destroyed\n// All in ~10 lines. Try writing this with callbacks and threads." },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: `GlobalScope.launch`.** Ignores structured concurrency; leaks; runs after the UI is gone. Fix: always use `viewModelScope` or `lifecycleScope`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: `runBlocking` in production Android code.** Blocks the current thread — if it's the UI thread, that's an ANR. Fix: `runBlocking` is for `main()` in unit tests only. Everywhere else, use `launch` from a scope." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Ignoring cancellation.** A coroutine can be cancelled at any suspension point. Long CPU-bound loops without a suspension point ignore cancellation. Fix: call `yield()` or `ensureActive()` periodically, or use `isActive`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Collecting a Flow with plain `launch { flow.collect { ... } }` in a Fragment.** Runs while the view is gone. Fix: wrap with `repeatOnLifecycle(STARTED)`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Storing a `Job` and never joining/awaiting it.** If you `launch` and the parent scope has to wait synchronously for the result, use `async().await()` or don't launch at all — just call the `suspend fun`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Catching `CancellationException`.** It's how coroutines propagate cancellation. Swallowing it breaks structured concurrency. Fix: never `catch (e: Exception)` without re-throwing `CancellationException`, or use `catch (e: Exception) { if (e is CancellationException) throw e; ... }`, or better: `try { ... } catch (e: IOException) { ... }` — catch specific exceptions." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Always launch from a lifecycle-tied scope.** `viewModelScope`, `lifecycleScope`, or a custom scope with a well-defined lifecycle." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Let libraries pick their dispatcher.** Retrofit + Room already run on IO under the hood. Only add `withContext(Dispatchers.IO)` around code YOU wrote that's blocking." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Use `StateFlow` for state, `SharedFlow` for events.** Don't force one shape to do both." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Collect Flows with `repeatOnLifecycle(STARTED)` in Fragments.** Or `collectAsStateWithLifecycle()` in Compose." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Prefer `async { }` + `await()` for parallel work you need results from.** Don't chain `launch` + shared mutable variables." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Use `SupervisorJob` when child failures shouldn't cancel siblings.** Classic case: ViewModel with multiple independent flows — use `SupervisorJob` so one Flow's error doesn't cancel the others." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Convert a callback to `suspend fun`.** Wrap a `Retrofit.Callback` in `suspendCancellableCoroutine`, or use Retrofit's built-in suspend support.\n\n**Why:** Muscle memory for coroutine-ifying old APIs." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Parallel fetch.** Two independent APIs; fetch in parallel with `async`; render combined result.\n\n**Why:** Feel structured concurrency's power." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Debounced search.** EditText → StateFlow → debounce → search → results.\n\n**Why:** Real-world Flow chain." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Cancellation drill.** Launch a heavy CPU loop; cancel it from another coroutine; add `yield()` and confirm it stops promptly.\n\n**Why:** Cancellation is where bugs hide." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Retry with backoff.** Write a Flow operator that retries with exponential backoff on IOException. Combine with `stateIn`.\n\n**Why:** Production-grade resilience." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is a coroutine?**\n\n**A:** A coroutine is a suspendable computation — code that can pause at defined points (`suspend fun` calls) without blocking its underlying thread, and resume later. Coroutines are much cheaper than threads: you can have millions of coroutines on a small thread pool, because 'suspended' means the thread is free to do other work while the coroutine waits. The Kotlin compiler + `kotlinx.coroutines` library implement this via **continuation-passing style** — each suspension point creates a state machine, and the coroutine's state is persisted on the heap while it's waiting. From your code's perspective, you write `val user = api.fetchUser()` — looks blocking, isn't." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What is a `suspend fun`?**\n\n**A:** A function marked `suspend` — meaning it CAN pause without blocking. Only callable from another `suspend fun` or from inside a coroutine builder (`launch`, `async`, `runBlocking`). Under the hood, the compiler transforms `suspend fun getUser(id): User` into a function that takes a hidden `Continuation<User>` parameter and uses it to resume when the async work completes. You write sequential-looking code; the compiler generates the state machine. `suspend` is contagious — any function that calls a suspend fun must also be `suspend`, all the way up to the coroutine builder." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What are coroutine scopes and dispatchers?**\n\n**A:** **Scope** = a container for coroutines with a defined lifetime. Every coroutine belongs to exactly one scope. Cancelling the scope cancels all its coroutines. Android provides `viewModelScope` (auto-cancelled on `onCleared`) and `lifecycleScope` (auto-cancelled on `onDestroy`). **Dispatcher** = which thread(s) the coroutine's code runs on. `Dispatchers.Main` — UI thread; **`IO`** — background pool for blocking I/O; **`Default`** — CPU-core-sized pool for CPU work. Switch dispatchers with `withContext(Dispatchers.IO) { ... }`. **Together:** scope decides *lifetime*, dispatcher decides *where*." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What is structured concurrency?**\n\n**A:** The principle that **coroutines form a tree**, mirroring the code that launched them. A parent scope waits for its children to finish before completing, and cancelling the parent cancels every child. This solves the classic threading nightmare: forgotten background tasks running after the UI is gone. With structured concurrency: (1) You cannot 'leak' a coroutine — every one has an owner. (2) Cancellation propagates automatically — cancel the scope, the whole tree tears down. (3) Errors propagate too — if any child throws, the parent (and siblings, unless `SupervisorJob`) are cancelled. On Android, this pairs perfectly with lifecycle-scoped scopes: destroy the ViewModel → all its coroutines cancel." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: `launch` vs `async` — when to use which?**\n\n**A:** **`launch`** — fire-and-forget. Returns a `Job` you can `cancel` or `join`. Use for side-effect coroutines: 'save this record', 'update UI'. Doesn't return a value. **`async`** — returns a `Deferred<T>`. Use when you need the RESULT. Pair with `.await()`:\n```kotlin\nval a = async { fetchA() }   // starts immediately\nval b = async { fetchB() }   // starts in parallel\nval merged = merge(a.await(), b.await())\n```\n**Rule:** `launch` for 'do it and don't care about the return', `async` for 'do this in parallel with something else, then combine results'. Both respect structured concurrency." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What is a Flow?**\n\n**A:** A `Flow<T>` is a **cold, coroutine-based stream** that emits zero or more values over time and eventually completes (or fails). 'Cold' means the flow doesn't run until someone `collect`s it — like a function you have to call. Contrast with 'hot' streams like RxJava's Subject or Kotlin's StateFlow that always run. Flow is Kotlin's answer to RxJava, with much simpler mental model: it's just `suspend fun ... emit(x)`. Rich operator set: `map`, `filter`, `debounce`, `combine`, `flatMapLatest`, `retry`, `catch`, `flowOn`. **Killer combo:** Room DAOs return `Flow<List<T>>` — every table mutation re-emits, and your UI stays in sync automatically." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: `Flow` vs `StateFlow` vs `SharedFlow` — differences?**\n\n**A:** **`Flow`** — cold, replayable per collector, emits values on collection. Perfect for one-shot streams and reactive derivations. **`StateFlow`** — hot, always has one current value, replays it to new collectors, conflates rapid updates. Perfect for UI state (form values, list of items, loading flag). Modern replacement for LiveData. **`SharedFlow`** — hot, broadcast, configurable replay/buffer, doesn't hold state. Perfect for events (navigate, show snackbar) where you don't want a new subscriber to receive stale events. **Rule of thumb:** state → `StateFlow`; events → `SharedFlow`; reactive derivations → `Flow` (turn hot with `stateIn` when the UI needs a StateFlow)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q8: How do you collect a Flow safely on Android?**\n\n**A:** In a Fragment/Activity:\n```kotlin\nviewLifecycleOwner.lifecycleScope.launch {\n  repeatOnLifecycle(Lifecycle.State.STARTED) {\n    vm.state.collect { render(it) }\n  }\n}\n```\n`repeatOnLifecycle(STARTED)` starts collection when the view becomes STARTED and cancels it when it drops below STARTED (fragment hidden/destroyed) — restarting each time the view becomes visible again. This is the modern equivalent of LiveData's lifecycle awareness. In **Jetpack Compose**: `val state by vm.state.collectAsStateWithLifecycle()` — same behavior, one-liner. **What you SHOULDN'T do:** plain `launch { vm.state.collect { ... } }` — this keeps collecting while the view is destroyed, wasting work and potentially crashing." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every Retrofit call** — `suspend fun getUsers(): List<User>`. Retrofit runs on IO automatically.\n- **Every Room DAO** — `suspend fun`s or `Flow`-returning methods.\n- **`viewModelScope.launch { }`** — the daily driver for VM logic.\n- **Debounced search / typeahead** — `Flow.debounce().flatMapLatest {}`.\n- **Parallel API calls** — `async { }` fan-out then `awaitAll()`.\n- **WorkManager `Worker`** — `suspend fun doWork()` for background work.\n- **Firebase Kotlin extensions** — `.await()` on tasks returns a coroutine-friendly result.\n- **Camera X / MediaPlayer** — Kotlin extensions expose suspend APIs." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`SupervisorJob`** — child failure doesn't cancel siblings. Used inside `viewModelScope` by design.\n- **`CoroutineExceptionHandler`** — install on a scope to catch unhandled exceptions from `launch` (not `async`).\n- **`channelFlow`, `callbackFlow`** — build a Flow from a callback API.\n- **Backpressure via `buffer`, `conflate`, `collectLatest`** — control what to do when producer outpaces consumer.\n- **`Mutex` + `withLock`** — mutual exclusion inside a coroutine.\n- **Testing coroutines** — `TestScope` + `runTest {}` in `kotlinx-coroutines-test`; `MainDispatcherRule` sets a test dispatcher for `Dispatchers.Main`.\n- **`Dispatchers.setMain` / `resetMain`** — test hooks to control the Main dispatcher.\n- **`suspendCancellableCoroutine`** — bridge to any legacy callback API.\n- **`kotlinx-coroutines-android`** artifact — provides `Dispatchers.Main` for Android.\n- **`Flow` vs Reactive Streams** — Flow is Kotlin-native and simpler; RxJava is richer but heavier and callback-mental-model. Most new code uses Flow." }
   ],
   "flashcards": [
-    { "front": "What does suspend mean?", "back": "The function can pause and resume without blocking its thread." },
-    { "front": "What is structured concurrency?", "back": "Coroutines are bound to a scope and auto-cancelled when it ends, preventing leaks." },
-    { "front": "Which dispatcher for network calls?", "back": "Dispatchers.IO." }
+    { "front": "What's a coroutine?", "back": "Suspendable computation; pauses without blocking a thread." },
+    { "front": "`suspend fun` restriction?", "back": "Only callable from another suspend fn or a coroutine builder." },
+    { "front": "`launch` vs `async`?", "back": "launch = fire-and-forget; async returns Deferred<T> with `.await()`." },
+    { "front": "Structured concurrency?", "back": "Coroutines form a tree; cancel scope → all children cancel." },
+    { "front": "Safe Flow collection in Fragment?", "back": "lifecycleScope + repeatOnLifecycle(STARTED)." },
+    { "front": "State vs event observable?", "back": "StateFlow for state (has current value); SharedFlow for events (broadcast)." }
   ],
   "quiz": [
-    { "q": "A suspend function…", "options": ["Blocks its thread", "Can pause without blocking a thread", "Runs on the GPU", "Is synchronous only"], "answer": 1, "explain": "Suspension frees the thread instead of blocking it." },
-    { "q": "Network calls should run on…", "options": ["Dispatchers.Main", "Dispatchers.IO", "Dispatchers.Default", "No dispatcher"], "answer": 1, "explain": "IO is optimized for blocking I/O like network/disk." },
-    { "q": "Structured concurrency prevents…", "options": ["Fast code", "Leaked coroutines after a scope ends", "UI rendering", "Compilation"], "answer": 1, "explain": "Scoped coroutines are cancelled when the scope is destroyed." }
+    { "q": "Coroutines are cheaper than threads because…", "options": ["Compile to native", "Suspend without blocking the thread", "Skip GC", "Are static"], "answer": 1, "explain": "A suspended coroutine frees the thread." },
+    { "q": "Which dispatcher for network calls?", "options": ["Main", "IO", "Default", "Unconfined"], "answer": 1, "explain": "IO for blocking I/O; Retrofit uses it internally." },
+    { "q": "Fire-and-forget with a return value not needed?", "options": ["async", "launch", "runBlocking", "collect"], "answer": 1, "explain": "async is for values; launch for side effects." },
+    { "q": "Preferred way to collect Flow in a Fragment?", "options": ["GlobalScope.launch", "lifecycleScope + repeatOnLifecycle(STARTED)", "runBlocking", "Any dispatcher"], "answer": 1, "explain": "Auto-cancels on view destroy." },
+    { "q": "For events (nav, snackbar), use…", "options": ["StateFlow", "SharedFlow", "LiveData", "MutableList"], "answer": 1, "explain": "Broadcast, no replay by default." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Call a suspend function from viewModelScope and update state." },
-    { "level": "Medium", "text": "Run two network calls in parallel with async/await and combine them." },
-    { "level": "Hard", "text": "Expose a StateFlow and collect it with repeatOnLifecycle(STARTED)." },
-    { "level": "Expert", "text": "Build a debounced search using Flow operators (debounce, flatMapLatest)." }
+    { "level": "Easy", "text": "Call a `suspend fun` from `viewModelScope` and update state." },
+    { "level": "Easy", "text": "Move a blocking call off the Main thread with `withContext(Dispatchers.IO)`." },
+    { "level": "Medium", "text": "Fetch two APIs in parallel with `async` + `awaitAll`." },
+    { "level": "Medium", "text": "Debounced search: query Flow → debounce → distinctUntilChanged → API." },
+    { "level": "Hard", "text": "Expose UI state as `StateFlow` via `stateIn`; collect with `repeatOnLifecycle(STARTED)`." },
+    { "level": "Hard", "text": "Cancel a long CPU loop cleanly — add `yield()` to make it cooperative." },
+    { "level": "Expert", "text": "Write a Flow retry-with-exponential-backoff operator for IOException." }
   ],
   "interviewQuestions": [
-    "What are coroutines and suspend functions?",
-    "Explain dispatchers and when to use each.",
+    "What is a coroutine?",
+    "What is a suspend fun?",
+    "What are coroutine scopes and dispatchers?",
     "What is structured concurrency?",
-    "Flow vs LiveData vs StateFlow?",
+    "launch vs async — when to use which?",
+    "What is a Flow?",
+    "Flow vs StateFlow vs SharedFlow — differences?",
     "How do you collect a Flow safely on Android?"
   ],
   "references": [
-    { "label": "Kotlin Coroutines guide", "url": "https://kotlinlang.org/docs/coroutines-overview.html" }
+    { "label": "Coroutines on Android", "url": "https://developer.android.com/kotlin/coroutines" },
+    { "label": "Flow guide", "url": "https://kotlinlang.org/docs/flow.html" }
   ]
 }

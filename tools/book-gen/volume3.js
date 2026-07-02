@@ -218,132 +218,20 @@ body.push(...miniproject(["Build an offline outbox: queue messages and sync them
 body.push(...advanced(["Expedited work, foreground-service workers, custom WorkerFactory + Hilt injection."]));
 
 // 9. Jetpack
-body.push(H1("9. Jetpack Components", "ch9"));
-body.push(callout("definition", ["Jetpack is a suite of libraries handling boilerplate and best practices: lifecycle-aware components, navigation, persistence, background work, and the Compose UI toolkit."]));
-body.push(table(["Library", "Solves"], [
-  ["ViewModel", "Hold UI state across config changes"],
-  ["LiveData / Flow", "Lifecycle-aware observable data"],
-  ["Navigation", "Single-activity navigation"],
-  ["Room", "SQLite with compile-time checks"],
-  ["Compose", "Declarative UI"],
-], [3200, 6160]));
-body.push(callout("interview", ["ViewModel survives configuration changes, exposing state via LiveData/StateFlow the UI observes — the backbone of MVVM. Compose makes UI a function of state, recomposing only what changed."]));
-body.push(...summary([
-  "Jetpack = best-practice libraries that snap together.",
-  "ViewModel retains UI state across rotation.",
-  "Compose is declarative: UI = f(state).",
-  "Recommended architecture: UI → ViewModel → Repository → data.",
-]));
-body.push(...interview([
-  "What is Android Jetpack?",
-  "Why use a ViewModel? How does it survive rotation?",
-  "LiveData vs StateFlow?",
-  "What is Compose and how does recomposition work?",
-  "Describe the recommended architecture.",
-]));
-body.push(...coding([
-  { level: "Easy", text: "ViewModel exposing a counter via StateFlow." },
-  { level: "Medium", text: "Navigation component screen with arguments." },
-  { level: "Hard", text: "MVVM screen: UI → ViewModel → Repository." },
-  { level: "Expert", text: "Rebuild the screen in Compose with state hoisting." },
-]));
-body.push(...realworld(["Modern Android apps (and Google's own) are built on Jetpack: ViewModel + Flow + Navigation + Room + Compose is the default stack."]));
-body.push(...miniproject(["Build a small notes app: Compose UI + ViewModel + Room, fully reactive."]));
-body.push(...advanced(["SavedStateHandle, Paging 3, Compose performance (stability, keys), Navigation 3."]));
+body.push(...topicToChapter(loadTopic("level_03", "jetpack"),
+  { chapterNumber: 9, bookmarkId: "ch9" }));
 
 // 10. Room
-body.push(H1("10. Room Database", "ch10"));
-body.push(callout("definition", ["Room is a Jetpack persistence library over SQLite giving compile-time-verified SQL, less boilerplate, and reactive Flow/LiveData queries."]));
-body.push(code([
-  "@Entity data class User(@PrimaryKey val id: Int, val name: String)",
-  "@Dao interface UserDao {",
-  "  @Query(\"SELECT * FROM User\") fun all(): Flow<List<User>>",
-  "  @Insert suspend fun insert(u: User)",
-  "}",
-], "room"));
-body.push(callout("mistake", ["Changing the schema without a Migration throws at runtime. Provide a Migration and bump the version (use destructive migration only in dev)."]));
-body.push(...summary([
-  "Room = @Entity + @Dao + @Database over SQLite.",
-  "SQL is verified at compile time.",
-  "Flow queries are reactive — UI auto-updates.",
-  "Schema changes need migrations + version bumps.",
-]));
-body.push(...interview([
-  "What is Room and why over raw SQLite?",
-  "Explain @Entity, @Dao, @Database.",
-  "How do reactive queries work?",
-  "How do you handle migrations?",
-  "How do you keep DB access off the main thread?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Define entity/DAO/database; insert and read." },
-  { level: "Medium", text: "Expose a Flow query and update the UI reactively." },
-  { level: "Hard", text: "Write and test a Migration adding a column." },
-  { level: "Expert", text: "Model a one-to-many relation with @Relation + a transaction." },
-]));
-body.push(...realworld(["Offline-first apps cache server data in Room and observe it with Flow, so the UI works without network and updates when sync completes."]));
-body.push(...miniproject(["Build an offline-first list backed by Room, synced from a fake API."]));
-body.push(...advanced(["TypeConverters, FTS search, multi-map relations, Room + Paging."]));
+body.push(...topicToChapter(loadTopic("level_03", "room"),
+  { chapterNumber: 10, bookmarkId: "ch10" }));
 
 // 11. Hilt
-body.push(H1("11. Hilt — Dependency Injection", "ch11"));
-body.push(callout("definition", ["Hilt is a DI library on Dagger that generates wiring for you. DI means objects receive their dependencies instead of creating them — improving testability and decoupling."]));
-body.push(callout("interview", ["DI inverts control: instead of UserRepository() creating an Api, the Api is injected; tests inject a fake Api with no real network. This is the Dependency Inversion Principle applied."]));
-body.push(...summary([
-  "Hilt automates Dagger DI on Android.",
-  "@Inject, @Module/@Provides, @Binds describe how to build types.",
-  "@AndroidEntryPoint enables injection in Android classes.",
-  "Scope intentionally — over-scoping to @Singleton leaks.",
-]));
-body.push(...interview([
-  "What is DI and why use it?",
-  "How does Hilt relate to Dagger?",
-  "Explain @Inject/@Module/@Provides/@Binds.",
-  "What are Hilt scopes?",
-  "How does DI improve testing?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Inject a repository into an Activity." },
-  { level: "Medium", text: "Provide a Retrofit Api via @Module/@Provides." },
-  { level: "Hard", text: "Bind an interface to an impl with @Binds + scope it." },
-  { level: "Expert", text: "Swap a real dep for a fake in a Hilt instrumented test." },
-]));
-body.push(...realworld(["Large Android apps wire dozens of dependencies (network, DB, analytics) through Hilt so features depend on abstractions, not concretions."]));
-body.push(...miniproject(["Wire a small app end-to-end with Hilt: Api → Repository → ViewModel, with a fake Api for tests."]));
-body.push(...advanced(["Custom components & scopes, @EntryPoint for non-Android classes, assisted injection."]));
+body.push(...topicToChapter(loadTopic("level_03", "hilt"),
+  { chapterNumber: 11, bookmarkId: "ch11" }));
 
 // 12. Coroutines
-body.push(H1("12. Coroutines", "ch12"));
-body.push(callout("definition", ["Kotlin coroutines are lightweight suspendable computations that make async code read sequentially. A suspend function pauses without blocking a thread."]));
-body.push(code([
-  "viewModelScope.launch {                      // structured concurrency",
-  "  val user = withContext(Dispatchers.IO) { api.getUser() }",
-  "  _state.value = user                        // back on main",
-  "}",
-], "coroutines"));
-body.push(callout("interview", ["Structured concurrency ties coroutines to a scope (viewModelScope/lifecycleScope); when the scope ends they're cancelled — no leaked work. Collect StateFlow with repeatOnLifecycle(STARTED) so collection pauses off-screen."]));
-body.push(...summary([
-  "suspend functions pause without blocking threads.",
-  "Dispatchers: Main (UI), IO (network/disk), Default (CPU).",
-  "Structured concurrency auto-cancels scoped coroutines.",
-  "Flow/StateFlow are the coroutine-native reactive streams.",
-]));
-body.push(...interview([
-  "What are coroutines and suspend functions?",
-  "Explain dispatchers.",
-  "What is structured concurrency?",
-  "Flow vs LiveData vs StateFlow?",
-  "How do you collect a Flow safely on Android?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Call a suspend function from viewModelScope and update state." },
-  { level: "Medium", text: "Run two calls in parallel with async/await and combine." },
-  { level: "Hard", text: "Expose StateFlow; collect with repeatOnLifecycle(STARTED)." },
-  { level: "Expert", text: "Debounced search with debounce + flatMapLatest." },
-]));
-body.push(...realworld(["Coroutines replaced callback hell and RxJava in most Android apps; a network + DB flow that once needed nested callbacks is now a few sequential lines."]));
-body.push(...miniproject(["Build a search screen: type → debounce → query API on IO → show results, all with Flow + coroutines."]));
-body.push(...advanced(["SupervisorJob, exception handling (CoroutineExceptionHandler), cold vs hot flows, channels."]));
+body.push(...topicToChapter(loadTopic("level_03", "coroutines"),
+  { chapterNumber: 12, bookmarkId: "ch12" }));
 
 // 13. Kotlin for Android
 body.push(...topicToChapter(loadTopic("level_03", "kotlin"),

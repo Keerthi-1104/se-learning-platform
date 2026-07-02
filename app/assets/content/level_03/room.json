@@ -2,49 +2,108 @@
   "id": "android.room",
   "levelId": 3,
   "title": "Room Database",
-  "xp": 50,
-  "estimatedMinutes": 25,
+  "xp": 45,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Explain Room's three building blocks",
-    "Get compile-time-checked SQL and reactive queries",
-    "Handle migrations safely"
+    "Understand Room via a real-life analogy",
+    "Model entities, DAOs, and the database class",
+    "Use Flow-returning DAOs for reactive UI",
+    "Write migrations that don't lose user data",
+    "Answer Room interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Room is a Jetpack persistence library — an abstraction over SQLite that gives compile-time-verified SQL, less boilerplate, and reactive queries via Flow/LiveData." },
-    { "type": "table", "headers": ["Building block", "Role"], "rows": [
-      ["@Entity", "A table (a data class)"],
-      ["@Dao", "Queries: @Insert/@Query/@Update/@Delete"],
-      ["@Database", "Ties entities + DAOs together"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of a paper filing cabinet at an office.**\n\n- **The cabinet itself (Room `@Database`)** — the physical piece of furniture holding all the folders. It has a version number stamped on it ('Cabinet v3 — installed 2024-03').\n- **The folders inside (Room `@Entity` classes)** — one folder per table: 'Customers', 'Orders', 'Products'. Each folder has a strict format: name, phone, address on Customer forms; item, price, date on Order forms.\n- **The office clerks (Room `@Dao` interfaces)** — you don't dig through the cabinet yourself. You hand a request slip to a clerk: 'get me all customers who ordered last month'. The clerks know the drawer, the layout, and hand back exactly what you asked for. Each clerk knows only a few operations — no fumbling.\n- **The old way (raw SQLite)** — you opening the cabinet yourself, remembering column names, writing SQL by hand, hoping you spelled 'customer' the same as when you set up the cabinet. Typos crash at runtime.\n- **The Room way** — every SQL query the clerks accept is **checked at compile time**. Column name typo? Won't build. Query returns 3 columns but your Kotlin class has 4? Won't build. Type mismatch? Won't build.\n\nThat compile-time safety is Room's superpower: **the compiler is your test suite for SQL correctness.**" },
+    { "type": "callout", "variant": "definition", "markdown": "**Room** (part of Android Jetpack) is a SQLite abstraction library that gives you a compile-time-checked, coroutine-native ORM. You declare **Entities** (tables), **DAOs** (query methods), and a **Database** class. Room generates the SQLite plumbing; your SQL queries are verified at compile time. DAO methods can return coroutines, Flow, LiveData, or Paging sources." },
+    { "type": "theory", "markdown": "## The three building blocks" },
+    { "type": "table", "headers": ["Piece", "What it is", "Example"], "rows": [
+      ["**@Entity**", "A Kotlin class that maps to a database table. Each field is a column.", "`data class User(@PrimaryKey val id: Int, val name: String)`"],
+      ["**@Dao**", "An interface with query methods. Room generates the impl.", "`@Query(\"SELECT * FROM user\") fun observeUsers(): Flow<List<User>>`"],
+      ["**@Database**", "Abstract class listing entities and DAOs; the DB entry point.", "`abstract class AppDb : RoomDatabase() { abstract fun userDao(): UserDao }`"]
     ]},
-    { "type": "code", "language": "kotlin", "code": "@Entity data class User(@PrimaryKey val id: Int, val name: String)\n@Dao interface UserDao {\n  @Query(\"SELECT * FROM User\") fun all(): Flow<List<User>>\n  @Insert suspend fun insert(u: User)\n}" },
-    { "type": "callout", "variant": "interview", "markdown": "Room verifies your SQL **at compile time** — a typo in a @Query fails the build, not at runtime. Returning a Flow makes queries reactive: the UI auto-updates when the table changes." },
-    { "type": "callout", "variant": "mistake", "markdown": "Shipping a schema change without a migration — Room throws IllegalStateException at runtime. Provide a Migration (or fallbackToDestructiveMigration only in dev) and bump the version." },
-    { "type": "callout", "variant": "tip", "markdown": "Keep DB work off the main thread: use suspend DAO functions or Flow. Expose Room behind a Repository so the rest of the app doesn't depend on Room types." }
+    { "type": "theory", "markdown": "## The full picture" },
+    { "type": "code", "language": "kotlin", "code": "// 1. Entity — the table\n@Entity(tableName = \"user\")\ndata class User(\n  @PrimaryKey(autoGenerate = true) val id: Int = 0,\n  val name: String,\n  val email: String?,\n  @ColumnInfo(name = \"joined_at\") val joinedAt: Long = System.currentTimeMillis(),\n)\n\n// 2. DAO — how you interact with the table\n@Dao\ninterface UserDao {\n  // Flow — emits a new list whenever the user table changes anywhere\n  @Query(\"SELECT * FROM user ORDER BY name\")\n  fun observeUsers(): Flow<List<User>>\n\n  @Query(\"SELECT * FROM user WHERE id = :id\")\n  suspend fun getById(id: Int): User?\n\n  @Insert(onConflict = OnConflictStrategy.REPLACE)\n  suspend fun upsert(user: User)\n\n  @Insert(onConflict = OnConflictStrategy.REPLACE)\n  suspend fun upsertAll(users: List<User>)\n\n  @Query(\"DELETE FROM user WHERE id = :id\")\n  suspend fun deleteById(id: Int)\n\n  // Transaction — the queries run atomically\n  @Transaction\n  suspend fun replaceAll(users: List<User>) {\n    clearAll()\n    upsertAll(users)\n  }\n\n  @Query(\"DELETE FROM user\")\n  suspend fun clearAll()\n}\n\n// 3. Database — the entry point\n@Database(entities = [User::class], version = 1, exportSchema = true)\nabstract class AppDb : RoomDatabase() {\n  abstract fun userDao(): UserDao\n}\n\n// 4. Building it (once, at app start)\nval db: AppDb = Room.databaseBuilder(context, AppDb::class.java, \"app.db\").build()\nval userDao = db.userDao()" },
+    { "type": "theory", "markdown": "## Why Room is a game-changer" },
+    { "type": "table", "headers": ["Feature", "Why it matters"], "rows": [
+      ["Compile-time SQL check", "Typos in columns, wrong types, invalid SQL — all fail to compile. Bugs caught in your IDE."],
+      ["Flow-returning DAOs", "Change the table anywhere → any observer of the Flow rerenders. UI stays in sync with data automatically."],
+      ["`suspend fun` DAOs", "Coroutine-native — no manual thread management."],
+      ["Migrations first-class", "Declare per-version migrations; Room verifies with schema JSONs."],
+      ["Paging integration", "Return `PagingSource<Int, User>` from a DAO — Paging 3 handles the rest."],
+      ["Type converters", "Store Enums, Dates, JSON via `@TypeConverter`."],
+      ["Testable", "In-memory DB (`inMemoryDatabaseBuilder`) makes DAO tests fast and hermetic."]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**The interview one-liner:** 'Room is SQLite with a compiler.' Everything else — Flow returns, migrations, transactions — flows from that core insight. The compiler validates your SQL against your Kotlin types the moment you save the file." },
+    { "type": "theory", "markdown": "## Relationships — @Embedded, @Relation" },
+    { "type": "code", "language": "kotlin", "code": "// Many-to-one: each Order belongs to one User\n@Entity(tableName = \"order\", foreignKeys = [\n  ForeignKey(entity = User::class, parentColumns = [\"id\"], childColumns = [\"userId\"])\n])\ndata class Order(\n  @PrimaryKey(autoGenerate = true) val id: Int = 0,\n  val userId: Int,\n  val amount: Double,\n)\n\n// A join result — User + their Orders\ndata class UserWithOrders(\n  @Embedded val user: User,\n  @Relation(parentColumn = \"id\", entityColumn = \"userId\")\n  val orders: List<Order>,\n)\n\n@Dao\ninterface UserOrdersDao {\n  @Transaction  // guarantees consistent read across the join\n  @Query(\"SELECT * FROM user\")\n  fun observeUsersWithOrders(): Flow<List<UserWithOrders>>\n}" },
+    { "type": "theory", "markdown": "## Migrations — the thing everyone gets wrong" },
+    { "type": "code", "language": "kotlin", "code": "// You bumped version = 1 to version = 2. What happens?\n// - If you provide a Migration: Room runs your SQL, keeps user data.\n// - If you call .fallbackToDestructiveMigration(): Room drops the DB.\n//   USER DATA IS GONE. Never do this in production.\n\nval MIGRATION_1_2 = object : Migration(1, 2) {\n  override fun migrate(db: SupportSQLiteDatabase) {\n    // Add a column to an existing table — user data preserved\n    db.execSQL(\"ALTER TABLE user ADD COLUMN age INTEGER NOT NULL DEFAULT 0\")\n  }\n}\n\nval db = Room.databaseBuilder(context, AppDb::class.java, \"app.db\")\n  .addMigrations(MIGRATION_1_2)\n  .build()\n\n// For complex changes (rename, split table), you often need multiple ALTER TABLEs\n// or the classic 'create new table, copy data, drop old, rename'. Always test on\n// a real prod-shaped DB before shipping." },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Calling a DAO method on the main thread.** Runs the SQL on the UI thread → ANR + IllegalStateException from Room. Fix: mark DAO methods `suspend` or return `Flow` — Room enforces it." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: `.fallbackToDestructiveMigration()` in production.** This wipes user data whenever the schema version changes. Fine for prototypes. Catastrophic when you ship it." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Making Room `Room.databaseBuilder(...).build()` in every screen.** Building the database is expensive. Do it ONCE via Hilt / a singleton and inject the DAO." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Storing complex objects as Blobs.** Room stores primitives. For enums/dates/JSON use `@TypeConverter`. Don't `Serializable` your way through it — you'll regret it at migration time." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Not using transactions for multi-step writes.** Two `INSERT` statements without `@Transaction` can leave the DB in a half-updated state on crash. Wrap related mutations in `@Transaction`." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Return `Flow<T>` from DAOs.** Any change anywhere in the app rerenders any observer — zero-effort reactivity." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Provide a single Database instance via Hilt.** `@Provides @Singleton fun provideDb(app) = Room.databaseBuilder(app, AppDb::class.java, \"app.db\").build()`" },
+    { "type": "callout", "variant": "best", "markdown": "**3. Write migrations for every version bump.** Never destructive-migrate real users." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Test DAOs with an in-memory Room DB.** Fast, hermetic, no fixture files. `Room.inMemoryDatabaseBuilder(...)`." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Enable `exportSchema = true` and commit schema JSON.** Room writes a JSON file per version; helps you diff schema changes in PRs and catch accidental breaks." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Use `@Transaction` for reads that join multiple tables.** Guarantees a consistent snapshot." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — CRUD app.** User entity, DAO with insert/get/delete, click a button to add, list all users.\n\n**Why:** Build muscle memory." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Reactive list.** Convert the DAO to return `Flow<List<User>>`; a ViewModel exposes it; a Fragment renders. Add a user → list updates automatically.\n\n**Why:** Feel the reactivity payoff." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Relationships.** Add Order entity with a foreign key to User; write a query that returns UserWithOrders.\n\n**Why:** Real apps have relationships." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Migration.** Ship v1 with User(id, name). Ship v2 that adds `email`. Write MIGRATION_1_2 and verify user data survives.\n\n**Why:** Migrations are a rite of passage." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Paging 3 + Room.** DAO returns `PagingSource<Int, User>`; UI renders with PagingDataAdapter; source loads more as you scroll.\n\n**Why:** Real production lists live here." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is Room?**\n\n**A:** Room is Android Jetpack's SQLite abstraction — a compile-time-checked, coroutine-native ORM. You declare `@Entity` classes (tables), `@Dao` interfaces (queries), and a `@Database` class (entry point). At compile time, Room parses every `@Query` string, verifies the columns and types match your Entity, and generates the underlying SQLite code. The result: SQL typos, wrong column types, and mismatched result mappings all fail to *compile*, not at runtime. DAOs can return `suspend fun`, `Flow<T>` (reactive!), `LiveData<T>`, or `PagingSource<Int, T>` — matching whatever pattern your UI uses. It's the successor to raw SQLite + manual `Cursor` code that dominated Android for years." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What are the three main annotations?**\n\n**A:** **`@Entity`** — marks a class as a table. `@PrimaryKey` on the ID field, `@ColumnInfo` to rename columns, `@Ignore` to skip a field, `@Embedded` to inline another class's fields. **`@Dao`** — marks an interface as a data access object. Method-level annotations: `@Query(\"SELECT ...\")` for arbitrary SQL, `@Insert` / `@Update` / `@Delete` for convenience CRUD. Room implements the interface at compile time. **`@Database`** — marks an abstract class as the DB entry point. Lists `entities = [...]`, sets `version = N`, and declares `abstract fun someDao(): SomeDao`. `Room.databaseBuilder(...)` builds an instance. Together they cover 95% of production Room usage." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How does Room integrate with Coroutines and Flow?**\n\n**A:** Room DAO methods can return: (1) **`suspend fun`** — one-shot query on a background dispatcher; suspends caller until done. (2) **`Flow<T>`** — reactive: emits a new value every time any row in the query's referenced tables changes. Cold flow: work starts on first collection. (3) **`LiveData<T>`** — same reactive behavior, lifecycle-aware. (4) **`PagingSource<K, T>`** — for Paging 3 integration. **Flow is the killer feature** — a UI observing `Flow<List<User>>` automatically re-renders whenever anyone inserts/updates/deletes a user, anywhere in the app. No manual invalidation. Combined with `viewModelScope` for launch, `stateIn` for hot-conversion, and `collectAsState()` in Compose, Room + Flow give you effortless reactive persistence." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you handle database migrations?**\n\n**A:** Bump `version = N` in the `@Database` annotation and provide a `Migration(from, to)` object listing SQL to run:\n```kotlin\nval MIGRATION_1_2 = object : Migration(1, 2) {\n  override fun migrate(db: SupportSQLiteDatabase) {\n    db.execSQL(\"ALTER TABLE user ADD COLUMN age INTEGER NOT NULL DEFAULT 0\")\n  }\n}\nRoom.databaseBuilder(...).addMigrations(MIGRATION_1_2).build()\n```\nRoom preserves user data by running your SQL. Enable `exportSchema = true` to have Room write a JSON schema per version — invaluable in code review to diff schema changes. **Never use `fallbackToDestructiveMigration()` in production** — it drops the DB on version mismatch. **Test migrations** with `MigrationTestHelper` before shipping." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: Room vs raw SQLite vs realm vs SQLDelight?**\n\n**A:** **Raw SQLite** — full control, no dependencies, but manual `Cursor` handling, runtime typos, tedious. Nobody chooses this today. **Room** — Google's official, compile-time SQL check, Flow-first, best Jetpack integration, coroutine-native. Default choice for Android. **Realm** — third-party object database; different query DSL; strong reactive story; but less-idiomatic Android integration and a bigger runtime. **SQLDelight** — JetBrains/Cash App, generates types from `.sq` SQL files (opposite of Room's Kotlin-first approach); popular in Kotlin Multiplatform because it targets both Android and iOS. **For pure Android** — pick Room. **For KMP with shared DB** — SQLDelight is a strong option." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What's `@Transaction` and when is it required?**\n\n**A:** `@Transaction` guarantees a group of DB operations runs atomically — either all succeed or none do. Two uses: (1) **Multi-step writes** — `@Transaction suspend fun replaceAll(users): { clearAll(); insertAll(users) }` — no half-updated state if a crash hits between the two DAO calls. (2) **Multi-table reads with relationships** — required when a method returns `@Relation` joined results (e.g., `UserWithOrders`), because Room actually runs multiple queries under the hood. `@Transaction` ensures the join sees a consistent snapshot. In general, wrap any related write operations in `@Transaction`. It's inexpensive and prevents whole classes of consistency bugs." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: How do you test Room DAOs?**\n\n**A:** Use `Room.inMemoryDatabaseBuilder(context, AppDb::class.java).build()` — the DB lives in RAM, is torn down after each test, has zero I/O overhead. Combine with Coroutines' `runTest {}` to drive suspend DAO calls, and standard JUnit assertions. Fast, hermetic, deterministic — a good DAO test suite runs 100+ tests in under a second. **For migrations,** use `MigrationTestHelper` — creates the DB at an old version, runs your migration, verifies the new schema matches. For **integration tests** with a real SQLite file, use `Room.databaseBuilder(context, AppDb::class.java, \"test.db\")` inside an instrumented test. But the in-memory DB is the daily driver." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q8: What are `@Embedded` and `@Relation`?**\n\n**A:** **`@Embedded`** — inline another class's fields directly into an entity's columns. Great for value objects: `@Embedded val address: Address` — Address's `street`, `city`, `zip` become columns of the parent table. No separate table. **`@Relation`** — signals a one-to-many or many-to-many relationship for query results. Example: `data class UserWithOrders(@Embedded val user: User, @Relation(parentColumn = \"id\", entityColumn = \"userId\") val orders: List<Order>)`. Room fetches users, then fetches all their orders, and stitches the results together — hiding SQL JOINs and result-set mapping. Always wrap `@Relation`-returning queries in `@Transaction` for consistency." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Offline-first apps** (Slack, Notion, Signal) — Room caches server data locally, UI reads from Room via Flow, background jobs sync to server via WorkManager.\n- **Search history / bookmarks / drafts** — anything you don't want to lose across app restarts.\n- **Paging 3 lists** — Room's `PagingSource` return type wires directly into Paging.\n- **Reactive UI** — Room's Flow returns are what make Compose apps feel 'automatically alive'.\n- **Multi-module apps** — one `:database` module owns Room; feature modules only see DAO interfaces." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`@TypeConverter`** — turn a `Date` into a `Long`, an `Enum` into a `String`, a `List<Int>` into a JSON string. Register a `@TypeConverters(...)` on the Database.\n- **`@Index`** — add a database index on a column for fast lookups.\n- **`@Fts4` / `@Fts3`** — full-text search entities.\n- **`RawQuery`** — build queries dynamically at runtime (returns a `Cursor` or Kotlin type). Rarely needed.\n- **`ROOM_ONLY_COMPILE`** — use `@DatabaseView` for pre-defined query 'views' as first-class types.\n- **Prepopulating** — `Room.databaseBuilder(...).createFromAsset(\"prepopulated.db\")` ships a canned DB.\n- **Room + Compose** — `daoFlow.collectAsStateWithLifecycle()` in a `@Composable` — reactive persistence, zero boilerplate.\n- **Kotlin Symbol Processing (KSP)** — Room 2.4+ supports KSP as a faster alternative to KAPT for its annotation processing; halve your build time by switching.\n- **Room + Kotlin Multiplatform (KMP)** — Room went KMP-preview in 2024, sharing DBs between Android and iOS is now viable." }
   ],
   "flashcards": [
-    { "front": "Room's three annotations?", "back": "@Entity (table), @Dao (queries), @Database (config tying them together)." },
-    { "front": "Key advantage of Room over raw SQLite?", "back": "Compile-time SQL verification, less boilerplate, and reactive Flow/LiveData queries." },
-    { "front": "What happens if you change the schema without a migration?", "back": "Room throws at runtime; you must provide a Migration and bump the version." }
+    { "front": "What is Room?", "back": "Compile-time-checked SQLite ORM for Android. Part of Jetpack." },
+    { "front": "Three main annotations?", "back": "@Entity (table), @Dao (queries), @Database (entry point)." },
+    { "front": "Killer feature of Flow-returning DAOs?", "back": "Any change to referenced tables auto-emits — UI stays in sync." },
+    { "front": "Never do in production?", "back": ".fallbackToDestructiveMigration() — wipes user data." },
+    { "front": "Test DAOs with?", "back": "Room.inMemoryDatabaseBuilder(...) — fast, hermetic." },
+    { "front": "@Transaction is for…", "back": "Atomic multi-step writes and consistent multi-query reads with @Relation." }
   ],
   "quiz": [
-    { "q": "Room verifies your SQL…", "options": ["At runtime only", "At compile time", "Never", "On the server"], "answer": 1, "explain": "Invalid @Query SQL fails the build." },
-    { "q": "Returning Flow from a DAO gives you…", "options": ["A one-time read", "Reactive auto-updating queries", "A blocking call", "Encryption"], "answer": 1, "explain": "Flow emits again whenever the underlying data changes." },
-    { "q": "A schema change requires…", "options": ["Nothing", "A Migration and a version bump", "A new app", "Root access"], "answer": 1, "explain": "Without a migration Room throws at runtime." }
+    { "q": "Room checks SQL…", "options": ["At runtime", "At compile time", "Never — you're on your own", "Only in debug"], "answer": 1, "explain": "Its superpower." },
+    { "q": "DAO methods should be…", "options": ["main-thread OK", "suspend or Flow-returning", "static", "annotated @MainThread"], "answer": 1, "explain": "Room enforces off-main-thread SQL." },
+    { "q": "For reactive UI, DAO returns…", "options": ["List<T>", "Flow<List<T>>", "Boolean", "Nothing"], "answer": 1, "explain": "Flow emits on any table change." },
+    { "q": "Migration is…", "options": ["Copying files", "SQL you supply for a version bump so user data survives", "Auto-magic", "For prod only"], "answer": 1, "explain": "Bump version + provide Migration." },
+    { "q": "Test DAOs with…", "options": ["Real device DB", "In-memory Room DB", "Mockito", "Instrumentation only"], "answer": 1, "explain": "Fast, no I/O." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Define an Entity, DAO and Database and insert/read a row." },
-    { "level": "Medium", "text": "Expose a Flow query and update the UI reactively." },
-    { "level": "Hard", "text": "Write a Migration that adds a column and test it." },
-    { "level": "Expert", "text": "Model a one-to-many relation with @Relation and a transaction." }
+    { "level": "Easy", "text": "Model a `User` entity and DAO with insert + observe." },
+    { "level": "Easy", "text": "Wire Room via Hilt as a singleton." },
+    { "level": "Medium", "text": "Add `@Relation` to fetch Users with their Orders." },
+    { "level": "Medium", "text": "Add a `@TypeConverter` for Date fields." },
+    { "level": "Hard", "text": "Ship a v1 → v2 migration that adds a column, verify user data survives." },
+    { "level": "Hard", "text": "Use `PagingSource<Int, User>` with Paging 3 for endless list." },
+    { "level": "Expert", "text": "Multi-module: `:database` module owns Room; feature modules only see DAO interfaces." }
   ],
   "interviewQuestions": [
-    "What is Room and why use it over raw SQLite?",
-    "Explain @Entity, @Dao, @Database.",
-    "How do reactive queries work in Room?",
-    "How do you handle migrations?",
-    "How do you keep DB access off the main thread?"
+    "What is Room?",
+    "What are the three main annotations?",
+    "How does Room integrate with Coroutines and Flow?",
+    "How do you handle database migrations?",
+    "Room vs raw SQLite vs Realm vs SQLDelight?",
+    "What's @Transaction and when is it required?",
+    "How do you test Room DAOs?",
+    "What are @Embedded and @Relation?"
   ],
   "references": [
-    { "label": "Android — Room", "url": "https://developer.android.com/training/data-storage/room" }
+    { "label": "Room — Android", "url": "https://developer.android.com/training/data-storage/room" },
+    { "label": "Room migrations", "url": "https://developer.android.com/training/data-storage/room/migrating-db-versions" }
   ]
 }
