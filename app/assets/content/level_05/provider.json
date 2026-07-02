@@ -3,47 +3,94 @@
   "levelId": 5,
   "title": "Provider",
   "xp": 40,
-  "estimatedMinutes": 20,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Explain Provider as an InheritedWidget wrapper",
-    "Use ChangeNotifier + Consumer/Selector",
-    "Avoid unnecessary rebuilds"
+    "Understand Provider via a real-life analogy",
+    "Distinguish Provider / ChangeNotifierProvider / FutureProvider / StreamProvider",
+    "Use Consumer, Selector, context.read, context.watch correctly",
+    "Recognize why Riverpod is the modern successor",
+    "Answer Provider interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Provider is a lightweight wrapper around InheritedWidget that makes dependency injection and state propagation simple. It exposes objects down the tree and rebuilds listeners when they change." },
-    { "type": "code", "language": "dart", "code": "class Counter extends ChangeNotifier {\n  int value = 0;\n  void inc() { value++; notifyListeners(); }\n}\n// provide:  ChangeNotifierProvider(create: (_) => Counter())\n// read:     context.watch<Counter>().value   // rebuilds\n//           context.read<Counter>().inc()     // no rebuild" },
-    { "type": "table", "headers": ["API", "Rebuilds?", "Use"], "rows": [
-      ["watch<T>() / Consumer", "Yes", "Read + rebuild on change"],
-      ["read<T>()", "No", "Call methods / one-off read"],
-      ["Selector<T,S>", "Only when S changes", "Granular rebuilds"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Provider as a public bulletin board mounted at the top of a school hallway.**\n\n- Anyone walking underneath (any child widget in the tree) can look up and read the current announcement — a user profile, a cart, a theme.\n- When someone updates the board (`notifyListeners()`), everyone who was WATCHING the board (via `context.watch<T>()` or a `Consumer<T>`) refreshes their notes automatically.\n- Anyone who only wants to check it ONCE without joining the watchlist (`context.read<T>()`) can — but they won't be notified of future changes.\n- The board itself is put up ONCE near the top of the tree (`ChangeNotifierProvider(create: () => Model())`), and everyone downstream can find it via `context.of<T>()`.\n\n**Why this matters:** Provider was Flutter's dominant state library from 2019–2022, and it's still very common — every legacy codebase you inherit will use it. It also teaches the InheritedWidget mental model, which underpins Riverpod, `Theme.of`, `MediaQuery.of`, and every other 'walk-the-tree' API in Flutter. Even if you'll write new apps in Riverpod, understanding Provider is a required part of the toolkit." },
+    { "type": "callout", "variant": "definition", "markdown": "**Provider** is a state-management package built on top of Flutter's `InheritedWidget` mechanism. You wrap part of the tree in a `Provider` (or a variant like `ChangeNotifierProvider`, `StreamProvider`, `FutureProvider`) and any descendant can read it via `Provider.of<T>(context)`, `context.watch<T>()`, or a `Consumer<T>` widget. `notifyListeners()` on a `ChangeNotifier` rebuilds every subscriber." },
+    { "type": "theory", "markdown": "## The Provider family — which one to use when" },
+    { "type": "table", "headers": ["Provider", "Wraps", "When"], "rows": [
+      ["`Provider<T>`", "Any object; never notifies", "DI: repositories, services, immutable config"],
+      ["`ChangeNotifierProvider<T>`", "A `ChangeNotifier`", "Mutable model that calls `notifyListeners()` on change"],
+      ["`ValueNotifierProvider` (via `ValueListenableBuilder`)", "A `ValueNotifier<T>`", "Simple 1-value state"],
+      ["`StreamProvider<T>`", "A `Stream<T>`", "Continuous async data (Firebase queries, sockets)"],
+      ["`FutureProvider<T>`", "A `Future<T>`", "One-shot async data (initial config load)"],
+      ["`ProxyProvider<A, T>`", "T depends on A", "Compute T from another provider (e.g., ApiClient from Auth)"]
     ]},
-    { "type": "callout", "variant": "mistake", "markdown": "Calling context.watch in callbacks (rebuild loops) or wrapping a huge subtree in Consumer so everything rebuilds. Use read() in callbacks and Selector for granular rebuilds." },
-    { "type": "callout", "variant": "tip", "markdown": "Provider is great for small-to-medium apps and is the official baseline. For larger apps many teams move to Riverpod (its spiritual successor) for compile-time safety." }
+    { "type": "theory", "markdown": "## Canonical pattern — ChangeNotifierProvider + Consumer" },
+    { "type": "code", "language": "dart", "code": "// pubspec: provider: ^6.1.2\nimport 'package:flutter/material.dart';\nimport 'package:provider/provider.dart';\n\n// 1. The model — plain Dart class extending ChangeNotifier\nclass CartModel extends ChangeNotifier {\n  final _items = <String>[];\n  List<String> get items => List.unmodifiable(_items);\n  int get count => _items.length;\n\n  void add(String item) { _items.add(item); notifyListeners(); }\n  void clear() { _items.clear(); notifyListeners(); }\n}\n\n// 2. Provide near the top of the tree\nvoid main() {\n  runApp(\n    ChangeNotifierProvider(\n      create: (_) => CartModel(),\n      child: const MaterialApp(home: HomePage()),\n    ),\n  );\n}\n\n// 3. Consume — three flavors\nclass HomePage extends StatelessWidget {\n  const HomePage({super.key});\n\n  @override\n  Widget build(BuildContext context) => Scaffold(\n    appBar: AppBar(title: const Text('Cart demo')),\n    body: Column(\n      children: [\n        // (a) context.watch<T>() — read + subscribe (rebuilds on notify)\n        Text('Items: ${context.watch<CartModel>().count}'),\n\n        // (b) Consumer<T> — surgical: only this subtree rebuilds\n        Consumer<CartModel>(\n          builder: (context, cart, child) => Expanded(\n            child: ListView(children: cart.items.map((s) => Text(s)).toList()),\n          ),\n        ),\n\n        // (c) context.read<T>() — read WITHOUT subscribing (use in callbacks)\n        FilledButton(\n          onPressed: () => context.read<CartModel>().add('apple'),\n          child: const Text('Add apple'),\n        ),\n      ],\n    ),\n  );\n}" },
+    { "type": "theory", "markdown": "## Selector — narrow the rebuild scope" },
+    { "type": "code", "language": "dart", "code": "// Consumer rebuilds on ANY notifyListeners() from CartModel.\n// If you only care about `count`, use Selector so the widget rebuilds\n// ONLY when the extracted value changes.\n\nSelector<CartModel, int>(\n  selector: (context, cart) => cart.count,\n  builder: (context, count, child) => Text('Items: $count'),\n)\n\n// Now this Text rebuilds only when `count` changes — even if CartModel\n// notifies for reasons that don't affect count (e.g., a sort-order change).\n// This is the direct equivalent of Riverpod's `ref.watch(p.select((s) => s.count))`." },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: `context.watch<T>()` in a callback.** Only use `watch` in `build()`. In `onPressed` etc., use `context.read<T>()` — you want the current value, not a subscription." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Forgetting `notifyListeners()` after a mutation.** State changes but the UI never rebuilds — no visible bug for the developer, silent for the user. Trigger it every time the outside-observable state changes." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Notifying while widgets are building.** Calling `notifyListeners()` inside a `build()` method throws in debug. Do state changes in callbacks, not in `build`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Wrapping the whole widget tree in `Consumer<T>`.** Every notification rebuilds it. Use `Selector<T, X>` to narrow, or move the `Consumer` down closer to the widgets that actually depend on the state." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Not disposing.** A `ChangeNotifierProvider` disposes its notifier automatically. But if you manage the notifier yourself (`Provider.value`), you must call `dispose()` — otherwise listeners leak." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. `context.watch<T>()` in `build`, `context.read<T>()` in callbacks.** The rule that fixes most Provider bugs." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Prefer `Selector<T, X>` for narrow subscriptions.** Rebuilds only when the extracted slice changes." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Provide as HIGH as needed, no higher.** If only two screens need CartModel, provide near their common ancestor — not at `MaterialApp` root. Fewer rebuilds." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Use `ProxyProvider` when one provider derives from another.** Cleaner than manual wiring." },
+    { "type": "callout", "variant": "best", "markdown": "**5. For new projects in 2026, prefer Riverpod.** Same conceptual model, better ergonomics (no `BuildContext`, compile-safe DI, `AsyncValue`, easier testing)." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Counter with ChangeNotifierProvider.** `CounterModel` with an `_count` field; increment button." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Cart across screens.** Home + Cart tabs share a `CartModel` via a single provider at the app root." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Selector for count-only rebuild.** Watch the whole model somewhere; use `Selector` to isolate a `count` widget; observe fewer rebuilds via DevTools' Highlight Rebuilds." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — MultiProvider.** Wrap the app with multiple providers (Auth, Theme, Cart). Access each independently." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Migrate to Riverpod.** Convert a Provider-based screen to Riverpod (`NotifierProvider`); compare LOC + boilerplate." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is Provider and what problem does it solve?**\n\n**A:** Provider is a state-management package built on top of Flutter's `InheritedWidget` mechanism. It solves the 'how do I share state across many widgets without passing callbacks 10 levels deep' problem. You wrap part of the tree in a Provider; any descendant can read that state via `Provider.of<T>(context)`, `context.watch<T>()`, or `Consumer<T>`. Combined with a `ChangeNotifier` model, subscribers auto-rebuild when the model calls `notifyListeners()`. It was Flutter's dominant state solution 2019-2022; Riverpod (its spiritual successor) is now the modern default, but Provider is still widespread in existing code and worth understanding fluently." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: `context.watch<T>()` vs `context.read<T>()` vs `Consumer<T>`?**\n\n**A:** **`context.watch<T>()`** — reads the value AND subscribes; the calling widget rebuilds on every `notifyListeners()`. Use inside `build()`. **`context.read<T>()`** — reads the current value WITHOUT subscribing; the calling widget does NOT rebuild. Use inside callbacks (`onPressed`) where you just want to call a method or read the current state once. **`Consumer<T>(builder: ...)`** — same as `watch` but scopes the rebuild to the builder's subtree; the enclosing `build()` isn't invalidated. Rule: `watch` in build, `read` in callbacks, `Consumer` when you want to isolate the rebuild region." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What is `Selector<T, X>` and when do you use it?**\n\n**A:** `Selector<T, X>` is like `Consumer<T>` but you extract only a SLICE of `T` via a `selector: (context, model) => model.field` callback. The builder rebuilds only when the extracted value changes. Without a Selector, `Consumer<CartModel>` rebuilds on ANY `notifyListeners()` — even if you only care about `count` and the notification was about `sortOrder`. With `Selector<CartModel, int>`, it rebuilds only when `count` changes. This is the exact equivalent of Riverpod's `ref.watch(p.select((s) => s.field))`. Essential for keeping rebuilds surgical in complex apps." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How does `Provider` differ from `ChangeNotifierProvider`?**\n\n**A:** **`Provider<T>`** — provides a value that NEVER notifies. Great for dependency injection: repositories, services, immutable config objects. Descendants that `read` it will not rebuild. **`ChangeNotifierProvider<T>`** — provides a `ChangeNotifier` subclass. `notifyListeners()` triggers rebuilds of all subscribers. Great for mutable state. There are also `StreamProvider<T>` (wraps a Stream), `FutureProvider<T>` (wraps a Future), `ProxyProvider<A, T>` (T derives from A), and value variants (`Provider.value`) for pre-existing instances. Pick based on the shape of your state: pure DI → `Provider`, mutable model → `ChangeNotifierProvider`, async → `Stream`/`FutureProvider`." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What's `MultiProvider` and when do you need it?**\n\n**A:** `MultiProvider(providers: [P1, P2, P3])` composes multiple providers into one widget instead of nesting them (`Provider(child: Provider(child: Provider(child: ...)))`). Pure sugar — the behavior is identical to nesting, but the widget tree is flatter and easier to read. Use it whenever your app has multiple providers at the same scope level: `MultiProvider(providers: [ChangeNotifierProvider(create: (_) => Auth()), ChangeNotifierProvider(create: (_) => Theme()), Provider(create: (_) => Api()) ], child: MyApp())`. It's the standard pattern for wiring up a project's top-level state." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: Why is Riverpod considered Provider's successor?**\n\n**A:** Riverpod (from Provider's author) fixes Provider's structural issues: **(1) No `BuildContext` required** — providers are top-level `final` variables read via a `ref` object; you can access state outside of widgets (tests, controllers, isolates). **(2) Compile-safe** — if a provider isn't reachable, the error is at build time, not `ProviderNotFoundException` at runtime. **(3) `AsyncValue<T>`** — sealed loading/data/error state built-in; kills ad-hoc `bool _loading; String? _error` patterns. **(4) `autoDispose`** — automatic cleanup when no widget watches. **(5) Better testing** — `ProviderContainer` runs state without pumping widgets. Same conceptual model (an InheritedWidget-style dependency graph), better ergonomics. For NEW projects in 2026 → Riverpod. Existing Provider code is fine to keep." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What causes `ProviderNotFoundException`?**\n\n**A:** `Provider.of<T>(context)` was called from a widget that isn't a descendant of the `Provider<T>` that provides `T`. Common causes: **(1) Provider not at the right level** — you provided `CartModel` inside a screen, but a different screen tries to read it. Move the provider up. **(2) Called from a builder that runs outside the provider scope** — e.g., a dialog opened via `showDialog` runs in the ROOT navigator's overlay, above your provider. Fix: use the `builder:` field of `showDialog` that inherits the current context, or pass the value explicitly. **(3) Wrong type** — `Provider<Cart>` but you asked for `Provider<CartModel>`. Fix: match the types exactly. This is Provider's most common error; Riverpod moves it to compile time." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Existing Flutter apps 2019-2022** — the dominant pattern; still very common.\n- **`FirebaseAuth.instance.authStateChanges()`** naturally maps to `StreamProvider<User?>`.\n- **Feature flags / A/B configs** — `Provider<FlagsService>` for DI.\n- **Design system tokens** — `ChangeNotifierProvider<AppTheme>` for hot theme changes.\n- **Small-to-medium apps** — Provider is still simple and sufficient.\n- **Tests** — `ChangeNotifierProvider.value(value: fakeCart, child: MyScreen)`." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`InheritedNotifier` under the hood** — Provider uses this to propagate.\n- **`ProxyProvider<A, T>` / `ProxyProvider2` / …** — derive one provider from others (e.g., `ApiClient` from `AuthToken`).\n- **`Provider.value` vs `Provider(create: ...)`** — value skips lifecycle management (no dispose); use only if you own the object's lifecycle elsewhere.\n- **`ListenableProvider`** — provide any `Listenable` (`ValueNotifier`, `AnimationController`).\n- **`context.select<T, R>((T v) => v.field)`** — inline version of `Selector` without a wrapping widget.\n- **`Consumer2`, `Consumer3`** — subscribe to multiple providers in one builder.\n- **Testing** — `MaterialApp` wrapped in a `MultiProvider` fed with mocks.\n- **Migration to Riverpod** — usually 1:1 mapping; `ChangeNotifierProvider` → `NotifierProvider`; `StreamProvider` → `StreamProvider`; `ProxyProvider` → derived providers.\n- **`provider.debugCheckInvalidValueType`** — helper for validation.\n- **`riverpod_generator`** — code-gen for cleaner Riverpod syntax." }
   ],
   "flashcards": [
-    { "front": "What is Provider built on?", "back": "InheritedWidget — it wraps it to simplify DI and state propagation." },
-    { "front": "watch vs read?", "back": "watch() subscribes and rebuilds on change; read() is a one-off access (use in callbacks)." },
-    { "front": "How to rebuild granularly?", "back": "Use Selector<T,S> so only widgets depending on S rebuild." }
+    { "front": "Provider is built on?", "back": "InheritedWidget — Flutter's built-in tree-walking dependency mechanism." },
+    { "front": "watch vs read?", "back": "watch = read + subscribe (in build). read = read only (in callbacks)." },
+    { "front": "Rebuild narrowly?", "back": "Use Selector<T, X> or context.select((v) => v.field) to subscribe to a slice." },
+    { "front": "MultiProvider is for?", "back": "Composing multiple providers into a single, flat parent widget." },
+    { "front": "Common error?", "back": "ProviderNotFoundException — the calling widget isn't a descendant of the Provider." },
+    { "front": "Provider vs Riverpod?", "back": "Same idea. Riverpod: no BuildContext, compile-safe, AsyncValue, easier tests. New apps → Riverpod." }
   ],
   "quiz": [
-    { "q": "Provider is essentially a wrapper around…", "options": ["A database", "InheritedWidget", "A Stream", "Isolates"], "answer": 1, "explain": "Provider simplifies InheritedWidget for DI + state." },
-    { "q": "In a button callback you should use…", "options": ["context.watch", "context.read", "Consumer", "Selector"], "answer": 1, "explain": "read() accesses without subscribing/rebuilding." },
-    { "q": "To minimize rebuilds, use…", "options": ["Consumer on the whole screen", "Selector", "watch everywhere", "setState"], "answer": 1, "explain": "Selector rebuilds only when the selected value changes." }
+    { "q": "Best inside build() to observe changes?", "options": ["read", "watch", "provide", "notify"], "answer": 1, "explain": "Read + subscribe." },
+    { "q": "Inside onPressed — use?", "options": ["watch", "read", "select", "consumer"], "answer": 1, "explain": "One-shot read; no subscription." },
+    { "q": "Narrow to a single field?", "options": ["Consumer", "Selector<T, X>", "read", "InheritedWidget"], "answer": 1, "explain": "Rebuilds only when the field changes." },
+    { "q": "notifyListeners inside build() ?", "options": ["Fine", "Throws in debug — do in callbacks", "Silently ignored", "Recommended"], "answer": 1, "explain": "Only mutate state outside build()." },
+    { "q": "Why Riverpod over Provider?", "options": ["Slower", "No BuildContext, compile-safe, AsyncValue, easier tests", "Deprecated", "Web only"], "answer": 1, "explain": "Fixes Provider's structural issues." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Build a counter with ChangeNotifier + Provider." },
-    { "level": "Medium", "text": "Use Selector to rebuild only one label of many." },
-    { "level": "Hard", "text": "Compose multiple providers and a ProxyProvider dependency." },
-    { "level": "Expert", "text": "Profile and eliminate over-rebuilds in a Provider-based list screen." }
+    { "level": "Easy", "text": "Counter via ChangeNotifierProvider + context.watch/read." },
+    { "level": "Easy", "text": "MultiProvider with 3 providers (Auth/Theme/Cart)." },
+    { "level": "Medium", "text": "Selector<CartModel, int> to isolate a count widget." },
+    { "level": "Medium", "text": "StreamProvider<User?> from a Firebase authStateChanges stream." },
+    { "level": "Hard", "text": "ProxyProvider2 — ApiClient derives from AuthToken + Config." },
+    { "level": "Hard", "text": "Fix a ProviderNotFoundException by moving the Provider up the tree." },
+    { "level": "Expert", "text": "Migrate one screen from Provider (ChangeNotifierProvider) to Riverpod (NotifierProvider); measure LOC delta." }
   ],
   "interviewQuestions": [
-    "What is Provider and what is it built on?",
-    "watch vs read vs Selector?",
-    "How does Provider avoid prop drilling?",
-    "When does a Consumer rebuild?",
-    "Provider vs Riverpod?"
+    "What is Provider and what problem does it solve?",
+    "context.watch<T>() vs context.read<T>() vs Consumer<T>?",
+    "What is Selector<T, X> and when do you use it?",
+    "How does Provider differ from ChangeNotifierProvider?",
+    "What's MultiProvider and when do you need it?",
+    "Why is Riverpod considered Provider's successor?",
+    "What causes ProviderNotFoundException?"
   ],
   "references": [
-    { "label": "provider package", "url": "https://pub.dev/packages/provider" }
+    { "label": "provider — pub.dev", "url": "https://pub.dev/packages/provider" },
+    { "label": "Simple app state — Flutter docs", "url": "https://docs.flutter.dev/data-and-backend/state-mgmt/simple" }
   ]
 }

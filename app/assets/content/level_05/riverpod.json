@@ -2,51 +2,109 @@
   "id": "sm.riverpod",
   "levelId": 5,
   "title": "Riverpod",
-  "xp": 50,
-  "estimatedMinutes": 30,
+  "xp": 55,
+  "estimatedMinutes": 45,
   "objectives": [
-    "Explain how Riverpod improves on Provider",
-    "Use the main provider types",
-    "Leverage compile-safe DI + testability"
+    "Understand Riverpod via a real-life analogy",
+    "Use `Provider` / `NotifierProvider` / `AsyncNotifierProvider` / `StreamProvider`",
+    "Handle `AsyncValue<T>` for loading / data / error states",
+    "Test Riverpod state without pumping widgets",
+    "Answer Riverpod interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Riverpod is a reactive state + dependency-injection framework (by Provider's author) that fixes Provider's limits: it's compile-safe, not tied to the widget tree/BuildContext, and easy to test and compose." },
-    { "type": "code", "language": "dart", "code": "final counterProvider = StateProvider<int>((ref) => 0);\n// read in a ConsumerWidget:\nfinal count = ref.watch(counterProvider);\nref.read(counterProvider.notifier).state++;\n// async:\nfinal userProvider = FutureProvider((ref) => api.getUser());" },
-    { "type": "table", "headers": ["Provider type", "Use"], "rows": [
-      ["Provider", "Expose a value/service"],
-      ["StateProvider", "Simple mutable state"],
-      ["NotifierProvider", "Complex state + logic"],
-      ["FutureProvider", "Async value (loading/error/data)"],
-      ["StreamProvider", "Stream of values"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Riverpod as a smart utility grid running underneath your whole app.**\n\n- Each utility source is a **provider** — a top-level `final` variable declaring 'here's how to build a fresh Cart / User / Theme / Api client'. It's like plugging a specific appliance into a wall socket.\n- Widgets don't need to know WHERE the socket is or which floor of the building they're on (no `BuildContext` walking). They just tap a **`ref`** — a room-agnostic tool — and say `ref.watch(cartProvider)`. The grid delivers the current value AND notifies them when it changes.\n- Providers can depend on other providers — `apiClientProvider` reads `authTokenProvider` — and Riverpod tracks the graph, invalidates downstream when upstream changes, and disposes providers that no one is using anymore.\n- **`AsyncValue<T>`** is a sealed wrapper — every async provider yields `loading | data(T) | error`. UIs use `state.when(loading: …, data: …, error: …)` and the compiler forces you to handle every case. No more ad-hoc `bool _loading, String? _error` flags.\n\n**Riverpod is Provider's spiritual successor** — same InheritedWidget-style dependency graph, but WITHOUT `BuildContext`, WITH compile-time safety, and WITH `AsyncValue` baked in. In 2026 it's the modern default for new Flutter apps." },
+    { "type": "callout", "variant": "definition", "markdown": "**Riverpod** is a compile-safe, reactive state-management + DI framework by Provider's author. Providers are top-level `final` variables declaring how to build a value. Consumers use `ref.watch` / `ref.read` / `ref.listen` — no `BuildContext` required. Common families: **`Provider<T>`** (pure DI), **`NotifierProvider<N, T>`** (sync mutable state), **`AsyncNotifierProvider<N, T>`** (async state with `AsyncValue<T>`), **`FutureProvider<T>`** / **`StreamProvider<T>`** (async reads), **`.family`** / **`.autoDispose`** modifiers." },
+    { "type": "theory", "markdown": "## The provider family" },
+    { "type": "table", "headers": ["Provider", "State type", "Use case"], "rows": [
+      ["`Provider<T>`", "T (immutable)", "DI: repositories, config, services"],
+      ["`NotifierProvider<N, T>`", "T (mutable via `state = ...`)", "Sync mutable state (counter, form)"],
+      ["`AsyncNotifierProvider<N, T>`", "`AsyncValue<T>`", "Async state you also mutate (user profile fetch + update)"],
+      ["`FutureProvider<T>`", "`AsyncValue<T>`", "One-shot async read (initial config)"],
+      ["`StreamProvider<T>`", "`AsyncValue<T>`", "Continuous async data (Firebase, socket)"],
+      ["`.family` modifier", "adds a parameter", "`userProvider(id)` returns different user per id"],
+      ["`.autoDispose` modifier", "cleans up when unused", "prevent long-lived state leaks"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "Riverpod's wins over Provider: no BuildContext needed to read state, multiple providers of the same type, compile-time safety (no ProviderNotFound at runtime), and trivial overriding for tests. AsyncValue elegantly models loading/error/data." },
-    { "type": "callout", "variant": "mistake", "markdown": "Calling ref.watch inside callbacks (use ref.read) or doing side effects during build. Keep build pure; trigger actions via notifiers/ref.read." },
-    { "type": "callout", "variant": "tip", "markdown": "Use code generation (@riverpod) for less boilerplate and auto-dispose. autoDispose frees provider state when no longer watched — important for memory." }
+    { "type": "theory", "markdown": "## Sample program — counter, async user, family" },
+    { "type": "code", "language": "dart", "code": "// pubspec: flutter_riverpod: ^2.5.1\nimport 'package:flutter/material.dart';\nimport 'package:flutter_riverpod/flutter_riverpod.dart';\n\n// ================= 1. Sync mutable state — NotifierProvider ==============\nfinal counterProvider = NotifierProvider<CounterNotifier, int>(CounterNotifier.new);\n\nclass CounterNotifier extends Notifier<int> {\n  @override\n  int build() => 0;                      // initial state\n\n  void increment() => state++;\n  void reset() => state = 0;\n}\n\n// ================= 2. Async state — AsyncNotifierProvider.family =========\nfinal userProvider = AsyncNotifierProvider.family<UserNotifier, User, int>(\n  UserNotifier.new,\n);\n\nclass UserNotifier extends FamilyAsyncNotifier<User, int> {\n  @override\n  Future<User> build(int id) async {\n    // Riverpod caches by (provider + arg). Same id → same result reused.\n    return _repo.fetchUser(id);\n  }\n\n  Future<void> refresh() async {\n    state = const AsyncLoading();\n    state = await AsyncValue.guard(() => _repo.fetchUser(arg));\n  }\n\n  UserRepository get _repo => ref.read(userRepoProvider);\n}\n\n// ================= 3. Pure DI — a Provider for the repository ============\nfinal userRepoProvider = Provider<UserRepository>((ref) => UserRepository());\n\nclass User { const User(this.id, this.name); final int id; final String name; }\nclass UserRepository {\n  Future<User> fetchUser(int id) async {\n    await Future.delayed(const Duration(milliseconds: 400));\n    return User(id, 'User $id');\n  }\n}\n\n// ================= 4. UI — ConsumerWidget / ConsumerStatefulWidget =======\nvoid main() => runApp(const ProviderScope(child: MaterialApp(home: HomePage())));\n\nclass HomePage extends ConsumerWidget {\n  const HomePage({super.key});\n\n  @override\n  Widget build(BuildContext context, WidgetRef ref) {\n    final count = ref.watch(counterProvider);\n    final userAsync = ref.watch(userProvider(42));    // family with id=42\n\n    return Scaffold(\n      appBar: AppBar(title: const Text('Riverpod demo')),\n      body: Column(\n        children: [\n          Text('Count: $count'),\n          FilledButton(\n            onPressed: () => ref.read(counterProvider.notifier).increment(),\n            child: const Text('+1'),\n          ),\n          const Divider(),\n\n          // AsyncValue.when — exhaustive, compiler-checked\n          userAsync.when(\n            loading: () => const CircularProgressIndicator(),\n            error:   (e, s) => Text('error: $e'),\n            data:    (u) => Text('Hi, ${u.name}'),\n          ),\n        ],\n      ),\n    );\n  }\n}" },
+    { "type": "theory", "markdown": "## `ref.watch` vs `ref.read` vs `ref.listen`" },
+    { "type": "table", "headers": ["API", "Subscribes?", "Use in"], "rows": [
+      ["`ref.watch(p)`", "Yes — widget rebuilds on change", "Inside `build()`"],
+      ["`ref.watch(p.select((s) => s.field))`", "Yes — but only when the SELECTED field changes", "Narrow rebuilds"],
+      ["`ref.read(p)`", "No — one-shot read", "Callbacks (`onPressed`)"],
+      ["`ref.read(p.notifier)`", "No — access the underlying Notifier for mutation", "Callbacks that call `notifier.increment()` etc."],
+      ["`ref.listen(p, callback)`", "Fires on change; doesn't rebuild", "Side effects: nav, toast, log"],
+      ["`ref.invalidate(p)`", "Force refresh", "Pull-to-refresh"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**The rule matches Provider's:** `watch` in `build`, `read` in callbacks. Riverpod adds `.select()` for narrow rebuilds and `ref.listen()` for one-shot side effects — same job as `BlocListener`." },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: `ref.watch` inside a callback.** Only use `watch` in `build()`. Use `read` for one-shot access in `onPressed`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Missing `ProviderScope` at the root.** Wrap `MaterialApp` in `ProviderScope`; without it, `ref` finds nothing." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Storing a `Ref` past its lifetime.** In `AsyncNotifier`, `ref` is only valid while the notifier is mounted. Don't stash it in an isolate or send it across a channel." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Not using `.autoDispose` for scoped state.** Without `autoDispose`, providers live for the whole app lifetime — even when no widget uses them. For per-screen state, add it: `NotifierProvider.autoDispose<...>`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: `state.value` on `AsyncValue` without checking.** `state.value` is null while loading. Prefer `state.when(...)` which the compiler enforces." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Always `ref.watch` in `build`, `ref.read` in callbacks.**" },
+    { "type": "callout", "variant": "best", "markdown": "**2. Use `AsyncValue.when` — never `.value` blindly.** The compiler forces exhaustive handling." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Providers for repositories, not widgets.** DI shape: `apiProvider`, `userRepoProvider`, then a `NotifierProvider` that uses them." },
+    { "type": "callout", "variant": "best", "markdown": "**4. `.autoDispose` for per-screen state.** Especially for `AsyncNotifier` that fires a network request." },
+    { "type": "callout", "variant": "best", "markdown": "**5. `.family` for parameterized providers.** `userProvider(id)` — one provider spec, many concrete instances." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Adopt `riverpod_generator` (`@riverpod`) for less boilerplate.** Generates the provider declaration from a function or class." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Test with `ProviderContainer` — no widgets required.**" },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — CounterNotifier.** Sync int state; increment / reset methods." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — AsyncNotifier fetch user.** `userProvider` reads a repository; UI uses `.when` for loading/data/error." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — `.family` per id.** `userProvider(id)` — verify each id caches independently." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Optimistic update.** Toggle 'liked' on a post; if server fails, revert the state." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard) — `ProviderContainer` test.** Test the `CounterNotifier` without any widget pump." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert) — `.autoDispose` + `keepAlive` on scroll.** A search-result provider that disposes when the screen leaves but keeps alive briefly to survive tab switches." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is Riverpod and how does it differ from Provider?**\n\n**A:** Riverpod is Provider's spiritual successor by the same author. Same conceptual model — a dependency graph of state that the widget tree can watch — but structurally different: **(1) No `BuildContext`** — providers are top-level `final` variables; consumers use a `ref` object that works everywhere (widgets, tests, controllers, isolates). **(2) Compile-safe** — a missing provider is a build error, not `ProviderNotFoundException` at runtime. **(3) `AsyncValue<T>`** built-in — sealed loading/data/error state, no ad-hoc `bool _loading` flags. **(4) `.autoDispose`** — automatic lifecycle cleanup. **(5) Better testing** — `ProviderContainer` runs state without widgets. Same InheritedWidget-style graph; better ergonomics. In 2026 it's the default for new Flutter apps." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What are the main provider families?**\n\n**A:** **`Provider<T>`** — pure DI; provides a value that never changes. **`NotifierProvider<N, T>`** — synchronous mutable state; `Notifier<T>` has a `build()` returning initial state and methods that mutate `state`. **`AsyncNotifierProvider<N, T>`** — async version; `AsyncNotifier<T>` returns `Future<T>` from `build()`, state is exposed as `AsyncValue<T>`. **`FutureProvider<T>`** / **`StreamProvider<T>`** — one-off Future / continuous Stream, both yielding `AsyncValue<T>`. **`.family`** modifier — parameterize a provider so `userProvider(42)` and `userProvider(43)` are separate instances. **`.autoDispose`** modifier — auto-cleanup when no widget watches. Choose based on state shape: sync/async, mutable/immutable, parameterized/not." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What is `AsyncValue<T>` and why is it useful?**\n\n**A:** `AsyncValue<T>` is a sealed value in ONE of three states: **`loading`**, **`data(T)`**, or **`error(Object, StackTrace)`**. Instead of managing `bool _loading; String? _error; T? _data;` flags manually (and constantly forgetting an edge case like error-then-loading transitions), you write `state = AsyncValue.loading();` then `state = AsyncValue.data(user);` or `state = AsyncValue.error(e, s);`. UIs consume via `state.when(loading: ..., data: ..., error: ...)` — the compiler forces you to handle every case. **`AsyncValue.guard(() => api.fetch())`** wraps errors automatically. This is Flutter's modern way to model server state." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: `ref.watch` vs `ref.read` vs `ref.listen`?**\n\n**A:** **`ref.watch(p)`** — reads AND subscribes; the widget rebuilds on change. Use inside `build()`. **`ref.read(p)`** — reads without subscribing. Use in callbacks (`onPressed`). **`ref.read(p.notifier)`** — accesses the underlying `Notifier` so you can call mutation methods. **`ref.listen(p, (prev, next) => ...)`** — fires a callback on change; doesn't rebuild. Perfect for side effects: navigate on auth-state change, show a toast on error. **`ref.invalidate(p)`** — force refresh, useful for pull-to-refresh. **Rule:** watch in build, read in callbacks, listen for side effects. Same discipline as `BlocBuilder` vs `BlocListener`." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What is `.family` and when do you use it?**\n\n**A:** `.family` parameterizes a provider: instead of one `userProvider` for a single user, you get `userProvider(int id)` — separate cached instances per id. `ref.watch(userProvider(42))` and `ref.watch(userProvider(43))` are independent providers. Use for **per-id fetches** — user by id, product by SKU, chat by conversation-id. Under the hood, Riverpod hashes the argument and caches results per hash. **Rule:** the argument must be `hashCode`/`equals` friendly — use `int`, `String`, `Freezed` classes; NEVER a mutable `List`. Combine with `.autoDispose` for auto-cleanup when no widget watches that particular instance." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What is `.autoDispose` and when do you need it?**\n\n**A:** Without `.autoDispose`, a provider lives for the whole app lifetime — even when no widget uses it. That's fine for singletons (repo, config). For **screen-scoped state** (a search-query provider that's only relevant while the search screen is open), add `.autoDispose`: `NotifierProvider.autoDispose<...>`. When the last widget stops watching, Riverpod disposes the provider. **`ref.keepAlive()`** inside an autoDispose provider prevents disposal even if watchers drop — useful for briefly surviving tab switches. **`ref.onDispose(() => …)`** registers a cleanup callback. Together these give surgical control over provider lifetimes." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: How do you test Riverpod state?**\n\n**A:** Use `ProviderContainer` — a manual dependency graph without any widget tree:\n```dart\ntest('counter increments', () {\n  final container = ProviderContainer();\n  addTearDown(container.dispose);\n  expect(container.read(counterProvider), 0);\n  container.read(counterProvider.notifier).increment();\n  expect(container.read(counterProvider), 1);\n});\n```\n**Override providers for tests** with `ProviderContainer(overrides: [userRepoProvider.overrideWithValue(FakeUserRepo())])`. No widgets pumped; fast; deterministic. For widget tests, use `ProviderScope(overrides: [...], child: MyWidget())`. **This test story is Riverpod's biggest win over Provider** — the same Notifier + repositories can be tested without any Flutter machinery." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q8: When would you NOT use Riverpod?**\n\n**A:** **(1) Widget-local ephemeral state** — a form field's text, an expanded/collapsed toggle. Use `setState` — Riverpod is overkill for state that never leaves one widget. **(2) A codebase already fully on Bloc/Provider** — a rewrite is rarely worth it; keep what works. **(3) A team with strong preference for another library** — technology harmony matters more than any framework's superiority. **(4) Genuinely tiny apps** — the setup ceremony is real; a 3-screen app might not need it. **My rule:** default to Riverpod for new apps of any size; use `setState` for widget-local state; keep existing codebases on their existing library. Zealous rewrites cause more bugs than they fix." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **New Flutter apps in 2024+** — Riverpod is the modern default.\n- **`riverpod_generator`** — code-gen `@riverpod` for cleaner syntax; increasingly the recommended style.\n- **Firebase apps** — natural pairing with `StreamProvider`/`AsyncNotifierProvider`.\n- **Multi-module apps** — providers can be scoped and overridden per feature.\n- **Testing** — `ProviderContainer` for state tests; `ProviderScope` overrides for widget tests.\n- **Migration from Provider** — typically 1:1: `ChangeNotifierProvider` → `NotifierProvider`; `StreamProvider` → `StreamProvider`; `Provider.of(context)` → `ref.watch/read`." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`@riverpod` code-gen (`riverpod_generator`)** — generates the provider from a function or class.\n- **`ref.onDispose(() => …)`** — cleanup hook when the provider is disposed.\n- **`ref.invalidate(p)` vs `ref.refresh(p)`** — invalidate marks stale; refresh reads immediately.\n- **`ProviderObserver`** — global observer for logging every provider add/update/dispose.\n- **`AsyncValue.guard(() => …)`** — wraps a Future in AsyncValue automatically.\n- **`StateNotifier` (legacy)** — old API; new code uses `Notifier` and `AsyncNotifier`.\n- **Scoping** — nested `ProviderScope` for feature-level providers.\n- **`ref.listenSelf`** — a Notifier listens to itself.\n- **Circular dependencies** — Riverpod throws at build time — no runtime infinite loops.\n- **`Ref` in a Notifier** — persists as long as the notifier is mounted; use in async methods for other provider access." }
   ],
   "flashcards": [
-    { "front": "How does Riverpod improve on Provider?", "back": "Compile-safe, no BuildContext needed, multiple same-type providers, easy testing/overrides." },
-    { "front": "What is AsyncValue?", "back": "A type modeling loading/error/data from Future/Stream providers, with .when()." },
-    { "front": "watch vs read in Riverpod?", "back": "watch subscribes/rebuilds in build; read is a one-off (use in callbacks)." }
+    { "front": "Why Riverpod?", "back": "No BuildContext, compile-safe, AsyncValue built-in, autoDispose, easy tests." },
+    { "front": "AsyncValue<T>?", "back": "Sealed: loading | data(T) | error. UI consumes via .when(loading: ..., data: ..., error: ...)." },
+    { "front": "watch vs read vs listen?", "back": "watch = subscribe (in build). read = one-shot (in callbacks). listen = fire callback on change (side effects)." },
+    { "front": ".family?", "back": "Parameterize a provider — userProvider(id) caches per argument." },
+    { "front": ".autoDispose?", "back": "Provider auto-disposed when no widget watches; use for screen-scoped state." },
+    { "front": "Test?", "back": "ProviderContainer — read/mutate providers without any widget tree." }
   ],
   "quiz": [
-    { "q": "A key Riverpod advantage over Provider is…", "options": ["It needs BuildContext", "Compile-time safety (no runtime ProviderNotFound)", "It's slower", "It can't be tested"], "answer": 1, "explain": "Errors surface at compile time, not runtime." },
-    { "q": "Async loading/error/data is modeled by…", "options": ["bool flags", "AsyncValue", "setState", "a Stream only"], "answer": 1, "explain": "FutureProvider/StreamProvider expose AsyncValue with .when()." },
-    { "q": "In a callback you should use…", "options": ["ref.watch", "ref.read", "Consumer", "setState"], "answer": 1, "explain": "read() avoids subscribing inside callbacks." }
+    { "q": "Riverpod requires BuildContext?", "options": ["Yes", "No — uses a `ref` object", "Only in build", "Only in tests"], "answer": 1, "explain": "No context needed; works in isolates + tests." },
+    { "q": "AsyncValue<T>?", "options": ["A Future", "Sealed loading | data | error", "Deprecated", "Only sync"], "answer": 1, "explain": "Model async state without ad-hoc flags." },
+    { "q": "Best for a debounced screen-scoped search provider?", "options": ["Provider", "NotifierProvider.autoDispose", "GlobalProvider", "Nothing"], "answer": 1, "explain": "Auto-cleanup when screen leaves." },
+    { "q": "Test tool?", "options": ["Widget pump only", "ProviderContainer + overrides", "Reflection", "None"], "answer": 1, "explain": "Test state without widgets." },
+    { "q": "Family arg must be…", "options": ["Any type", "Hashable/equals-friendly", "int only", "String only"], "answer": 1, "explain": "Used as a cache key." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Counter with StateProvider." },
-    { "level": "Medium", "text": "Fetch data with FutureProvider and render AsyncValue.when()." },
-    { "level": "Hard", "text": "Build a NotifierProvider with complex state + actions." },
-    { "level": "Expert", "text": "Override providers with fakes in widget tests; verify behavior." }
+    { "level": "Easy", "text": "CounterNotifier — sync int state with increment/reset." },
+    { "level": "Easy", "text": "userRepoProvider as a Provider; consume via ref.read." },
+    { "level": "Medium", "text": "AsyncNotifier fetching a user; UI uses .when for loading/data/error." },
+    { "level": "Medium", "text": "userProvider.family(int id); watch two different ids in the same screen." },
+    { "level": "Hard", "text": "Optimistic 'like' toggle: mutate state; if server fails, revert." },
+    { "level": "Hard", "text": "autoDispose + keepAlive for a search provider that survives briefly on tab switch." },
+    { "level": "Expert", "text": "Test a Notifier with ProviderContainer + fake repository; assert transitions." }
   ],
   "interviewQuestions": [
-    "How does Riverpod improve on Provider?",
-    "Explain the main provider types.",
-    "What is AsyncValue and how do you use it?",
-    "watch vs read vs listen?",
-    "How does autoDispose help memory?"
+    "What is Riverpod and how does it differ from Provider?",
+    "What are the main provider families?",
+    "What is AsyncValue<T> and why is it useful?",
+    "ref.watch vs ref.read vs ref.listen?",
+    "What is .family and when do you use it?",
+    "What is .autoDispose and when do you need it?",
+    "How do you test Riverpod state?",
+    "When would you NOT use Riverpod?"
   ],
   "references": [
-    { "label": "Riverpod docs", "url": "https://riverpod.dev" }
+    { "label": "Riverpod docs", "url": "https://riverpod.dev" },
+    { "label": "flutter_riverpod on pub.dev", "url": "https://pub.dev/packages/flutter_riverpod" }
   ]
 }

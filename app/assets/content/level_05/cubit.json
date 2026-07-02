@@ -2,49 +2,97 @@
   "id": "sm.cubit",
   "levelId": 5,
   "title": "Cubit",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 35,
+  "estimatedMinutes": 25,
   "objectives": [
-    "Explain Cubit as a simpler BLoC",
-    "Emit states from methods directly",
-    "Choose Cubit vs BLoC"
+    "Understand Cubit via a real-life analogy",
+    "See when to prefer Cubit over Bloc",
+    "Write methods that `emit` state directly",
+    "Test Cubits with `blocTest`",
+    "Answer Cubit interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "A Cubit is a lighter form of BLoC from the same package: instead of events, you call methods that emit new states directly. Less boilerplate, same testability and immutable-state model." },
-    { "type": "code", "language": "dart", "code": "class CounterCubit extends Cubit<int> {\n  CounterCubit() : super(0);\n  void increment() => emit(state + 1);\n}\n// UI: BlocBuilder<CounterCubit,int>(builder: (c,s)=>Text('$s'))" },
-    { "type": "table", "headers": ["", "Cubit", "BLoC"], "rows": [
-      ["Trigger", "Method calls", "Events"],
-      ["Boilerplate", "Less", "More"],
-      ["Traceability", "Method-level", "Full event log + transitions"],
-      ["Best for", "Simple/medium state", "Complex event-driven flows"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Cubit as BLoC's easy-mode drivetrain.**\n\n- **BLoC** is a manual-transmission car: you shift explicitly (dispatch named `Event` classes), then the engine (bloc) responds. More control, more discipline, more ceremony.\n- **Cubit** is an automatic transmission: you just press the gas (call a method on the cubit), and the engine responds. Same road, same engine — you just skipped writing out every gear change.\n\n**Both come from the same `flutter_bloc` package.** Cubit is `Bloc` with the event layer removed. States are still immutable, still flow one-way, still consumed by `BlocBuilder`. You give up the audit trail (no named events to log), you gain speed and less code.\n\n**When to pick Cubit:** counters, toggles, form fields, simple loading→data→error flows — anything where you don't need the 'who fired this event' log. For most feature-level state in a small-to-medium app, Cubit is enough. Reach for full BLoC when the team explicitly wants named events (compliance, analytics, complex event replay)." },
+    { "type": "callout", "variant": "definition", "markdown": "**Cubit** is a subset of BLoC where you skip events. Instead of dispatching `bloc.add(EventClass())`, you call `cubit.methodName()` and the method calls `emit(newState)` directly. Same one-way flow, same `flutter_bloc` widgets (`BlocProvider`, `BlocBuilder`, `BlocSelector`, `BlocListener`) — everything except the event layer." },
+    { "type": "theory", "markdown": "## The whole API — 8 lines" },
+    { "type": "code", "language": "dart", "code": "import 'package:flutter_bloc/flutter_bloc.dart';\n\n// State is anything — often a sealed hierarchy for exhaustive matching\nsealed class CounterState {}\nclass CounterInitial extends CounterState {}\nclass CounterValue extends CounterState { CounterValue(this.n); final int n; }\n\nclass CounterCubit extends Cubit<CounterState> {\n  CounterCubit() : super(CounterInitial());\n\n  int _count = 0;\n\n  void increment() { _count++; emit(CounterValue(_count)); }\n  void decrement() { _count--; emit(CounterValue(_count)); }\n  void reset()     { _count = 0; emit(CounterValue(0)); }\n}\n\n// UI\nBlocProvider(\n  create: (_) => CounterCubit(),\n  child: BlocBuilder<CounterCubit, CounterState>(\n    builder: (ctx, s) => switch (s) {\n      CounterInitial() => const Text('start'),\n      CounterValue(:final n) => Text('$n'),\n    },\n  ),\n);\n\n// Elsewhere:\ncontext.read<CounterCubit>().increment();\n// no `CounterCubit.add(IncrementEvent())` ceremony." },
+    { "type": "theory", "markdown": "## Complete sample — async load pattern" },
+    { "type": "code", "language": "dart", "code": "import 'package:flutter_bloc/flutter_bloc.dart';\n\nsealed class UserState {}\nclass UserLoading extends UserState {}\nclass UserLoaded extends UserState { UserLoaded(this.name); final String name; }\nclass UserError extends UserState { UserError(this.msg); final String msg; }\n\nclass UserCubit extends Cubit<UserState> {\n  UserCubit(this._repo) : super(UserLoading());\n\n  final UserRepository _repo;\n\n  Future<void> load(int id) async {\n    emit(UserLoading());\n    try {\n      emit(UserLoaded(await _repo.getName(id)));\n    } catch (e) {\n      emit(UserError(e.toString()));\n    }\n  }\n\n  Future<void> refresh() async {\n    if (state is UserLoaded) await load(1);   // implicit id — real app: pass it\n  }\n}\n\n// UI\nBlocConsumer<UserCubit, UserState>(\n  listener: (ctx, s) {\n    if (s is UserError) {\n      ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(s.msg)));\n    }\n  },\n  builder: (ctx, s) => switch (s) {\n    UserLoading() => const CircularProgressIndicator(),\n    UserLoaded(:final name) => Text('Hi, $name'),\n    UserError() => const Text('Try again'),\n  },\n);\n\n// Test:\n// blocTest<UserCubit, UserState>(\n//   'emits Loading then Loaded on load',\n//   build: () => UserCubit(mockRepo),\n//   act: (cubit) => cubit.load(1),\n//   expect: () => [isA<UserLoading>(), isA<UserLoaded>()],\n// );\n\nclass UserRepository { Future<String> getName(int id) async => 'Ada'; }" },
+    { "type": "theory", "markdown": "## Cubit vs Bloc — decision table" },
+    { "type": "table", "headers": ["Question", "→ Cubit", "→ Bloc"], "rows": [
+      ["Do you need named events for logging / replay?", "no", "yes"],
+      ["Do you need transformers (debounce, restartable)?", "no", "yes"],
+      ["Are actions one-to-one with methods?", "yes — Cubit shines", "not required"],
+      ["Do you need `on<Event>` + `Emitter`?", "no", "yes"],
+      ["Small counter / toggle / form?", "**Cubit**", "overkill"],
+      ["Complex search with debounced streams?", "harder", "**Bloc** — use `transformer:`"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "Use Cubit by default; reach for BLoC when you need the explicit event trail (auditing/debugging complex flows) or advanced event transformers (debounce, throttle, concurrency control)." },
-    { "type": "callout", "variant": "tip", "markdown": "Cubit and BLoC share the same widgets (BlocProvider/BlocBuilder/BlocListener) and the same testing tools, so migrating Cubit → BLoC later is straightforward." }
+    { "type": "callout", "variant": "interview", "markdown": "**The senior take:** don't over-engineer. If a screen has 'load → data → error', Cubit is perfect. If you're implementing a debounced search with cancellable inflight requests, use Bloc's transformers. Both compose freely inside the same app — a `SearchBloc` alongside a `CounterCubit` is a legit architecture." },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Calling `emit` from outside the cubit.** Only the cubit's own methods may emit. UI calls the method; the method emits." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Mutating state fields on the same object.** State must be IMMUTABLE — emit a fresh state each time, don't mutate the current one." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Doing debounce with `Timer` inside cubit methods.** Works, but gets messy fast. For debounced streams, promote to a Bloc + transformer." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: One mega-cubit for the whole app.** Split by feature. A `CartCubit` + `AuthCubit` + `NotificationsCubit` beats a `AppCubit`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Skipping `close()` in tests.** Cubits leak subscriptions if not closed. The `bloc_test` framework closes them automatically; manual tests should call `.close()`." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Use sealed classes for state.** Dart 3 `sealed class` + `switch` → exhaustive matching, compiler catches missed cases." },
+    { "type": "callout", "variant": "best", "markdown": "**2. `Equatable` or Freezed** on state so `emit` skips duplicate states." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Split by feature.** Small focused Cubits, not one mega-Cubit." },
+    { "type": "callout", "variant": "best", "markdown": "**4. `BlocListener` for side effects.** Don't navigate or toast inside the builder." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Test with `blocTest`.** Same tool as Bloc; just build/act/expect." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Promote to Bloc when you hit event-transformer needs (debounce, cancellation).** Coexist happily in the same app." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — CounterCubit.** Increment / decrement / reset with an `int` state." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Easy) — ToggleCubit.** `bool` state; a single `toggle()` method." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — UserCubit(load).** Loading → Loaded / Error pattern; show SnackBar on error via BlocListener." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — CartCubit with add/remove/clear.** State is a sealed hierarchy; equality via `Equatable`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Migrate a Bloc to a Cubit.** Take a simple 3-event Bloc, port to Cubit; measure LOC reduction." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is a Cubit and how does it relate to Bloc?**\n\n**A:** A Cubit is a lighter variant of BLoC that skips the event layer. Both come from the same `flutter_bloc` package and share every widget (`BlocProvider`, `BlocBuilder`, `BlocSelector`, `BlocListener`). The difference: **Bloc** requires you to define event classes (`class AddItem extends CartEvent`) and dispatch them (`bloc.add(AddItem('apple'))`) — handlers use `on<AddItem>((e, emit) => ...)`. **Cubit** skips that ceremony — you call a method (`cubit.addItem('apple')`) that directly calls `emit(newState)`. Same unidirectional flow, less boilerplate. Same testing story via `blocTest`." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: When would you pick Cubit over Bloc?**\n\n**A:** When your state changes are one-to-one with method calls and you don't need the audit trail of named events. Perfect for **counters, toggles, form fields, simple load → data → error flows, wizard steps**. Cubit gives you the same architectural benefits (immutable state, one-way flow, testability) with 40% less code. **Reach for full BLoC when:** (1) you need event transformers (debounce, throttle, restartable — used for search-as-you-type); (2) you want the audit log of every action; (3) a compliance-heavy app where every state change should be traceable. Both can coexist in one codebase; it's not either/or." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: Does a Cubit have events?**\n\n**A:** No — that's the whole point. In a Cubit, actions are just methods. `cubit.addItem('apple')` → the method internally `emit(newState)`. No `AddItemEvent` class, no `bloc.add(...)` dispatch, no `on<AddItemEvent>` handler. What you lose: the ability to intercept, log, or transform events at the framework layer. What you gain: significantly less code. If you later need events (say, to add debouncing), you can promote the Cubit to a Bloc — the widget-side code (`BlocBuilder`, `BlocListener`) stays identical." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you handle async work in a Cubit?**\n\n**A:** Same as Bloc — methods are just Dart `async` functions:\n```dart\nFuture<void> load() async {\n  emit(UserLoading());\n  try {\n    emit(UserLoaded(await _repo.get()));\n  } catch (e) {\n    emit(UserError(e.toString()));\n  }\n}\n```\nAwait completes the async task; `emit` sends the new state; UI reacts via `BlocBuilder`. Return type is `Future<void>` if the UI wants to know when the operation finishes. **Common pattern:** for cancellable async work, you'd promote to a Bloc — Cubits don't natively support cancellation of in-flight operations. For fire-and-forget, Cubit is enough." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you test a Cubit?**\n\n**A:** Same `bloc_test` API as Bloc:\n```dart\nblocTest<UserCubit, UserState>(\n  'emits Loading then Loaded on load',\n  build: () => UserCubit(mockRepo),\n  act: (cubit) => cubit.load(),\n  expect: () => [isA<UserLoading>(), isA<UserLoaded>()],\n);\n```\nNo widgets needed. Combine with `mocktail`/`mockito` for the repository. Fast, deterministic, reads exactly like a spec. Alternative: use `emitsInOrder` from Dart's `test` package on `cubit.stream`. **Rule:** cover every method's happy path AND error path with a `blocTest`. Cubit's simplicity makes 100% state-logic coverage easy — one of its best properties." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: Can Cubit and Bloc coexist in one app?**\n\n**A:** Absolutely — they use the SAME package (`flutter_bloc`), share widgets, and are freely mixable. Use Cubit for straightforward feature state (counters, toggles, simple loads), Bloc for cases needing event transformers or explicit event logs. `BlocProvider<CartCubit>` and `BlocProvider<SearchBloc>` sit side by side in `MultiBlocProvider`. `context.read<CartCubit>()` and `context.read<SearchBloc>()` both work. **Best-of-both-worlds architecture:** Cubits for 80% of your state, Blocs for the 20% with complex event handling. Prevents both over-engineering (unnecessary Blocs) and under-engineering (Cubits pushed past their limits)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What are common Cubit mistakes?**\n\n**A:** **(1) Mutating the current state instead of emitting a new one** — state must be immutable, or `emit` skips it as a duplicate. **(2) Missing `Equatable`/`Freezed`** — without value equality, `emit` fires rebuilds even for logically-equal states. **(3) One giant Cubit for the entire app** — split by feature. **(4) Doing side effects in `BlocBuilder`'s builder** — use `BlocListener` for nav/toasts. **(5) Not calling `close()` in tests** — `bloc_test` handles it; manual tests must. **(6) Reaching for Cubit when you actually need transformers** — if you're implementing debounced search or cancellable async, promote to Bloc. **All these are conceptually the same as Bloc mistakes — Cubit shares its parent's discipline.**" },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Feature-scoped state** in enterprise apps that use flutter_bloc broadly.\n- **Wizard / onboarding flows** — one Cubit per step.\n- **Form state** — a `CheckoutFormCubit` with `emailChanged`, `passwordChanged`, `submit`.\n- **Local UI state that outgrows setState** — an expanded/collapsed panel with multiple triggers." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`hydrated_cubit`** — persist Cubit state across process death (part of hydrated_bloc).\n- **`replay_cubit`** — undo/redo.\n- **`emit` returns before the state has been distributed** — it queues on the stream.\n- **Cubit is a `Stream<State>`** — you can compose it via `cubit.stream.map(...)` in RxDart-style pipelines.\n- **`onChange(Change<State> change)`** — override to observe every emit for logging.\n- **`onError(Object, StackTrace)`** — override to intercept async errors thrown from methods.\n- **`BlocObserver`** — set globally to log every Cubit + Bloc change across the app.\n- **`freezed` + Cubit** — sealed states with `copyWith` in one line.\n- **Migration path** — Cubit → Bloc is mechanical: define events, replace method bodies with `on<Event>` handlers." }
   ],
   "flashcards": [
-    { "front": "Cubit vs BLoC core difference?", "back": "Cubit emits states from method calls; BLoC maps explicit events to states." },
-    { "front": "When prefer BLoC over Cubit?", "back": "When you need an event trail or transformers (debounce/throttle/concurrency)." },
-    { "front": "Do Cubit and BLoC share widgets?", "back": "Yes — BlocProvider/BlocBuilder/BlocListener work for both." }
+    { "front": "Cubit vs Bloc?", "back": "Same package + widgets. Cubit skips events; methods call emit directly." },
+    { "front": "When Cubit?", "back": "Counters, toggles, form fields, simple load/error flows — no need for debouncing/audit log." },
+    { "front": "When promote to Bloc?", "back": "Need event transformers (debounce/restartable) or named-event logs." },
+    { "front": "Widgets?", "back": "Same as Bloc: BlocProvider, BlocBuilder, BlocSelector, BlocListener, BlocConsumer." },
+    { "front": "Test tool?", "back": "blocTest — build + act + expect states." },
+    { "front": "Can they coexist?", "back": "Yes — same package, side-by-side in MultiBlocProvider." }
   ],
   "quiz": [
-    { "q": "A Cubit changes state by…", "options": ["Dispatching events", "Calling methods that emit", "Mutating fields", "setState"], "answer": 1, "explain": "Methods call emit(newState) directly." },
-    { "q": "Choose BLoC over Cubit when you need…", "options": ["Less code", "An explicit event trail/transformers", "No testing", "Global variables"], "answer": 1, "explain": "Events enable auditing and transformers." },
-    { "q": "Cubit and BLoC…", "options": ["Use different widgets", "Share the same widgets and tests", "Can't coexist", "Are unrelated"], "answer": 1, "explain": "Same package, same UI widgets and testing tools." }
+    { "q": "Cubit emits new state via…", "options": ["Event dispatch", "Method that calls emit(newState)", "setState", "notifyListeners"], "answer": 1, "explain": "No event class needed." },
+    { "q": "When to use Bloc over Cubit?", "options": ["Always", "When you need event transformers or audit log", "When lazy", "For counters"], "answer": 1, "explain": "Otherwise Cubit is enough." },
+    { "q": "Cubit and Bloc share…", "options": ["Nothing", "Same widgets and testing tools", "Only state class", "Web-only"], "answer": 1, "explain": "One package." },
+    { "q": "Test API?", "options": ["setUp/tearDown", "blocTest", "GoldenTest only", "Pump"], "answer": 1, "explain": "build/act/expect." },
+    { "q": "Mixing Cubit + Bloc in one app?", "options": ["Illegal", "Perfectly fine", "Blocked by package", "Deprecated"], "answer": 1, "explain": "Common architecture." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Build a counter Cubit." },
-    { "level": "Medium", "text": "Model a toggle/settings screen with a Cubit." },
-    { "level": "Hard", "text": "Convert a Cubit to a BLoC and keep tests passing." },
-    { "level": "Expert", "text": "Build a paginated list Cubit with loading-more and error states." }
+    { "level": "Easy", "text": "CounterCubit with increment/decrement/reset." },
+    { "level": "Easy", "text": "ToggleCubit with a single toggle() method." },
+    { "level": "Medium", "text": "UserCubit with Loading/Loaded/Error and a load() future." },
+    { "level": "Medium", "text": "Sealed CartState + Equatable; add/remove/clear methods." },
+    { "level": "Hard", "text": "Use blocTest to cover happy + error paths of a Cubit." },
+    { "level": "Hard", "text": "Migrate a small Bloc to a Cubit; measure LOC reduction." },
+    { "level": "Expert", "text": "Persist cart state across process death using hydrated_cubit." }
   ],
   "interviewQuestions": [
-    "What is a Cubit?",
-    "Cubit vs BLoC — when use each?",
-    "How do you emit and test Cubit states?",
-    "Can you migrate Cubit to BLoC easily?",
-    "Why are Cubit states immutable?"
+    "What is a Cubit and how does it relate to Bloc?",
+    "When would you pick Cubit over Bloc?",
+    "Does a Cubit have events?",
+    "How do you handle async work in a Cubit?",
+    "How do you test a Cubit?",
+    "Can Cubit and Bloc coexist in one app?",
+    "What are common Cubit mistakes?"
   ],
   "references": [
-    { "label": "Cubit — bloc library", "url": "https://bloclibrary.dev/bloc-concepts/#cubit" }
+    { "label": "Cubit — bloclibrary.dev", "url": "https://bloclibrary.dev/#/coreconcepts?id=cubit" },
+    { "label": "bloc_test", "url": "https://pub.dev/packages/bloc_test" }
   ]
 }

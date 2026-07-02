@@ -1,5 +1,6 @@
 // VOLUME 5 — State Management
 const L = require("./lib");
+const { loadTopic, topicToChapter } = require("./topic_to_chapter");
 const {
   C, P, H1, H2, bullet, num, callout, code, table, rule, chip,
   makeDoc, pageProps, save, Paragraph, TextRun, PageBreak, AlignmentType,
@@ -68,116 +69,21 @@ body.push(P([{ t: "'Which state management do you use?' ", b: true }, "is one of
 body.push(callout("note", [["Each chapter ends with: ", { t: "✅ Summary · 🎯 Interview Questions · 💻 Coding Problems · 🏭 Real-world Example · 🛠 Mini Project · 🚀 Advanced Notes.", b: true }]]));
 body.push(callout("interview", ["The split that frames everything: ephemeral (local) state belongs in setState; shared/app state belongs in a state-management solution. Always separate logic from UI and rebuild only what changed — that's true for every tool below."]));
 
-// 1 Provider
-body.push(...chapter({
-  id: "ch1", title: "1. Provider",
-  def: "Provider is a lightweight wrapper around InheritedWidget that simplifies dependency injection and state propagation, rebuilding listeners when the provided value changes.",
-  blocks: [
-    code(["class Counter extends ChangeNotifier {",
-      "  int value = 0; void inc(){ value++; notifyListeners(); }",
-      "}",
-      "context.watch<Counter>().value;  // rebuilds",
-      "context.read<Counter>().inc();   // no rebuild"], "dart"),
-    table(["API", "Rebuilds?", "Use"], [
-      ["watch / Consumer", "Yes", "Read + rebuild"],
-      ["read", "No", "Callbacks / one-off"],
-      ["Selector", "Only on selected change", "Granular rebuilds"]], [2600, 2400, 4360]),
-    callout("mistake", ["watch in callbacks (rebuild loops) or a Consumer around a huge subtree. Use read() in callbacks and Selector for granular rebuilds."]),
-  ],
-  summary: ["Provider wraps InheritedWidget for DI + state.", "watch rebuilds; read is one-off; Selector is granular.", "Great for small/medium apps; official baseline.", "Riverpod is its compile-safe successor."],
-  interview: ["What is Provider built on?", "watch vs read vs Selector?", "How does it avoid prop drilling?", "When does a Consumer rebuild?", "Provider vs Riverpod?"],
-  coding: [
-    { level: "Easy", text: "Counter with ChangeNotifier + Provider." },
-    { level: "Medium", text: "Selector to rebuild one label of many." },
-    { level: "Hard", text: "ProxyProvider dependency between providers." },
-    { level: "Expert", text: "Profile and remove over-rebuilds in a Provider list." }],
-  realworld: ["Many production apps start with Provider for shared state like theme, auth and cart — simple and officially supported."],
-  miniproject: ["Build a shopping cart with Provider: add/remove items, a badge count, and a total that rebuilds granularly."],
-  advanced: ["MultiProvider composition, ProxyProvider, Provider vs InheritedModel."],
-}));
+// 1. Provider
+body.push(...topicToChapter(loadTopic("level_05", "provider"),
+  { chapterNumber: 1, bookmarkId: "ch1" }));
 
-// 2 BLoC
-body.push(...chapter({
-  id: "ch2", title: "2. BLoC",
-  def: "BLoC (Business Logic Component) maps a stream of input events to a stream of output states, enforcing strict separation of UI and logic.",
-  blocks: [
-    code(["class CounterBloc extends Bloc<CounterEvent,int> {",
-      "  CounterBloc() : super(0) { on<Increment>((e,emit)=>emit(state+1)); }",
-      "}",
-      "BlocBuilder<CounterBloc,int>(builder:(c,s)=>Text('$s'));"], "dart"),
-    table(["Widget", "Purpose"], [
-      ["BlocProvider", "Create/provide a bloc"],
-      ["BlocBuilder", "Rebuild on state"],
-      ["BlocListener", "Side effects (snackbar/nav)"],
-      ["BlocConsumer", "Builder + Listener"]], [3000, 6160]),
-    callout("interview", ["BLoC's strength is explicitness + testability: every transition is an event handler unit-testable with bloc_test, and unidirectional event→state flow makes complex flows predictable and observable."]),
-  ],
-  summary: ["BLoC maps events → immutable states (streams).", "UI: BlocProvider/Builder/Listener/Consumer.", "Highly testable; great for large, event-driven teams.", "More boilerplate — Cubit is the lighter sibling."],
-  interview: ["Explain the BLoC data flow.", "Builder vs Listener vs Consumer?", "Why immutable states?", "How do you test a BLoC?", "BLoC vs Cubit?"],
-  coding: [
-    { level: "Easy", text: "Counter BLoC with Increment/Decrement." },
-    { level: "Medium", text: "Network request with loading/success/error states." },
-    { level: "Hard", text: "Search BLoC with debounce + cancellation transformers." },
-    { level: "Expert", text: "Full bloc_test coverage of a complex BLoC." }],
-  realworld: ["Large team apps (banking, enterprise) favor BLoC because its explicit, observable transitions are auditable and easy to onboard onto."],
-  miniproject: ["Build a weather app: a BLoC fetching by city with loading/error/data states and a retry."],
-  advanced: ["Event transformers (concurrent/sequential/restartable), HydratedBloc persistence, bloc observer."],
-}));
+// 2. BLoC
+body.push(...topicToChapter(loadTopic("level_05", "bloc"),
+  { chapterNumber: 2, bookmarkId: "ch2" }));
 
-// 3 Cubit
-body.push(...chapter({
-  id: "ch3", title: "3. Cubit",
-  def: "A Cubit is a lighter BLoC from the same package: you call methods that emit states directly (no events), with the same immutability and testability.",
-  blocks: [
-    code(["class CounterCubit extends Cubit<int> {",
-      "  CounterCubit():super(0);",
-      "  void increment()=>emit(state+1);",
-      "}"], "dart"),
-    table(["", "Cubit", "BLoC"], [
-      ["Trigger", "Method calls", "Events"],
-      ["Boilerplate", "Less", "More"],
-      ["Best for", "Simple/medium state", "Complex event flows"]], [1700, 3830, 3830]),
-    callout("interview", ["Use Cubit by default; switch to BLoC when you need the explicit event trail (auditing) or transformers (debounce/throttle/concurrency). They share widgets and tests, so migration is easy."]),
-  ],
-  summary: ["Cubit emits states from method calls.", "Less boilerplate than BLoC, same model.", "Shares widgets/tests with BLoC.", "Upgrade to BLoC for event trails/transformers."],
-  interview: ["Cubit vs BLoC?", "When prefer BLoC?", "How do you test a Cubit?", "Can you migrate Cubit → BLoC?", "Why immutable states?"],
-  coding: [
-    { level: "Easy", text: "Counter Cubit." },
-    { level: "Medium", text: "Settings/toggle screen Cubit." },
-    { level: "Hard", text: "Convert a Cubit to BLoC, keep tests green." },
-    { level: "Expert", text: "Paginated list Cubit (load-more + error)." }],
-  realworld: ["Teams often build most features as Cubits and reserve full BLoCs for the few flows that truly need event semantics."],
-  miniproject: ["Build a paginated infinite-scroll list with a Cubit (initial/loading/loaded/error/loadingMore)."],
-  advanced: ["Cubit + freezed states, HydratedCubit, equatable for state equality."],
-}));
+// 3. Cubit
+body.push(...topicToChapter(loadTopic("level_05", "cubit"),
+  { chapterNumber: 3, bookmarkId: "ch3" }));
 
-// 4 Riverpod
-body.push(...chapter({
-  id: "ch4", title: "4. Riverpod",
-  def: "Riverpod is a compile-safe reactive state + DI framework (by Provider's author) that removes Provider's limits: no BuildContext needed, multiple same-type providers, and easy testing.",
-  blocks: [
-    code(["final counter = StateProvider<int>((ref)=>0);",
-      "ref.watch(counter);            // subscribe",
-      "ref.read(counter.notifier).state++;",
-      "final user = FutureProvider((ref)=>api.getUser()); // AsyncValue"], "dart"),
-    table(["Provider type", "Use"], [
-      ["Provider", "Value/service"],
-      ["StateProvider", "Simple mutable state"],
-      ["NotifierProvider", "Complex state + logic"],
-      ["FutureProvider/StreamProvider", "Async (loading/error/data)"]], [3600, 5560]),
-    callout("interview", ["Riverpod's wins over Provider: no BuildContext to read state, multiple providers of the same type, compile-time safety (no runtime ProviderNotFound), trivial test overrides, and AsyncValue.when() for async UI."]),
-  ],
-  summary: ["Compile-safe DI + reactive state, no BuildContext needed.", "Provider/State/Notifier/Future/Stream types.", "AsyncValue models loading/error/data.", "autoDispose + codegen reduce boilerplate/leaks."],
-  interview: ["How does Riverpod improve on Provider?", "Main provider types?", "What is AsyncValue?", "watch vs read vs listen?", "How does autoDispose help?"],
-  coding: [
-    { level: "Easy", text: "Counter with StateProvider." },
-    { level: "Medium", text: "FutureProvider + AsyncValue.when()." },
-    { level: "Hard", text: "NotifierProvider with complex state + actions." },
-    { level: "Expert", text: "Override providers with fakes in widget tests." }],
-  realworld: ["Riverpod is the default choice for many new production apps (and is used in this very learning platform) thanks to compile-time safety and testability."],
-  miniproject: ["Build a paginated search app with Riverpod: a NotifierProvider + FutureProvider, AsyncValue UI, and provider overrides in tests."],
-  advanced: ["@riverpod codegen, family + autoDispose, ref.listen for side effects, keepAlive."],
-}));
+// 4. Riverpod
+body.push(...topicToChapter(loadTopic("level_05", "riverpod"),
+  { chapterNumber: 4, bookmarkId: "ch4" }));
 
 // 5 GetX
 body.push(...chapter({
@@ -296,5 +202,5 @@ const doc = makeDoc([
   { properties: pageProps("Volume 5 — State Management"),
     children: [...toc(), ...body] },
 ]);
-const out = require("path").join(__dirname, "Volume-5-State-Management.docx");
+const out = require("path").join(__dirname, "../../docs/books/Volume-5-State-Management.docx");
 save(doc, out).then(() => console.log("WROTE", out));

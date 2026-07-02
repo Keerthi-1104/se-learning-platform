@@ -3,49 +3,101 @@
   "levelId": 5,
   "title": "BLoC",
   "xp": 50,
-  "estimatedMinutes": 30,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Explain the event → state model",
-    "Separate UI from business logic",
-    "Test BLoC logic in isolation"
+    "Understand BLoC via a real-life analogy",
+    "Distinguish Events, States, Blocs — the unidirectional flow",
+    "Use BlocProvider, BlocBuilder, BlocSelector, BlocListener correctly",
+    "Test blocs deterministically with `bloc_test`",
+    "Answer BLoC interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "BLoC (Business Logic Component) maps a stream of input events to a stream of output states. The UI sends events; the BLoC emits immutable states; the UI rebuilds from state. It enforces strict separation of UI and logic." },
-    { "type": "code", "language": "dart", "code": "sealed class CounterEvent {}\nclass Increment extends CounterEvent {}\nclass CounterBloc extends Bloc<CounterEvent, int> {\n  CounterBloc() : super(0) {\n    on<Increment>((e, emit) => emit(state + 1));\n  }\n}\n// UI: BlocBuilder<CounterBloc,int>(builder: (c,s)=>Text('$s'))" },
-    { "type": "callout", "variant": "interview", "markdown": "BLoC's strength is explicitness and testability: every state transition is an event handler you can unit-test with bloc_test, and the unidirectional event→state flow makes complex flows predictable and debuggable (every transition is observable)." },
-    { "type": "table", "headers": ["Widget", "Purpose"], "rows": [
-      ["BlocProvider", "Create/provide a bloc"],
-      ["BlocBuilder", "Rebuild UI on state"],
-      ["BlocListener", "Side effects (snackbars, nav)"],
-      ["BlocConsumer", "Builder + Listener combined"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of BLoC as an assembly-line factory with clear input, output, and no ambiguity about what happens.**\n\n- **Events (Inputs on a conveyor)** are things that arrive at the factory door: 'User pressed Add to Cart', 'Timer fired', 'Bluetooth scan finished'. Each event is a named object saying *what happened*.\n- **The Bloc (the machine on the floor)** transforms events into new states. It doesn't do UI; it doesn't call `setState`. It just says 'given the current state + this event, what's the new state?' A completely predictable transformation.\n- **States (Outputs on the far conveyor)** are the OBSERVABLE outputs — snapshots of what the UI should show. `CartLoaded(items)`, `CartLoading`, `CartError`. UI just renders whatever state comes out.\n- **BlocBuilder** is the RECEIVER on the UI side — every new state → rebuild.\n\n**The disciplined flow is the whole point:** UI dispatches an event, the bloc computes the new state, the UI rebuilds. Never write directly into state from the UI. This unidirectional flow (like Redux) makes bugs traceable: every state change has an event that caused it — searchable, loggable, replayable.\n\n**Why teams pick BLoC:** in large teams, the discipline is worth its ceremony. Every UI change corresponds to a named event; every state has a name. Onboarding new engineers is easier because the pattern is uniform across the codebase." },
+    { "type": "callout", "variant": "definition", "markdown": "**BLoC (Business Logic Component)** is a state-management pattern popularized by the `flutter_bloc` package. State flows in ONE direction: **UI → Event → Bloc → State → UI**. Each Bloc extends `Bloc<Event, State>` and implements event handlers with `on<EventClass>((event, emit) => …)`. UI consumes state via `BlocBuilder`, `BlocSelector`, `BlocListener`. **Cubit** is a lighter variant that skips events (methods call `emit` directly) — same state flow, less boilerplate. Both come from the same package." },
+    { "type": "theory", "markdown": "## The three primitives" },
+    { "type": "table", "headers": ["Concept", "What it is", "Example"], "rows": [
+      ["**Event**", "An immutable class describing 'something happened'", "`class AddItem extends CartEvent { final String name; }`"],
+      ["**State**", "An immutable class describing 'what the UI should show'", "`class CartLoaded extends CartState { final List<Item> items; }`"],
+      ["**Bloc**", "The class that maps events → states", "`class CartBloc extends Bloc<CartEvent, CartState> { … }`"]
     ]},
-    { "type": "callout", "variant": "mistake", "markdown": "Putting business logic in the UI or mutating state in place. States must be immutable and emitted; logic belongs in event handlers, not widgets." },
-    { "type": "callout", "variant": "tip", "markdown": "BLoC shines on large, team-based, event-driven apps. The boilerplate is real — for simpler state, Cubit (same package, no events) is lighter." }
+    { "type": "theory", "markdown": "## Canonical Bloc — cart example, end to end" },
+    { "type": "code", "language": "dart", "code": "// pubspec: flutter_bloc: ^8.1, equatable: ^2.0\nimport 'package:equatable/equatable.dart';\nimport 'package:flutter/material.dart';\nimport 'package:flutter_bloc/flutter_bloc.dart';\n\n// 1. Events — user intents / external triggers\nsealed class CartEvent extends Equatable { const CartEvent(); @override List<Object?> get props => []; }\nclass CartFetched extends CartEvent { const CartFetched(); }\nclass CartItemAdded extends CartEvent {\n  const CartItemAdded(this.name);\n  final String name;\n  @override List<Object?> get props => [name];\n}\nclass CartCleared extends CartEvent { const CartCleared(); }\n\n// 2. States — UI-consumable snapshots\nsealed class CartState extends Equatable { const CartState(); @override List<Object?> get props => []; }\nclass CartInitial extends CartState { const CartInitial(); }\nclass CartLoading extends CartState { const CartLoading(); }\nclass CartLoaded extends CartState {\n  const CartLoaded(this.items);\n  final List<String> items;\n  @override List<Object?> get props => [items];\n}\nclass CartError extends CartState {\n  const CartError(this.message);\n  final String message;\n  @override List<Object?> get props => [message];\n}\n\n// 3. The Bloc — event handlers\nclass CartBloc extends Bloc<CartEvent, CartState> {\n  CartBloc(this._repo) : super(const CartInitial()) {\n    on<CartFetched>(_onFetched);\n    on<CartItemAdded>(_onAdded);\n    on<CartCleared>(_onCleared);\n  }\n\n  final CartRepository _repo;\n\n  Future<void> _onFetched(CartFetched _, Emitter<CartState> emit) async {\n    emit(const CartLoading());\n    try {\n      final items = await _repo.fetchCart();\n      emit(CartLoaded(items));\n    } catch (e) {\n      emit(CartError(e.toString()));\n    }\n  }\n\n  Future<void> _onAdded(CartItemAdded event, Emitter<CartState> emit) async {\n    final current = state;\n    if (current is CartLoaded) {\n      emit(CartLoaded([...current.items, event.name]));\n      await _repo.saveCart([...current.items, event.name]);\n    }\n  }\n\n  Future<void> _onCleared(CartCleared _, Emitter<CartState> emit) async {\n    emit(const CartLoaded([]));\n    await _repo.saveCart([]);\n  }\n}\n\n// 4. UI — provide the bloc, then consume states\nvoid main() {\n  runApp(MaterialApp(\n    home: BlocProvider(\n      create: (_) => CartBloc(CartRepository())..add(const CartFetched()),\n      child: const CartScreen(),\n    ),\n  ));\n}\n\nclass CartScreen extends StatelessWidget {\n  const CartScreen({super.key});\n  @override\n  Widget build(BuildContext context) => Scaffold(\n    appBar: AppBar(title: const Text('Cart')),\n    body: BlocBuilder<CartBloc, CartState>(\n      builder: (context, state) => switch (state) {\n        CartInitial() => const Center(child: Text('idle')),\n        CartLoading() => const Center(child: CircularProgressIndicator()),\n        CartError(:final message) => Center(child: Text('Error: $message')),\n        CartLoaded(:final items) => ListView(children: items.map((s) => Text(s)).toList()),\n      },\n    ),\n    floatingActionButton: FloatingActionButton(\n      onPressed: () => context.read<CartBloc>().add(const CartItemAdded('apple')),\n      child: const Icon(Icons.add),\n    ),\n  );\n}\n\nclass CartRepository {  // stub\n  Future<List<String>> fetchCart() async => ['banana'];\n  Future<void> saveCart(List<String> items) async {}\n}" },
+    { "type": "theory", "markdown": "## Widgets — Builder / Selector / Listener / Consumer" },
+    { "type": "table", "headers": ["Widget", "Purpose"], "rows": [
+      ["**`BlocBuilder<B, S>`**", "Rebuild UI when state changes"],
+      ["**`BlocSelector<B, S, X>`**", "Rebuild only when a slice of state changes (perf)"],
+      ["**`BlocListener<B, S>`**", "Side effect on state change (nav, toast, dialog) — doesn't rebuild"],
+      ["**`BlocConsumer<B, S>`**", "Builder + Listener in one — for common combined use"],
+      ["**`MultiBlocProvider` / `MultiBlocListener`**", "Compose many"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**The key discipline:** `BlocBuilder` for widgets that visually reflect state, `BlocListener` for one-shot side effects (navigate, show snackbar). Mixing them into `BlocBuilder`'s builder causes side effects on rebuild — a bug. `BlocConsumer` combines both cleanly." },
+    { "type": "theory", "markdown": "## Cubit — same idea, less ceremony" },
+    { "type": "code", "language": "dart", "code": "// Cubit skips events. Methods on the cubit directly emit state.\nclass CartCubit extends Cubit<CartState> {\n  CartCubit(this._repo) : super(const CartInitial());\n\n  final CartRepository _repo;\n\n  Future<void> fetch() async {\n    emit(const CartLoading());\n    try {\n      emit(CartLoaded(await _repo.fetchCart()));\n    } catch (e) {\n      emit(CartError(e.toString()));\n    }\n  }\n\n  void add(String name) {\n    final s = state;\n    if (s is CartLoaded) emit(CartLoaded([...s.items, name]));\n  }\n}\n\n// UI:\ncontext.read<CartCubit>().fetch();     // no event class needed\ncontext.read<CartCubit>().add('apple');\n\n// Trade-off: no explicit event names → less debuggable action trail.\n// Cubit for simple cases; Bloc when you need the event log." },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Calling `emit()` from outside the bloc.** Only the bloc itself may emit. UI dispatches events (`bloc.add(...)`); the bloc emits inside handlers." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Storing mutable data in state.** State classes must be IMMUTABLE — the equality check depends on it. Use `copyWith`, `List.of`, `Map.of`, or Freezed." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Using `BlocBuilder` for side effects.** Navigation, toasts, dialogs go in `BlocListener` — the builder is for widgets only." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Sequential emits per keystroke without transforming.** For debounce, use `transformer:` on the event handler (`transformer: (events, mapper) => events.debounce(300ms).switchMap(mapper)`) or use `restartable()` from `bloc_concurrency`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: One giant Bloc for the whole app.** Split by feature (`CartBloc`, `AuthBloc`, `NotificationsBloc`); each with its own scope." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Sealed classes for events and states.** Dart 3's `sealed class` + `switch` gives exhaustive matching — the compiler catches missed cases." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Immutable + `Equatable` (or Freezed).** Two states with identical fields must be equal; else you'll get spurious rebuilds." },
+    { "type": "callout", "variant": "best", "markdown": "**3. `BlocSelector` for narrow subscriptions.** Just like Provider's `Selector`." },
+    { "type": "callout", "variant": "best", "markdown": "**4. `BlocListener` for side effects.** Don't navigate inside `BlocBuilder`." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Repository pattern.** Blocs depend on Repositories, not on Retrofit/Room directly. Testable + reusable." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Test with `bloc_test`.** Assert 'given initial state and this event, expect these emitted states.' Property-based, fast, deterministic." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Counter Cubit.** State is an `int`; methods `increment()`, `decrement()`, `reset()`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Auth Bloc.** Events: `SignInRequested`, `SignedOut`. States: `Unauthenticated`, `Authenticating`, `Authenticated(user)`. Emits transitions." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Debounced search.** `SearchQueryChanged(q)` event; transform with debounce + switchMap so only the latest query fires." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Cart with optimistic add.** UI emits an add; UI shows immediately; server errors revert state." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Bloc + Freezed + bloc_test.** Use Freezed for states/events; write bloc_test assertions for every transition." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is BLoC and how does it differ from setState / Provider?**\n\n**A:** BLoC (Business Logic Component) is a state-management pattern with **strict unidirectional data flow**: UI dispatches EVENTS → the BLoC transforms them into STATES → UI renders whatever state comes out. Contrast: **setState** is imperative widget-local state; **Provider/Riverpod** are broader but let you mutate state from anywhere. BLoC's discipline is that state changes MUST correspond to a named event — nothing else can trigger them. Trade-off: more boilerplate (events, states, handlers) for large-team predictability. Every state change is traceable and testable in isolation. Common in enterprise codebases where strict architecture matters." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: BLoC vs Cubit — when to use which?**\n\n**A:** Same conceptual model, different ceremony. **BLoC** requires you to define events (`class AddItem extends CartEvent`) and dispatch them (`bloc.add(AddItem('apple'))`). Handlers use `on<AddItem>((e, emit) => ...)`. Every action is a named class. **Cubit** skips events: methods on the cubit call `emit(newState)` directly. `context.read<CartCubit>().add('apple')`. **Rule:** Cubit for simple state (a counter, a toggle, a form). BLoC when you want the audit trail — every state change has a named event you can log, filter, or replay. Both come from the same `flutter_bloc` package." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: `BlocBuilder` vs `BlocListener` vs `BlocConsumer`?**\n\n**A:** **`BlocBuilder<B, S>`** — pure UI: whenever state changes, rebuild. Use for widgets that reflect state visually. **`BlocListener<B, S>`** — one-shot side effect on state change: navigate, show a snackbar, play a sound. Does NOT rebuild. **`BlocConsumer<B, S>`** — combines both: `builder:` for UI + `listener:` for side effect. Use for widgets that need both. **Anti-pattern:** doing navigation or `showSnackBar` inside `BlocBuilder.builder` — the side effect fires on every rebuild, spamming snackbars. Always separate concerns: builder for pure render, listener for effects." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you narrow rebuilds in BLoC?**\n\n**A:** `BlocSelector<B, S, X>` — extract a slice of state; widget rebuilds only when that slice changes.\n```dart\nBlocSelector<CartBloc, CartState, int>(\n  selector: (state) => state is CartLoaded ? state.items.length : 0,\n  builder: (context, count) => Text('$count'),\n)\n```\nWithout Selector, `BlocBuilder` rebuilds on any state transition — even ones that don't affect the widget. Equivalent to Provider's `Selector` and Riverpod's `p.select(...)`. Also: split large states into smaller feature-scoped blocs; a widget that only cares about `AuthState` should watch `AuthBloc`, not a mega-bloc." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you handle async work in a Bloc?**\n\n**A:** `on<Event>` handlers can be `async` functions. Inside, you `emit()` a loading state, `await` your repository call, then `emit()` success or error state. Example:\n```dart\non<CartFetched>((event, emit) async {\n  emit(CartLoading());\n  try {\n    emit(CartLoaded(await repo.fetch()));\n  } catch (e) {\n    emit(CartError(e.toString()));\n  }\n});\n```\n**Do NOT** launch background work in `emit` handlers via `Future.microtask` etc. — the emit context ends when the handler returns. For long-running streams, use `emit.forEach<T>(stream, onData: (t) => newState)` — Bloc's built-in helper for stream→state mapping." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How do you debounce or throttle events?**\n\n**A:** By passing a **`transformer:`** to the event handler. From the `bloc_concurrency` package:\n- **`sequential()`** — process one event at a time in order (default).\n- **`concurrent()`** — process events in parallel.\n- **`droppable()`** — ignore new events while one is in flight.\n- **`restartable()`** — cancel the previous handler when a new event arrives (for search-as-you-type).\n\nExample: `on<SearchQueryChanged>((e, emit) => …, transformer: restartable())`. Also, use RxDart-style transformers: `transformer: (events, mapper) => events.debounceTime(Duration(milliseconds: 300)).switchMap(mapper)`. These transformers are the key to writing search-as-you-type, debounced input handlers, and cancellable pipelines within BLoC's discipline." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: How do you test a Bloc?**\n\n**A:** Use the **`bloc_test`** package:\n```dart\nblocTest<CartBloc, CartState>(\n  'emits Loading then Loaded when Fetched',\n  build: () => CartBloc(mockRepo),\n  act: (bloc) => bloc.add(CartFetched()),\n  expect: () => [CartLoading(), CartLoaded(['banana'])],\n);\n```\nThe framework: (1) creates a bloc from `build:`, (2) dispatches actions via `act:`, (3) collects emitted states, (4) asserts they match `expect:`. Fast (no widget pump), deterministic, and reads exactly like a spec. Combined with mock repositories (mocktail / mockito), your business logic is fully testable without any UI. This is one of BLoC's biggest selling points — clean separation from Flutter widgets makes tests trivial." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Google's official Flutter samples** — heavily BLoC.\n- **Enterprise Android/iOS ports to Flutter** — teams that had unidirectional flows before choose BLoC to preserve their architecture.\n- **BMW MyBMW app** — public case study.\n- **Reddit Flutter clients** — common choice.\n- **Financial / auth-heavy apps** — the named-event audit trail matters for compliance." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`hydrated_bloc`** — persist bloc state to disk automatically; state survives process death.\n- **`replay_bloc`** — undo/redo out of the box.\n- **`bloc_concurrency`** — transformers (droppable, restartable, ...).\n- **`Freezed`** — sealed classes with generated equality + `copyWith` + patterns.\n- **`BlocObserver`** — global observer for logging every transition (great for analytics).\n- **`emit.forEach<T>(stream, onData: ...)`** — Stream→State conversion inside a handler.\n- **`emit.onEach<T>(stream, onData: ...)`** — subscribe without waiting for stream to complete.\n- **Repository pattern** — always inject via constructor; makes tests trivial.\n- **Migrating from Provider** — usually a 1:1 mapping; ChangeNotifier → Cubit, StreamProvider → BlocProvider with Stream in the state.\n- **Big-team code review discipline** — 'every action is an event' makes PRs easy to review." }
   ],
   "flashcards": [
-    { "front": "What does BLoC map?", "back": "Input events → output states, both as streams; the UI rebuilds from state." },
-    { "front": "BlocBuilder vs BlocListener?", "back": "Builder rebuilds UI on state; Listener runs one-off side effects (snackbar, navigation)." },
-    { "front": "Why is BLoC testable?", "back": "Each event→state transition is a pure handler unit-testable with bloc_test." }
+    { "front": "Data flow?", "back": "UI → Event → Bloc → State → UI (strictly one-way)." },
+    { "front": "Three primitives?", "back": "Event (input), State (output), Bloc (mapping)." },
+    { "front": "Bloc vs Cubit?", "back": "Bloc has explicit event classes; Cubit skips them (methods call emit directly)." },
+    { "front": "Widgets — pure render vs side effect?", "back": "BlocBuilder for UI, BlocListener for nav/toasts, BlocConsumer for both." },
+    { "front": "Debounce events?", "back": "transformer: restartable() or a custom stream transformer with debounce+switchMap." },
+    { "front": "Test tool?", "back": "bloc_test — build + act + expect states." }
   ],
   "quiz": [
-    { "q": "BLoC transforms…", "options": ["States into events", "Events into states", "Widgets into pixels", "JSON into widgets"], "answer": 1, "explain": "UI events flow in; immutable states flow out." },
-    { "q": "For a snackbar on a state change, use…", "options": ["BlocBuilder", "BlocListener", "BlocProvider", "Selector"], "answer": 1, "explain": "Listener handles side effects without rebuilding." },
-    { "q": "BLoC states should be…", "options": ["Mutable", "Immutable and emitted", "Global variables", "Stored in widgets"], "answer": 1, "explain": "Emit new immutable states rather than mutating." }
+    { "q": "Bloc data flow?", "options": ["UI ↔ State", "UI → Event → Bloc → State → UI", "Bloc → UI direct", "None"], "answer": 1, "explain": "Unidirectional." },
+    { "q": "Cubit skips…", "options": ["State", "Events (methods call emit directly)", "UI", "Rebuilds"], "answer": 1, "explain": "Simpler; no audit trail." },
+    { "q": "Navigation on state change?", "options": ["BlocBuilder", "BlocListener", "setState", "read"], "answer": 1, "explain": "Side effects → Listener." },
+    { "q": "Narrow rebuild?", "options": ["BlocBuilder always", "BlocSelector on a slice", "read()", "GlobalKey"], "answer": 1, "explain": "Watch a slice, not the whole state." },
+    { "q": "Test with…", "options": ["Widget pumping", "bloc_test build/act/expect", "print", "Manual"], "answer": 1, "explain": "Isolate business logic." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Build a counter BLoC with Increment/Decrement events." },
-    { "level": "Medium", "text": "Model a network request with loading/success/error states." },
-    { "level": "Hard", "text": "Add debounce + cancellation to a search BLoC with transformers." },
-    { "level": "Expert", "text": "Unit-test a complex BLoC with bloc_test covering all transitions." }
+    { "level": "Easy", "text": "Counter Cubit with increment/decrement/reset." },
+    { "level": "Easy", "text": "Convert Counter Cubit to a Bloc with Increment/Decrement events." },
+    { "level": "Medium", "text": "Auth Bloc: Unauthenticated → Authenticating → Authenticated states." },
+    { "level": "Medium", "text": "BlocSelector isolates cart count from a big CartState." },
+    { "level": "Hard", "text": "Debounced search bloc with transformer: restartable() from bloc_concurrency." },
+    { "level": "Hard", "text": "Optimistic add + rollback on server error." },
+    { "level": "Expert", "text": "Use hydrated_bloc so the cart state survives process death; verify with adb kill." }
   ],
   "interviewQuestions": [
-    "Explain the BLoC pattern and its data flow.",
+    "What is BLoC and how does it differ from setState / Provider?",
+    "BLoC vs Cubit — when to use which?",
     "BlocBuilder vs BlocListener vs BlocConsumer?",
-    "Why are BLoC states immutable?",
-    "How do you test a BLoC?",
-    "BLoC vs Cubit?"
+    "How do you narrow rebuilds in BLoC?",
+    "How do you handle async work in a Bloc?",
+    "How do you debounce or throttle events?",
+    "How do you test a Bloc?"
   ],
   "references": [
-    { "label": "bloc library", "url": "https://bloclibrary.dev" }
+    { "label": "BLoC library", "url": "https://bloclibrary.dev" },
+    { "label": "flutter_bloc on pub.dev", "url": "https://pub.dev/packages/flutter_bloc" }
   ]
 }
