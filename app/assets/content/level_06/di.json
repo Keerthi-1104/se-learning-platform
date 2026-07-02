@@ -2,49 +2,106 @@
   "id": "arch.di",
   "levelId": 6,
   "title": "Dependency Injection",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 45,
+  "estimatedMinutes": 35,
   "objectives": [
-    "Explain DI vs the Service Locator pattern",
-    "Choose constructor injection over globals",
-    "Scope dependencies deliberately"
+    "Understand DI via a real-life analogy",
+    "Distinguish Constructor / Setter / Service-Locator styles",
+    "Use `get_it` and Riverpod as DI containers in Flutter",
+    "See how DI + Repository + Use Cases unlock testability",
+    "Answer DI interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Dependency Injection means an object receives its collaborators from outside instead of creating them. This decouples classes, enables testing with fakes, and is the practical form of the Dependency Inversion Principle (SOLID)." },
-    { "type": "table", "headers": ["Style", "Example", "Notes"], "rows": [
-      ["Constructor DI", "class VM(this.repo)", "Preferred — explicit, testable"],
-      ["Service Locator", "GetIt.I<Repo>()", "Convenient but hides deps"],
-      ["Riverpod DI", "ref.watch(repoProvider)", "Compile-safe container"],
-      ["Hilt / Dagger", "@Inject", "Annotation-driven codegen (Android)"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Dependency Injection as room service in a good hotel.**\n\n- You (the class that needs stuff) don't leave your room to fetch a towel, a menu, or coffee. You call the front desk, and it's DELIVERED to you. You just USE it — you never care where it came from, who made it, or where it's stored.\n- The **front desk (DI container / composition root)** knows where everything lives — the linen room, the kitchen, the coffee bar. When you ask for a towel, it hands you one. When another guest asks, they get the same well-folded towel from the same supply.\n- Without DI: you'd have to **build your own towels** every time you needed one — go find cotton, learn to weave, wash it. Every guest does this independently. Nothing works.\n\n**In code terms:** without DI, `UserViewModel` would say `final _repo = UserRepositoryImpl(Dio(), Hive.box('users'))` — building its own dependencies inside itself. That means: (1) `UserViewModel` KNOWS about Dio and Hive (leak). (2) Tests can't swap in a fake repository. (3) Every consumer builds its own — no sharing, no consistency.\n\n**With DI:** `UserViewModel(this._repo)` accepts the repository. Something else (the composition root, or a container like `get_it` or Riverpod) decides which repository to hand it. That single change unlocks testability, sharing, and clean architecture." },
+    { "type": "callout", "variant": "definition", "markdown": "**Dependency Injection (DI)** is the design principle of PROVIDING a class with its dependencies from OUTSIDE rather than having the class CREATE them internally. Implementations range from manual constructor injection (`ClassName(this._dep)`) to service locators (`get_it`) to compile-time DI frameworks. In Flutter, the two dominant options are **`get_it`** (a service locator) and **`Riverpod`** (a compile-safe DI container). DI is one of the SOLID principles (the 'D' in SOLID — Dependency Inversion)." },
+    { "type": "theory", "markdown": "## The three styles of DI" },
+    { "type": "table", "headers": ["Style", "How it works", "Example"], "rows": [
+      ["**Constructor injection** (best)", "Dependencies passed as constructor arguments", "`UserVM(this._repo)` — mandatory, visible in the API"],
+      ["**Setter injection**", "Dependencies assigned via public setters after construction", "`vm.repo = fakeRepo;` — allows late binding, less safe"],
+      ["**Method injection**", "Dependency passed as a method arg on each call", "`vm.load(_repo);` — awkward but works for one-shots"]
     ]},
-    { "type": "code", "language": "dart", "code": "// Preferred: constructor DI (explicit, unit-testable)\nclass HomeViewModel {\n  final UserRepository repo;\n  HomeViewModel(this.repo);\n}\n// In wiring: HomeViewModel(sl.get());  or via provider" },
-    { "type": "callout", "variant": "interview", "markdown": "Constructor DI is the strongest form: a class's dependencies are visible in its signature, making it obvious what to fake in tests. Service locators (`GetIt.I<...>()`) are convenient but hide dependencies and can cause runtime surprises." },
-    { "type": "callout", "variant": "mistake", "markdown": "Registering everything as a global singleton. Long-lived state leaks across screens/users and breaks tests. Scope thoughtfully: app / feature / screen." }
+    { "type": "callout", "variant": "interview", "markdown": "**The rule:** prefer constructor injection. It makes dependencies EXPLICIT (visible in the API), IMMUTABLE (assigned once), and TESTABLE (fakes injected at construction time). Setter injection is for edge cases; method injection almost never. Every well-designed Flutter class uses constructor injection." },
+    { "type": "theory", "markdown": "## Manual DI — the 'composition root' pattern" },
+    { "type": "code", "language": "dart", "code": "// Without a container. `main.dart` becomes THE ONE PLACE that knows all wiring.\n// This works fine for small apps.\n\nvoid main() {\n  // 1. Instantiate the outermost dependencies.\n  final dio = Dio(BaseOptions(baseUrl: 'https://api.example.com'));\n  final hiveBox = Hive.box<Map>('users');\n\n  // 2. Compose upward — data sources → repository → use case → view model.\n  final remote = UserRemoteDataSource(dio);\n  final local  = UserLocalDataSource(hiveBox);\n  final repo   = UserRepositoryImpl(remote, local);\n  final registerUser = RegisterUser(repo);\n  final loginVm = LoginViewModel(registerUser);\n\n  // 3. Hand the root VM to the app.\n  runApp(MyApp(loginVm: loginVm));\n}\n\n// The whole graph is visible in one file. That's the 'composition root'.\n// Testable? Yes — swap `dio` and `hiveBox` for fakes at the top.\n// Scaling? OK for maybe 30 classes. Beyond that, use a container." },
+    { "type": "theory", "markdown": "## `get_it` — the popular service locator" },
+    { "type": "code", "language": "dart", "code": "// pubspec: get_it: ^7.7.0\nimport 'package:get_it/get_it.dart';\n\nfinal getIt = GetIt.instance;\n\n// Register everything at startup — the composition root.\nvoid setupServiceLocator() {\n  getIt.registerSingleton<Dio>(Dio(BaseOptions(baseUrl: 'https://api.example.com')));\n  getIt.registerSingleton<Box<Map>>(Hive.box<Map>('users'));\n\n  getIt.registerFactory<UserRemoteDataSource>(() => UserRemoteDataSource(getIt<Dio>()));\n  getIt.registerFactory<UserLocalDataSource>(() => UserLocalDataSource(getIt<Box<Map>>()));\n\n  getIt.registerLazySingleton<UserRepository>(() => UserRepositoryImpl(\n    getIt<UserRemoteDataSource>(),\n    getIt<UserLocalDataSource>(),\n  ));\n\n  getIt.registerFactory<RegisterUser>(() => RegisterUser(getIt<UserRepository>()));\n}\n\nvoid main() {\n  setupServiceLocator();\n  runApp(const MyApp());\n}\n\n// Elsewhere in the app — grab any dependency by TYPE:\nfinal registerUser = getIt<RegisterUser>();   // no BuildContext, no boilerplate.\n// Trade-off: hidden coupling — grep is your only tool to see who uses what." },
+    { "type": "theory", "markdown": "## Riverpod as a DI container (modern default)" },
+    { "type": "code", "language": "dart", "code": "// pubspec: flutter_riverpod: ^2.5.1\nimport 'package:flutter_riverpod/flutter_riverpod.dart';\n\n// Each provider IS a DI registration — top-level `final`.\nfinal dioProvider = Provider<Dio>((ref) => Dio());\nfinal hiveBoxProvider = Provider<Box<Map>>((ref) => Hive.box<Map>('users'));\n\nfinal userRemoteProvider = Provider<UserRemoteDataSource>(\n  (ref) => UserRemoteDataSource(ref.read(dioProvider)),\n);\nfinal userLocalProvider = Provider<UserLocalDataSource>(\n  (ref) => UserLocalDataSource(ref.read(hiveBoxProvider)),\n);\n\nfinal userRepositoryProvider = Provider<UserRepository>(\n  (ref) => UserRepositoryImpl(\n    ref.read(userRemoteProvider),\n    ref.read(userLocalProvider),\n  ),\n);\n\nfinal registerUserProvider = Provider<RegisterUser>(\n  (ref) => RegisterUser(ref.read(userRepositoryProvider)),\n);\n\n// In ViewModel / widget:\nfinal registerUser = ref.read(registerUserProvider);\n\n// Trade-off vs get_it: compile-safe (missing provider = build error),\n//   test-friendly (override providers in ProviderScope for tests),\n//   no `BuildContext` required, tracks lifecycle." },
+    { "type": "theory", "markdown": "## `get_it` vs Riverpod — the daily-driver comparison" },
+    { "type": "table", "headers": ["Feature", "get_it", "Riverpod"], "rows": [
+      ["Type-safety", "Runtime check (throws if missing)", "**Compile-time** (missing provider = build error)"],
+      ["Test overrides", "Manual `registerFactory` before test + `getIt.reset()`", "`ProviderScope(overrides: [...])` — first-class"],
+      ["Lifecycle", "Singleton / lazy singleton / factory", "`.autoDispose`, `.family`, `keepAlive`"],
+      ["State + DI unified?", "No — pure DI only", "**Yes** — same API for DI (`Provider`) and state (`NotifierProvider`)"],
+      ["Ceremony to set up", "Very light", "Slightly more (`ProviderScope` wrapper)"],
+      ["Community trajectory", "Stable, mature", "Growing / trending default for new apps"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**The pragmatic call:** modern apps default to Riverpod because state and DI use ONE mental model. `get_it` is common in older codebases and Bloc-heavy shops (Bloc + get_it is a proven pairing). Manual DI is fine for < 20 classes." },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Instantiating deps inside the class.** `UserVM() { _repo = UserRepositoryImpl(...); }` — untestable. Always take deps via constructor." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Overusing service locator.** `getIt<X>()` scattered throughout your codebase — you've lost visibility of the dependency graph. Prefer constructor injection; use the locator ONLY at the composition root." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: `getIt<Dio>()` in a widget's `build()`.** DI lookups in build execute every rebuild. Read once, pass to the constructor OR use Riverpod (which handles this idiomatically)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Not overriding in tests.** Tests should NEVER hit the real Retrofit / Hive. Either register fakes before each test (`getIt.reset()` + `registerFactory`) or use Riverpod's `ProviderScope(overrides: [...])`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Circular dependencies.** A → B → C → A. Both `get_it` and Riverpod detect this. Fix by introducing an interface both can depend on, or by breaking one link (often the sign of a missing abstraction)." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Constructor injection everywhere.** Setter/method injection only when there's a compelling reason." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Composition root at the top.** `main.dart` (or a `setupDI()` file) is THE only place where the whole graph is assembled." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Depend on interfaces, not concrete classes.** `UserRepository`, not `UserRepositoryImpl`. This is what makes fakes swappable." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Test at layer boundaries.** Inject fakes; assert behavior. Unit tests should compile in milliseconds." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Prefer Riverpod for new Flutter apps.** Same tool for DI + state = one mental model." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Keep DI narrow.** Not everything needs to be injected. `String.trim()` doesn't need a container — it's a pure function." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Manual DI in `main.dart`.** Compose Dio → RemoteDS → LocalDS → Repository → UseCase → VM. Print each step." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — `get_it` setup.** Same graph via `getIt.register*`. Access `getIt<RegisterUser>()` from a screen." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Riverpod DI.** Same graph as top-level `Provider<T>`s; read via `ref.read`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Test with fakes.** Write a widget test that overrides `userRepositoryProvider` with `FakeUserRepository`; assert UI shows fake data." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Multi-module DI.** Split `di_common.dart`, `di_features.dart`, `di_test.dart`; the test module OVERRIDES fakes with a single flip." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is Dependency Injection?**\n\n**A:** Dependency Injection (DI) is providing a class with its dependencies from OUTSIDE rather than having it create them internally. Instead of `UserVM() { _repo = UserRepositoryImpl(...); }`, you write `UserVM(this._repo)` and someone else (the composition root, a container like `get_it` or Riverpod) decides which repository to hand it. **Why:** (1) **Testability** — swap real dependencies for fakes at construction. (2) **Loose coupling** — the class depends on abstractions, not concrete implementations. (3) **Reusability** — one instance shared across the app. It's the 'D' in SOLID (Dependency Inversion Principle). Every well-architected Flutter class uses DI." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What are the three DI styles?**\n\n**A:** **(1) Constructor injection (recommended)** — dependencies passed as constructor arguments. Explicit, immutable, testable, visible in the API. Example: `UserVM(this._repo, this._logger)`. **(2) Setter injection** — dependencies set via public setter after construction (`vm.repo = fakeRepo;`). Allows late binding but less safe (dependencies may be null mid-lifecycle). **(3) Method injection** — dependency passed as an argument on each method call. Awkward but useful for one-shot dependencies. **Rule:** always prefer constructor injection. Setter and method injection are edge cases; if you're using them a lot, something's wrong with the design." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What is a composition root?**\n\n**A:** The single place in the app where the WHOLE dependency graph is wired up. Typically `main.dart` or a `setup_di.dart` file. Only this file imports every layer and knows every implementation. Everywhere ELSE in the code, classes take their dependencies via constructor and don't know or care where they came from. **Why one composition root:** you can see the entire dependency graph in ONE file — no hidden couplings. Testing is trivial: your test's composition root wires fakes instead of real classes. If you find yourself instantiating dependencies OUTSIDE the composition root, you've drifted from the pattern." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: `get_it` vs Riverpod for DI in Flutter — which do you use?**\n\n**A:** Both are proven. **`get_it`** — a lightweight service locator. Register at startup (`getIt.registerSingleton<T>`); access anywhere (`getIt<T>()`). Very light API, works with any state library. Popular with Bloc-heavy codebases. Trade-off: runtime lookups + hidden coupling. **Riverpod** — a compile-safe DI container that ALSO handles state. Providers are top-level `final`; read via `ref`. Test overrides via `ProviderScope(overrides: [...])`. My rule: modern greenfield apps → Riverpod (one tool for DI + state). Existing Bloc + `get_it` codebases → keep them; the migration cost usually outweighs the benefit. Manual DI is fine for small apps (< 20 classes)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How does DI improve testing?**\n\n**A:** Massively. Without DI: `UserVM` builds `UserRepositoryImpl(Dio())` itself → tests would hit real HTTP, be slow, flaky, and impossible to control. With DI: your test constructs `UserVM(FakeUserRepository())` and controls exactly what the repo returns. `FakeUserRepository` can throw errors on demand, return empty lists, simulate slow responses. **In Riverpod:** `ProviderScope(overrides: [userRepositoryProvider.overrideWithValue(FakeUserRepository())], child: MyScreen())`. **In `get_it`:** `getIt.reset(); getIt.registerFactory<UserRepository>(() => FakeUserRepository())`. Every test suite in a well-DI'd codebase runs in milliseconds. This is DI's #1 payoff." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What are the risks of service locators like `get_it`?**\n\n**A:** **(1) Hidden coupling** — any class can call `getIt<Whatever>()`; the dependency isn't visible in the class's constructor. Grep is your only tool. **(2) Runtime failures** — if a dependency isn't registered, `getIt<X>()` throws at RUNTIME, not compile time. **(3) Testing setup/teardown** — `getIt.reset()` before every test or state bleeds. **(4) 'Just get it' anti-pattern** — everyone starts sprinkling `getIt` calls everywhere, and the codebase loses testability. **The fix:** use the service locator ONLY at the composition root; everywhere else, prefer constructor injection. If you follow that discipline, `get_it` is a fine choice. Riverpod moves these problems to compile time — hence its rising popularity." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What is Dependency Inversion (DIP) vs Dependency Injection (DI)?**\n\n**A:** Related, often confused. **Dependency Inversion Principle (DIP)** — the design idea that high-level modules should depend on ABSTRACTIONS (interfaces), not concrete implementations. Both should depend on the abstraction. It's about the DIRECTION of the arrow. **Dependency Injection (DI)** — the TECHNIQUE of PROVIDING those abstractions from outside a class (usually via constructor). It's about the MECHANISM. In practice, DI is HOW you achieve DIP. You define an interface (`UserRepository`), depend on it in your Use Case (`RegisterUser(this._repo)`), and inject the implementation from outside. That's DIP achieved through DI. Interview trick: 'What is DIP?' → answer with 'depend on abstractions'; 'How do you implement it?' → answer with 'via constructor injection'." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every non-trivial Flutter app** — uses either `get_it`, Riverpod, or manual DI.\n- **Bloc-heavy codebases** — usually pair with `get_it` + `injectable` codegen.\n- **Riverpod-heavy codebases** — DI + state under one tool.\n- **Testing** — DI is what makes fast, hermetic test suites possible.\n- **Google's official Flutter architecture guide** — uses DI throughout.\n- **Enterprise apps** — often layer DI on top of Clean Architecture." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`injectable`** — codegen companion to `get_it`; annotations generate registration code.\n- **Riverpod code generation** — `@riverpod` decorator generates providers from annotated functions/classes.\n- **Scoped containers** — feature-scoped DI: `MultiProvider` in Provider; nested `ProviderScope` in Riverpod.\n- **Circular dependency detection** — both libraries throw; introduce an interface or split the class.\n- **Async initialization** — `getIt.registerSingletonAsync<T>` for services that need async init (Firebase); wait via `getIt.allReady()`.\n- **DI + Isolates** — providers/get_it registrations don't survive to a fresh isolate; use `Isolate.run` + pass primitive args or re-register.\n- **`Inversify.js`, `Guice`, `Dagger`** — DI containers in other ecosystems; same concepts.\n- **Compile-time DI** — Kotlin's `Hilt` / Dart's future macros will bring compile-time DI to Flutter.\n- **Testing patterns** — 'ArrangeActAssert' with all deps injected as fakes; behavior verified without touching real services." }
   ],
   "flashcards": [
-    { "front": "DI in one sentence?", "back": "Classes receive their collaborators from outside instead of creating them." },
-    { "front": "Constructor DI vs Service Locator?", "back": "Constructor DI is explicit and testable; Service Locator is convenient but hides dependencies." },
-    { "front": "Why scope dependencies?", "back": "To avoid global state that leaks between users/features and breaks tests." }
+    { "front": "DI definition?", "back": "Provide dependencies from outside rather than the class creating them internally." },
+    { "front": "Preferred style?", "back": "Constructor injection — explicit, immutable, testable." },
+    { "front": "Composition root?", "back": "The single file (main.dart) where the whole dependency graph is wired." },
+    { "front": "get_it vs Riverpod?", "back": "get_it = light service locator (runtime lookup). Riverpod = compile-safe container + state. New apps → Riverpod." },
+    { "front": "DI's #1 payoff?", "back": "Testability — swap real deps for fakes in one line." },
+    { "front": "DIP vs DI?", "back": "DIP = principle (depend on abstractions). DI = technique to achieve it (inject from outside)." }
   ],
   "quiz": [
-    { "q": "The preferred form of DI is…", "options": ["Global variables", "Constructor injection", "Reflection at runtime", "Compile-time macros"], "answer": 1, "explain": "Constructor DI makes dependencies explicit and easy to fake." },
-    { "q": "A Service Locator's biggest downside is…", "options": ["It's slow", "It hides dependencies", "It requires reflection", "It can't be async"], "answer": 1, "explain": "You can't tell a class's dependencies from its signature." },
-    { "q": "Over-scoping to @Singleton…", "options": ["Improves testability", "Leaks state and hurts tests", "Speeds up GC", "Is required"], "answer": 1, "explain": "Global lifetime keeps state alive too long." }
+    { "q": "Preferred injection style?", "options": ["Method", "Setter", "Constructor", "Global var"], "answer": 2, "explain": "Explicit + immutable + testable." },
+    { "q": "Composition root is…", "options": ["Every widget", "The single place where the graph is wired (usually main.dart)", "Widget tree root", "InheritedWidget"], "answer": 1, "explain": "Single source of wiring truth." },
+    { "q": "Riverpod DI advantage over get_it?", "options": ["Faster", "Compile-safe + unified with state + easy test overrides", "Web only", "Nothing"], "answer": 1, "explain": "Provider missing = build error." },
+    { "q": "Service-locator risk?", "options": ["Nothing", "Hidden coupling + runtime failures", "Only web", "Slow builds"], "answer": 1, "explain": "Trade-off of the pattern." },
+    { "q": "DI's biggest payoff?", "options": ["APK size", "Testability — fakes injected at construction", "Startup speed", "Colors"], "answer": 1, "explain": "Fast hermetic tests." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Rewrite a class that creates its own Api to receive it via the constructor." },
-    { "level": "Medium", "text": "Wire the app using GetIt (Service Locator) and note the trade-offs." },
-    { "level": "Hard", "text": "Wire the app using Riverpod providers with proper scopes; swap in fakes for tests." },
-    { "level": "Expert", "text": "Build a per-feature scope where each screen gets its own ViewModel instance while a Repository is shared." }
+    { "level": "Easy", "text": "Wire a small graph manually in main.dart (Dio → Remote → Repo → VM)." },
+    { "level": "Easy", "text": "Set up get_it with three registrations; access from a widget." },
+    { "level": "Medium", "text": "Same graph in Riverpod as top-level Providers." },
+    { "level": "Medium", "text": "Write a widget test that overrides userRepositoryProvider with a fake." },
+    { "level": "Hard", "text": "Reproduce a ProviderNotFoundException and fix by moving the Provider." },
+    { "level": "Hard", "text": "Introduce circular dependency A→B→A; both libraries should detect it." },
+    { "level": "Expert", "text": "Multi-module DI: di_common + di_features; test module overrides fakes." }
   ],
   "interviewQuestions": [
-    "Difference between DIP and DI?",
-    "Constructor DI vs Service Locator?",
-    "How does DI help testing?",
-    "Why is over-scoping to Singleton bad?",
-    "How do Riverpod/Hilt/GetIt compare as DI tools?"
+    "What is Dependency Injection?",
+    "What are the three DI styles?",
+    "What is a composition root?",
+    "get_it vs Riverpod for DI in Flutter — which do you use?",
+    "How does DI improve testing?",
+    "What are the risks of service locators like get_it?",
+    "What is Dependency Inversion (DIP) vs Dependency Injection (DI)?"
   ],
   "references": [
-    { "label": "Fowler — Inversion of Control", "url": "https://martinfowler.com/articles/injection.html" }
+    { "label": "get_it — pub.dev", "url": "https://pub.dev/packages/get_it" },
+    { "label": "Riverpod — DI", "url": "https://riverpod.dev/docs/concepts/reading" }
   ]
 }

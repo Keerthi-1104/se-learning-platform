@@ -77,141 +77,21 @@ body.push(...miniproject(["Build an OrderRepository with local cache + remote sy
 body.push(...advanced(["Unit of Work, aggregate roots, and the distinction between DDD Repositories and DAOs."]));
 
 // 5. Service Layer
-body.push(H1("5. Service Layer", "ch5"));
-body.push(callout("definition", ["A Service is a reusable, focused unit of behavior that isn't domain data itself — analytics, notifications, auth, sync, connectivity. Services are often stateless helpers injected wherever they're needed."]));
-body.push(table(["", "Service", "Repository", "UseCase"], [
-  ["Owns", "A capability / integration", "Data of an aggregate", "A single business action"],
-  ["State?", "Usually stateless", "Sometimes caches", "Stateless"],
-  ["Example", "AnalyticsService", "OrderRepository", "PlaceOrderUseCase"],
-], [1500, 2900, 2600, 2360]));
-body.push(callout("interview", ["Repository = DATA of an aggregate. Service = a CAPABILITY that doesn't fit one aggregate (auth, notifications, crash reporting). Use cases orchestrate both to perform actions."]));
-body.push(...summary([
-  "Services capture cross-cutting capabilities.",
-  "Prefer stateless services; caches belong in repos.",
-  "Split by cohesion — one capability per service.",
-  "Use cases orchestrate services + repositories.",
-]));
-body.push(...interview([
-  "Service vs Repository vs UseCase?",
-  "When would a service be stateful?",
-  "How do services relate to SOLID?",
-  "How do you test a service?",
-  "Cross-cutting concerns modeled as services?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Extract analytics calls into an AnalyticsService." },
-  { level: "Medium", text: "Build an AuthService used by multiple screens." },
-  { level: "Hard", text: "Split a God 'UserService' into focused pieces." },
-  { level: "Expert", text: "Add a connectivity Service and gate a sync worker with it." },
-]));
-body.push(...realworld(["A shared FeatureFlagService or AnalyticsService is the difference between features that can measure themselves and features that ship blind."]));
-body.push(...miniproject(["Build an AuthService + AnalyticsService + ConnectivityService and wire them into two features via DI."]));
-body.push(...advanced(["Domain events + service handlers (event-driven architecture at app scale) and CQRS-lite for read/write separation."]));
+body.push(...topicToChapter(loadTopic("level_06", "service_layer"),
+  { chapterNumber: 5, bookmarkId: "ch5" }));
 
 // 6. Dependency Injection
-body.push(H1("6. Dependency Injection", "ch6"));
-body.push(callout("definition", ["DI means a class receives its collaborators from outside instead of creating them. It decouples classes, enables fakes in tests, and is the practical form of the Dependency Inversion Principle."]));
-body.push(table(["Style", "Example", "Notes"], [
-  ["Constructor DI", "class VM(this.repo)", "Preferred — explicit"],
-  ["Service Locator", "GetIt.I<Repo>()", "Convenient but hides deps"],
-  ["Riverpod DI", "ref.watch(repoProvider)", "Compile-safe container"],
-  ["Hilt / Dagger", "@Inject", "Annotation-driven (Android)"],
-], [1800, 3200, 4360]));
-body.push(callout("interview", ["Constructor DI is the strongest form: a class's dependencies are visible in its signature, making it obvious what to fake in tests. Service locators are convenient but hide dependencies and can cause runtime surprises."]));
-body.push(...summary([
-  "DI = receive collaborators from outside; don't build them.",
-  "Prefer constructor DI for explicitness and testability.",
-  "Riverpod (Flutter) and Hilt (Android) offer compile-safe containers.",
-  "Scope deliberately — global singletons leak state.",
-]));
-body.push(...interview([
-  "Difference between DIP and DI?",
-  "Constructor DI vs Service Locator?",
-  "How does DI help testing?",
-  "Why is over-scoping to Singleton bad?",
-  "Riverpod vs Hilt vs GetIt as DI tools?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Rewrite a class that creates its Api to receive it via constructor." },
-  { level: "Medium", text: "Wire the app using GetIt; note the trade-offs." },
-  { level: "Hard", text: "Wire the app using Riverpod with proper scopes; swap fakes in tests." },
-  { level: "Expert", text: "Build per-feature scopes: shared repo, per-screen VM instance." },
-]));
-body.push(...realworld(["Testable code is DI'd code. Every major mobile stack (Hilt, Koin, Riverpod, GetIt) exists because manual wiring at scale is a nightmare."]));
-body.push(...miniproject(["Wire a small app end-to-end with Riverpod + per-feature scopes; write widget tests using provider overrides."]));
-body.push(...advanced(["Compile-time DI (Dagger/Hilt code-gen) vs reflection (Guice), scoped containers, and Object Composition Root pattern."]));
+body.push(...topicToChapter(loadTopic("level_06", "di"),
+  { chapterNumber: 6, bookmarkId: "ch6" }));
 
-// 7. Feature-first
-body.push(H1("7. Feature-first Architecture", "ch7"));
-body.push(callout("definition", ["Feature-first organizes the codebase by domain feature (auth, cart, orders) with each feature owning its full vertical slice — presentation, domain, data — instead of one giant top-level 'screens' and 'services' folder."]));
-body.push(code([
-  "lib/",
-  "  core/                 (theme, router, DI, shared widgets)",
-  "  features/",
-  "    auth/",
-  "       presentation/    (screens, view models)",
-  "       domain/          (entities, use cases, repo interfaces)",
-  "       data/            (repo impls, sources, DTOs, mappers)",
-  "    cart/    (same structure)",
-  "    orders/  (same structure)",
-], "layout"));
-body.push(callout("interview", ["Feature-first scales to large teams because a feature is a replaceable unit: change or delete it in one directory. Layers still exist — inside each feature — so Clean Architecture and MVVM still apply."]));
-body.push(...summary([
-  "Group by feature, not by layer.",
-  "Each feature owns its own presentation/domain/data.",
-  "Change locality: touch one folder for a feature.",
-  "Truly shared code lives in core/.",
-]));
-body.push(...interview([
-  "Layer-first vs feature-first — trade-offs?",
-  "How does feature-first help large teams?",
-  "What belongs in core/?",
-  "Does feature-first replace Clean Architecture?",
-  "How do you prevent cross-feature imports?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Migrate one screen from layer-first to feature-first." },
-  { level: "Medium", text: "Move shared widgets/theme into core/; verify no feature imports another." },
-  { level: "Hard", text: "Enforce feature isolation with lint or import boundary rules." },
-  { level: "Expert", text: "Extract a feature into its own package the app module depends on." },
-]));
-body.push(...realworld(["The SE Learning Platform app itself is feature-first: features/roadmap, features/topic, features/quiz, features/ai — each isolated, testable, and swappable."]));
-body.push(...miniproject(["Take an existing layer-first project (or a stub) and refactor into feature-first with a strict core/ policy."]));
-body.push(...advanced(["Hexagonal per feature, gated public APIs, and inter-feature communication via events/services rather than direct imports."]));
+// 7. Feature-first Architecture
+body.push(...topicToChapter(loadTopic("level_06", "feature_first"),
+  { chapterNumber: 7, bookmarkId: "ch7" }));
 
 // 8. Modular
-body.push(H1("8. Modular Architecture", "ch8"));
-body.push(callout("definition", ["Modular architecture splits the codebase into independent packages with explicit dependencies. In Flutter this is a multi-package repo — app + core + design_system + feature_* packages."]));
-body.push(table(["Wins", "Costs"], [
-  ["Enforced boundaries (imports blocked)", "Extra package plumbing"],
-  ["Faster incremental builds", "Version-alignment work"],
-  ["Independent team ownership", "Some duplication if boundaries wrong"],
-  ["Reusable modules across apps", ""],
-], [4680, 4680]));
-body.push(callout("interview", ["The main win is compiler-enforced boundaries: package B cannot import package A's private symbols. That's stronger than any lint rule and scales to many teams working in parallel."]));
-body.push(callout("mistake", ["Modularizing too early. For a small team/app, one package with strict folders is enough. Modularize when build times or team coordination become a bottleneck."]));
-body.push(...summary([
-  "Split into packages: core, design_system, feature_*, app.",
-  "Compiler enforces boundaries and public APIs.",
-  "Speeds up incremental builds; enables team ownership.",
-  "Don't modularize prematurely.",
-]));
-body.push(...interview([
-  "What is modular architecture and why use it?",
-  "How do modules enforce boundaries?",
-  "Typical Flutter module layout?",
-  "When would you NOT modularize?",
-  "How to handle shared code between modules?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Extract a feature into its own package with a small public API." },
-  { level: "Medium", text: "Set up a melos monorepo with core + design_system + one feature." },
-  { level: "Hard", text: "Break a circular dependency between features via a shared abstraction." },
-  { level: "Expert", text: "Add CI that builds only affected packages on push." },
-]));
-body.push(...realworld(["Airbnb, Uber, PhonePe run modular monorepos with hundreds of packages so many teams can ship in parallel without stepping on each other."]));
-body.push(...miniproject(["Split a demo Flutter app into 3 packages (core, design_system, one feature) using melos; enforce that feature can only see core's public API."]));
-body.push(...advanced(["Semantic versioning inside a monorepo, affected-only CI, and platform channels wrapped as reusable packages."]));
+// 8. Modular Architecture
+body.push(...topicToChapter(loadTopic("level_06", "modular"),
+  { chapterNumber: 8, bookmarkId: "ch8" }));
 
 // 9. Foundation
 body.push(H1("9. Foundation Layer", "ch9"));

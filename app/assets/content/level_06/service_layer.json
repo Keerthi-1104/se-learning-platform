@@ -2,47 +2,104 @@
   "id": "arch.service_layer",
   "levelId": 6,
   "title": "Service Layer",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "xp": 40,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Distinguish services from repositories and use cases",
-    "Use services for cross-cutting concerns",
-    "Keep services stateless where possible"
+    "Understand the Service Layer via a real-life analogy",
+    "Distinguish Service vs Repository vs Use Case",
+    "See where cross-cutting concerns (auth, logging, analytics) live",
+    "Recognize when to add a service layer (and when not to)",
+    "Answer service-layer interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "A Service is a reusable, focused unit of behavior that isn't domain data itself — analytics, notifications, auth, sync, connectivity. Services are often stateless helpers injected wherever they're needed." },
-    { "type": "table", "headers": ["", "Service", "Repository", "UseCase"], "rows": [
-      ["Owns", "A capability / integration", "Data access to an aggregate", "A single business action"],
-      ["State?", "Usually stateless", "Sometimes caches", "Stateless"],
-      ["Example", "AnalyticsService, AuthService", "OrderRepository", "PlaceOrderUseCase"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of the Service Layer as the CONCIERGE DESK on the ground floor of an office building.**\n\n- Each business (feature) upstairs — marketing, finance, HR — has its OWN filing cabinets, own procedures, own Repository (see Chapter 4).\n- But every business needs the same shared services: **printing** (Analytics), **security badges** (Auth), **coffee** (Logging), **elevators** (Networking client). Nobody wants each floor to install its own coffee machine.\n- The **concierge desk** provides those SHARED services to any floor that asks. When Marketing wants to log an event, they call the concierge (`AnalyticsService.log`). When Finance needs to check who's badged in, they call the concierge (`AuthService.currentUser`).\n\n**In code terms:** a service layer is a set of stateless (or long-lived-singleton) SHARED SERVICES that ANY feature can use — AuthService, AnalyticsService, LoggingService, ConnectivityService, NotificationService, DeepLinkService, ConfigService.\n\n**Not the same as a Repository:** Repository = 'single source of truth for ONE DATA TYPE' (User, Order). Service = 'reusable cross-cutting CAPABILITY' (auth, logging). They coexist. Repositories often DEPEND on Services (e.g., `UserRepositoryImpl` uses `AuthService` for the current token)." },
+    { "type": "callout", "variant": "definition", "markdown": "**A Service Layer** is a collection of long-lived, feature-independent capabilities that many parts of the app need — authentication, analytics, logging, connectivity, notifications, deep links, feature flags. Services are typically **singletons** registered in the DI container. They have no UI, no domain model, no per-user business rules — just infrastructure/plumbing that ANY feature might call." },
+    { "type": "theory", "markdown": "## Service vs Repository vs Use Case — the three roles" },
+    { "type": "table", "headers": ["Role", "Scope", "Example"], "rows": [
+      ["**Repository**", "One DATA TYPE (User, Order, Product)", "`UserRepository.getById(id)`"],
+      ["**Use Case**", "One USER ACTION (Register, Login, PlaceOrder)", "`RegisterUser(email, name)`"],
+      ["**Service**", "One CROSS-CUTTING CAPABILITY", "`AnalyticsService.log('signup')`, `AuthService.token`"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "The distinction interviewers love: a **Repository** is about DATA of an aggregate; a **Service** is about a CAPABILITY that doesn't fit one aggregate (auth, notifications, crash reporting). Use cases orchestrate both to perform actions." },
-    { "type": "callout", "variant": "mistake", "markdown": "Turning every class into a 'Service' — a giant `UserService` doing auth, profile, roles AND messaging is just a God object. Split by capability and cohesion." }
+    { "type": "callout", "variant": "interview", "markdown": "**The distinction that separates senior devs:** Repositories own data, Use Cases own actions, Services own capabilities. If you're confused whether something is a Service or a Repository, ask 'Does it own a data type?' Yes → Repository. No, but many features use it → Service." },
+    { "type": "theory", "markdown": "## Sample program — the essential services in a typical app" },
+    { "type": "code", "language": "dart", "code": "// ============ AuthService ============\n// One place that knows the current user + token. EVERY other layer reads from here.\nclass AuthService {\n  String? _token;\n  User?   _user;\n\n  String? get token => _token;\n  User? get currentUser => _user;\n  bool  get isLoggedIn => _token != null;\n\n  Future<void> signIn({required String token, required User user}) async {\n    _token = token; _user = user;\n    _notify();\n  }\n\n  Future<void> signOut() async {\n    _token = null; _user = null;\n    _notify();\n  }\n\n  // Simple broadcast so listeners can react to auth changes.\n  final _listeners = <VoidCallback>[];\n  void addListener(VoidCallback fn) => _listeners.add(fn);\n  void _notify() { for (final fn in _listeners) fn(); }\n}\n\n// ============ AnalyticsService ============\n// Fire-and-forget event logging. Never blocks the UI.\nclass AnalyticsService {\n  AnalyticsService(this._sender);\n  final AnalyticsSender _sender;   // wraps Firebase/Mixpanel/Segment\n\n  void log(String event, {Map<String, Object?> props = const {}}) {\n    unawaited(_sender.send(event, props));   // never awaited\n  }\n\n  void screen(String name) => log('screen_view', props: {'name': name});\n}\n\n// ============ ConnectivityService ============\n// Watches network state so features can react (show offline banner, defer sync).\nclass ConnectivityService {\n  final _controller = StreamController<bool>.broadcast();\n  Stream<bool> get onChanged => _controller.stream;\n\n  Future<void> init() async {\n    Connectivity().onConnectivityChanged.listen((result) {\n      _controller.add(result != ConnectivityResult.none);\n    });\n  }\n\n  Future<bool> get isOnline async =>\n      (await Connectivity().checkConnectivity()) != ConnectivityResult.none;\n}\n\n// ============ Wiring at the composition root ============\nvoid setupServices() {\n  getIt.registerSingleton<AuthService>(AuthService());\n  getIt.registerSingleton<AnalyticsService>(AnalyticsService(FirebaseAnalyticsSender()));\n  getIt.registerSingleton<ConnectivityService>(ConnectivityService()..init());\n}\n\n// ============ Consumed by a Repository ============\nclass OrderRepositoryImpl implements OrderRepository {\n  OrderRepositoryImpl(this._api, this._auth, this._analytics);\n  final Dio _api;\n  final AuthService _auth;\n  final AnalyticsService _analytics;\n\n  @override\n  Future<Order> placeOrder(Cart cart) async {\n    final resp = await _api.post('/orders',\n      data: cart.toJson(),\n      options: Options(headers: {'Authorization': 'Bearer ${_auth.token}'}),\n    );\n    _analytics.log('order_placed', props: {'total': cart.total});\n    return Order.fromJson(resp.data);\n  }\n}\n\n// Notice: Repository uses BOTH Services. Services don't know about Repositories.\n// This is the correct dependency direction — Services are 'below' Repositories." },
+    { "type": "theory", "markdown": "## The common services in a real Flutter app" },
+    { "type": "table", "headers": ["Service", "Purpose", "Common backing"], "rows": [
+      ["**AuthService**", "Current user + token, sign-in/out, session refresh", "Firebase Auth, Keycloak, custom OAuth"],
+      ["**AnalyticsService**", "Event logging", "Firebase Analytics, Mixpanel, Segment"],
+      ["**LoggingService**", "Structured logs for debugging + monitoring", "`log` package, Sentry, Crashlytics"],
+      ["**ConnectivityService**", "Network reachability + stream", "`connectivity_plus` package"],
+      ["**NotificationService**", "Push notifications + local scheduling", "`firebase_messaging`, `flutter_local_notifications`"],
+      ["**DeepLinkService**", "Incoming URLs → in-app navigation", "`uni_links`, `app_links`, `go_router`"],
+      ["**RemoteConfigService**", "Feature flags + A/B", "Firebase Remote Config, Optimizely"],
+      ["**LocalizationService**", "Current locale + translations", "`intl` + `flutter_localizations`"],
+      ["**ThemeService**", "Current theme mode + custom colors", "`ChangeNotifier` wrapper"]
+    ]},
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Confusing Service with Repository.** Repository owns a data type; Service owns a capability. A `UserService.getById(id)` is really a `UserRepository`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Business logic inside a Service.** Services should be infrastructure — no domain rules. 'Should this order be flagged?' is a Use Case; 'Log an event' is a Service." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: A Service depending on a Repository.** Usually wrong direction — a Repository uses Services (AuthService.token), not the reverse. If a Service needs domain data, extract a Use Case." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: One giant `AppService` doing everything.** Split by capability. `AuthService`, `AnalyticsService`, `LoggingService` — each < 200 lines and focused." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: UI depending on multiple raw Services.** UI should call a ViewModel; the ViewModel calls Services. Direct `context.read<AnalyticsService>()` in every widget → coupling nightmare." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Services are singletons.** Registered in DI (get_it / Riverpod), one instance per app." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Small, focused, capability-scoped.** Don't build a `SuperService`." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Services depend on packages, not on domain layer.** They wrap Firebase/Dio/Retrofit — they don't know about User or Order." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Repositories consume Services.** Not the reverse." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Interfaces + implementations.** `AnalyticsService` (interface) + `FirebaseAnalyticsService` (impl). Fakes swap in for tests." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Fire-and-forget for logs/analytics.** Never block the UI on an analytics call." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — AuthService.** Simple `AuthService` with sign-in/sign-out + `currentUser`. Register in `get_it`. Two screens read the same instance." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — AnalyticsService.** Wrap Firebase Analytics; log a screen view from every route." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — ConnectivityService.** Stream of online/offline; show a banner via a top-level widget." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Repository consumes Services.** OrderRepository uses AuthService (token) + AnalyticsService (log placement)." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Fake Services for tests.** `FakeAnalyticsService` records calls; assert that placing an order fires exactly one 'order_placed' event." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is a Service Layer?**\n\n**A:** A Service Layer is a collection of long-lived, feature-independent capabilities that many features share — authentication, analytics, logging, connectivity, notifications, deep links, feature flags, localization. Services are typically singletons registered in the DI container. **They have no UI, no domain model, no business rules** — just infrastructure. Any Repository, Use Case, ViewModel, or Widget can consume them. Services differ from Repositories: Repositories own DATA TYPES (User, Order); Services own CAPABILITIES (auth, logging). Both are essential; they coexist in a layered app." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: Service vs Repository vs Use Case — what's the difference?**\n\n**A:** **Repository** — single source of truth for ONE DATA TYPE. Combines API + cache + DB. `UserRepository.getById(id)`. **Use Case** — application-specific business rule for ONE USER ACTION. `RegisterUser(email, name)`. **Service** — reusable capability for CROSS-CUTTING CONCERN. `AnalyticsService.log(event)`, `AuthService.token`. All three coexist. Typical dependency direction: ViewModel → Use Case → Repository → DataSource, and each of those may ALSO use Services (AuthService for tokens, AnalyticsService for logging). Services are 'below and orthogonal' to the vertical Repository/Use Case stack." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What are common services in a Flutter app?**\n\n**A:** **AuthService** — current user + token, sign-in/out. **AnalyticsService** — event logging (Firebase Analytics, Mixpanel). **LoggingService** — structured logs (Sentry, Crashlytics). **ConnectivityService** — network reachability + stream (`connectivity_plus`). **NotificationService** — push + local notifications. **DeepLinkService** — incoming URL routing. **RemoteConfigService** — feature flags + A/B (Firebase Remote Config). **LocalizationService** — locale + `Intl`. **ThemeService** — theme mode + tokens. Each is a small, focused, capability-scoped class — usually < 200 lines. Register all as singletons in the composition root." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: Where does business logic live — Service, Repository, or Use Case?**\n\n**A:** **Use Case.** Services are infrastructure (auth, logging), Repositories manage data access, but the DECISIONS ('should this order be flagged?', 'is this user eligible?', 'apply the discount ladder') are BUSINESS LOGIC — Use Case territory. Anti-pattern: a service like `OrderService.placeOrder(cart)` that does auth check + total calculation + inventory check + payment + logging. That's not a service — that's a hidden use case. Split: `PlaceOrder` use case orchestrates; it calls `AuthService.token`, `PricingService.calculate`, `PaymentService.charge`, `OrderRepository.save`, `AnalyticsService.log`. Each service is a thin capability; the use case is the business rule." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: Should services have interfaces?**\n\n**A:** Ideally yes, especially for testability. `AnalyticsService` (abstract) with `FirebaseAnalyticsService` (impl) means tests can inject `FakeAnalyticsService` and assert 'exactly this event was logged, once, with these params'. Without an interface, tests need to mock Firebase directly — heavier setup. **In practice:** interface + impl is common for testable / mockable services (AnalyticsService, LoggingService). Simple pure-Dart services (`ThemeService` wrapping a ChangeNotifier) often skip the interface. Rule: if the service wraps a third-party library, interface it so tests don't need the library." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How do Services get injected?**\n\n**A:** Via the DI container at the composition root. **`get_it`:** `getIt.registerSingleton<AuthService>(AuthService());`. Consumers do `getIt<AuthService>()` or take it via constructor. **Riverpod:** `final authServiceProvider = Provider<AuthService>((ref) => AuthService());`. Consumers do `ref.read(authServiceProvider)`. **Wiring pattern:** in `setupServices()` (called from `main`), register all singleton services. Repositories and ViewModels take services via constructor. Widgets access services via ViewModel — NEVER via direct DI lookup, or you leak infrastructure concerns into widgets." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What's a common Service-related anti-pattern?**\n\n**A:** **'God Service'** — one class that does everything: `AppService` with methods `login`, `logout`, `fetchUser`, `logEvent`, `checkConnectivity`, `showNotification`, `translate`. Symptoms: 2000+ lines, dozens of dependencies, impossible to test one thing without setting up all the others. **Fix:** split by capability. Each service is < 200 lines, has one job. Registration cost is a few extra lines in `setupServices` — a small price for maintainability. Related anti-patterns: (1) Service depending on Repository (usually the wrong direction). (2) Business logic in a Service (should be a Use Case). (3) Widget reading Service directly (should go through ViewModel)." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every non-trivial Flutter app** has at least AuthService + AnalyticsService.\n- **Firebase-backed apps** — auth, analytics, notifications, remote config, crashlytics are all Services.\n- **Feature flags via RemoteConfigService** — enable/disable features without a release.\n- **Sentry integration** — LoggingService wraps Sentry's SDK.\n- **Offline-aware apps** — ConnectivityService informs the UI + Repositories.\n- **A/B testing** — ExperimentsService picks variants." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Fake Services in integration tests** — `FakeAnalyticsService` records events; assertions verify tracking.\n- **Health checks** — services expose an `isHealthy` getter for a debug panel.\n- **Service composition** — `NotificationService` may depend on `AuthService` (send device token per user).\n- **Async init** — many services need `await service.init()`; `getIt.registerSingletonAsync` handles this cleanly.\n- **Service reset for tests** — `getIt.reset()` before each test group.\n- **Riverpod for service state** — expose `AsyncValue<AuthState>` if the service is state-carrying.\n- **Scoped services** — a `FeatureFlagsService` may scope by user; use factories over singletons if state differs per session.\n- **Cross-service events** — `AuthService.onSignOut` → `AnalyticsService.reset()` → `ConnectivityService` re-init. Use `Stream`s to broadcast.\n- **Sentinel value patterns** — services often expose `late final Something? optionalThing` — plan initialization carefully.\n- **Testing with real HTTP** — service-level tests may still use dependency injection to swap Dio for MockDio." }
   ],
   "flashcards": [
-    { "front": "Service vs Repository?", "back": "Repository = data access to an aggregate. Service = a capability/integration (auth, analytics, notifications)." },
-    { "front": "Are services usually stateful?", "back": "No — prefer stateless services; caches/state belong in repositories or dedicated stores." },
-    { "front": "Why not one giant Service class?", "back": "It becomes a God object; split by cohesion (one capability per service)." }
+    { "front": "Service Layer?", "back": "Long-lived, feature-independent capabilities (auth, analytics, logging, connectivity) shared across the app." },
+    { "front": "Service vs Repository?", "back": "Repository owns a data type. Service owns a capability." },
+    { "front": "Service vs Use Case?", "back": "Service = infrastructure capability. Use Case = business rule / user action." },
+    { "front": "Common services?", "back": "Auth, Analytics, Logging, Connectivity, Notification, DeepLink, RemoteConfig, Localization, Theme." },
+    { "front": "Register how?", "back": "Singleton in the DI container (get_it or Riverpod), at the composition root." },
+    { "front": "Anti-pattern?", "back": "'God Service' — one class doing everything. Split by capability." }
   ],
   "quiz": [
-    { "q": "Which is most likely a Service?", "options": ["OrderRepository", "AnalyticsService", "UserEntity", "HomeViewModel"], "answer": 1, "explain": "Analytics is a cross-cutting capability, not aggregate data." },
-    { "q": "Services should be…", "options": ["Big monoliths", "Focused and often stateless", "UI-aware", "Global singletons only"], "answer": 1, "explain": "Small, focused, testable helpers work best." },
-    { "q": "A UseCase typically…", "options": ["Only mutates the DB", "Orchestrates repositories/services for one action", "Draws widgets", "Handles UI navigation"], "answer": 1, "explain": "Use cases coordinate collaborators to perform one business action." }
+    { "q": "Service owns…", "options": ["A data type", "A cross-cutting capability", "A widget tree", "State"], "answer": 1, "explain": "Auth, logging, analytics." },
+    { "q": "Business logic belongs in…", "options": ["Service", "Use Case", "Widget", "main.dart"], "answer": 1, "explain": "Services are infrastructure." },
+    { "q": "Direction between Service and Repository?", "options": ["Service uses Repository", "Repository uses Service (for auth token, logging)", "Circular", "Neither"], "answer": 1, "explain": "Services below Repositories." },
+    { "q": "Should Services have interfaces?", "options": ["Never", "Ideally yes — enables fake for tests", "Only in web apps", "Only web-only ones"], "answer": 1, "explain": "Testability." },
+    { "q": "Register services as…", "options": ["Widget", "Singleton in DI container", "GlobalKey", "Nothing"], "answer": 1, "explain": "One instance per app." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Extract analytics calls from widgets into an AnalyticsService." },
-    { "level": "Medium", "text": "Build an AuthService with signIn/signOut used by multiple screens." },
-    { "level": "Hard", "text": "Split a God 'UserService' into AuthService, ProfileRepository, RolesService." },
-    { "level": "Expert", "text": "Add a connectivity Service and use it to gate a sync worker." }
+    { "level": "Easy", "text": "Build an AuthService singleton and register in get_it." },
+    { "level": "Easy", "text": "AnalyticsService that logs a screen view for every route." },
+    { "level": "Medium", "text": "ConnectivityService with a Stream; render an offline banner." },
+    { "level": "Medium", "text": "Repository that depends on AuthService + AnalyticsService." },
+    { "level": "Hard", "text": "Fake AnalyticsService in a widget test; assert exact event fired." },
+    { "level": "Hard", "text": "Refactor a God Service into 4 capability-scoped services." },
+    { "level": "Expert", "text": "Cross-service subscription: AuthService.onSignOut resets multiple services." }
   ],
   "interviewQuestions": [
-    "Service vs Repository vs UseCase?",
-    "When would a service be stateful?",
-    "How do services help SOLID?",
-    "How do you test a service?",
-    "Cross-cutting concerns you'd model as services?"
+    "What is a Service Layer?",
+    "Service vs Repository vs Use Case — what's the difference?",
+    "What are common services in a Flutter app?",
+    "Where does business logic live — Service, Repository, or Use Case?",
+    "Should services have interfaces?",
+    "How do Services get injected?",
+    "What's a common Service-related anti-pattern?"
   ],
   "references": [
-    { "label": "Fowler — Service Layer", "url": "https://martinfowler.com/eaaCatalog/serviceLayer.html" }
+    { "label": "Service Layer — Martin Fowler", "url": "https://martinfowler.com/eaaCatalog/serviceLayer.html" },
+    { "label": "Firebase Analytics — Flutter", "url": "https://firebase.google.com/docs/analytics/get-started?platform=flutter" }
   ]
 }

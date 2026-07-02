@@ -2,49 +2,95 @@
   "id": "arch.modular",
   "levelId": 6,
   "title": "Modular Architecture",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 45,
+  "estimatedMinutes": 35,
   "objectives": [
-    "Split a monolith into independent packages",
-    "Enforce module boundaries and public APIs",
-    "Speed up builds and enable team ownership"
+    "Understand modular architecture via a real-life analogy",
+    "See how one repo splits into many pub packages",
+    "Manage a Dart monorepo with `melos`",
+    "Know when modular is worth the ceremony (rarely for solo devs, essential at 5+ teams)",
+    "Answer modular-architecture interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Modular architecture splits the codebase into independent packages (modules) with explicit dependencies. In Flutter this is typically a multi-package repo — an `app/` module plus `core/`, `ui/`, `feature_auth/`, `feature_cart/` and so on." },
-    { "type": "code", "language": "text", "code": "packages/\n  core/           (network, storage, config)\n  design_system/  (theme, tokens, shared widgets)\n  feature_auth/   (public: AuthApi, private: impl)\n  feature_cart/\n  app/            (composes features, wires DI)" },
-    { "type": "table", "headers": ["Wins", "Costs"], "rows": [
-      ["Enforced boundaries (imports blocked)", "Extra package plumbing"],
-      ["Faster incremental builds", "Version-alignment work"],
-      ["Independent team ownership", "Some duplication if boundaries wrong"],
-      ["Reusable modules across apps", ""]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of modular architecture as splitting one giant apartment building into a set of independent townhouses.**\n\n- A **single-package Flutter app** is one big apartment building — all residents share the same lobby, elevators, plumbing, wiring. Everyone knows everything. Renovate the plumbing and everyone loses water for a week.\n- A **modular app** is many townhouses side by side. Each has its own front door, plumbing, wiring. Residents share only shared amenities (park, sidewalks). Renovate ONE townhouse and the others don't notice.\n\n**In code:** modular architecture splits your `lib/` into MANY Dart packages, each with its own `pubspec.yaml`, `lib/`, `test/`. They live under a monorepo (managed by `melos`). Each package has a strict public API (what it exports); everything else is private.\n\n**Why teams reach for this:** at 5+ engineers on a single-package app, everyone's changes conflict. Compile times balloon. Code reviews touch every folder. Testing becomes 'let me run the whole app'. Splitting into packages FORCES the discipline that feature-first started — you literally CAN'T import from another package without declaring the dependency.\n\n**When it's overkill:** solo developer, small team, sub-100k LOC. The ceremony (many pubspec files, melos setup, versioning) isn't worth it. **Layer-first → feature-first → modular is a natural progression as your app scales.**" },
+    { "type": "callout", "variant": "definition", "markdown": "**Modular architecture** splits a single Flutter app across multiple Dart packages inside a **monorepo**. Each package (e.g., `feature_auth`, `feature_cart`, `core_ui`, `data_api`) has its own `pubspec.yaml`, `lib/`, `test/`, versioning. The app's root `pubspec.yaml` pulls them via `path:` deps. Managed with **`melos`** — a tool for scripting cross-package operations (bootstrap, test, format). Enforces strong boundaries: no accidental imports, isolated tests, parallel CI, independent versioning." },
+    { "type": "theory", "markdown": "## The three levels of module isolation" },
+    { "type": "table", "headers": ["Level", "Structure", "When"], "rows": [
+      ["**Level 1: Feature-first folders**", "One package, `lib/features/*`", "Small-medium apps; 1-5 engineers"],
+      ["**Level 2: Feature-per-package (modular)**", "Monorepo; each feature is a Dart package", "Medium-large apps; 5-20 engineers"],
+      ["**Level 3: Federated packages** (published)", "Separate repos; published to pub / private registry", "Very large; 20+ engineers; multiple products"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "The main win of modular architecture is **compiler-enforced boundaries**: package B cannot import a private symbol of package A. That's stronger than any lint rule and scales to many teams working in parallel." },
-    { "type": "callout", "variant": "mistake", "markdown": "Modularizing too early. For a small team/app, one package with strict folders is enough. Modularize when build times or team coordination become a bottleneck." }
+    { "type": "theory", "markdown": "## Typical modular structure with `melos`" },
+    { "type": "code", "language": "text", "code": "monorepo_root/\n├── melos.yaml                    # melos config\n├── pubspec.yaml                  # root workspace (Dart 3.5+ workspaces feature)\n├── app/                          # the actual Flutter app\n│   ├── pubspec.yaml\n│   └── lib/\n│       └── main.dart             # wires all packages together\n│\n├── packages/\n│   ├── core_ui/                  # shared widgets, theme\n│   │   ├── pubspec.yaml\n│   │   └── lib/\n│   │       └── core_ui.dart      # public API — `export` statements\n│   │\n│   ├── core_services/            # AuthService, AnalyticsService, etc.\n│   │   ├── pubspec.yaml\n│   │   └── lib/\n│   │\n│   ├── core_networking/          # shared Dio + interceptors\n│   │   ├── pubspec.yaml\n│   │   └── lib/\n│   │\n│   ├── feature_auth/             # a feature\n│   │   ├── pubspec.yaml          # depends on core_services, core_ui\n│   │   ├── lib/\n│   │   │   ├── feature_auth.dart # public API\n│   │   │   └── src/              # internal implementation\n│   │   └── test/                 # feature-scoped tests\n│   │\n│   ├── feature_cart/\n│   │   ├── pubspec.yaml\n│   │   └── lib/\n│   │\n│   ├── feature_checkout/\n│   │\n│   └── feature_profile/\n│\n└── tools/\n    └── ci/                       # shared CI scripts\n\n# app/pubspec.yaml pulls features via path deps:\n# dependencies:\n#   feature_auth: { path: ../packages/feature_auth }\n#   feature_cart: { path: ../packages/feature_cart }\n#   ...\n# feature_cart/pubspec.yaml can pull core_ui + core_services:\n#   dependencies:\n#     core_ui: { path: ../core_ui }\n#     core_services: { path: ../core_services }\n# feature_cart CANNOT depend on feature_auth — enforced by pubspec." },
+    { "type": "theory", "markdown": "## `melos.yaml` — one place that scripts the whole monorepo" },
+    { "type": "code", "language": "yaml", "code": "# melos.yaml at monorepo root\nname: my_app_monorepo\n\npackages:\n  - app\n  - packages/*\n\nscripts:\n  # `melos bootstrap` — install dependencies for all packages\n  # Automatic: no config needed\n\n  analyze:\n    run: melos exec -- dart analyze\n    description: Run dart analyze in every package.\n\n  test:\n    run: melos exec --dir-exists=test -- flutter test\n    description: Run tests in every package that has a test/ folder.\n\n  format:\n    run: melos exec -- dart format --set-exit-if-changed .\n    description: Format all Dart files.\n\n  gen:\n    run: melos exec -c 1 --depends-on=build_runner -- dart run build_runner build --delete-conflicting-outputs\n    description: Run code generation across all packages that need it.\n\n  clean:\n    run: melos exec -- flutter clean\n\ncommand:\n  bootstrap:\n    usePubspecOverrides: true    # dart 2.19+ pubspec overrides — cleaner than path: everywhere" },
+    { "type": "code", "language": "bash", "code": "# Common melos commands you'll actually run:\n\nmelos bootstrap             # link path deps, install everything\nmelos run analyze           # run dart analyze in every package\nmelos run test              # run tests in every package (or a subset)\nmelos run test --scope=\"feature_*\"\nmelos run gen               # run build_runner in every package that needs it\nmelos publish               # publish selected packages\nmelos version               # bump versions across changed packages" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Splitting into packages too early.** Solo dev on a 30-file app going modular = 3x the ceremony for no benefit. Stay feature-first until you have ~5 engineers or ~500 files." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Circular package dependencies.** `feature_cart` depends on `feature_auth` which depends on `feature_cart`. `melos bootstrap` will fail. Fix: extract shared parts to `core_*`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Leaky public APIs.** Every package should have a clear public entry point (`lib/package_name.dart`) with `export` statements. Everything else lives in `lib/src/` and is effectively private. Import-from-`src/` breaks encapsulation." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Not scripting via `melos`.** Running `flutter test` in every package by hand doesn't scale. Set up `melos run test` early." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Independent versioning without a plan.** Bumping `feature_auth` from 1.0.0 to 2.0.0 while `feature_cart` stays at 1.0.0 requires thinking about compatibility. Most monorepos use SINGLE-VERSION for internal packages." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Start with feature-first folders.** Migrate to modular only when the pain justifies it." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Public API via `lib/package_name.dart`.** Everything internal in `lib/src/`." },
+    { "type": "callout", "variant": "best", "markdown": "**3. `core_*` packages for shared code.** `core_ui`, `core_services`, `core_networking`." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Features cannot depend on other features.** Enforced by pubspec." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Single version for internal packages.** Simpler than per-package semver at first." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Set up `melos` from day 1 of modular.** Never run cross-package commands by hand." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Parallel CI per package.** Test independently, aggregate results." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Set up a monorepo skeleton.** `app/` + `packages/core_ui/` + `packages/feature_home/`. Run `melos bootstrap`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Extract shared widgets.** Move `ProductCard` from your app into `core_ui`. Wire the dependency." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Feature package.** Extract `features/auth/` into `packages/feature_auth/`. Verify it compiles." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Enforce package boundaries.** Try to import `feature_cart` from `feature_auth`; watch pubspec fail." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Parallel CI.** Set up GitHub Actions that tests each package in a separate job." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is modular architecture in Flutter?**\n\n**A:** Modular architecture splits a single Flutter app across MULTIPLE Dart packages within a monorepo. Each package (`feature_auth`, `feature_cart`, `core_ui`, `core_services`) has its own `pubspec.yaml`, `lib/`, `test/`. The app's `pubspec.yaml` pulls them via `path:` dependencies. Managed with **`melos`** — a tool for scripting cross-package operations. **Why:** at 5+ engineers on a single-package app, everyone's changes conflict; compile times balloon; boundaries erode. Splitting into packages FORCES the discipline feature-first started — you literally can't accidentally import across features. **When:** medium-to-large apps, 5+ engineers, 500+ files. **Overkill for:** solo devs, small teams, tutorials." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What is `melos` and why do you need it?**\n\n**A:** `melos` is a Dart monorepo management tool from Invertase (creators of FlutterFire). It scripts cross-package operations: `melos bootstrap` links all path dependencies, `melos run test` runs tests in every package, `melos version` bumps versions across changed packages. Without `melos`, you'd manually `cd` into each package and run commands — unsustainable at 10+ packages. `melos` also supports **`melos.yaml` scripts** — reusable commands like `melos run gen` (run code generation across every package that has `build_runner`). Essential for any Dart monorepo. Modern Dart 3.5+ workspaces feature complements it." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How does modular relate to feature-first?**\n\n**A:** Modular is feature-first taken to the next level. **Feature-first (level 1):** one package, features organized by folder (`lib/features/auth/`). Discipline is directory-based; you can accidentally import across features. **Modular (level 2):** each feature is a SEPARATE PACKAGE. The compiler ENFORCES boundaries — you can't import from a package without adding it to your `pubspec.yaml`. Enforcement moves from lint to build system. **Migration path:** most teams start feature-first, promote to modular when the codebase hits ~500 files or the team crosses 5 engineers. The migration is mechanical: move folders to `packages/feature_*/lib/`, add pubspec files, use `melos bootstrap`." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What are typical package types in a modular Flutter app?**\n\n**A:** Three categories. **Feature packages (`feature_auth`, `feature_cart`)** — user-visible capabilities. Each has its own domain/data/presentation layers. Depends only on core packages. **Core packages (`core_ui`, `core_services`, `core_networking`, `core_theme`)** — shared infrastructure. `core_ui` has design-system widgets; `core_services` has AuthService etc.; `core_networking` provides a shared Dio configuration. Depend only on other core packages. **The app package** — wires all features together, sets up DI, provides the top-level router. Depends on everything. **Rule:** dependency arrows from features INTO core, from app INTO features + core. Never features → features." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you enforce package boundaries?**\n\n**A:** Multiple mechanisms. **(1) `pubspec.yaml` deps** — `feature_cart`'s `pubspec.yaml` doesn't list `feature_auth` as a dependency, so imports fail at compile time. Strongest enforcement. **(2) Public API discipline** — `lib/feature_auth.dart` re-exports what's public via `export` statements; internal code lives in `lib/src/`. Consumers only see the public API. **(3) Dart's built-in `lib/src/` privacy** — files in `src/` shouldn't be imported directly by other packages (linters warn). **(4) `dart_code_metrics` custom rules** — flag imports from private paths. Together, these make cross-boundary drift nearly impossible." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What are the trade-offs of modular architecture?**\n\n**A:** **Pros:** (1) Enforced boundaries — impossible to accidentally cross features. (2) Faster CI — test packages in parallel. (3) Faster onboarding — new devs work in one package. (4) Independent versioning if needed. (5) Ability to extract packages to their own repo later. **Cons:** (1) More boilerplate — many `pubspec.yaml` files, many `lib/package_name.dart` public APIs. (2) `melos` learning curve. (3) Cross-package refactors are harder — 3 pubspec bumps + 3 test runs. (4) `path:` deps can be finicky (relative paths, IDE quirks). (5) Overkill for < 500 files or < 5 engineers. **My rule:** start feature-first; migrate to modular WHEN pain justifies it, not by anticipation." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: When is modular architecture worth it?**\n\n**A:** **Worth it when:** (1) 5+ engineers touching the codebase daily. (2) 500+ files or 100+ screens. (3) Multiple features developed in parallel by separate teams. (4) Long build times (`flutter build` >2 minutes). (5) Test isolation matters (each feature can be tested in a fast, hermetic package). (6) You want to eventually extract features to their own repos. **Not worth it when:** (1) Solo developer. (2) Small team (2-3). (3) Under 500 files. (4) Fast, disposable prototypes. (5) The team doesn't know `melos` and doesn't have time to learn. **Migration path:** feature-first → modular is a natural evolution; don't jump straight to modular on day 1." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Large enterprise Flutter apps** — banking, delivery, ride-share.\n- **Google's Now In Android** — Kotlin/Compose reference; feature-modular structure.\n- **BMW MyBMW app** — public case study, modular monorepo.\n- **Flutter's own SDK repo** — internally modular.\n- **FlutterFire monorepo** — 25+ Firebase plugin packages.\n- **Melos itself is heavily used** in the Flutter ecosystem.\n- **NOT common in indie / solo / small apps** — the ceremony isn't worth it." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Dart 3.5+ pubspec workspaces** — native workspaces feature; simplifies path deps.\n- **`pubspec_overrides.yaml`** — Dart 2.19+ per-package overrides.\n- **Private pub registries** — publish internal packages to a company registry (Cloudsmith, Verdaccio for Dart via API).\n- **Package changelogs + versioning** — semver per package; `melos publish --dry-run` verifies.\n- **Parallel `flutter build`** — CI can build feature-package tests in parallel across matrix jobs.\n- **Nx / Bazel for very large scale** — cross-package caching; Google-scale.\n- **Federated plugins (see Volume 4 packages)** — modular architecture within a plugin.\n- **`melos run test --diff=main`** — test only changed packages (incremental CI).\n- **Package graph visualization** — `melos list --graph` prints DOT graph of dependencies.\n- **Golden test isolation** — each feature has its own golden test folder.\n- **Refactoring across packages** — Dart's rename refactoring works, but slower; `find_and_replace_regex` or manual." }
   ],
   "flashcards": [
-    { "front": "What does modular architecture enforce?", "back": "Import boundaries — a package can only see another's public API." },
-    { "front": "Typical modules in a Flutter monorepo?", "back": "core, design_system, feature_X packages, and an app module that composes them." },
-    { "front": "When to modularize?", "back": "When build times or team coordination hurt — not day one." }
+    { "front": "Modular architecture?", "back": "Split app into multiple Dart packages (feature_auth, feature_cart, core_ui, ...) in a monorepo." },
+    { "front": "Manager tool?", "back": "melos — scripts cross-package operations (bootstrap, test, format, publish, version)." },
+    { "front": "Rule?", "back": "Features cannot depend on features. Only on core_* packages." },
+    { "front": "Public API?", "back": "lib/package_name.dart with export statements. Everything else in lib/src/." },
+    { "front": "When?", "back": "5+ engineers, 500+ files, feature-first no longer scaling. Not solo devs." },
+    { "front": "Progression?", "back": "Layer-first → Feature-first → Modular. Match architecture to scale." }
   ],
   "quiz": [
-    { "q": "Modular architecture's key enforcement is…", "options": ["Faster GC", "Import boundaries between packages", "Higher frame rates", "Cheaper hosting"], "answer": 1, "explain": "Modules can only expose their public API." },
-    { "q": "A common Flutter modular layout has…", "options": ["Only one lib/", "core + design_system + feature_* packages + app", "One package per widget", "No app module"], "answer": 1, "explain": "Feature packages composed by an app module." },
-    { "q": "The main risk of early modularization is…", "options": ["Faster builds", "Overhead without payoff", "Better DI", "Fewer bugs"], "answer": 1, "explain": "You pay setup cost before the wins arrive." }
+    { "q": "Modular architecture organizes by…", "options": ["Screen", "Multiple Dart packages in a monorepo", "Layer", "File type"], "answer": 1, "explain": "Each feature = a package." },
+    { "q": "Monorepo tool?", "options": ["Cocoapods", "melos", "npm", "Podfile"], "answer": 1, "explain": "Dart / Flutter monorepo manager." },
+    { "q": "Rule between features?", "options": ["Can import freely", "Feature CANNOT depend on other features (enforced by pubspec)", "One giant feature", "Only via reflection"], "answer": 1, "explain": "Enforced boundaries." },
+    { "q": "When adopt?", "options": ["Always", "5+ engineers / 500+ files", "3-screen apps", "Never"], "answer": 1, "explain": "Match to scale." },
+    { "q": "Public API convention?", "options": ["Every .dart file is public", "lib/package_name.dart re-exports; internal in lib/src/", "Nothing", "src/ is public"], "answer": 1, "explain": "Explicit boundary." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Extract a feature into its own package with a small public API." },
-    { "level": "Medium", "text": "Set up a monorepo (melos) with core + design_system + one feature package." },
-    { "level": "Hard", "text": "Break a circular dependency between two features by introducing a shared abstraction." },
-    { "level": "Expert", "text": "Add CI that builds only affected packages on push." }
+    { "level": "Easy", "text": "Set up a monorepo with app/ + packages/core_ui/ + packages/feature_home/." },
+    { "level": "Easy", "text": "melos bootstrap; verify all path deps resolved." },
+    { "level": "Medium", "text": "Extract ProductCard into core_ui; consume from feature_cart." },
+    { "level": "Medium", "text": "Convert an existing feature folder into a Dart package." },
+    { "level": "Hard", "text": "Add lib/package_name.dart public API; ensure lib/src/ is not imported directly." },
+    { "level": "Hard", "text": "Set up parallel CI: melos run test with matrix jobs per package." },
+    { "level": "Expert", "text": "Publish a core package to a private pub registry; consume it from the app." }
   ],
   "interviewQuestions": [
-    "What is modular architecture and why use it?",
-    "How do modules enforce boundaries?",
-    "What's a typical Flutter module layout?",
-    "When would you NOT modularize?",
-    "How do you handle shared code between modules?"
+    "What is modular architecture in Flutter?",
+    "What is melos and why do you need it?",
+    "How does modular relate to feature-first?",
+    "What are typical package types in a modular Flutter app?",
+    "How do you enforce package boundaries?",
+    "What are the trade-offs of modular architecture?",
+    "When is modular architecture worth it?"
   ],
   "references": [
-    { "label": "melos — Dart monorepo tool", "url": "https://melos.invertase.dev" }
+    { "label": "melos — Invertase", "url": "https://melos.invertase.dev" },
+    { "label": "Dart pubspec workspaces", "url": "https://dart.dev/tools/pub/workspaces" }
   ]
 }
