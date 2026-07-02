@@ -3,48 +3,99 @@
   "levelId": 4,
   "title": "Widget Lifecycle",
   "xp": 40,
-  "estimatedMinutes": 20,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Order the State lifecycle methods",
-    "Use initState/dispose to manage resources",
-    "Handle didUpdateWidget and didChangeDependencies"
+    "Understand the StatefulWidget lifecycle via a real-life analogy",
+    "Memorize the callback order for every scenario",
+    "Know when to use initState, didChangeDependencies, didUpdateWidget, dispose",
+    "Avoid the classic leak, forgotten-dispose, and stale-listener bugs",
+    "Answer widget-lifecycle interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "The widget (State) lifecycle is the sequence of methods Flutter calls on a StatefulWidget's State as it's created, updated and removed." },
-    { "type": "code", "language": "text", "code": "createState -> initState -> didChangeDependencies -> build\n   ... parent rebuilds with new config ...\ndidUpdateWidget -> build\n   ... dependency changes ...\ndidChangeDependencies -> build\n   ... removed ...\ndeactivate -> dispose" },
-    { "type": "table", "headers": ["Method", "Use it to"], "rows": [
-      ["initState", "One-time setup: controllers, listeners, subscriptions"],
-      ["didChangeDependencies", "React to InheritedWidget changes"],
-      ["didUpdateWidget", "Respond to new widget config"],
-      ["dispose", "Release controllers/subscriptions (prevent leaks)"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of a shop opening in a mall.**\n\n- **`createState`** — you SIGN THE LEASE. One-time. Flutter says 'you're a real shop now, here's an empty rental space.'\n- **`initState`** — you SET UP THE SHOP: hang the sign, plug in the lights, subscribe to the mall's newsletter (streams / listeners). Done ONCE, before the first customer.\n- **`didChangeDependencies`** — the mall's central AC changes temperature. Any shop that reads it (`Theme.of(context)`, `MediaQuery.of(context)`) gets notified. Sometimes right after `initState`, sometimes later.\n- **`build`** — CUSTOMERS ARRIVE. You lay out the shelves. Runs OFTEN — every frame that might have changed.\n- **`didUpdateWidget`** — the PARENT company renamed you or changed your signage. Your inside stays the same (State survives), but you should refresh the poster to match the new brand.\n- **`deactivate`** — the lease is being moved to a new mall floor. Your shop object might come back somewhere else, or might be permanently closed.\n- **`dispose`** — SHOP CLOSED FOREVER. Unsubscribe from the newsletter, unplug the lights, cancel deliveries. Miss this step? You keep paying the newsletter fees forever (leak).\n\n**The bug you'll see every week:** subscribing to a stream in `initState` but forgetting to `cancel()` in `dispose` — the stream keeps firing at a dead widget, tries to call `setState`, and crashes. This one callback fixes 80% of Flutter bugs." },
+    { "type": "callout", "variant": "definition", "markdown": "**The StatefulWidget lifecycle** is the ordered set of callbacks Flutter invokes on your `State<T>` object from creation to destruction: `createState → initState → didChangeDependencies → build → didUpdateWidget/setState → build → deactivate → dispose`. Understanding it is essential for correctly setting up and tearing down resources (streams, controllers, timers, listeners)." },
+    { "type": "theory", "markdown": "## The full callback sequence" },
+    { "type": "code", "language": "text", "code": "PARENT CREATES THIS WIDGET FOR THE FIRST TIME:\ncreateState()                     ← once per State instance\ninitState()                       ← one-time setup; no context.dependOnInheritedWidget yet\ndidChangeDependencies()           ← safe to read Theme.of/MediaQuery.of\nbuild()                           ← first paint\n\nEVERY REBUILD (setState OR parent rebuilds):\n  If parent gave NEW widget-config: didUpdateWidget(oldWidget)\n  build()                         ← re-render\n\nDEPENDENCIES CHANGED (theme, MediaQuery, InheritedWidget upstream):\ndidChangeDependencies()\nbuild()\n\nWIDGET REMOVED (permanent OR temporarily moved in tree):\ndeactivate()                      ← removed from tree; may or may not come back\n  → if re-inserted elsewhere: activate() → build()\n  → if truly removed:\ndispose()                         ← FINAL. Cancel streams, dispose controllers, cancel timers." },
+    { "type": "theory", "markdown": "## What each callback is for" },
+    { "type": "table", "headers": ["Callback", "Use for", "Critical rule"], "rows": [
+      ["`initState()`", "One-time init: subscribe to streams, init controllers, start timers", "Can't use `InheritedWidget`/`Theme.of` yet — use `didChangeDependencies` for that"],
+      ["`didChangeDependencies()`", "React to InheritedWidget changes (theme, locale, MediaQuery)", "Called after `initState` and whenever a dependency actually changes"],
+      ["`build(context)`", "Return the widget subtree", "Runs OFTEN — keep it pure and fast. No side effects."],
+      ["`didUpdateWidget(oldWidget)`", "React to parent passing NEW props", "Compare `widget.foo` (new) with `oldWidget.foo` — resubscribe if key input changed"],
+      ["`setState(fn)`", "Mutate state and schedule a rebuild", "`fn` must be sync; don't call after dispose"],
+      ["`deactivate()`", "Widget removed but might re-enter (rare use)", "Rarely overridden in app code"],
+      ["`dispose()`", "Cancel EVERY subscription/timer/controller you created", "Missing this = leak or 'setState called after dispose' crash"]
     ]},
-    { "type": "callout", "variant": "mistake", "markdown": "Forgetting to dispose() AnimationControllers, TextEditingControllers, StreamSubscriptions, or FocusNodes — the #1 source of memory leaks in Flutter. Every controller you create in initState, dispose in dispose()." },
-    { "type": "callout", "variant": "tip", "markdown": "Never call setState in build() (infinite loop) or after dispose() (throws). Guard async callbacks with `if (mounted)` before calling setState." }
+    { "type": "callout", "variant": "interview", "markdown": "**The rule that saves you:** For every resource acquired in `initState` (stream subscription, animation controller, timer, listener), you MUST release it in `dispose`. This isn't optional — it's the difference between a stable app and a mystery-crash app." },
+    { "type": "theory", "markdown": "## Complete sample program — a stream-consuming widget with correct lifecycle" },
+    { "type": "code", "language": "dart", "code": "import 'dart:async';\nimport 'package:flutter/material.dart';\n\n// A widget that subscribes to a Stream — showcasing the full lifecycle.\nclass TickerCounter extends StatefulWidget {\n  const TickerCounter({super.key, required this.stream});\n  final Stream<int> stream;\n\n  @override\n  State<TickerCounter> createState() => _TickerCounterState();\n}\n\nclass _TickerCounterState extends State<TickerCounter> {\n  StreamSubscription<int>? _sub;\n  int _value = 0;\n\n  @override\n  void initState() {\n    super.initState();\n    debugPrint('initState');\n    _sub = widget.stream.listen(_onTick);   // subscribe ONCE\n  }\n\n  @override\n  void didChangeDependencies() {\n    super.didChangeDependencies();\n    debugPrint('didChangeDependencies (theme/media changed)');\n  }\n\n  @override\n  void didUpdateWidget(TickerCounter oldWidget) {\n    super.didUpdateWidget(oldWidget);\n    if (oldWidget.stream != widget.stream) {\n      // Parent gave us a DIFFERENT stream — resubscribe.\n      _sub?.cancel();\n      _sub = widget.stream.listen(_onTick);\n    }\n  }\n\n  void _onTick(int v) {\n    if (!mounted) return;                    // don't setState after dispose\n    setState(() => _value = v);\n  }\n\n  @override\n  void dispose() {\n    debugPrint('dispose');\n    _sub?.cancel();                          // release the subscription\n    super.dispose();\n  }\n\n  @override\n  Widget build(BuildContext context) {\n    debugPrint('build');\n    return Center(child: Text('tick = $_value', style: Theme.of(context).textTheme.headlineMedium));\n  }\n}\n\n// This covers every important pattern:\n//   1. One-time subscribe in initState\n//   2. Re-subscribe in didUpdateWidget if the input stream changed\n//   3. Guard setState with `mounted`\n//   4. Cancel subscription in dispose\n//   5. Read Theme in build (or didChangeDependencies) — NOT initState" },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Reading `context.dependOnInheritedWidget` in `initState`.** `Theme.of`, `MediaQuery.of`, `Provider.of<T>` — all throw or return stale data in `initState`. Read them in `didChangeDependencies` or `build`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Forgetting to cancel a stream/timer/controller in `dispose`.** Weeks-later mystery: 'setState called after dispose' crash. Fix: EVERY `StreamSubscription`, `AnimationController`, `Timer`, `TextEditingController` needs a matching `.cancel()`/`.dispose()`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Calling `setState` after `dispose`.** Guard with `if (!mounted) return;` in any async callback." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Doing expensive work in `build`.** `build` runs OFTEN. `jsonDecode(...)`, `File.readAsString(...)`, `Provider.of` chains — all bad here. Do them in `initState` or a controller." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Not implementing `didUpdateWidget` when props change.** If your widget takes a `stream` or `future`, and the parent hands a DIFFERENT one, your State keeps listening to the OLD one until you re-subscribe in `didUpdateWidget`." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Every `initState` acquire needs a matching `dispose` release.** Read your `dispose` and your `initState` together — they should be mirror images." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Guard async callbacks with `mounted`.** `if (!mounted) return;` before touching state." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Read inherited widgets in `didChangeDependencies` or `build`.** Never in `initState`." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Implement `didUpdateWidget` when the widget holds a subscription tied to a prop.** Compare `widget.foo` vs `oldWidget.foo`; resubscribe if changed." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Use `hooks_riverpod` / `flutter_hooks` for boilerplate reduction.** They automate `initState`/`dispose` pairing." },
+    { "type": "callout", "variant": "best", "markdown": "**6. For animation, use `TickerProviderStateMixin` or `SingleTickerProviderStateMixin`.** Otherwise the controller has no vsync signal." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Log every callback.** Override every lifecycle callback with a `print`; navigate to/away/back and observe the sequence.\n\n**Why:** Nothing beats seeing it in the console once." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Ticker counter.** Build the sample; verify `dispose` fires when you leave the screen." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Guard against stale setState.** Introduce a 500 ms `Future.delayed` in an async callback; pop the screen before it fires; observe the crash; add `mounted` check." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Resubscribe on prop change.** Widget takes a stream; parent swaps the stream on button press; use `didUpdateWidget` to resubscribe." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — AnimationController lifecycle.** `TickerProviderStateMixin`; controller created in `initState`, disposed in `dispose`; animation restarted on rebuild if a color prop changed." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: List the StatefulWidget lifecycle callbacks in order.**\n\n**A:** For a fresh widget: `createState → initState → didChangeDependencies → build`. Then every rebuild: `didUpdateWidget(oldWidget)` (only if the parent supplies a new widget) → `build`. If a dependency (`Theme`, `MediaQuery`, `InheritedWidget`) changes: `didChangeDependencies → build`. When the widget is removed: `deactivate → dispose`. If it's re-inserted elsewhere in the tree without being disposed: `activate → build`. Understanding this order tells you where to do one-time init (`initState`), where to react to prop changes (`didUpdateWidget`), and where to release resources (`dispose`)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What's the difference between `initState` and `didChangeDependencies`?**\n\n**A:** **`initState`** runs ONCE, right after the State object is created but before the first `build`. Use for setup that doesn't depend on `InheritedWidget`s: subscribe to streams, init controllers, create timers. **CRITICAL:** you cannot safely call `Theme.of(context)`, `MediaQuery.of(context)`, or `Provider.of<T>(context)` here — those depend on inherited widgets that aren't fully wired yet. **`didChangeDependencies`** runs immediately after `initState` AND every time an ancestor inherited widget notifies (theme change, MediaQuery, orientation). Safe to read inherited widgets here. **Rule:** one-time init → `initState`; inherited-widget-dependent init → `didChangeDependencies`." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: When is `didUpdateWidget` called and what should you do there?**\n\n**A:** Called when the parent widget rebuilds with a NEW widget-config for the same State instance (same widget type + key). The State survives; only the widget-config is refreshed. You get access to `oldWidget` so you can compare old vs new. **Use for:** reacting to prop changes. Example: your widget takes a `stream` prop; if `oldWidget.stream != widget.stream`, cancel the old subscription and subscribe to the new one. Without `didUpdateWidget`, your State would keep listening to the stale prop forever. Also used to restart animations when an input changes (e.g., `oldWidget.color != widget.color` → animate the transition)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What is `dispose()` and what MUST you do in it?**\n\n**A:** `dispose()` runs once when the State is permanently removed from the tree. **You MUST release every resource acquired in `initState`:** cancel `StreamSubscription`s, dispose `AnimationController`s / `TextEditingController`s / `ScrollController`s, cancel `Timer`s, remove listeners. Missing any of these creates memory leaks and 'setState called after dispose' crashes when the released-but-still-active subscription fires. Call `super.dispose()` LAST. **Rule of thumb:** if `initState` creates it or subscribes to it, `dispose` releases it. Read them side by side in code review." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What is `mounted` and when do you use it?**\n\n**A:** `mounted` is a `bool` on `State` that's `true` while the widget is in the tree and `false` after `dispose()`. Async callbacks can fire AFTER the widget is gone — calling `setState` then crashes with 'setState called after dispose.' **Guard:** `if (!mounted) return;` before touching state or calling `setState` in any async continuation. Common example:\n```dart\nvoid _load() async {\n  final data = await api.fetch();\n  if (!mounted) return;\n  setState(() => _data = data);\n}\n```\nModern flavors of Flutter also detect this with the `use_build_context_synchronously` lint." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: Why can't you use `Theme.of(context)` in `initState`?**\n\n**A:** `initState` runs before the framework has fully set up dependencies. `Theme.of(context)` internally calls `context.dependOnInheritedWidgetOfExactType<Theme>()`, which not only reads the theme but SUBSCRIBES the State to theme changes. In `initState`, that subscription can't be set up safely — Flutter throws or returns stale data. Move theme reads to `didChangeDependencies` (which re-fires when the theme changes) or `build` (which fires on every rebuild). This is the #1 cause of the 'context used inappropriately in initState' warnings in code review." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What's the difference between `deactivate` and `dispose`?**\n\n**A:** **`deactivate`** — the State is being TEMPORARILY removed from the tree. It might be re-inserted somewhere else (rare — happens with `GlobalKey` moves). At this point the widget is no longer in the tree but not yet released. **`dispose`** — the State is being PERMANENTLY removed and destroyed. After dispose, the State object will be garbage-collected. **Rule:** you almost never override `deactivate` in app code. Override `dispose` for cleanup. If Flutter re-inserts your State elsewhere (rare!), `activate` fires next; without an `activate` override, the State just continues normally." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q8: Does a StatelessWidget have a lifecycle?**\n\n**A:** A minimal one: just `build(context)`. No `initState` / `dispose` because there's no State object to manage. The widget is created, `build` runs, and eventually the widget is garbage-collected once it's no longer referenced by the Element tree. This is why StatelessWidgets are cheap and preferable — no lifecycle to reason about, no cleanup to forget. When you find yourself wanting `initState` in a Stateless widget, that's the signal to promote to StatefulWidget." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every `StreamBuilder` / `FutureBuilder`** wraps this lifecycle pattern.\n- **Every animation controller in Flutter** — created in `initState` (with `vsync: this`), disposed in `dispose`.\n- **Every form controller** (`TextEditingController`, `FocusNode`) — same pattern.\n- **Bloc/Riverpod widgets abstract this away** — Providers handle create/dispose for you.\n- **LeakCanary-equivalent (Flutter memory allocations tool)** — surface widgets that leaked their subscriptions.\n- **Testing** — `WidgetTester` respects the lifecycle; `pumpWidget` triggers `initState`, `pumpAndSettle` runs animations." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`SingleTickerProviderStateMixin` vs `TickerProviderStateMixin`** — one animation controller vs many; use the single variant when you can (cheaper).\n- **`AutomaticKeepAliveClientMixin`** — keep a State alive when its parent (like a TabBar) rebuilds it.\n- **`WidgetsBindingObserver`** — subscribe to app lifecycle (background/foreground) — separate from widget lifecycle.\n- **`RouteAware`** — listen for route push/pop events (via `RouteObserver`).\n- **`reassemble()`** — invoked on hot reload; useful for resetting caches during dev.\n- **`FocusNode.addListener`** — remember to `removeListener` in `dispose`.\n- **`ValueNotifier` / `ChangeNotifier`** — same pattern; `dispose()` them.\n- **`use_build_context_synchronously` lint** — surfaces context usage across an `await` gap; the linter's answer to the async lifecycle bug." }
   ],
   "flashcards": [
-    { "front": "First lifecycle methods of State?", "back": "createState → initState → didChangeDependencies → build." },
-    { "front": "Where do you release resources?", "back": "dispose() — controllers, subscriptions, focus nodes, listeners." },
-    { "front": "When is didUpdateWidget called?", "back": "When the parent rebuilds this widget with a new configuration." }
+    { "front": "Full lifecycle in order?", "back": "createState → initState → didChangeDependencies → build → (didUpdateWidget/setState → build)* → deactivate → dispose." },
+    { "front": "initState vs didChangeDependencies?", "back": "initState = one-time, NO inherited widget access. didChangeDependencies = safe to read Theme/MediaQuery." },
+    { "front": "Rule of dispose?", "back": "Every subscription/controller/timer created in initState must be released in dispose." },
+    { "front": "mounted usage?", "back": "Check `if (!mounted) return;` before setState after an await." },
+    { "front": "Why didUpdateWidget?", "back": "React to parent passing NEW props (e.g., resubscribe if the stream prop changed)." },
+    { "front": "Stateless lifecycle?", "back": "Just build(). Simpler, no cleanup — prefer when you don't need local state." }
   ],
   "quiz": [
-    { "q": "One-time setup belongs in…", "options": ["build", "initState", "dispose", "didUpdateWidget"], "answer": 1, "explain": "initState runs once when the State is inserted." },
-    { "q": "Failing to dispose a controller causes…", "options": ["Faster UI", "A memory leak", "A compile error", "Nothing"], "answer": 1, "explain": "Undisposed controllers/subscriptions leak memory and resources." },
-    { "q": "Before setState in an async callback, check…", "options": ["if (mounted)", "if (context)", "if (build)", "nothing"], "answer": 0, "explain": "The widget may have been disposed; mounted guards against that." }
+    { "q": "First callback on a new StatefulWidget?", "options": ["build", "createState", "dispose", "didUpdateWidget"], "answer": 1, "explain": "createState creates the State object." },
+    { "q": "Safe place to read Theme.of(context)?", "options": ["initState", "createState", "didChangeDependencies", "constructor"], "answer": 2, "explain": "Inherited widgets ready here." },
+    { "q": "Missing dispose usually causes…", "options": ["Nothing", "Leak or setState-after-dispose crash", "Slow build", "Compile error"], "answer": 1, "explain": "Every acquire needs a release." },
+    { "q": "didUpdateWidget fires when…", "options": ["setState is called", "Parent passes a NEW widget instance for same key/type", "Theme changes", "Route pops"], "answer": 1, "explain": "React to prop changes here." },
+    { "q": "Guarding async setState uses…", "options": ["disposed", "mounted", "isDisposed", "context.mounted only"], "answer": 1, "explain": "`if (!mounted) return;`." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Log every lifecycle method and trigger each transition." },
-    { "level": "Medium", "text": "Create and dispose an AnimationController correctly." },
-    { "level": "Hard", "text": "Use didUpdateWidget to react to a changed parent parameter." },
-    { "level": "Expert", "text": "Reproduce and fix a setState-after-dispose crash with a mounted guard." }
+    { "level": "Easy", "text": "Override every lifecycle callback with a print; navigate to/from and log the order." },
+    { "level": "Easy", "text": "Convert an animated widget to `SingleTickerProviderStateMixin`, create controller in initState, dispose in dispose." },
+    { "level": "Medium", "text": "Guard an async setState with `if (!mounted) return;`; reproduce the crash without it." },
+    { "level": "Medium", "text": "Implement didUpdateWidget: resubscribe when the stream prop changes." },
+    { "level": "Hard", "text": "Restart an animation on prop change via didUpdateWidget." },
+    { "level": "Hard", "text": "Use AutomaticKeepAliveClientMixin so a Tab's State survives switching tabs." },
+    { "level": "Expert", "text": "Build a lifecycle-aware widget that pauses a Stream on background (via WidgetsBindingObserver) and resumes on foreground." }
   ],
   "interviewQuestions": [
-    "Walk through the State lifecycle.",
-    "What goes in initState vs dispose?",
-    "When is didUpdateWidget vs didChangeDependencies called?",
-    "Why and how do you guard setState with mounted?",
-    "Common causes of Flutter memory leaks?"
+    "List the StatefulWidget lifecycle callbacks in order.",
+    "initState vs didChangeDependencies — differences?",
+    "When is didUpdateWidget called and what should you do there?",
+    "What is dispose() and what MUST you do in it?",
+    "What is `mounted` and when do you use it?",
+    "Why can't you use Theme.of(context) in initState?",
+    "deactivate vs dispose?",
+    "Does a StatelessWidget have a lifecycle?"
   ],
   "references": [
-    { "label": "Flutter — State class", "url": "https://api.flutter.dev/flutter/widgets/State-class.html" }
+    { "label": "State class — Flutter API", "url": "https://api.flutter.dev/flutter/widgets/State-class.html" },
+    { "label": "State management overview", "url": "https://docs.flutter.dev/data-and-backend/state-mgmt" }
   ]
 }

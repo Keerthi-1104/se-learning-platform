@@ -1,5 +1,6 @@
 // VOLUME 4 — Flutter & Dart
 const L = require("./lib");
+const { loadTopic, topicToChapter } = require("./topic_to_chapter");
 const {
   C, P, H1, H2, bullet, num, callout, code, table, rule, chip,
   makeDoc, pageProps, save, Paragraph, TextRun, PageBreak, AlignmentType,
@@ -71,97 +72,21 @@ body.push(P([{ t: "Flutter is the centerpiece of this roadmap. ", b: true }, "Th
 body.push(callout("note", [["Each topic ends with: ", { t: "✅ Summary · 🎯 Interview Questions · 💻 Coding Problems · 🏭 Real-world Example · 🛠 Mini Project · 🚀 Advanced Notes.", b: true }]]));
 body.push(callout("interview", ["The signature senior Flutter question: 'Explain the difference between the Widget, Element and RenderObject trees.' If you can answer that and walk a frame through the rendering pipeline, you're ahead of most candidates."]));
 
-// 1 Dart
-body.push(...chapter({
-  id: "ch1", title: "1. Dart Fundamentals",
-  def: "Dart is Flutter's language — typed, null-safe, OOP — compiling JIT for hot reload in development and AOT to native code for fast release builds.",
-  blocks: [
-    code(["int? y;  final len = y?.length ?? 0;   // null safety",
-      "Future<User> fetch() async => await api.getUser();",
-      "Stream<int> ticks() async* { for (var i=0;;i++) yield i; }"], "dart"),
-    callout("interview", ["Dart is single-threaded per isolate with an event loop — no shared-memory concurrency. Heavy work runs in a separate Isolate communicating by messages, which is why Flutter UIs avoid most lock/race bugs."]),
-    callout("mistake", ["CPU-heavy work (huge JSON parse, image processing) on the main isolate freezes the UI. Offload with compute()/Isolate.run()."]),
-  ],
-  summary: ["Dart is null-safe and compiles JIT (dev) + AOT (release).", "Future = one async value; Stream = many over time.", "Concurrency is isolate-based with message passing.", "Offload CPU-heavy work with compute()/Isolate."],
-  interview: ["What is sound null safety?", "JIT vs AOT and how it enables hot reload?", "Future vs Stream?", "How does Dart handle concurrency (isolates)?", "When and how do you use compute()?"],
-  coding: [
-    { level: "Easy", text: "Write a null-safe function using ?., ?? and late." },
-    { level: "Medium", text: "Consume a Stream with async* and await for." },
-    { level: "Hard", text: "Parse a large JSON off the main isolate with compute()." },
-    { level: "Expert", text: "Build producer/consumer with Isolates + SendPort/ReceivePort." }],
-  realworld: ["Apps that decode big API responses or images do it in an isolate so scrolling stays smooth — a direct application of Dart's concurrency model."],
-  miniproject: ["Build a CLI/app that fetches and parses a large dataset off the main isolate and reports timing on vs off the UI thread."],
-  advanced: ["Isolate groups & shared memory (TransferableTypedData).", "Zones and error handling.", "Extension types and the upcoming macros."],
-}));
+// 1. Dart Language
+body.push(...topicToChapter(loadTopic("level_04", "dart"),
+  { chapterNumber: 1, bookmarkId: "ch1" }));
 
-// 2 Widgets
-body.push(...chapter({
-  id: "ch2", title: "2. Widgets",
-  def: "In Flutter the UI is built from widgets — immutable configuration objects describing part of the UI, composed into a tree. Even the app and layout are widgets.",
-  blocks: [
-    table(["", "StatelessWidget", "StatefulWidget"], [
-      ["State", "None", "Mutable State object"],
-      ["Rebuilds", "When inputs change", "On setState"],
-      ["Use", "Static/derived UI", "UI that changes over time"]], [1700, 3830, 3830]),
-    callout("analogy", ["Widgets are blueprints, not the building. Flutter rebuilds blueprints cheaply each frame; the persistent objects (Elements/RenderObjects) are reused behind the scenes."]),
-    callout("mistake", ["Expensive work in build() — it can run 60+/sec. Keep it pure and cheap; hoist constant subtrees into const widgets so Flutter skips them."]),
-  ],
-  summary: ["Widgets are immutable UI configuration.", "Stateless has no internal state; Stateful uses setState.", "build() must be cheap and pure.", "const widgets are reused and skipped on rebuild."],
-  interview: ["What does 'everything is a widget' mean?", "Stateless vs Stateful?", "Why are widgets immutable?", "Why use const constructors?", "Composition vs inheritance in Flutter?"],
-  coding: [
-    { level: "Easy", text: "Compose a profile card from Stateless widgets." },
-    { level: "Medium", text: "Convert a Stateless counter to Stateful." },
-    { level: "Hard", text: "Extract a rebuilding subtree into const; verify fewer rebuilds." },
-    { level: "Expert", text: "Build a reusable themable component with slot builders." }],
-  realworld: ["Design systems ship libraries of small composable widgets; teams build screens by composition, never deep inheritance."],
-  miniproject: ["Build a reusable component library (buttons, cards, inputs) with const constructors and a theme."],
-  advanced: ["InheritedWidget for dependency propagation.", "Keys deep-dive.", "Widget canonicalization and const folding."],
-}));
+// 2. Widgets
+body.push(...topicToChapter(loadTopic("level_04", "widgets"),
+  { chapterNumber: 2, bookmarkId: "ch2" }));
 
-// 3 Widget Lifecycle
-body.push(...chapter({
-  id: "ch3", title: "3. Widget Lifecycle",
-  def: "The State lifecycle is the sequence Flutter calls on a StatefulWidget's State as it's created, updated and removed.",
-  blocks: [
-    code(["createState -> initState -> didChangeDependencies -> build",
-      "didUpdateWidget -> build        (parent rebuilds with new config)",
-      "deactivate -> dispose           (removed)"], "lifecycle"),
-    callout("mistake", ["Forgetting dispose() for AnimationControllers, TextEditingControllers, StreamSubscriptions, FocusNodes — the #1 Flutter leak. Create in initState, dispose in dispose()."]),
-    callout("tip", ["Never setState in build() (infinite loop) or after dispose() (throws). Guard async callbacks with `if (mounted)`."]),
-  ],
-  summary: ["Order: createState → initState → didChangeDependencies → build.", "Release resources in dispose().", "didUpdateWidget reacts to new parent config.", "Guard setState with mounted after async."],
-  interview: ["Walk through the State lifecycle.", "initState vs dispose?", "didUpdateWidget vs didChangeDependencies?", "Why guard setState with mounted?", "Common Flutter memory leaks?"],
-  coding: [
-    { level: "Easy", text: "Log every lifecycle method." },
-    { level: "Medium", text: "Create and dispose an AnimationController." },
-    { level: "Hard", text: "React to a changed parent param in didUpdateWidget." },
-    { level: "Expert", text: "Reproduce and fix a setState-after-dispose crash." }],
-  realworld: ["A video player widget acquires the controller in initState and releases it in dispose; getting this wrong leaks native players and crashes after navigation."],
-  miniproject: ["Build a stopwatch widget that correctly sets up and tears down a Ticker across navigation."],
-  advanced: ["AutomaticKeepAliveClientMixin, RouteAware, lifecycle with AppLifecycleState."],
-}));
+// 3. Widget Lifecycle
+body.push(...topicToChapter(loadTopic("level_04", "widget_lifecycle"),
+  { chapterNumber: 3, bookmarkId: "ch3" }));
 
-// 4 BuildContext
-body.push(...chapter({
-  id: "ch4", title: "4. BuildContext",
-  def: "A BuildContext is a handle to a widget's location in the tree — it IS the widget's Element — used to look up Theme, MediaQuery, Navigator and inherited data.",
-  blocks: [
-    code(["final theme = Theme.of(context);  // walks UP to nearest Theme",
-      "Navigator.of(context).push(route);"], "dart"),
-    callout("interview", ["Theme.of(context) walks up from this element to the nearest matching InheritedWidget and registers a dependency, so the widget rebuilds when that data changes. BuildContext is the Element seen through a narrower interface."]),
-    callout("mistake", ["Using a context above the widget you need (Scaffold.of in the same build that creates the Scaffold). Use a Builder or child widget to get a context below the provider. After an await, check context.mounted."]),
-  ],
-  summary: ["BuildContext is the widget's Element (tree location).", ".of(context) looks up ancestor InheritedWidgets + subscribes.", "Wrong/too-high context fails to find Scaffold/Provider.", "Check context.mounted after async gaps."],
-  interview: ["What is BuildContext really?", "How does Theme.of(context) work?", "Why can the wrong context fail?", "Using context after async safely?", "BuildContext vs Element?"],
-  coding: [
-    { level: "Easy", text: "Read Theme and MediaQuery via context." },
-    { level: "Medium", text: "Fix a Scaffold.of error using a Builder." },
-    { level: "Hard", text: "Create an InheritedWidget read via .of(context)." },
-    { level: "Expert", text: "Demonstrate/fix a use-context-after-await bug." }],
-  realworld: ["Every Theme/MediaQuery/Provider lookup uses this mechanism; understanding it explains a whole class of 'No Scaffold found' / 'No Provider found' errors."],
-  miniproject: ["Build a small AppConfig InheritedWidget and consume it across several screens."],
-  advanced: ["InheritedModel for partial dependencies.", "dependOnInheritedWidgetOfExactType internals.", "Element visitor APIs."],
-}));
+// 4. BuildContext
+body.push(...topicToChapter(loadTopic("level_04", "buildcontext"),
+  { chapterNumber: 4, bookmarkId: "ch4" }));
 
 // 5 The three trees
 body.push(...chapter({
@@ -483,5 +408,5 @@ const doc = makeDoc([
   { properties: pageProps("Volume 4 — Flutter & Dart"),
     children: [...toc(), ...body] },
 ]);
-const out = require("path").join(__dirname, "Volume-4-Flutter.docx");
+const out = require("path").join(__dirname, "../../docs/books/Volume-4-Flutter.docx");
 save(doc, out).then(() => console.log("WROTE", out));

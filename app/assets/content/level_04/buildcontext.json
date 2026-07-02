@@ -2,44 +2,104 @@
   "id": "flutter.buildcontext",
   "levelId": 4,
   "title": "BuildContext",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "xp": 35,
+  "estimatedMinutes": 25,
   "objectives": [
-    "Explain what BuildContext really is",
-    "Use it to look up inherited widgets and ancestors",
-    "Avoid the classic 'wrong context' errors"
+    "Understand BuildContext via a real-life analogy",
+    "Know what context can and can't do",
+    "Recognize `context.of<T>()` patterns (Theme, MediaQuery, Provider)",
+    "Avoid the classic stale-context bugs",
+    "Answer BuildContext interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "A BuildContext is a handle to the location of a widget in the tree — in fact it IS the widget's Element. It's how you access Theme, MediaQuery, Navigator, and inherited data relative to that position." },
-    { "type": "code", "language": "dart", "code": "final theme = Theme.of(context);          // walks UP to nearest Theme\nfinal width = MediaQuery.of(context).size.width;\nNavigator.of(context).push(route);" },
-    { "type": "callout", "variant": "interview", "markdown": "BuildContext is the Element. Theme.of(context) walks up the tree from this element to find the nearest matching InheritedWidget and registers a dependency, so the widget rebuilds when that data changes." },
-    { "type": "callout", "variant": "mistake", "markdown": "Using a context that's above the widget you need (e.g., calling Scaffold.of(context) in the same build method that creates the Scaffold) — it won't find it. Use a Builder or split into a child widget to get a context below the provider." },
-    { "type": "callout", "variant": "mistake", "markdown": "Using BuildContext across an async gap without checking mounted — after an await the element may be gone. Guard with `if (!context.mounted) return;`." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of BuildContext as your position on a family tree.**\n\n- Your position knows WHO your parents, grandparents, great-grandparents are (the ancestors up the tree). It doesn't know your children or siblings directly.\n- If your grandma has a family recipe (`Theme`), you can ask 'ancestors, does anyone have a recipe?' and the closest ancestor answers. That's what `Theme.of(context)` does — it walks UP the tree looking for the nearest `Theme` widget.\n- Your position is TIED TO WHERE YOU ARE STANDING RIGHT NOW. Walk to a different family reunion (a different widget), and 'your ancestors' changes. This is why old references to context are DANGEROUS — the family tree may have restructured and your old spot may no longer exist.\n- Two subtle rules follow: **(1) You can't ask for ancestors before you're properly at the reunion** — `context` from inside `initState` isn't 'placed' yet in the tree in the way `didChangeDependencies` and `build` are. **(2) You can't use context after you've left the tree** — the async gap is where 'the family reunion is over but I'm still trying to ask grandma' bugs happen.\n\n**BuildContext is a handle to a specific Element in the tree.** You use it to travel UP (find ancestors) and interact with the framework at THAT position. It's not a general-purpose 'this widget' pointer." },
+    { "type": "callout", "variant": "definition", "markdown": "**BuildContext** is a handle to the location of a widget in the widget tree — specifically, a reference to the corresponding `Element` in the Element tree. It's the API surface for **querying ancestors** (`Theme.of(context)`, `MediaQuery.of(context)`, `Provider.of<T>(context)`) and for framework operations at that position (`Navigator.of(context).push(...)`, `Scaffold.of(context).showBottomSheet(...)`). Every `build(BuildContext context)` call receives one." },
+    { "type": "theory", "markdown": "## What BuildContext CAN do" },
+    { "type": "table", "headers": ["Operation", "Example", "Under the hood"], "rows": [
+      ["Find nearest ancestor of a type", "`Theme.of(context)`", "Walks Element tree up until it finds a `Theme` InheritedWidget"],
+      ["Find nearest ancestor + subscribe to changes", "`Provider.of<Cart>(context)`", "Also registers the Element to rebuild when Cart changes"],
+      ["Find the Navigator / Scaffold / Overlay", "`Navigator.of(context).push(...)`", "Walks up until it finds the closest `NavigatorState`"],
+      ["Focus/dismiss keyboard", "`FocusScope.of(context).unfocus()`", "Same pattern"],
+      ["Read MediaQuery (screen size, insets)", "`MediaQuery.of(context).size`", "InheritedWidget lookup"],
+      ["`context.mounted`", "`if (context.mounted) Navigator.push(...)`", "True while the corresponding Element is still in the tree"]
+    ]},
+    { "type": "theory", "markdown": "## What BuildContext CANNOT do" },
+    { "type": "table", "headers": ["Not for", "Why", "Alternative"], "rows": [
+      ["Storing app state", "It's a handle to a widget position — not state", "Use Riverpod/Bloc/Provider"],
+      ["Communicating with children", "Only walks UP the tree", "Pass callbacks or use InheritedWidget"],
+      ["Being cached across async gaps safely", "The Element may unmount", "Use `context.mounted` check"],
+      ["Being used from a background isolate", "Widgets exist only on the main isolate", "Isolate returns data; main sets state"]
+    ]},
+    { "type": "theory", "markdown": "## The three common patterns" },
+    { "type": "code", "language": "dart", "code": "@override\nWidget build(BuildContext context) {\n  // 1. Read + SUBSCRIBE — Theme/MediaQuery/Provider.of<T> return the value AND\n  //    register this widget to rebuild when the ancestor changes.\n  final theme = Theme.of(context);\n  final size = MediaQuery.of(context).size;\n\n  // 2. Read WITHOUT subscribing — use `listen: false` for one-shot reads.\n  //    Common with Provider when you want to call a method but not rebuild.\n  final cart = Provider.of<Cart>(context, listen: false);\n\n  // 3. Framework navigation — always via context.\n  return FilledButton(\n    onPressed: () => Navigator.of(context).push(\n      MaterialPageRoute(builder: (_) => const DetailPage()),\n    ),\n    child: Text('Open', style: theme.textTheme.labelLarge),\n  );\n}" },
+    { "type": "theory", "markdown": "## The async gap — the #1 BuildContext bug" },
+    { "type": "code", "language": "dart", "code": "// BAD — using context after await\nvoid _save() async {\n  await api.save();\n  // 500 ms have passed. User might have popped this page.\n  // context may point to a DEAD Element. Navigator.push crashes.\n  Navigator.of(context).pop();     // ❌\n}\n\n// GOOD — Flutter 3.7+ added context.mounted for exactly this\nvoid _save() async {\n  await api.save();\n  if (!context.mounted) return;    // ✅\n  Navigator.of(context).pop();\n}\n\n// ALSO GOOD — read what you need BEFORE the await\nvoid _save() async {\n  final nav = Navigator.of(context);  // capture now, still on tree\n  await api.save();\n  nav.pop();                          // NavigatorState is not tied to `context`\n}\n\n// The lint `use_build_context_synchronously` catches these at edit time." },
+    { "type": "theory", "markdown": "## Complete sample program — patterns in one screen" },
+    { "type": "code", "language": "dart", "code": "import 'package:flutter/material.dart';\n\nvoid main() => runApp(const MaterialApp(home: HomePage()));\n\nclass HomePage extends StatelessWidget {\n  const HomePage({super.key});\n\n  @override\n  Widget build(BuildContext context) {\n    // Read Theme + MediaQuery via context (walks up the tree).\n    final theme = Theme.of(context);\n    final width = MediaQuery.of(context).size.width;\n\n    return Scaffold(\n      appBar: AppBar(title: const Text('BuildContext demo')),\n      body: Center(\n        child: Column(\n          mainAxisSize: MainAxisSize.min,\n          children: [\n            Text('width: ${width.toStringAsFixed(0)}px',\n                style: theme.textTheme.bodyLarge),\n            const SizedBox(height: 16),\n            FilledButton(\n              onPressed: () async {\n                // Capture Navigator BEFORE the await gap.\n                final nav = Navigator.of(context);\n                await Future<void>.delayed(const Duration(milliseconds: 400));\n                // context might be gone; nav is fine.\n                nav.push(MaterialPageRoute(\n                  builder: (_) => const _Detail(),\n                ));\n              },\n              child: const Text('Open Detail (after 400ms)'),\n            ),\n            const SizedBox(height: 16),\n            FilledButton(\n              onPressed: () async {\n                await Future<void>.delayed(const Duration(milliseconds: 400));\n                if (!context.mounted) return;   // guard the async gap\n                ScaffoldMessenger.of(context).showSnackBar(\n                  const SnackBar(content: Text('back in the tree')),\n                );\n              },\n              child: const Text('SnackBar with mounted check'),\n            ),\n          ],\n        ),\n      ),\n    );\n  }\n}\n\nclass _Detail extends StatelessWidget {\n  const _Detail();\n  @override\n  Widget build(BuildContext context) => Scaffold(\n    appBar: AppBar(title: const Text('Detail')),\n    body: const Center(child: Text('back to see the parent context still works')),\n  );\n}" },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Storing `context` in a field.** By the time you use it, the widget may have unmounted. Always get `context` from the current `build` call, or capture what you need BEFORE the await." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Using context after `await` without a mounted check.** Fixed by `if (!context.mounted) return;` or `if (mounted) …` in a State." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Reading `Theme.of(context)` in `initState`.** The InheritedWidget chain isn't ready. Read it in `didChangeDependencies` or `build`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Passing `context` deeply down a widget tree.** Just pass what the child needs (a color, a callback, an ID). Deep-passing context couples children to your position in the tree." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Calling `Scaffold.of(context)` from a widget above the Scaffold.** It walks UP — from above, no Scaffold ancestor exists. Fix: use `Builder(builder: (context) => …)` to create a new context below the Scaffold, or use `ScaffoldMessenger.of` for SnackBars." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Read what you need BEFORE the await gap.** `final nav = Navigator.of(context);` then await. Nav is not tied to context lifecycle." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Guard async setState / navigation with `mounted` / `context.mounted`.**" },
+    { "type": "callout", "variant": "best", "markdown": "**3. Enable the `use_build_context_synchronously` lint.** Catches the vast majority of stale-context bugs at edit time." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Prefer `context.watch<T>()` / `context.read<T>()` (Provider) or `ref.watch` / `ref.read` (Riverpod)** over passing context deeply." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Use `Builder` to introduce a nested context** when you need to look up an ancestor that's just above you in a builder function." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Read Theme/MediaQuery.** In a fresh screen, print `Theme.of(context).colorScheme.primary` and `MediaQuery.of(context).size.width` in `build`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Easy) — Show SnackBar from a button** using `ScaffoldMessenger.of(context)`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Fix the async-gap bug.** Introduce a delayed `Navigator.push`; watch it crash; add `context.mounted` guard." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Medium) — `Builder` trick.** Show a SnackBar from an `onPressed` inside the same Scaffold using `Builder`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard) — Custom InheritedWidget.** Define `MyTheme extends InheritedWidget`; read it via `MyTheme.of(context)` from a deeply nested child." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is BuildContext?**\n\n**A:** `BuildContext` is a handle to a widget's position in the tree — specifically, a reference to its corresponding `Element` in the Element tree. It's the API surface for querying **ancestors** (walking UP the tree) and for framework operations at that specific position. Every `build(BuildContext context)` gets one. Common usages: `Theme.of(context)`, `MediaQuery.of(context)`, `Navigator.of(context).push(...)`, `Provider.of<T>(context)`. It does NOT let you access children, siblings, or arbitrary state — only ancestors and framework services." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What does `Theme.of(context)` do under the hood?**\n\n**A:** Two things. **(1) Lookup:** it walks UP the Element tree until it finds the nearest `Theme` (an `InheritedWidget`) and returns its `data`. **(2) Subscribe:** it registers the calling Element as a dependent of that Theme. When the Theme's `updateShouldNotify` returns true, Flutter marks the dependent Element dirty, triggering a rebuild. So `Theme.of(context)` is BOTH a read and a subscription — that's why calling it many times in a `build()` is cheap but calling it many times means many subscriptions to potentially rebuild. Every `X.of(context)` pattern in Flutter follows this shape." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What is the async-gap problem with BuildContext?**\n\n**A:** When you `await` inside a callback, the current widget may be UNMOUNTED before the await resolves — the user popped the screen, the widget rebuilt with new keys, etc. Using `context` after the gap is undefined behavior: `Navigator.of(context)` may crash, `setState` may throw 'called after dispose.' **Two fixes:** (1) **`if (!context.mounted) return;`** after the await — Flutter 3.7+ supports this on any BuildContext. (2) **Capture what you need BEFORE the await** — `final nav = Navigator.of(context); await …; nav.push(...);` — because `NavigatorState` isn't tied to context lifecycle. The `use_build_context_synchronously` lint catches these automatically." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: Why does `Scaffold.of(context)` sometimes fail?**\n\n**A:** Because `.of(context)` walks UP the tree — if there's no `Scaffold` above the calling widget, it throws or returns null. The classic bug: you call `Scaffold.of(context).showBottomSheet(...)` inside the Scaffold's own `body:` field. But that `context` is the context OUTSIDE the Scaffold (the one passed to `build` of the parent). **Two fixes:** (1) wrap in a `Builder(builder: (context) => …)` — creates a fresh context below the Scaffold. (2) prefer `ScaffoldMessenger.of(context)` for SnackBars — it works across the whole app because ScaffoldMessengers sit near the top of the tree." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: Is BuildContext the same as `this` in a widget?**\n\n**A:** No. `this` in a widget class is the widget INSTANCE (a data blueprint). `BuildContext` refers to the widget's POSITION in the tree (its Element). You can have the same widget appear in TWO different positions in the tree (rare, but legal) — same `this`, different `BuildContext`s. And you can rebuild the same position with a NEW widget — same `BuildContext` (technically same Element), different `this`. This is why 'context' is distinct from 'widget instance': context represents the tree location; the widget is the description at that location." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What's the difference between `context.read<T>()` and `context.watch<T>()` (Provider)?**\n\n**A:** **`context.read<T>()`** — reads the current value WITHOUT subscribing. The widget won't rebuild when `T` changes. Use inside callbacks (`onPressed`) to grab the current value once. **`context.watch<T>()`** — reads AND subscribes. The widget rebuilds whenever `T` changes. Use inside `build()` to observe state. Same idea in Riverpod: `ref.read(provider)` vs `ref.watch(provider)`. Wrong choice symptoms: using `watch` in a callback triggers unnecessary rebuilds; using `read` in `build` renders stale data. Rule: **`watch` in build, `read` in callbacks.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What is `context.mounted`?**\n\n**A:** A `bool` property on `BuildContext` (Flutter 3.7+) that's `true` while the corresponding Element is still in the tree, `false` after it's been unmounted. It's the counterpart to `State.mounted`. Use in stateless-widget async callbacks where you don't have a State: `if (!context.mounted) return;` after an await. Before Flutter 3.7 you had to hack around this by capturing values pre-await. Now the pattern is idiomatic and lint-checked by `use_build_context_synchronously`. This is the single biggest daily-driver BuildContext feature since null safety." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every screen** — `Theme.of`, `MediaQuery.of`, `Navigator.of` — bread and butter.\n- **Riverpod** — `ref.watch` / `ref.read` replaces Provider's `context.watch`/`read`.\n- **Custom design system** — expose `AppTheme.of(context)` via an InheritedWidget.\n- **Testing** — `tester.element(finder)` returns a `BuildContext` you can use in tests.\n- **DevTools** — inspects Element tree via BuildContext relationships." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`context.dependOnInheritedWidgetOfExactType<T>()`** — the low-level API `.of(context)` calls; walks up and subscribes.\n- **`context.getInheritedWidgetOfExactType<T>()`** — same but WITHOUT subscribing (rarely useful).\n- **`context.findAncestorWidgetOfExactType<T>()`** — walks up for a plain (non-inherited) widget; more expensive; use sparingly.\n- **`context.visitAncestorElements(...)`** — walk ancestors imperatively; power-user only.\n- **`InheritedNotifier<T>`** — a specialization for propagating a `Listenable`.\n- **`InheritedModel<T>`** — subscribers can specify which aspects of the model they care about; finer-grained rebuilds.\n- **`Element.dependOnInheritedElement(...)`** — the mechanism underlying `.of(context)` — worth reading Flutter source once.\n- **`context.owner!.debugDoingBuild`** — sometimes useful in framework-level debugging." }
   ],
   "flashcards": [
-    { "front": "What is a BuildContext?", "back": "A handle to a widget's location in the tree — it is the widget's Element." },
-    { "front": "What does Theme.of(context) do?", "back": "Walks up from the context's element to the nearest Theme InheritedWidget and subscribes to changes." },
-    { "front": "Why does Scaffold.of(context) sometimes fail?", "back": "The context is above the Scaffold; use a Builder/child widget to get a context below it." }
+    { "front": "What is BuildContext?", "back": "Handle to a widget's position in the Element tree; used to query ancestors + framework services." },
+    { "front": "Theme.of(context) does what?", "back": "Walks up finding the nearest Theme InheritedWidget AND subscribes for rebuild on change." },
+    { "front": "Async-gap fix?", "back": "`if (!context.mounted) return;` OR capture (e.g. Navigator.of(context)) BEFORE the await." },
+    { "front": "Read vs Watch (Provider)?", "back": "read = one-shot, no subscribe. watch = subscribes, triggers rebuild on change." },
+    { "front": "context.mounted?", "back": "Flutter 3.7+ bool — true while the Element is in the tree. Use after await." },
+    { "front": "Scaffold.of(context) fails when?", "back": "You called it from ABOVE the Scaffold. Wrap in Builder or use ScaffoldMessenger.of." }
   ],
   "quiz": [
-    { "q": "A BuildContext essentially is…", "options": ["A widget", "An Element (tree location)", "A RenderObject", "A thread"], "answer": 1, "explain": "Each Element implements BuildContext, marking its place in the tree." },
-    { "q": "Theme.of(context) finds the Theme by…", "options": ["Searching the whole app", "Walking up to the nearest InheritedWidget", "Reading a global", "Querying the OS"], "answer": 1, "explain": "It looks up the ancestor chain and registers a dependency." },
-    { "q": "Using context after an await requires…", "options": ["Nothing", "Checking context.mounted", "A new isolate", "setState"], "answer": 1, "explain": "The element may be unmounted after the async gap." }
+    { "q": "BuildContext points to…", "options": ["The widget class", "An Element in the tree (a position)", "A RenderObject", "State object"], "answer": 1, "explain": "Handle to a location." },
+    { "q": "Theme.of(context) does…", "options": ["Only reads", "Reads AND subscribes for rebuild", "Ignores theme", "Static call"], "answer": 1, "explain": "InheritedWidget lookup + dependency." },
+    { "q": "Best async-gap guard?", "options": ["try/catch", "context.mounted (Flutter 3.7+)", "Ignore it", "GlobalKey"], "answer": 1, "explain": "Idiomatic since 3.7." },
+    { "q": "In build(), reading Provider should use…", "options": ["read", "watch", "of listen: false", "of ignoreListen"], "answer": 1, "explain": "Subscribe for rebuild." },
+    { "q": "Scaffold.of failing above Scaffold means…", "options": ["Corrupt tree", "No Scaffold ancestor from that context", "Use setState", "Reboot"], "answer": 1, "explain": "Walks UP only." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Read Theme and MediaQuery via context and display values." },
-    { "level": "Medium", "text": "Fix a Scaffold.of(context) error using a Builder." },
-    { "level": "Hard", "text": "Create an InheritedWidget and read it with a .of(context) helper." },
-    { "level": "Expert", "text": "Demonstrate and fix a use-context-after-await bug with context.mounted." }
+    { "level": "Easy", "text": "Print Theme.of(context).colorScheme.primary and MediaQuery.of(context).size in build()." },
+    { "level": "Easy", "text": "Show a SnackBar via ScaffoldMessenger.of(context)." },
+    { "level": "Medium", "text": "Reproduce the async-gap crash without context.mounted, then fix it." },
+    { "level": "Medium", "text": "Show a SnackBar from inside a Scaffold's body using a Builder to introduce a nested context." },
+    { "level": "Hard", "text": "Write a custom InheritedWidget `AppTheme` and a `.of(context)` accessor." },
+    { "level": "Hard", "text": "Capture Navigator.of(context) BEFORE an await and push after — verify no context.mounted needed." },
+    { "level": "Expert", "text": "Use InheritedModel to expose two aspects; make a widget rebuild only when one of them changes." }
   ],
   "interviewQuestions": [
-    "What is BuildContext, really?",
-    "How does Theme.of(context) work internally?",
-    "Why can the 'wrong' context fail to find a Scaffold/Provider?",
-    "How do you safely use context after async?",
-    "Relationship between BuildContext and Element?"
+    "What is BuildContext?",
+    "What does Theme.of(context) do under the hood?",
+    "What is the async-gap problem with BuildContext?",
+    "Why does Scaffold.of(context) sometimes fail?",
+    "Is BuildContext the same as `this` in a widget?",
+    "context.read<T>() vs context.watch<T>() (Provider)?",
+    "What is context.mounted?"
   ],
   "references": [
-    { "label": "Flutter — BuildContext", "url": "https://api.flutter.dev/flutter/widgets/BuildContext-class.html" }
+    { "label": "BuildContext — Flutter API", "url": "https://api.flutter.dev/flutter/widgets/BuildContext-class.html" },
+    { "label": "use_build_context_synchronously lint", "url": "https://dart.dev/lints/use_build_context_synchronously" }
   ]
 }

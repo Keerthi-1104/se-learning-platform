@@ -1,50 +1,103 @@
 {
   "id": "flutter.widgets",
   "levelId": 4,
-  "title": "Widgets",
-  "xp": 40,
-  "estimatedMinutes": 25,
+  "title": "Widgets — Stateless & Stateful",
+  "xp": 45,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Explain 'everything is a widget' and immutability",
-    "Choose Stateless vs Stateful correctly",
-    "Compose UI declaratively"
+    "Understand widgets via a real-life analogy",
+    "Know Stateless vs Stateful and when to use each",
+    "Write clean widget code with `const`, composition, and small classes",
+    "Distinguish widget vs element vs render object",
+    "Answer widget interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "In Flutter, the UI is built from widgets — immutable configuration objects describing part of the UI. Layout, styling, and even the app itself are widgets composed into a tree." },
-    { "type": "table", "headers": ["", "StatelessWidget", "StatefulWidget"], "rows": [
-      ["State", "None (immutable)", "Mutable State object"],
-      ["Rebuilds", "When inputs change", "When setState is called"],
-      ["Use", "Static / derived UI", "UI that changes over time"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of a movie set built with LEGO blueprints.**\n\n- Every LEGO character on set is a `Widget` — but a widget isn't the *physical* character. It's the **blueprint / instruction sheet** describing what the character looks like RIGHT NOW: 'hat=red, pose=standing, holding=sword'.\n- Each frame of the movie, the studio rebuilds a fresh set of blueprints (rebuilds widgets). That sounds wasteful — but the studio's assistant (Flutter's `Element` tree) compares old vs new blueprint and reuses actual bricks (`RenderObject`s) wherever possible. Only the *changed* bricks get replaced.\n- A **`StatelessWidget`** is a blueprint that never changes on its own — a background pattern brick. Its output depends only on its inputs.\n- A **`StatefulWidget`** is a blueprint bundled with a small stateful controller (`State`) — like a character whose blueprint includes 'facial expression: happy → sad → surprised' that can change over time without regenerating the whole character.\n\n**The mental shift:** widgets are cheap, throw-away descriptions. Build them, describe the UI you want, let Flutter figure out the minimal diff. Do NOT try to hold onto references or mutate widgets — they're immutable by design." },
+    { "type": "callout", "variant": "definition", "markdown": "**A Widget** is an immutable description of part of a UI. Flutter's UI is a *tree of widgets*, rebuilt (in whole or part) whenever state changes. **StatelessWidget** — no internal state; renders purely from its constructor parameters. **StatefulWidget** — pairs an immutable widget-config with a mutable `State` object that persists across rebuilds and can call `setState()` to trigger a new build." },
+    { "type": "theory", "markdown": "## StatelessWidget vs StatefulWidget" },
+    { "type": "table", "headers": ["Property", "StatelessWidget", "StatefulWidget"], "rows": [
+      ["Has internal state?", "No — pure function of props", "Yes — in a separate `State` object"],
+      ["When to use", "Presentational (buttons, labels, cards)", "Anything with UI state (form field, tab, animation)"],
+      ["`build()` lives on", "The widget class itself", "The `State` subclass"],
+      ["Rebuilds", "When parent rebuilds and props change", "When parent rebuilds OR `setState()` is called"],
+      ["Lifecycle", "Just `build()`", "`initState`, `didChangeDependencies`, `didUpdateWidget`, `build`, `dispose`, ..."],
+      ["Cost", "Very cheap — a few pointers", "Slightly more (State object retained across rebuilds)"]
     ]},
-    { "type": "code", "language": "dart", "code": "class Greeting extends StatelessWidget {\n  final String name;\n  const Greeting(this.name, {super.key});\n  @override\n  Widget build(BuildContext c) => Text('Hello, $name');\n}" },
-    { "type": "callout", "variant": "analogy", "markdown": "Widgets are like a blueprint, not the building. Flutter rebuilds blueprints cheaply on every frame; the heavy, persistent objects (Elements/RenderObjects) are kept and reused behind the scenes." },
-    { "type": "callout", "variant": "mistake", "markdown": "Putting expensive work in build(). build() can run 60+ times/second — keep it pure and cheap, and hoist constant subtrees into const widgets so Flutter can skip them." },
-    { "type": "callout", "variant": "tip", "markdown": "Favor composition over deep inheritance: build small widgets and compose them. Use const constructors everywhere possible to cut rebuilds." }
+    { "type": "theory", "markdown": "## Sample program — both types side by side" },
+    { "type": "code", "language": "dart", "code": "import 'package:flutter/material.dart';\n\nvoid main() => runApp(const MaterialApp(home: HomePage()));\n\n// STATELESS — its output is purely a function of the constructor args.\nclass Greeting extends StatelessWidget {\n  const Greeting({super.key, required this.name});\n  final String name;\n\n  @override\n  Widget build(BuildContext context) {\n    return Text(\n      'Hello, $name!',\n      style: Theme.of(context).textTheme.headlineMedium,\n    );\n  }\n}\n\n// STATEFUL — has internal `_count` state that survives rebuilds.\nclass Counter extends StatefulWidget {\n  const Counter({super.key});\n\n  @override\n  State<Counter> createState() => _CounterState();\n}\n\nclass _CounterState extends State<Counter> {\n  int _count = 0;\n\n  void _increment() {\n    setState(() => _count++);   // schedule a rebuild\n  }\n\n  @override\n  Widget build(BuildContext context) {\n    return Column(\n      mainAxisSize: MainAxisSize.min,\n      children: [\n        Text('count = $_count', style: const TextStyle(fontSize: 32)),\n        const SizedBox(height: 8),\n        FilledButton(onPressed: _increment, child: const Text('+1')),\n      ],\n    );\n  }\n}\n\nclass HomePage extends StatelessWidget {\n  const HomePage({super.key});\n\n  @override\n  Widget build(BuildContext context) => Scaffold(\n    appBar: AppBar(title: const Text('Widgets demo')),\n    body: const Center(\n      child: Column(\n        mainAxisAlignment: MainAxisAlignment.center,\n        children: [\n          Greeting(name: 'Ada'),      // stateless — rebuilds only if name changes\n          SizedBox(height: 32),\n          Counter(),                   // stateful — its own _count survives rebuilds\n        ],\n      ),\n    ),\n  );\n}" },
+    { "type": "theory", "markdown": "## The three trees (mental model)" },
+    { "type": "table", "headers": ["Tree", "What it holds", "Mutable?", "Rebuilt?"], "rows": [
+      ["**Widget tree**", "Immutable UI descriptions (what you write)", "No", "Every setState — cheap"],
+      ["**Element tree**", "Wires widgets to render objects; holds `BuildContext`s and `State` objects", "Yes (Flutter mutates it)", "Structure preserved wherever possible via key + type matching"],
+      ["**Render tree**", "Actual layout/paint objects on screen", "Yes", "Only when relevant — expensive parts skipped"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**The insight:** when you 'rebuild' in Flutter, you're rebuilding CHEAP widget descriptions. Flutter reuses the same expensive Element + RenderObject wherever the widget type + key line up. That's why calling `setState` is fast — Flutter diffs, not repaints from scratch." },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Making everything Stateful.** Turns cheap `const` widgets into stateful ones — creates a `State` object per widget and blocks `const` optimizations. Rule: **Stateless unless it needs to hold state.**" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Forgetting `const`.** `const Text('Home')` is skip-rebuilt (Flutter knows it can't have changed). `Text('Home')` builds a new object each frame. Prefix EVERY constructor you can with `const`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Building giant widget trees inside one `build()`.** Slower to rebuild, hard to read. Extract subtrees into their own StatelessWidget — Flutter can skip rebuilding them when props haven't changed." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Mutating state without `setState()`.** `_count++` alone won't rebuild — Flutter never knows. Always `setState(() => _count++)`. Alternative: use a state-management library (Riverpod/Bloc) so this pattern goes away." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Doing work in `build()` that shouldn't be per-build.** `build()` may be called MANY times per second. Don't allocate expensive objects, decode images, or start async work there. Use `initState` for one-shot setup, or move work to a controller." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Default to StatelessWidget.** Only reach for Stateful when you have local UI state (a form field, an expanded flag, an animation controller)." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Prefix EVERY constructor with `const` where possible.** The most consistent Flutter perf win — flat-out skips rebuilds of subtrees." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Extract subtrees into small widgets.** A 300-line `build()` is a code smell. `_UserAvatar`, `_OrderTile`, `_HeaderBar` — small widgets are readable AND perf-friendly (Flutter can skip rebuilding them)." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Pass callbacks, not BuildContext.** Don't hand off `context` between widgets — it becomes stale. Pass the specific data or callback the child needs." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Use `Key`s intentionally.** Use `ValueKey` on list items that could reorder — Flutter reuses the right State object. Use `GlobalKey` sparingly (they leak if held past their widget's lifetime)." },
+    { "type": "callout", "variant": "best", "markdown": "**6. For non-trivial state, use a state-management solution.** Riverpod, Bloc, Provider — anything but ad-hoc `setState` for cross-widget state." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Refactor to Stateless.** Take a Stateful widget with no state and make it Stateless. Watch the widget code shrink by half." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Easy) — Add `const` everywhere.** Prefix every widget constructor with `const` where the analyzer accepts it. Measure APK size / hot-reload speed." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Counter.** Build the sample; add reset and decrement." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Medium) — Extract subtrees.** Take a 200-line `build()`, extract 5 small widgets, verify hot-reload still works." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard) — Expandable card.** Stateful widget with `_expanded` bool; animated with `AnimatedContainer`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert) — Reorderable list with keys.** Make sure state persists on each item across reorder — that's what `ValueKey(item.id)` is for." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is a widget?**\n\n**A:** A widget is an **immutable description of part of a UI**. It's a Dart class extending `Widget` (usually via `StatelessWidget` or `StatefulWidget`). Widgets are cheap to construct and thrown away every rebuild. The framework diffs new widgets against the existing **Element tree**, reusing Elements and RenderObjects wherever the widget type + key match. So widgets aren't 'the UI' — they're **blueprints of the UI you want**. Flutter figures out the minimal set of actual changes needed. This lets Flutter's declarative model (`build()` returns a fresh tree) coexist with efficient incremental rendering." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: StatelessWidget vs StatefulWidget?**\n\n**A:** **StatelessWidget** — no internal state. Its `build()` is a pure function of the widget's fields. Cheap, easy to reason about. Use for presentational widgets. **StatefulWidget** — pairs an immutable widget-config with a separate mutable `State` object that survives rebuilds. The `State` holds internal data (a counter, an animation controller, a scroll position). Its `build()` lives on the State. Use when you need to hold local UI state that persists across rebuilds. **Rule:** start Stateless; only promote to Stateful when you have data that must survive rebuilds locally to that widget." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: Why is a StatefulWidget split into two classes?**\n\n**A:** Because the WIDGET is immutable (part of the widget tree, replaced every rebuild) but its STATE isn't — the State object needs to survive rebuilds. If they were one class, either the widget couldn't be `final` (breaks tree diffing) or state would reset every rebuild. Splitting solves both: the immutable widget-config replaces itself freely; the State object is retained by the Element tree as long as the widget type + key stay the same. This is why `createState()` returns a fresh State object once, and the framework reuses it as long as it can." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: Why prefix widgets with `const`?**\n\n**A:** `const` widgets are compile-time constants — the compiler canonicalizes them (identical values share one instance), and Flutter's diff algorithm **skip-rebuilds** any subtree whose top widget is `const` — because its value literally cannot have changed. Extract stable subtrees like icons, dividers, headers, empty placeholders as `const` widgets and Flutter avoids rebuilding them entirely. It's one of the cheapest and most consistent Flutter perf wins; every serious codebase enforces it via `prefer_const_constructors` / `prefer_const_literals_to_create_immutables` lints." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What is `setState()` and what does it do?**\n\n**A:** `setState(fn)` schedules the current `State` object to rebuild on the NEXT frame. It runs `fn` synchronously (that's where you mutate state), marks the Element dirty, and Flutter will re-invoke `build()` before the next paint. **What it does NOT do:** rebuild the whole app, run immediately, or accept an async function. **Rules:** (1) `fn` should be synchronous; do the async work OUTSIDE and call `setState` with the result. (2) Don't call `setState` after `dispose()` — check `mounted`. (3) `setState` is expensive to abuse — every call schedules a rebuild — so state-management libraries (Riverpod/Bloc) avoid it by using observable state elsewhere." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What is a `Key` and when do you use one?**\n\n**A:** A `Key` uniquely identifies a widget across rebuilds so Flutter can match it to the correct Element. Without keys, Flutter matches by **position + widget-type** — usually fine, but breaks when widgets of the same type reorder (e.g., a list of `TextField`s that reshuffle). Types: **`ValueKey(id)`** — most common, use on list items; **`ObjectKey(obj)`** — key by object identity; **`GlobalKey`** — a key visible across the whole tree, lets you access a widget's State from anywhere (avoid — use state management instead); **`UniqueKey()`** — a fresh key every rebuild (forces re-creation of state). **Rule:** add `ValueKey(item.id)` to items in a list that can reorder or filter." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: Widget vs Element vs RenderObject — what's the difference?**\n\n**A:** **Widget** — the blueprint you write in Dart. Cheap, immutable, thrown away and rebuilt often. **Element** — the framework's runtime instantiation of a widget in the tree. Holds a `BuildContext`, ties the widget to its `RenderObject`, retains `State` between rebuilds. Roughly analogous to a virtual DOM node. **RenderObject** — the layout + paint + hit-test machinery. Expensive: has a canvas, a size, a paint region, sits in the render tree. When you rebuild widgets, Flutter tries to reuse the same Element (and its RenderObject) wherever possible; only if the widget's type OR key changed does Flutter create a fresh Element + RenderObject. This layered architecture is why Flutter's rebuild is fast even with a large tree." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every Flutter screen** — a tree of widgets, some Stateless, some Stateful.\n- **Material / Cupertino / your app widgets** — all built on the same primitives (`StatelessWidget`, `StatefulWidget`, `RenderObjectWidget`).\n- **Custom widgets** — 90% Stateless, 10% Stateful (mostly for animation controllers or form field state).\n- **Design systems** — a design-system package is a curated set of Stateless widgets.\n- **Testing** — `WidgetTester.pumpWidget(...)` builds the widget tree; `find.byType(Counter)` navigates it." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`InheritedWidget`** — the base for propagating data down the tree (Theme, MediaQuery, Provider). Efficient because it only rebuilds descendants that read from it.\n- **`InheritedNotifier` / `InheritedModel`** — advanced variants for finer-grained rebuilding.\n- **`ProxyWidget` and `RenderObjectWidget`** — how framework-level widgets like `Container`, `Padding`, `Align` are built.\n- **`Diagnosticable` mixin** — `debugFillProperties` for nicer widget inspector output.\n- **`hashCode`/`==` on widget classes** — Flutter uses widget type + key for identity; ==/hashCode DON'T need to consider all fields (that would defeat immutability).\n- **`StatefulWidget` with `TickerProviderStateMixin`** — for animation controllers that consume a ticker.\n- **`AutomaticKeepAliveClientMixin`** — keep a widget's State alive across parent-tab switches (e.g., TabBar pages).\n- **`didUpdateWidget(oldWidget)`** — called when the parent rebuilds with a NEW widget-config; use to react to prop changes." }
   ],
   "flashcards": [
-    { "front": "Are widgets mutable?", "back": "No — widgets are immutable configuration; the mutable part lives in State (for StatefulWidget) and the Element tree." },
-    { "front": "Stateless vs Stateful?", "back": "Stateless has no internal mutable state; Stateful has a State object updated via setState." },
-    { "front": "Why use const widgets?", "back": "Const widgets are canonicalized and can be skipped during rebuilds, improving performance." }
+    { "front": "What is a widget?", "back": "Immutable description of part of the UI; a blueprint, not the UI itself." },
+    { "front": "Stateless vs Stateful?", "back": "Stateless = pure fn of props. Stateful = pairs immutable widget with a mutable State that survives rebuilds." },
+    { "front": "Why `const` widgets?", "back": "Compile-time canonicalized; Flutter skip-rebuilds their subtree — huge perf win." },
+    { "front": "setState purpose?", "back": "Marks the current State dirty; Flutter rebuilds it on the next frame." },
+    { "front": "Three trees?", "back": "Widget (blueprint) → Element (runtime instance + context) → RenderObject (layout/paint)." },
+    { "front": "When to use ValueKey?", "back": "On list items that can reorder or filter — preserves the right State object." }
   ],
   "quiz": [
-    { "q": "Widgets in Flutter are…", "options": ["Mutable objects", "Immutable configuration", "Native views", "Threads"], "answer": 1, "explain": "Widgets are immutable descriptions; Elements/RenderObjects hold the mutable state." },
-    { "q": "Use a StatefulWidget when…", "options": ["UI never changes", "UI changes over time via internal state", "You need a const", "You want less code"], "answer": 1, "explain": "Stateful widgets manage mutable state that triggers rebuilds." },
-    { "q": "Why prefer const widgets?", "options": ["They look different", "Flutter can skip rebuilding them", "They use more memory", "They disable layout"], "answer": 1, "explain": "Const widgets are reused and skipped during rebuilds." }
+    { "q": "A widget is…", "options": ["The UI itself", "An immutable description of the UI", "A RenderObject", "Only for buttons"], "answer": 1, "explain": "Blueprint, not screen pixels." },
+    { "q": "StatelessWidget's build depends on…", "options": ["Global state", "Constructor fields (props) only", "setState", "BuildContext only"], "answer": 1, "explain": "Pure function of props." },
+    { "q": "const widget wins because…", "options": ["Smaller APK", "Skip-rebuild + canonicalization", "Required by lints", "Faster GC"], "answer": 1, "explain": "Compiler knows it can't have changed." },
+    { "q": "setState is…", "options": ["Async", "Synchronous — schedules a rebuild on next frame", "A call to build()", "Deprecated"], "answer": 1, "explain": "Sync mutation; rebuild happens later." },
+    { "q": "ValueKey is for…", "options": ["Themes", "List items that reorder — preserves State", "Only tests", "Global keys"], "answer": 1, "explain": "Correct identity across reorders." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Build a profile card by composing Stateless widgets." },
-    { "level": "Medium", "text": "Convert a Stateless counter to Stateful with setState." },
-    { "level": "Hard", "text": "Extract a rebuilding subtree into a const widget and verify fewer rebuilds." },
-    { "level": "Expert", "text": "Build a reusable, themable component with named constructors and slots (child builders)." }
+    { "level": "Easy", "text": "Prefix every possible widget in a screen with `const` — measure hot-reload speed before/after." },
+    { "level": "Easy", "text": "Convert a StatefulWidget with no state into StatelessWidget." },
+    { "level": "Medium", "text": "Build the Counter sample; add reset and decrement." },
+    { "level": "Medium", "text": "Extract a 250-line `build()` into 6 named private widgets." },
+    { "level": "Hard", "text": "Reorderable ListView using `ValueKey(item.id)`; state per item survives reorder." },
+    { "level": "Hard", "text": "Expandable card animated with AnimatedContainer + setState." },
+    { "level": "Expert", "text": "Custom `RenderObjectWidget` that draws a soft-shadow rectangle." }
   ],
   "interviewQuestions": [
-    "What does 'everything is a widget' mean?",
+    "What is a widget?",
     "StatelessWidget vs StatefulWidget?",
-    "Why are widgets immutable?",
-    "Why and when use const constructors?",
-    "How does composition beat inheritance in Flutter?"
+    "Why is a StatefulWidget split into two classes?",
+    "Why prefix widgets with `const`?",
+    "What is setState() and what does it do?",
+    "What is a Key and when do you use one?",
+    "Widget vs Element vs RenderObject — what's the difference?"
   ],
   "references": [
-    { "label": "Flutter — Intro to widgets", "url": "https://docs.flutter.dev/ui/widgets-intro" }
+    { "label": "Widgets — Flutter docs", "url": "https://docs.flutter.dev/development/ui/widgets-intro" },
+    { "label": "Inside Flutter (three trees)", "url": "https://docs.flutter.dev/resources/inside-flutter" }
   ]
 }

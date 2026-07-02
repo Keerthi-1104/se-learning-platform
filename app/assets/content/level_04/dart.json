@@ -1,52 +1,107 @@
 {
   "id": "flutter.dart",
   "levelId": 4,
-  "title": "Dart Fundamentals",
+  "title": "Dart Language",
   "xp": 50,
-  "estimatedMinutes": 30,
+  "estimatedMinutes": 45,
   "objectives": [
-    "Explain Dart's sound null safety",
-    "Use async/await, Futures and Streams",
-    "Understand JIT vs AOT and the single-threaded isolate model"
+    "Understand Dart via a real-life analogy",
+    "Master null safety, records, patterns, and pattern-matching switch",
+    "Use Futures, async/await, and Streams idiomatically",
+    "Recognize what makes Dart good for Flutter (AOT + JIT, isolates)",
+    "Answer Dart interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Dart is the language behind Flutter — a typed, null-safe, object-oriented language that compiles JIT for fast development (hot reload) and AOT to native code for fast release builds." },
-    { "type": "code", "language": "dart", "code": "int x = 5;            // non-nullable\nint? y;               // nullable\nfinal len = y?.length ?? 0;\nFuture<User> fetch() async => await api.getUser();  // async\nStream<int> ticks() async* { for (var i=0;;i++) yield i; }" },
-    { "type": "table", "headers": ["Concept", "Meaning"], "rows": [
-      ["Sound null safety", "Types are non-null by default; ? marks nullable"],
-      ["Future", "A single async value"],
-      ["Stream", "A sequence of async values"],
-      ["Isolate", "Independent memory + event loop (no shared state)"],
-      ["JIT / AOT", "Dev hot reload / native release builds"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Dart as the engine of a hybrid car.**\n\n- **In development (`flutter run`)** — the JIT engine spins up instantly. Hot reload works because the code is being interpreted + JITed live. You edit, save, see the change in ~300 ms without losing state. Perfect for iteration.\n- **In production (`flutter build apk/aab/ipa/web`)** — an AOT compiler ahead-of-time compiles Dart to native ARM/x64 machine code. The final app boots fast, runs at native speed, and has predictable frame times (no JIT jitter mid-scroll).\n- **Same source code, two engines** — the reason Flutter feels *both* fast to develop and fast to ship. It's the single most underrated architectural choice in Flutter.\n\n**And the language itself?** Dart looks like TypeScript that had a serious workout: null-safe types, first-class classes, sealed classes, records, pattern matching, top-level functions, and `async`/`await` that everyone else copied. It's Java-family without the ceremony, JavaScript-family without the surprises." },
+    { "type": "callout", "variant": "definition", "markdown": "**Dart** is a null-safe, object-oriented, class-based language from Google (2011). Every value is an object; strong type system with sound null safety since Dart 3 (2023); dual JIT (development / dartpad) + AOT (production Flutter) compilation. Runs on the **Dart VM** (native) or compiles to **JavaScript** (web) and **native machine code** (Flutter mobile/desktop). It's the language Flutter is written IN and Flutter apps are written IN." },
+    { "type": "theory", "markdown": "## The Dart features you'll actually use every day" },
+    { "type": "table", "headers": ["Feature", "Example", "When"], "rows": [
+      ["Null safety", "`String?` vs `String`, `?.`, `!`, `??`", "Every variable — types tell you if null is possible"],
+      ["`final` vs `const`", "`final ctx = …` vs `const Duration(seconds: 1)`", "final = set-once at runtime; const = compile-time literal"],
+      ["`var` inference", "`var users = <User>[]`", "Local variables — let the compiler infer"],
+      ["Records (Dart 3)", "`(int, String) pair = (1, 'a');`", "Return multiple values without a class"],
+      ["Patterns + `switch`", "`switch(shape) { case Circle(:var r) => …`", "Destructure + type-dispatch"],
+      ["Sealed classes", "`sealed class Result { … }`", "Exhaustive matching for ADTs"],
+      ["Extension methods", "`extension on String { … }`", "Add methods to types you don't own"],
+      ["Async/await", "`await api.fetch()`", "Non-blocking sequential-looking code"],
+      ["Streams", "`Stream<Message> chat`", "Multiple values over time"],
+      ["Isolates", "`Isolate.run(() => heavy())`", "True parallelism (each isolate has its own heap)"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "Dart is single-threaded per isolate with an event loop. There's no shared-memory concurrency — heavy work runs in a separate Isolate and communicates via messages, which is why Flutter UIs avoid most lock/race bugs." },
-    { "type": "callout", "variant": "mistake", "markdown": "Doing CPU-heavy work (parsing a huge JSON, image processing) on the main isolate freezes the UI. Use compute()/Isolate.run() to offload it." },
-    { "type": "callout", "variant": "tip", "markdown": "Prefer final/const and immutable data. const constructors let Flutter skip rebuilding and reuse widget instances — a real performance win." }
+    { "type": "theory", "markdown": "## Null safety — types tell you if null is possible" },
+    { "type": "code", "language": "dart", "code": "// Non-nullable by default\nString name = 'Ada';       // never null\nString? nick = null;       // may be null\n\n// Safe access\nfinal len = nick?.length ?? 0;        // 0 if nick is null\nfinal upper = nick?.toUpperCase();    // String? — may be null\n\n// Assert non-null (only when you're certain)\nfinal must = nick!.length;            // throws if nick is null — code smell if used often\n\n// late — declare non-null but assign later\nlate final ApiClient api;             // 'I promise to set this before first use'\n\n// Sound null safety means: if a variable is typed `String`, the compiler\n// GUARANTEES it's never null — no runtime surprise NPEs like Java 8." },
+    { "type": "theory", "markdown": "## Records + patterns (Dart 3, 2023)" },
+    { "type": "code", "language": "dart", "code": "// Records — light-weight anonymous groups of values\n(int, String) namedPair = (1, 'Ada');\nfinal person = (name: 'Ada', age: 34);   // named fields\nprint(person.name);                       // 'Ada'\n\n// Destructure with a pattern\nfinal (id, label) = namedPair;            // id=1, label='Ada'\n\n// Pattern-matching switch (like Kotlin's when / Rust's match)\nsealed class Shape {}\nclass Circle extends Shape { Circle(this.r); final double r; }\nclass Square extends Shape { Square(this.s); final double s; }\n\ndouble area(Shape sh) => switch (sh) {\n  Circle(:final r) => 3.14 * r * r,      // destructure Circle's r\n  Square(:final s) => s * s,\n  // No default — the compiler proves we handled every case in the sealed hierarchy.\n};\n\n// instanceof-and-cast eliminated: `case Foo f when …` binds `f: Foo` automatically." },
+    { "type": "theory", "markdown": "## Async — Future, Stream, and isolates" },
+    { "type": "code", "language": "dart", "code": "// Future = one value later. async/await reads sequential, runs non-blocking.\nFuture<User> fetchUser(int id) async {\n  final resp = await http.get(Uri.parse('/users/$id'));\n  return User.fromJson(jsonDecode(resp.body));\n}\n\n// Stream = many values over time. Same async/await via for-loop.\nStream<int> tick() async* {\n  for (var i = 0; ; i++) { yield i; await Future.delayed(Duration(seconds: 1)); }\n}\n\nawait for (final n in tick().take(5)) { print(n); }\n\n// Isolate — TRUE parallelism. Each isolate has its OWN heap, no shared memory.\n// Use for CPU-heavy work (image decode, JSON parse of a big file, ML inference).\nfinal result = await Isolate.run(() => _heavyCompute(bigInput));\n\n// The event loop: async/await schedules work on the SAME isolate (single-thread).\n// Isolates give you multi-core; async gives you cooperative concurrency." },
+    { "type": "theory", "markdown": "## Sample program — a small end-to-end program" },
+    { "type": "code", "language": "dart", "code": "// File: bin/user_app.dart\n// Run: dart run bin/user_app.dart\n\nimport 'dart:convert';\n\nsealed class Result<T> {\n  const Result();\n}\nclass Ok<T>   extends Result<T> { const Ok(this.value); final T value; }\nclass Err<T>  extends Result<T> { const Err(this.error); final Object error; }\n\nclass User {\n  User({required this.id, required this.name, this.email});\n  final int id;\n  final String name;\n  final String? email;\n\n  factory User.fromJson(Map<String, dynamic> j) => User(\n    id: j['id'] as int,\n    name: j['name'] as String,\n    email: j['email'] as String?,\n  );\n\n  @override\n  String toString() => 'User($id, $name, ${email ?? '(no email)'})';\n}\n\nResult<List<User>> parseUsers(String jsonStr) {\n  try {\n    final list = (jsonDecode(jsonStr) as List).cast<Map<String, dynamic>>();\n    return Ok(list.map(User.fromJson).toList());\n  } catch (e) {\n    return Err(e);\n  }\n}\n\nvoid main() {\n  const json = '''[{\"id\":1,\"name\":\"Ada\"},{\"id\":2,\"name\":\"Ben\",\"email\":\"b@x.com\"}]''';\n  final result = parseUsers(json);\n\n  // Pattern matching over the sealed Result — exhaustive, no default needed.\n  switch (result) {\n    case Ok(:final value):\n      for (final u in value) print(u);\n    case Err(:final error):\n      print('parse failed: $error');\n  }\n}\n\n// Output:\n//   User(1, Ada, (no email))\n//   User(2, Ben, b@x.com)" },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Using `!` (bang) everywhere.** Same as Kotlin's `!!` — tells the compiler 'trust me, not null' and crashes at runtime if you're wrong. Prefer `?.`, `??`, or `if (x != null)` (which smart-narrows the type)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: `late` when you don't need it.** `late` disables null-safety guarantees for that variable. Only use for framework-injected fields (like a Bloc's `stream` that's set in `initState`)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Confusing `final` and `const`.** `final` = reference assigned once at runtime (`final now = DateTime.now()`). `const` = compile-time literal (`const Duration(seconds: 1)`). `const` values are canonicalized (one instance for identical values) — huge for Flutter widget trees." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Blocking the event loop.** `for (var i = 0; i < 10000000; i++) …` on the main isolate freezes the UI. Long CPU work → offload with `Isolate.run(...)`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Ignoring cancellation of Streams.** Subscriptions leak if not cancelled. Prefer `StreamSubscription.cancel()` in `dispose()` or auto-managed with Provider/Bloc." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Default to `final` and immutable data.** State that doesn't change can't be wrong." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Prefix widget constants with `const`.** `const Text('Home')` skips rebuilds — one of Flutter's biggest perf wins." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Use records + patterns for one-shot data.** Beats writing a class for every tuple." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Model results as `sealed class Result<T>`.** Ok / Err — exhaustive matching kills the try/catch pyramid." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Isolates for CPU work, async for I/O.** Don't confuse them — most 'my app is slow' problems are I/O on the main isolate, fixed by `await`." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Adopt `analysis_options.yaml` with `flutter_lints`.** Catches null-safety violations, unused imports, and 100+ style issues at edit time." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Null-safe chain.** Given `User? → Address? → City?`, write a one-liner returning the city or 'unknown'.\n\n**Why:** Muscle memory for `?.` + `??`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Records + destructuring.** Parse a CSV row into `(String name, int age, String? email)` and destructure." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — sealed Result.** Wrap a `Future<Either<Error,User>>` pattern in `Result<T>` with `map` and `fold`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Stream + async*.** Emit a running average every second from a synthetic sensor stream." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Isolate.run.** Move a 500-ms JSON parse off the main isolate; measure jank before/after with Flutter's perf overlay." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Why does Flutter use Dart?**\n\n**A:** Three reasons. **(1) Dual compilation** — Dart supports both JIT (fast dev + hot reload) and AOT (fast production startup + predictable frame times). No other mainstream language nails both. **(2) Single-thread event loop with isolates** — matches Flutter's declarative render model perfectly; long CPU work is opt-in to an isolate, not accidentally scattered across threads. **(3) Ergonomics** — Dart is a small, focused language with null safety, records, patterns, sealed classes, async/await, extension methods. Compare to a Flutter-in-JavaScript alternative: no null safety, no sealed classes, worse performance. Google *did* try Flutter on Java (early prototypes) and dropped it. Dart isn't Flutter's constraint — it's Flutter's superpower." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: `final` vs `const` — difference?**\n\n**A:** **`final`** — the reference is assigned exactly once and then read-only. The value itself may be constructed at runtime: `final now = DateTime.now();`. **`const`** — a compile-time constant. The value must be entirely known at compile time. `const Duration(seconds: 1)`. Two things a `const` object always gets: **canonicalization** (identical values share the same underlying instance in memory — `identical(const Duration(seconds:1), const Duration(seconds:1))` is `true`), and it can be used as a `const` argument or `const` widget subtree. **In Flutter:** prefix as many widget constructors as possible with `const` — Flutter skips rebuilding a `const` widget subtree because it knows its value hasn't changed." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How does Dart's null safety work?**\n\n**A:** Nullability is part of the type. `String` is non-nullable; `String?` is nullable. The compiler forbids passing a `String?` where a `String` is expected without checking. Operators: **`?.`** — safe call; **`??`** — null-coalescing default; **`!`** — force non-null (throws if null); **`x != null`** — smart-narrows `x` to non-null inside the if. Dart 3 added **sound** null safety — meaning the guarantees hold even across dynamic dispatch (in older 'unsound' null safety, `dynamic` could smuggle nulls in). **Effect:** whole classes of `NoSuchMethodError: null` bugs go extinct at compile time." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: `async`/`await` vs `Isolate.run` — when to use which?**\n\n**A:** **`async`/`await`** is single-threaded cooperative concurrency. Your code yields (`await`) at each I/O point and the SAME isolate can run other queued microtasks in the meantime. Perfect for **I/O**: network, file, DB. **`Isolate.run(() => heavy())`** is TRUE parallelism — spawns a fresh isolate with its own heap, runs the work there, returns the result. Perfect for **CPU**: image decode, big JSON parse, ML inference. **Golden rule:** if your CPU is idle but your UI is stuck, you're doing I/O without `await`. If your CPU is 100% but your UI is stuck, you're doing CPU work on the main isolate — offload to `Isolate.run`." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What are records and patterns (Dart 3)?**\n\n**A:** **Records** are anonymous, structurally-typed groups of values. `(int, String) pair = (1, 'Ada')`. With named fields: `({int id, String name}) rec = (id: 1, name: 'Ada')`. Great for returning multiple values without writing a class. **Patterns** are declarative shapes you can match and destructure: `final (a, b) = pair;` binds `a=1, b='Ada'`. Combined with pattern-matching `switch`, you can destructure sealed hierarchies exhaustively:\n```dart\nswitch (shape) {\n  Circle(:final r) => Math.pi * r * r,\n  Square(:final s) => s * s,\n}\n```\nThis is Dart's equivalent of Kotlin's data classes + `when`, Rust's enums + `match`, Java 21's records + sealed. Modern Dart code leans on it heavily for domain modeling." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What are sealed classes and how do they help?**\n\n**A:** A `sealed class Foo {}` restricts subclassing to the same library. Combined with pattern-matching `switch`, the compiler **exhaustively** checks every case is handled — no `default:` needed, and adding a new subclass forces every switch to update. This gives Dart **algebraic data types**: model a `Result<T>` as `Ok<T>(value)` | `Err(error)`, or a `Shape` as `Circle` | `Square` | `Triangle`. Eliminates the 'forgot a case' bug that plagues open class hierarchies, and replaces visitor-pattern boilerplate. Introduced in Dart 3 (2023); the modern default for domain modeling." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What are extension methods?**\n\n**A:** Add methods to a type you don't own. `extension StringX on String { bool get isValidEmail => ... }` — now every `String` in scope has `.isValidEmail`. Under the hood, extensions compile to static functions with the receiver as the first argument; they're syntactic sugar, not open-class monkey-patching. Extensions can't access private members. Widely used in Flutter — `context.theme`, `context.push('/route')`, `50.px`, `String.capitalize()` — for concise, readable domain code. **Prefer extensions to util classes** wherever the receiver is obvious." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q8: JIT vs AOT — what do they compile to and when?**\n\n**A:** **JIT (Just-In-Time)** — Dart source is parsed and compiled to bytecode on the fly. `flutter run` uses JIT for the app on the device. The killer feature it enables: **hot reload** (~300 ms round-trip from edit to running change, preserving app state) and **hot restart** (~1s, fresh state). **AOT (Ahead-of-Time)** — `flutter build apk/aab/ipa/web` compiles Dart directly to native ARM/x64 (or JavaScript for web). No VM overhead, no JIT warm-up, predictable performance, small binaries. Same source code — Dart's tooling picks the compiler based on the build target. That's why Flutter feels fast to develop AND fast to ship." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every Flutter app** — Dart is the primary language.\n- **Server-side (Dart Frog, Shelf, Serverpod)** — same language front-and-back.\n- **CLI tools** — `dart run` your own tools; compile to a single-binary with `dart compile exe`.\n- **Flutter Web** — Dart compiles to JavaScript (dart2js) or WebAssembly (dart2wasm).\n- **Google Ads, Google Pay, BMW MyBMW, Alibaba, TenCent** — mainstream Flutter apps you use.\n- **The Flutter SDK itself** — written mostly in Dart." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`dart:async` internals** — Futures use a microtask queue; nested `await`s don't leak stack frames.\n- **`Zone`** — advanced context (uncaught error handling, `runZonedGuarded`, `HttpOverrides`).\n- **`Isolate.spawn` vs `Isolate.run`** — `run` is the modern one-shot helper; `spawn` for long-lived isolates with message passing.\n- **`SendPort`/`ReceivePort`** — message-passing between isolates. No shared memory — Dart's design keeps it simple.\n- **`dart2wasm`** — compiles Dart to WebAssembly for Flutter Web; faster than dart2js in many workloads.\n- **`Function.apply`** — call a function reflectively (rare).\n- **`dart:mirrors`** — reflection, disabled in Flutter (breaks tree-shaking).\n- **`dart compile exe`** — ship a standalone native binary of a Dart CLI.\n- **`dart pub` + `pubspec.yaml`** — package manager; hosted at pub.dev.\n- **`analysis_options.yaml`** — enforce lints; `include: package:flutter_lints/flutter.yaml`." }
   ],
   "flashcards": [
-    { "front": "JIT vs AOT in Dart?", "back": "JIT powers hot reload in development; AOT compiles to native code for fast, optimized release builds." },
-    { "front": "Future vs Stream?", "back": "Future = one async value; Stream = a sequence of async values over time." },
-    { "front": "How does Dart do concurrency?", "back": "Single-threaded isolates with an event loop; heavy work runs in separate isolates communicating by messages (no shared memory)." }
+    { "front": "Why Dart for Flutter?", "back": "JIT for hot reload + AOT for production speed; single-thread event loop matches declarative UI; strong ergonomics." },
+    { "front": "`final` vs `const`?", "back": "`final` = set-once at runtime. `const` = compile-time literal + canonicalized; skip-rebuild in Flutter." },
+    { "front": "Sound null safety?", "back": "Types encode nullability. `String` never null; `String?` may be. Enforced at compile time." },
+    { "front": "async vs isolate?", "back": "async/await = cooperative concurrency for I/O (single isolate). Isolate = true parallelism for CPU (separate heaps)." },
+    { "front": "Records (Dart 3)?", "back": "Anonymous grouped values; `(int, String)` or `({int id, String name})`. Destructure with patterns." },
+    { "front": "sealed + pattern switch?", "back": "Algebraic data types. Compiler proves the switch is exhaustive; no default needed." }
   ],
   "quiz": [
-    { "q": "Dart release builds use…", "options": ["JIT", "AOT compilation to native", "An interpreter", "WebAssembly only"], "answer": 1, "explain": "AOT gives fast startup and optimized native code in release." },
-    { "q": "A Stream represents…", "options": ["One async value", "A sequence of async values", "A synchronous list", "A thread"], "answer": 1, "explain": "Streams emit multiple values over time; Futures emit one." },
-    { "q": "To run heavy CPU work without freezing the UI…", "options": ["Use setState", "Use compute()/Isolate", "Add more widgets", "Use a Future only"], "answer": 1, "explain": "Offload to another isolate; a Future on the main isolate still blocks during CPU work." }
+    { "q": "Prefix widget constructors with `const` because…", "options": ["Prevents runtime errors", "Skip-rebuilds & canonicalization for perf", "Required by Dart 3", "Reduces APK size only"], "answer": 1, "explain": "Flutter's biggest perf win — skip rebuilds when the subtree is const." },
+    { "q": "Isolate.run is for…", "options": ["I/O work", "CPU-heavy work (true parallelism)", "UI updates", "State management"], "answer": 1, "explain": "I/O = async/await; CPU = isolate." },
+    { "q": "Best guard for a nullable?", "options": ["!", "?. + ??", "throw", "assert"], "answer": 1, "explain": "Safe-call + Elvis." },
+    { "q": "Dart 3 introduced…", "options": ["Async/await", "Records + patterns + sealed classes", "Extension methods", "Streams"], "answer": 1, "explain": "The big 2023 release." },
+    { "q": "Sealed + pattern switch enables…", "options": ["Reflection", "Exhaustive matching over a closed hierarchy", "Runtime types", "Concurrency"], "answer": 1, "explain": "Compile-time safety for domain models." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Write a null-safe function using ?., ??, and late." },
-    { "level": "Medium", "text": "Consume a Stream with async* and listen/await for." },
-    { "level": "Hard", "text": "Parse a large JSON off the main isolate with compute()." },
-    { "level": "Expert", "text": "Build a producer/consumer using Isolates and SendPort/ReceivePort." }
+    { "level": "Easy", "text": "Null-safe chain: user?.address?.city?.name ?? 'unknown'." },
+    { "level": "Easy", "text": "Prefix every possible widget constructor in a screen with `const`." },
+    { "level": "Medium", "text": "Model Result<T> as a sealed class with Ok/Err; add `map` + `fold`." },
+    { "level": "Medium", "text": "Parse a CSV row to a record `(String, int, String?)` and destructure." },
+    { "level": "Hard", "text": "Stream running average via async*." },
+    { "level": "Hard", "text": "Offload JSON parse of a 1MB file with Isolate.run and measure the delta." },
+    { "level": "Expert", "text": "Migrate an unsound-null-safety Dart 2 codebase to Dart 3 sound null safety." }
   ],
   "interviewQuestions": [
-    "What is sound null safety in Dart?",
-    "JIT vs AOT and how it enables hot reload?",
-    "Future vs Stream?",
-    "How does Dart handle concurrency (isolates)?",
-    "When and how do you use compute()?"
+    "Why does Flutter use Dart?",
+    "final vs const — difference?",
+    "How does Dart's null safety work?",
+    "async/await vs Isolate.run — when to use which?",
+    "What are records and patterns (Dart 3)?",
+    "What are sealed classes and how do they help?",
+    "What are extension methods?",
+    "JIT vs AOT — what do they compile to and when?"
   ],
   "references": [
-    { "label": "Dart language tour", "url": "https://dart.dev/language" }
+    { "label": "Dart language tour", "url": "https://dart.dev/language" },
+    { "label": "Records and patterns (Dart 3)", "url": "https://dart.dev/language/records" }
   ]
 }
