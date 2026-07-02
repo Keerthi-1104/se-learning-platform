@@ -1,5 +1,6 @@
 // VOLUME 7 — Backend Development
 const L = require("./lib");
+const { loadTopic, topicToChapter } = require("./topic_to_chapter");
 const {
   C, P, H1, H2, bullet, num, callout, code, table, rule, chip,
   makeDoc, pageProps, save, Paragraph, TextRun, PageBreak, AlignmentType,
@@ -57,154 +58,21 @@ body.push(P([{ t: "Backend engineering ", b: true }, "is where mobile turns into
 body.push(callout("note", [["Each topic ends with ", { t: "✅ Summary · 🎯 Interview · 💻 Coding · 🏭 Real-world · 🛠 Mini Project · 🚀 Advanced.", b: true }]]));
 body.push(callout("interview", ["Senior backend interviews rarely test one topic in isolation. Expect: 'Design a rate-limited REST API on Spring Boot with JWT auth, deployed to K8s, using Redis for the cache and Kafka for async events.' Volume 7 gives you the vocabulary for that whole answer."]));
 
-// 1. REST
-body.push(H1("1. REST APIs", "ch1"));
-body.push(callout("definition", ["REST is an architectural style: resources at URLs, HTTP verbs, cacheable responses, statelessness. Six constraints: client-server, stateless, cacheable, layered, uniform interface, optional code-on-demand."]));
-body.push(code([
-  "GET    /v1/users              -> list",
-  "GET    /v1/users/42           -> read one",
-  "POST   /v1/users              -> create",
-  "PUT    /v1/users/42           -> replace",
-  "PATCH  /v1/users/42           -> partial update",
-  "DELETE /v1/users/42           -> remove",
-  "GET    /v1/users/42/orders    -> nested resource",
-], "REST"));
-body.push(callout("interview", ["Richardson Maturity Model: Level 0 (one URL, one verb) → Level 1 (resources) → Level 2 (verbs + status codes; where most APIs live) → Level 3 (HATEOAS). 'Good REST' = Level 2."]));
-body.push(callout("mistake", ["'RPC-in-URL' like POST /doAction — forfeits caching and semantics. Model actions as state transitions on resources."]));
-body.push(...summary([
-  "Nouns for resources; correct verbs; correct status codes.",
-  "Version (/v1/); paginate (cursor > offset); add ?fields for projection.",
-  "Idempotency keys on POST for retry-safe writes.",
-  "429 + Retry-After for rate limits; request IDs for tracing.",
-]));
-body.push(...interview([
-  "State the REST constraints.",
-  "Which HTTP methods are idempotent?",
-  "How would you version a REST API?",
-  "Cursor vs offset pagination?",
-  "How do idempotency keys prevent duplicate charges?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Design a REST endpoint set for a books catalog (CRUD + search)." },
-  { level: "Medium", text: "Add cursor pagination + ?fields projection." },
-  { level: "Hard", text: "Add idempotency keys to POST /orders." },
-  { level: "Expert", text: "Design v1 → v2 with dual routes + deprecation + sunset headers." },
-]));
-body.push(...realworld(["Stripe's API is the gold standard — idempotency keys, careful versioning, meaningful errors. Study it before any API-design interview."]));
-body.push(...miniproject(["Ship a small REST API (users + orders) with pagination, filters, idempotency, versioning, and OpenAPI docs."]));
-body.push(...advanced(["HATEOAS in JSON-Hyper-Schema / HAL; OpenAPI-driven codegen; consumer-driven contract tests (Pact)."]));
+// 1. REST APIs
+body.push(...topicToChapter(loadTopic("level_07", "rest"),
+  { chapterNumber: 1, bookmarkId: "ch1" }));
 
 // 2. GraphQL
-body.push(H1("2. GraphQL", "ch2"));
-body.push(callout("definition", ["GraphQL: one endpoint, typed schema, clients pick fields. Three root operations: Query, Mutation, Subscription."]));
-body.push(code([
-  "type User { id: ID!  name: String!  orders: [Order!]! }",
-  "type Order { id: ID!  total: Float! }",
-  "type Query { user(id: ID!): User }",
-  "type Mutation { placeOrder(userId: ID!, items: [String!]!): Order }",
-  "",
-  "query { user(id: \"42\") { name  orders { total } } }",
-], "graphql"));
-body.push(callout("interview", ["N+1 problem: resolving `orders` for 20 users fires 20 queries. Fix with DataLoader — batches keys within a tick and dedupes calls. #1 GraphQL perf question."]));
-body.push(callout("mistake", ["Ignoring query complexity — a client can DoS you with deeply nested lists. Enforce depth limits, complexity budgets, and persisted queries."]));
-body.push(...summary([
-  "One endpoint, typed schema, no over/under-fetching.",
-  "Watch N+1 — always use DataLoader on lists.",
-  "Depth + complexity limits in production.",
-  "Persisted queries reduce parse cost and lock the query set.",
-]));
-body.push(...interview([
-  "GraphQL vs REST — when use each?",
-  "What is the N+1 problem?",
-  "How do you auth a GraphQL API?",
-  "Persisted queries?",
-  "Query vs Mutation vs Subscription?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Schema + resolver for User { name, email }." },
-  { level: "Medium", text: "Mutation with input types and error handling." },
-  { level: "Hard", text: "Fix an N+1 with DataLoader." },
-  { level: "Expert", text: "Persisted queries + depth/complexity limits." },
-]));
-body.push(...realworld(["GitHub's API v4 is a widely-cited real GraphQL API — good example of paginated connections, mutations, and OAuth-scoped access."]));
-body.push(...miniproject(["Build a small GraphQL server for a blog: nested queries, mutations, subscriptions, DataLoader on the comments list."]));
-body.push(...advanced(["Federation (subgraphs + gateway), field-level auth, caching strategies (Apollo/GraphCDN), custom scalars."]));
+body.push(...topicToChapter(loadTopic("level_07", "graphql"),
+  { chapterNumber: 2, bookmarkId: "ch2" }));
 
 // 3. gRPC
-body.push(H1("3. gRPC", "ch3"));
-body.push(callout("definition", ["High-performance RPC using HTTP/2 + Protocol Buffers. Contract-first: define services in .proto, generate typed clients in many languages."]));
-body.push(code([
-  "syntax = \"proto3\";",
-  "message OrderReq { string id = 1; }",
-  "message OrderRes { string id = 1;  double total = 2; }",
-  "service OrderService {",
-  "  rpc GetOrder (OrderReq) returns (OrderRes);",
-  "  rpc StreamOrders (OrderReq) returns (stream OrderRes);",
-  "}",
-], "proto"));
-body.push(callout("interview", ["Advantages over REST: binary Protobuf (smaller/faster than JSON), HTTP/2 multiplexing, generated typed clients, first-class streaming. Ideal for internal microservices."]));
-body.push(callout("mistake", ["Renaming/renumbering Protobuf fields — breaks wire compatibility. Add new tags; mark removed as `reserved`."]));
-body.push(...summary([
-  "Contract-first: .proto → generated clients & stubs.",
-  "Four RPC modes: unary, server-stream, client-stream, bidi-stream.",
-  "Better than REST for internal service-to-service.",
-  "gRPC-Web/Connect bridges gRPC to browsers.",
-]));
-body.push(...interview([
-  "Advantages of gRPC over REST?",
-  "Four streaming modes?",
-  "How to evolve a Protobuf schema safely?",
-  "gRPC in the browser?",
-  "How to authenticate gRPC calls?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Unary GetOrder RPC with a generated client." },
-  { level: "Medium", text: "Server streaming for a live orders feed." },
-  { level: "Hard", text: "Bearer-token auth via metadata + interceptors." },
-  { level: "Expert", text: "Expose to a browser via gRPC-Web + Connect." },
-]));
-body.push(...realworld(["Google's internal APIs, Uber, Netflix, Square — gRPC is the internal backbone at massive scale because it's fast and typed."]));
-body.push(...miniproject(["Build a small internal service (`InventoryService`) in gRPC with unary + server streaming and a typed client used by a REST gateway."]));
-body.push(...advanced(["gRPC deadlines & cancellation, xDS load balancing, protobuf FieldMask, buf.build linting."]));
+body.push(...topicToChapter(loadTopic("level_07", "grpc"),
+  { chapterNumber: 3, bookmarkId: "ch3" }));
 
 // 4. Spring Boot
-body.push(H1("4. Spring Boot", "ch4"));
-body.push(callout("definition", ["Opinionated framework on top of Spring: auto-configures beans based on classpath + properties, curated 'starter' dependencies, embedded server, production endpoints (Actuator)."]));
-body.push(code([
-  "@SpringBootApplication",
-  "public class App { public static void main(String[] a){ SpringApplication.run(App.class,a);} }",
-  "",
-  "@RestController @RequestMapping(\"/v1/users\")",
-  "class UserController {",
-  "  private final UserRepo repo;",
-  "  UserController(UserRepo r){ this.repo = r; }        // constructor DI",
-  "  @GetMapping(\"/{id}\") User get(@PathVariable Long id){ return repo.findById(id).orElseThrow(); }",
-  "}",
-], "spring boot"));
-body.push(callout("interview", ["Auto-configuration = `@Conditional*`. Beans register only when their conditions match (class on classpath + property set). Adding starter-data-jpa auto-wires DataSource, EntityManager and TxManager from properties."]));
-body.push(callout("mistake", ["Field injection (`@Autowired` on fields). Hides dependencies, hard to test. Constructor injection is the official recommendation."]));
-body.push(...summary([
-  "Starters + auto-config + embedded server = minutes to running.",
-  "Constructor DI, @ConfigurationProperties, profiles for env config.",
-  "Actuator + Prometheus + OpenTelemetry from day one.",
-  "Test with @SpringBootTest + Testcontainers for realistic integration.",
-]));
-body.push(...interview([
-  "Spring vs Spring Boot?",
-  "How does auto-configuration work?",
-  "Field vs constructor injection?",
-  "What are profiles for?",
-  "How do you expose health and metrics?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Hello World REST controller in Spring Boot." },
-  { level: "Medium", text: "JPA + User entity + repository + CRUD endpoints." },
-  { level: "Hard", text: "Add @Valid, global @ControllerAdvice, standard error DTO." },
-  { level: "Expert", text: "Actuator + Prometheus + OpenTelemetry across two services." },
-]));
-body.push(...realworld(["Fintech, telecom, and enterprise Java shops run on Spring Boot. It's the backbone of countless bank APIs, order-management systems, and MNC backends."]));
-body.push(...miniproject(["Build an Orders API: Spring Boot + JPA + Flyway migrations + validation + global error handler + Actuator + integration tests via Testcontainers."]));
-body.push(...advanced(["Spring WebFlux (reactive), Spring Native (GraalVM AOT), problem+json errors, Bean Validation groups."]));
+body.push(...topicToChapter(loadTopic("level_07", "spring_boot"),
+  { chapterNumber: 4, bookmarkId: "ch4" }));
 
 // 5. Spring Security
 body.push(H1("5. Spring Security", "ch5"));

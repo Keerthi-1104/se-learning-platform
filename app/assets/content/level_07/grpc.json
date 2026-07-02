@@ -3,49 +3,109 @@
   "levelId": 7,
   "title": "gRPC",
   "xp": 40,
-  "estimatedMinutes": 25,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Describe gRPC's contract-first Protobuf model",
-    "Distinguish the four RPC types",
-    "Know when gRPC beats REST"
+    "Understand gRPC via a real-life analogy",
+    "Distinguish Unary, Server-streaming, Client-streaming, Bidirectional",
+    "Write `.proto` files and generate typed clients/servers",
+    "See when gRPC beats REST (and when it doesn't)",
+    "Answer gRPC interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "gRPC is a high-performance RPC framework using HTTP/2, Protocol Buffers, and generated clients in ~10 languages. You define services in a .proto file; the tooling generates typed clients and stubs on both sides." },
-    { "type": "code", "language": "proto", "code": "syntax = \"proto3\";\nmessage OrderReq { string id = 1; }\nmessage OrderRes { string id = 1;  double total = 2; }\nservice OrderService {\n  rpc GetOrder (OrderReq) returns (OrderRes);\n  rpc StreamOrders (OrderReq) returns (stream OrderRes);   // server-stream\n}" },
-    { "type": "table", "headers": ["RPC type", "Direction"], "rows": [
-      ["Unary", "1 req → 1 res"],
-      ["Server streaming", "1 req → N res"],
-      ["Client streaming", "N req → 1 res"],
-      ["Bidirectional streaming", "N req ↔ N res"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of gRPC as private radio frequencies between departments in the same company.**\n\n- **REST + JSON** is the postal service — anyone can send a letter (HTTP request), the envelope has a return address, the paper is human-readable, anyone can read it in transit. Great for public communication. Slow, verbose, universal.\n- **gRPC** is a leased radio channel — the two departments already agreed on the FREQUENCY, the CODES they'll use, the VOCABULARY. Messages are compact binary blips. Nobody else can even understand them without the codebook. Perfect for INTERNAL communication where speed and typing matter more than universal legibility.\n\n**Concretely:** gRPC is Google's RPC (Remote Procedure Call) framework. You define your API in a `.proto` file — typed, versioned, unambiguous. `protoc` generates typed client + server stubs in 12+ languages. Messages are Protocol Buffers (binary, compact). Transport is HTTP/2, so you get streaming, multiplexing, TLS. Client code calls `stub.getUser(request)` like a local function.\n\n**Why teams reach for gRPC:** (1) **Speed** — 5-10x smaller payloads than JSON, faster serialization. (2) **Streaming** — bidirectional streams over one connection (impossible in classic REST). (3) **Typed contracts** — the `.proto` is compile-checked; no runtime surprises. (4) **Polyglot** — same `.proto` generates Go, Java, Python, Node.js, C++, Kotlin, Swift, Dart clients.\n\n**Where gRPC struggles:** browsers can't speak raw gRPC (need gRPC-Web proxy). Debugging binary payloads is harder. Public APIs don't do gRPC — REST is more familiar. **Rule:** gRPC excels for MICROSERVICE-TO-MICROSERVICE communication inside a data center. REST for public + browser + mobile. Some teams use both." },
+    { "type": "callout", "variant": "definition", "markdown": "**gRPC** (gRPC Remote Procedure Call) is Google's high-performance RPC framework. Services are defined in **Protocol Buffers** (`.proto` files) — strongly-typed messages + service methods. `protoc` compiles the `.proto` into typed clients/servers in 12+ languages. Transport is **HTTP/2** (multiplexed, streaming, TLS). Payloads are compact binary. Four call types: **Unary** (request → response), **Server-streaming** (request → stream), **Client-streaming** (stream → response), **Bidirectional** (stream ⇄ stream). Ideal for internal microservice communication." },
+    { "type": "theory", "markdown": "## The four RPC types" },
+    { "type": "table", "headers": ["Type", "Shape", "Example"], "rows": [
+      ["**Unary**", "Request → Response (single)", "`GetUser(userId) → User` — classic RPC"],
+      ["**Server-streaming**", "Request → stream of responses", "`ListOrders(userId) → stream<Order>` — server sends many"],
+      ["**Client-streaming**", "Stream of requests → response", "`UploadChunks(stream<Chunk>) → FileMeta` — file upload"],
+      ["**Bidirectional**", "Both stream at once", "`Chat(stream<Msg>) → stream<Msg>` — real-time"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "gRPC's edge: **binary Protobuf** (smaller/faster than JSON), **HTTP/2 multiplexing**, **generated clients** (no hand-written HTTP calls), and **first-class streaming**. Ideal for internal service-to-service; harder for browsers (needs gRPC-Web proxy)." },
-    { "type": "callout", "variant": "mistake", "markdown": "Breaking wire compatibility by renaming/renumbering Protobuf fields. Add new fields with new tags; never reuse an old tag. Removed fields should be marked `reserved`." },
-    { "type": "callout", "variant": "tip", "markdown": "Use gRPC for internal microservices and mobile-to-backend performance-critical paths; REST/GraphQL for public/browser APIs. gRPC-Web + Connect bridge gRPC to the browser when needed." }
+    { "type": "theory", "markdown": "## Sample program — a `.proto` file for a user service" },
+    { "type": "code", "language": "proto", "code": "// user.proto — the source of truth. Everything else is generated.\nsyntax = \"proto3\";\npackage user.v1;\n\noption java_package = \"com.example.user.v1\";\noption java_multiple_files = true;\n\nservice UserService {\n  // Unary\n  rpc GetUser(GetUserRequest) returns (User);\n\n  // Server-streaming\n  rpc ListUsers(ListUsersRequest) returns (stream User);\n\n  // Client-streaming\n  rpc BatchCreate(stream CreateUserRequest) returns (BatchCreateResponse);\n\n  // Bidirectional streaming\n  rpc Chat(stream ChatMessage) returns (stream ChatMessage);\n}\n\nmessage GetUserRequest {\n  int64 id = 1;\n}\n\nmessage User {\n  int64  id    = 1;\n  string name  = 2;\n  string email = 3;\n  int64  created_at_epoch_ms = 4;\n}\n\nmessage ListUsersRequest {\n  string search = 1;\n  int32  limit  = 2;\n}\n\nmessage CreateUserRequest {\n  string name  = 1;\n  string email = 2;\n}\n\nmessage BatchCreateResponse {\n  repeated User users = 1;\n}\n\nmessage ChatMessage {\n  int64  from_user_id = 1;\n  string content      = 2;\n  int64  timestamp_ms = 3;\n}\n\n// Run: protoc --java_out=. --grpc-java_out=. user.proto\n//      protoc --dart_out=grpc:. user.proto\n// Get typed stubs + messages in every target language." },
+    { "type": "theory", "markdown": "## Server + client in Java (Spring Boot)" },
+    { "type": "code", "language": "java", "code": "// SERVER (net.devh.grpc.server, or grpc-java directly)\n@GrpcService\npublic class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {\n\n  private final UserRepository repo;\n\n  public UserGrpcService(UserRepository repo) { this.repo = repo; }\n\n  @Override\n  public void getUser(GetUserRequest request, StreamObserver<User> responseObserver) {\n    var entity = repo.findById(request.getId())\n        .orElseThrow(() -> Status.NOT_FOUND.withDescription(\"user not found\").asRuntimeException());\n\n    var response = User.newBuilder()\n        .setId(entity.id)\n        .setName(entity.name)\n        .setEmail(entity.email)\n        .setCreatedAtEpochMs(entity.createdAt.toEpochMilli())\n        .build();\n\n    responseObserver.onNext(response);\n    responseObserver.onCompleted();\n  }\n\n  @Override\n  public void listUsers(ListUsersRequest req, StreamObserver<User> observer) {\n    // Server-streaming — emit one User per row.\n    repo.findMatching(req.getSearch(), req.getLimit()).forEach(entity -> {\n      observer.onNext(toProto(entity));\n    });\n    observer.onCompleted();\n  }\n\n  @Override\n  public StreamObserver<CreateUserRequest> batchCreate(StreamObserver<BatchCreateResponse> observer) {\n    // Client-streaming — collect all requests, then respond once.\n    var created = new ArrayList<User>();\n    return new StreamObserver<>() {\n      @Override public void onNext(CreateUserRequest req) { created.add(toProto(repo.save(fromProto(req)))); }\n      @Override public void onError(Throwable t) { observer.onError(t); }\n      @Override public void onCompleted() {\n        observer.onNext(BatchCreateResponse.newBuilder().addAllUsers(created).build());\n        observer.onCompleted();\n      }\n    };\n  }\n}\n\n// CLIENT — a Kotlin/Java caller\n// Auto-generated stub is drop-in typed.\nvar channel = ManagedChannelBuilder.forAddress(\"users.internal\", 9000)\n    .usePlaintext()   // use TLS in prod!\n    .build();\n\nvar client = UserServiceGrpc.newBlockingStub(channel);\nvar user = client.getUser(GetUserRequest.newBuilder().setId(42).build());\nSystem.out.println(user.getName());   // 'Ada'" },
+    { "type": "theory", "markdown": "## gRPC vs REST — the honest comparison" },
+    { "type": "table", "headers": ["Concern", "REST + JSON", "gRPC"], "rows": [
+      ["**Payload size**", "Verbose text", "Binary; 5-10x smaller"],
+      ["**Speed**", "Slower serialization", "Fast Protocol Buffers"],
+      ["**Type safety**", "Runtime JSON parsing", "Compile-time types from `.proto`"],
+      ["**Browser support**", "Universal", "Needs gRPC-Web proxy"],
+      ["**Streaming**", "SSE / WebSocket / awkward", "Native, four types"],
+      ["**Debugging**", "curl + Postman + human-readable", "grpcurl; binary is opaque"],
+      ["**Public API**", "Very common", "Rare (partner integrations)"],
+      ["**Microservice-to-microservice**", "Fine", "**Excellent** — the sweet spot"],
+      ["**Mobile**", "Universal, easy", "Works but heavier setup"],
+      ["**Learning curve**", "Low", "Higher — `.proto`, codegen, HTTP/2 concepts"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**The pragmatic call:** REST for public APIs and browser/mobile. gRPC for microservice-to-microservice inside a data center where types and speed matter. Some teams use BOTH — a REST gateway wraps internal gRPC services. Not one-vs-the-other." },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Breaking `.proto` compatibility.** Renaming a field or reusing a tag number → downstream services parse wrong data. Rule: tags are permanent; add new fields with new tags; deprecate but don't reuse." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: `usePlaintext()` in production.** No TLS = anyone snooping the wire reads everything. Always TLS in prod." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Not handling `DEADLINE_EXCEEDED`.** Servers hang; clients wait forever. Set deadlines: `stub.withDeadlineAfter(5, TimeUnit.SECONDS).getUser(...)`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Ignoring gRPC status codes.** They're different from HTTP — `UNAVAILABLE`, `DEADLINE_EXCEEDED`, `NOT_FOUND`, `PERMISSION_DENIED`. Map them properly to your app-level errors." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Trying gRPC in a browser.** Doesn't work directly. Use gRPC-Web + Envoy proxy — or just use REST/JSON for browsers." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Version your `.proto` package.** `package user.v1;`. Migrations are much smoother." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Tags are forever.** Never reuse a field number." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Always TLS in production.** `usePlaintext` is dev-only." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Set deadlines on every call.** Prevents hangs." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Use interceptors for auth, logging, tracing.** Similar to Spring filters or Dio interceptors." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Health checks + reflection.** `grpc.health.v1.Health` and server reflection make ops easier." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Prefer gRPC internally; REST at the edge.** A REST gateway wraps internal gRPC." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Hello proto.** `service Greeter { rpc Hello(HelloRequest) returns (HelloResponse); }`. Generate + implement in one language." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — User service unary RPCs.** GetUser + CreateUser." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Server-streaming ListUsers.** Stream 1000 users; client renders them as they arrive." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Client-streaming file upload.** Chunks of bytes; server assembles + returns metadata." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard) — Bidirectional chat.** Two clients; server broadcasts messages." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert) — Cross-language codegen.** Same `.proto` → Kotlin server + Dart client (Flutter) + Go microservice." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is gRPC?**\n\n**A:** gRPC is Google's high-performance RPC framework. You define your API in `.proto` files (Protocol Buffers) — typed messages + service methods. `protoc` generates typed client and server stubs in 12+ languages (Java, Kotlin, Go, Python, Dart, TypeScript, Swift, C++...). Transport is HTTP/2 (multiplexed streams, TLS, header compression). Payloads are compact BINARY. Client code calls `stub.getUser(request)` like a local function — the plumbing is invisible. **Best for:** internal microservice communication where speed, typing, and streaming matter more than human-readable payloads. **Not ideal for:** public browser APIs (no native browser support), simple CRUD APIs where REST is enough." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What are the four types of RPCs?**\n\n**A:** **(1) Unary** — one request, one response. Classic RPC. `GetUser(userId) → User`. **(2) Server-streaming** — one request, stream of responses. `ListOrders(userId) → stream<Order>` — server sends orders as they're found. **(3) Client-streaming** — stream of requests, one response. `UploadChunks(stream<Chunk>) → FileMetadata` — client uploads a big file in chunks. **(4) Bidirectional streaming** — both sides stream at once. `Chat(stream<Msg>) → stream<Msg>` — real-time chat, live location, collaborative editing. **HTTP/2 makes all four possible** on ONE connection with backpressure. REST needs SSE, WebSockets, or awkward polling for the streaming types." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: gRPC vs REST — when to use which?**\n\n**A:** **gRPC** — internal microservice-to-microservice. Same team owns both sides. Speed and typing matter. Streaming is required. Mobile client for a high-throughput app. **REST** — public APIs, browser clients, mobile-to-server, simple CRUD, cache-heavy workloads, wide client compatibility. **Both often coexist** — a REST gateway (`api.company.com`) wraps internal gRPC services (`user-service.internal:9090`). External clients see REST; internal microservices talk gRPC. **Rule of thumb:** if you're asking 'gRPC or REST?', the honest answer is often 'REST at the edge, gRPC internally'. Don't force one everywhere." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What are Protocol Buffers?**\n\n**A:** A language-neutral, platform-neutral serialization format from Google. You define messages in `.proto` files — typed fields with unique tag numbers:\n```proto\nmessage User {\n  int64 id = 1;\n  string name = 2;\n  string email = 3;\n}\n```\n`protoc` generates classes in Java/Go/Python/Dart etc. Serialization is BINARY and 5-10x smaller than equivalent JSON, and faster to parse. **Rules:** field numbers 1-15 use one byte (put common fields there); tags are FOREVER (never reuse); adding new fields is backwards-compatible (old code ignores unknown fields). Proto3 is the current version. **Also used outside gRPC** — for cache serialization, cross-service message passing over Kafka, etc." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How does gRPC handle errors?**\n\n**A:** gRPC has its own status code enum (different from HTTP): `OK`, `CANCELLED`, `UNKNOWN`, `INVALID_ARGUMENT`, `DEADLINE_EXCEEDED`, `NOT_FOUND`, `ALREADY_EXISTS`, `PERMISSION_DENIED`, `RESOURCE_EXHAUSTED`, `FAILED_PRECONDITION`, `ABORTED`, `UNIMPLEMENTED`, `INTERNAL`, `UNAVAILABLE`, `DATA_LOSS`, `UNAUTHENTICATED`. Servers throw `Status.NOT_FOUND.asRuntimeException()`; clients catch `StatusRuntimeException` and inspect `.getStatus().getCode()`. **Rich errors** — attach details as protobuf messages (google.rpc.Status pattern). **Retry-safe codes** — the docs specify which are safe to retry (`UNAVAILABLE`, `DEADLINE_EXCEEDED`). Better than REST's HTTP-code overloading, but requires learning a new taxonomy." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How do you handle backward compatibility in `.proto` files?**\n\n**A:** Protocol Buffers is designed for backward compatibility: **(1) NEVER reuse a field number** — old clients still expect that tag to mean the old thing. **(2) ADD new fields with new tags** — old clients ignore them. **(3) NEVER change the type** of an existing field — buffer parses will get garbage. **(4) Mark fields DEPRECATED with `[deprecated = true]`** — servers can still send them but new clients ignore. **(5) Reserve deleted fields** to prevent reuse: `reserved 5, 6, 7; reserved \"old_name\";`. **(6) Package versioning** — `package user.v1;` → `package user.v2;` for breaking changes. Follow these rules and you can add features indefinitely without breaking old clients. Break them once and you'll have a bad day." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: Can browsers use gRPC?**\n\n**A:** Not natively. Browsers can't speak raw gRPC because they can't manipulate HTTP/2 frames directly. **Two workarounds:** **(1) gRPC-Web** — a slimmed-down protocol that browsers CAN speak (regular HTTP requests). Needs a proxy (Envoy is popular) that translates gRPC-Web ↔ real gRPC. Supports unary + server-streaming; NO client-streaming or bidirectional. **(2) REST gateway** — expose your gRPC as REST via `grpc-gateway` (Go) or hand-written adapters. Browsers talk REST; internally your servers use gRPC. **Rule:** if browsers are consumers, gRPC-Web works but adds ops complexity. Many teams just expose REST for browsers and use gRPC internally." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Google internal** — gRPC everywhere; the original use case.\n- **Netflix, Uber, Square, Dropbox** — heavy gRPC for microservices.\n- **Kubernetes API server** — internal + external gRPC.\n- **Envoy proxy** — service mesh built around gRPC.\n- **Flutter mobile** — `grpc` package works; some apps use it for chat + high-throughput endpoints.\n- **Not common:** public consumer APIs (REST dominates)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`grpc-gateway`** — auto-generate a REST + Swagger gateway from `.proto`.\n- **gRPC-Web + Envoy** — browser support via a proxy.\n- **gRPC deadlines** — `stub.withDeadlineAfter(5, TimeUnit.SECONDS)` propagates through calls.\n- **Interceptors** — for auth, logging, tracing (`ClientInterceptor`, `ServerInterceptor`).\n- **`grpc.health.v1.Health`** — standard health-check service.\n- **Server reflection** — `grpc.reflection.v1alpha.ServerReflection` — clients can discover services at runtime.\n- **grpcurl** — CLI for calling gRPC servers.\n- **Load balancing** — client-side (Google's approach) vs server-side (nginx / Envoy).\n- **`grpc-node`, `grpc-go`, `grpc-java`** — official implementations; `tonic` (Rust), `grpc-dart`.\n- **Envoy service mesh** — retries, observability, mTLS between services.\n- **Backwards-compatible proto changes** — see the Google protobuf guide.\n- **`buf`** — modern protobuf tooling (linting, breaking-change detection, code gen)." }
   ],
   "flashcards": [
-    { "front": "gRPC data format and transport?", "back": "Protocol Buffers over HTTP/2." },
-    { "front": "Four gRPC RPC types?", "back": "Unary, server streaming, client streaming, bidirectional streaming." },
-    { "front": "Rule for evolving a .proto?", "back": "Never reuse a tag number; mark removed fields as reserved; add new fields with new tags." }
+    { "front": "What is gRPC?", "back": "Google's RPC framework using Protocol Buffers over HTTP/2. Typed stubs generated from .proto files." },
+    { "front": "Four call types?", "back": "Unary, server-streaming, client-streaming, bidirectional." },
+    { "front": "Payload format?", "back": "Protocol Buffers (binary). 5-10x smaller than JSON, faster to parse." },
+    { "front": "Transport?", "back": "HTTP/2. Multiplexed, streaming, TLS, header compression." },
+    { "front": "When gRPC?", "back": "Microservice-to-microservice. Streaming required. Type safety matters. NOT for browsers directly." },
+    { "front": "Field tags rule?", "back": "Tags are FOREVER. Never reuse; add new fields with new tags." }
   ],
   "quiz": [
-    { "q": "gRPC serializes messages with…", "options": ["JSON", "XML", "Protocol Buffers (binary)", "Base64 strings"], "answer": 2, "explain": "Protobuf produces small, fast, schema-typed messages." },
-    { "q": "gRPC runs on top of…", "options": ["HTTP/1.1", "HTTP/2", "UDP raw", "MQTT"], "answer": 1, "explain": "HTTP/2 gives multiplexing and streaming." },
-    { "q": "gRPC is a strong fit for…", "options": ["Public browser-only APIs", "Internal service-to-service RPC + streaming", "Static file hosting", "Email"], "answer": 1, "explain": "Internal microservices benefit most." }
+    { "q": "gRPC transport?", "options": ["HTTP/1.1", "HTTP/2", "TCP raw", "SMTP"], "answer": 1, "explain": "Multiplexed streams." },
+    { "q": "Payload?", "options": ["JSON", "XML", "Protocol Buffers (binary)", "YAML"], "answer": 2, "explain": "Compact + typed." },
+    { "q": "Browsers speak gRPC?", "options": ["Yes natively", "No — need gRPC-Web + Envoy proxy", "Only Chrome", "Only Safari"], "answer": 1, "explain": "HTTP/2 frame manipulation not exposed." },
+    { "q": "Field number reuse?", "options": ["Fine", "NEVER — breaks backward compat", "Only if you rebuild all clients", "Automatic"], "answer": 1, "explain": "Tags are forever." },
+    { "q": "Streaming types?", "options": ["Only server", "Unary + 3 streaming variants", "None", "Only via SSE"], "answer": 1, "explain": "Native." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Define a .proto with a unary GetOrder RPC and generate a client." },
-    { "level": "Medium", "text": "Implement server-side streaming for a live orders feed." },
-    { "level": "Hard", "text": "Add authentication via metadata (bearer token) + interceptors." },
-    { "level": "Expert", "text": "Expose the service to a browser using gRPC-Web + Connect." }
+    { "level": "Easy", "text": "Write a `.proto` for a Greeter service; generate stubs." },
+    { "level": "Easy", "text": "Unary GetUser: server + client in one language." },
+    { "level": "Medium", "text": "Server-streaming ListUsers; client renders as they arrive." },
+    { "level": "Medium", "text": "Client-streaming BatchCreate; upload 1000 records." },
+    { "level": "Hard", "text": "Bidirectional Chat; two clients, one server, broadcast." },
+    { "level": "Hard", "text": "Add deadlines + interceptors for logging and auth." },
+    { "level": "Expert", "text": "Cross-language: Kotlin server + Dart Flutter client + Go microservice from ONE .proto." }
   ],
   "interviewQuestions": [
-    "What advantages does gRPC have over REST?",
-    "Four gRPC streaming modes?",
-    "How do you evolve a Protobuf schema safely?",
-    "How do you use gRPC from a browser?",
-    "How do you authenticate gRPC calls?"
+    "What is gRPC?",
+    "What are the four types of RPCs?",
+    "gRPC vs REST — when to use which?",
+    "What are Protocol Buffers?",
+    "How does gRPC handle errors?",
+    "How do you handle backward compatibility in .proto files?",
+    "Can browsers use gRPC?"
   ],
   "references": [
-    { "label": "gRPC — official site", "url": "https://grpc.io" }
+    { "label": "gRPC — official", "url": "https://grpc.io" },
+    { "label": "Protocol Buffers guide", "url": "https://protobuf.dev" }
   ]
 }

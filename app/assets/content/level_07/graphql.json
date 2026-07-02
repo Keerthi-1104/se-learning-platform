@@ -2,51 +2,101 @@
   "id": "be.graphql",
   "levelId": 7,
   "title": "GraphQL",
-  "xp": 40,
-  "estimatedMinutes": 25,
+  "xp": 45,
+  "estimatedMinutes": 35,
   "objectives": [
-    "Explain queries, mutations and the schema",
-    "Understand the N+1 problem and DataLoader",
-    "Weigh GraphQL vs REST for your use case"
+    "Understand GraphQL via a real-life analogy",
+    "Distinguish Query, Mutation, Subscription",
+    "Design a schema; resolve fields on the server",
+    "Handle N+1 queries with DataLoader",
+    "Answer GraphQL interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "GraphQL is a query language + runtime where the client specifies exactly what data it wants, and the server returns just that. One endpoint (`/graphql`), a typed schema, and three root operations: Query, Mutation, Subscription." },
-    { "type": "code", "language": "graphql", "code": "type User { id: ID!  name: String!  orders: [Order!]! }\ntype Order { id: ID!  total: Float! }\ntype Query { user(id: ID!): User }\ntype Mutation { placeOrder(userId: ID!, items: [String!]!): Order }\n\nquery { user(id: \"42\") { name  orders { total } } }" },
-    { "type": "table", "headers": ["", "REST", "GraphQL"], "rows": [
-      ["Endpoints", "Many nouns", "One /graphql"],
-      ["Over-fetching", "Common", "Client picks fields"],
-      ["Versioning", "URL v1/v2", "Deprecate fields"],
-      ["Caching", "HTTP caches natively", "App-level cache (Apollo/Relay)"],
-      ["N+1 risk", "Low", "High without DataLoader"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of GraphQL as a buffet vs a fixed menu.**\n\n- **REST** is a fixed menu. You order 'salad plate' and get whatever the chef put on it — maybe croutons and dressing you didn't want, maybe missing the tomatoes you wanted. You then order the 'fruit plate' and the 'cheese plate' separately, three round-trips to the kitchen.\n- **GraphQL** is a buffet. You walk down the counter and POINT at exactly what you want: 'give me id, name, and email from the user; then the last 3 order dates and total; then just the current cart's item count'. You get EXACTLY that. One request. One response. Zero waste.\n\n**In code:** GraphQL is a **query language** for APIs. The client sends a QUERY describing the shape of the response it wants; the server executes it and returns exactly that shape. One endpoint (`/graphql`), one method (POST), typed schema, introspectable.\n\n**Why teams reach for GraphQL:** (1) **No over-fetching** — the mobile client pulls only the fields it renders. (2) **No under-fetching** — no more 'first GET user, then GET user's orders, then GET each order's items' waterfall. (3) **Typed schema** — client and server share a contract; code generation everywhere. (4) **Introspection** — auto-generated docs and clients. Popular at Facebook (invented it), GitHub, Shopify, Airbnb.\n\n**Trade-offs:** caching is harder (every query is a unique POST); server complexity is real (resolver graphs, DataLoader for N+1); rate limiting is trickier (queries have varying cost). GraphQL shines for FEED-HEAVY apps with rich domain graphs. It's overkill for a simple CRUD API." },
+    { "type": "callout", "variant": "definition", "markdown": "**GraphQL** is a query language + runtime for APIs, developed at Facebook (2012, open-sourced 2015). Clients send **queries** describing the shape of the response they want; the server executes **resolvers** on each requested field and returns exactly that shape. Three operation types: **Query** (read), **Mutation** (write), **Subscription** (real-time). Schema is strongly typed (`type User { id: ID! name: String! }`). Single endpoint (`/graphql`), single POST method. Introspectable — clients can query the schema itself." },
+    { "type": "theory", "markdown": "## The three operation types" },
+    { "type": "table", "headers": ["Operation", "Purpose", "HTTP-equivalent"], "rows": [
+      ["**Query**", "Read data — like GET", "GET /users?fields=name,email"],
+      ["**Mutation**", "Write data — like POST/PUT/PATCH/DELETE", "POST /users"],
+      ["**Subscription**", "Real-time push over WebSocket", "Server-Sent Events / WebSocket"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "The N+1 problem: resolving `orders` for 20 users fires 20 DB queries. Fix with **DataLoader** — batches keys within a tick and dedupes calls. This is the #1 GraphQL performance interview question." },
-    { "type": "callout", "variant": "mistake", "markdown": "Ignoring query cost/complexity: a client can request deeply nested lists and DoS your server. Enforce depth limits, complexity budgets, and persisted queries in production." },
-    { "type": "callout", "variant": "tip", "markdown": "GraphQL shines when clients (mobile, web, IoT) need different views of the same data. For simple CRUD or public APIs with strong HTTP caching, REST is often the right call." }
+    { "type": "theory", "markdown": "## Schema — the shared contract" },
+    { "type": "code", "language": "graphql", "code": "# schema.graphql — the source of truth for what the API can do.\n\ntype User {\n  id: ID!\n  name: String!\n  email: String!\n  orders(limit: Int = 10): [Order!]!\n}\n\ntype Order {\n  id: ID!\n  total: Float!\n  createdAt: String!\n  items: [OrderItem!]!\n}\n\ntype OrderItem {\n  productId: ID!\n  quantity: Int!\n  unitPrice: Float!\n}\n\ntype Query {\n  user(id: ID!): User\n  users(search: String, limit: Int = 20): [User!]!\n}\n\ntype Mutation {\n  createUser(input: CreateUserInput!): User!\n  deleteUser(id: ID!): Boolean!\n}\n\ninput CreateUserInput {\n  name: String!\n  email: String!\n}\n\ntype Subscription {\n  onNewOrder(userId: ID!): Order!\n}\n\n# The `!` means non-null. `[User!]!` = non-null list of non-null Users.\n# GraphQL's null-safety > REST's silent-null-in-JSON convention." },
+    { "type": "theory", "markdown": "## A query, and its response" },
+    { "type": "code", "language": "graphql", "code": "# Client-side query. Ask for EXACTLY what you need — no more, no less.\nquery UserWithRecentOrders {\n  user(id: \"42\") {\n    id\n    name\n    orders(limit: 3) {\n      id\n      total\n      items {\n        productId\n        quantity\n      }\n    }\n  }\n}" },
+    { "type": "code", "language": "json", "code": "// Response matches the query shape EXACTLY. No over/under-fetching.\n{\n  \"data\": {\n    \"user\": {\n      \"id\": \"42\",\n      \"name\": \"Ada Lovelace\",\n      \"orders\": [\n        { \"id\": \"1001\", \"total\": 42.50, \"items\": [{ \"productId\": \"P1\", \"quantity\": 2 }] },\n        { \"id\": \"1002\", \"total\": 18.99, \"items\": [{ \"productId\": \"P2\", \"quantity\": 1 }] },\n        { \"id\": \"1003\", \"total\": 89.00, \"items\": [{ \"productId\": \"P3\", \"quantity\": 3 }] }\n      ]\n    }\n  }\n}" },
+    { "type": "theory", "markdown": "## Resolvers — how the server executes a query" },
+    { "type": "code", "language": "javascript", "code": "// Node.js example (Apollo Server). Resolvers map each schema field to code.\nconst resolvers = {\n  Query: {\n    user: async (_, { id }, { db }) => db.user.findById(id),\n    users: async (_, { search, limit }, { db }) => db.user.find({ search, limit }),\n  },\n\n  User: {\n    // GraphQL resolver signature: (parentObject, args, context, info) => value\n    orders: async (user, { limit }, { db }) =>\n      db.order.findByUserId(user.id, { limit }),\n  },\n\n  Order: {\n    items: async (order, _, { db }) => db.orderItem.findByOrderId(order.id),\n  },\n\n  Mutation: {\n    createUser: async (_, { input }, { db }) => db.user.create(input),\n    deleteUser: async (_, { id }, { db }) => { await db.user.delete(id); return true; },\n  },\n\n  Subscription: {\n    onNewOrder: {\n      subscribe: (_, { userId }, { pubsub }) => pubsub.asyncIterator(`ORDER_${userId}`),\n    },\n  },\n};\n\n// When a client asks for `user(42).orders(3).items`:\n//   1. Query.user runs → returns user record.\n//   2. User.orders runs with parent = that user.\n//   3. For each order, Order.items runs with parent = that order.\n//\n// This is the N+1 problem: 1 query for user, 1 for orders, then N queries for items.\n// Solution: DataLoader (see below)." },
+    { "type": "theory", "markdown": "## The N+1 problem and DataLoader" },
+    { "type": "code", "language": "javascript", "code": "// Without DataLoader — 1 orders query + N item queries.\n// With DataLoader — 1 orders query + 1 items query total. Massive speedup.\n\nimport DataLoader from 'dataloader';\n\n// Create per-request loaders in the GraphQL context.\nfunction createContext({ db }) {\n  return {\n    db,\n    itemsByOrderId: new DataLoader(async (orderIds) => {\n      const items = await db.orderItem.findByOrderIdsIn(orderIds);\n      // Group by orderId, return arrays in same order as input\n      const byOrder = new Map(orderIds.map((id) => [id, []]));\n      for (const item of items) byOrder.get(item.orderId).push(item);\n      return orderIds.map((id) => byOrder.get(id));\n    }),\n  };\n}\n\n// Resolver uses the loader instead of raw DB call.\nconst resolvers = {\n  Order: {\n    items: (order, _, { itemsByOrderId }) => itemsByOrderId.load(order.id),\n  },\n};\n\n// DataLoader batches all .load(id) calls in one event-loop tick,\n// dispatches ONE query, and distributes results back. Every serious\n// GraphQL server uses it." },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Ignoring N+1.** A `user { orders { items } }` query triggers 1 + N + N*M DB calls. Server dies at scale. Fix: DataLoader (or SQL joins in a resolver)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: No query cost limits.** A malicious client asks for `user { friends { friends { friends { friends { ... } } } } }` → server OOMs. Fix: query complexity analysis + depth limits + rate limiting by cost." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Returning errors as `null` fields.** GraphQL has an `errors` array in the response for this. Don't invent your own error convention." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: One giant resolver.** A `User.orders` resolver that also fetches items, addresses, and reviews. Break it up; let each field resolver do one thing." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: GraphQL for a simple CRUD API.** Overkill. REST is simpler when the client uses most fields anyway." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Always use DataLoader.** Batch and cache database calls per request. Non-negotiable for production." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Query depth + complexity limits.** `graphql-query-complexity` package. Reject expensive queries." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Persisted queries.** Client sends a HASH; server looks up the query. Reduces payload; enables allowlist of known queries." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Codegen everywhere.** `graphql-codegen` for TS/JS; `graphql_flutter_codegen` for Dart. Types match schema; refactors are safe." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Sensible caching.** Per-field cache hints (`@cacheControl`), Apollo's normalized cache on the client." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Federation for microservices.** Apollo Federation lets each service own part of the schema; a gateway composes them." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Simple schema.** `type User { id, name, email }` + `Query.user(id) + Query.users`. Run in Apollo Server." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Nested query.** Add `Order` + `orders` field on `User`; query one user with 3 orders." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Mutations.** `createUser`, `updateUser`, `deleteUser`. Test in GraphQL Playground." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — DataLoader.** Fix an N+1 problem by batching item queries per request." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard) — Subscriptions.** `onNewOrder` push via WebSocket; test with two clients." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert) — Federation.** Two services (`users`, `orders`); one gateway; unified schema." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is GraphQL and how does it differ from REST?**\n\n**A:** GraphQL is a query language for APIs. Clients send a QUERY describing exactly which fields they want; the server returns exactly that shape. Single endpoint (`/graphql`), single POST method. Contrast with REST: REST has many endpoints and returns fixed response shapes — clients often over-fetch (getting fields they don't need) or under-fetch (needing follow-up requests). GraphQL solves both: one request, exactly the fields you need, from any depth of the graph. Trade-offs: caching is harder (POST bodies aren't URL-based); server complexity is real (resolvers, N+1); tooling is more elaborate. Best for feed-heavy apps with rich graphs (Facebook, GitHub, Shopify, Airbnb)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What are Query, Mutation, and Subscription?**\n\n**A:** **Query** — read data; the GraphQL equivalent of GET. Executes resolvers to fetch fields. Idempotent. Safe. **Mutation** — write data; equivalent of POST/PUT/PATCH/DELETE. Executes SERIALLY (top-to-bottom) so multiple mutations in one request are ordered. **Subscription** — real-time push over WebSocket (or SSE). Client subscribes; server pushes updates when they occur. Used for chat, live scores, collaborative editing. **Rule:** the operation type is metadata about intent — the server treats them slightly differently (query resolvers can run in parallel; mutations serialize). Same schema, three access patterns." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What's the N+1 problem in GraphQL and how do you solve it?**\n\n**A:** When a query nests fields — e.g., `users { orders { items } }` — the naive resolver fires 1 query for users, then 1 per user's orders, then 1 per order's items. For 100 users with 10 orders each with 5 items → 5,001 database queries per request. Server dies at scale. **Solution: DataLoader.** A per-request batcher: each `.load(id)` call is deferred; at the end of the event-loop tick, DataLoader dispatches ONE query for all IDs together (`SELECT * FROM items WHERE order_id IN (...)`), and distributes results back. Now 3 queries total: users, orders, items. Every production GraphQL server uses DataLoader; without it, GraphQL is unusable at scale. Alternative: SQL joins in a single resolver (works but doesn't generalize to microservices)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you secure GraphQL against malicious queries?**\n\n**A:** Three layers. **(1) Query depth limits** — max 8-10 levels. A malicious `user { friends { friends { friends ... } } }` gets rejected. **(2) Query complexity analysis** — assign a cost per field; reject queries above a budget. `graphql-query-complexity` package. **(3) Persisted queries / allowlist** — clients register their queries at build time; server only executes registered ones. Popular at scale. **Plus:** rate limiting by cost (a 100-cost query vs a 5-cost query), authentication + authorization in resolvers, timeout per query. **Warning:** every mistake costs real CPU + DB load. GraphQL's flexibility is its power and its footgun." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What is a resolver?**\n\n**A:** A function that returns the value for ONE field in the schema. GraphQL's runtime walks the query, invoking a resolver for each field. Resolvers take four args: `(parent, args, context, info)`. `parent` = the parent object (e.g., for `User.orders`, parent is the user). `args` = field arguments (e.g., `orders(limit: 10)` → `{ limit: 10 }`). `context` = per-request shared state (auth, DB clients, DataLoaders). `info` = query metadata. Resolvers can be async — most fetch from DB. **Rule:** each resolver does ONE thing. `User.orders` fetches orders. `Order.items` fetches items. Composition + DataLoader gives you a beautifully-decomposed data layer." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How does caching work in GraphQL?**\n\n**A:** Different story from REST. **Client-side:** Apollo/Relay maintain a normalized cache keyed by object identity (`__typename + id`). Every query result is merged into this cache; subsequent queries can be served from cache without a network call. **Server-side:** per-field `@cacheControl(maxAge: 60)` directives hint HTTP or CDN caching. Fastly, Cloudflare Workers support GraphQL caching. **Persisted queries** enable HTTP GET requests (URL = query hash), unlocking CDN caching. **The gotcha:** REST's URL-based cache is trivially free; GraphQL's requires infrastructure. Rule: GraphQL caching is 'harder but doable', not 'impossible'. Apollo Client's normalized cache is worth the setup." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: When would you use GraphQL vs REST?**\n\n**A:** **GraphQL when:** (1) The client legitimately needs field selection (Facebook mobile trims payload aggressively). (2) The domain is a rich graph (users, orders, items, reviews all interconnected). (3) Multiple diverse clients (mobile + web + partner) need different fields. (4) Schema evolves fast; you want type safety. **REST when:** (1) Simple CRUD API — resource → verb → response. (2) Public API with many consumers (REST is more familiar). (3) Cache-heavy workloads (URL-based CDN caching). (4) Small team; GraphQL infrastructure overhead isn't justified. **Neither is 'better'** — they're for different problems. Big companies often ship both: REST for stable resource APIs, GraphQL for feed / dashboard aggregations. Rule: match the tool to the shape of the client's needs, not to trends." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q8: What is Apollo Federation?**\n\n**A:** A pattern from Apollo GraphQL for splitting a large GraphQL schema across MULTIPLE SERVICES, each owning part of the graph. `users` service owns `User`; `orders` service owns `Order`; `products` service owns `Product`. A **gateway** composes them into ONE unified schema. Clients query the gateway; the gateway routes fields to the appropriate service; DataLoader-like batching stitches results. **Why:** microservices with graph relationships (an Order references a User; the User service resolves user fields; orders service resolves order fields; gateway joins). **Alternatives:** schema stitching (older, deprecated). **Rule:** federation shines when you have 5+ backend services, all with their own GraphQL, and a single client needs data spanning several. For 1-2 services, plain GraphQL is enough." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Facebook, Instagram, WhatsApp** — the birthplace of GraphQL. Powers the feed.\n- **GitHub** — GraphQL API v4 is the modern successor to their REST v3.\n- **Shopify Storefront + Admin APIs** — both GraphQL.\n- **Airbnb** — heavy GraphQL adoption.\n- **`graphql_flutter`, `hasura`, `apollo_client`** — Flutter-side clients.\n- **Hasura, Postgraphile** — generate GraphQL from a Postgres schema.\n- **NOT used:** simple internal APIs, high-cache-hit workloads, gRPC-native systems." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Persisted queries** — reduce payload; enable HTTP GET + CDN cache.\n- **Apollo Federation** — split schema across services.\n- **`@defer` / `@stream`** — incremental delivery of parts of the response.\n- **Automatic Persisted Queries (APQ)** — clients optimistically send hash; server responds with 'not registered' → client re-sends full query + hash.\n- **`graphql-codegen`** — TS/Java/Swift/Kotlin/Dart types from schema.\n- **Introspection query** — `__schema { types { name } }` — auto-generate docs, clients.\n- **`@auth` directive** — declarative auth at field level.\n- **Batching + deduplication** — Apollo Client batches multiple queries in one HTTP request.\n- **Optimistic UI** — mutation result predicted client-side; reverted on server error.\n- **Relay-style pagination** — `edges { node cursor } pageInfo` — the canonical cursor pattern.\n- **Subscriptions over WebSocket** — `graphql-ws` protocol." }
   ],
   "flashcards": [
-    { "front": "Three GraphQL root operations?", "back": "Query (read), Mutation (write), Subscription (real-time)." },
-    { "front": "What's the N+1 problem?", "back": "Resolving a list field triggers N separate downstream calls; fix with DataLoader batching." },
-    { "front": "Common GraphQL DoS defense?", "back": "Depth limits + query complexity budgets + persisted queries." }
+    { "front": "What is GraphQL?", "back": "Query language for APIs. Client picks fields; server returns exactly that shape. One endpoint." },
+    { "front": "Three operation types?", "back": "Query (read), Mutation (write), Subscription (real-time)." },
+    { "front": "N+1 problem?", "back": "Nested query triggers 1 + N + N*M DB calls. Fix: DataLoader batches per request." },
+    { "front": "Resolver signature?", "back": "(parent, args, context, info) → value. Runs per field." },
+    { "front": "GraphQL vs REST caching?", "back": "REST caches by URL (free). GraphQL needs Apollo normalized cache + persisted queries." },
+    { "front": "When GraphQL?", "back": "Rich graph, field selection matters, multiple diverse clients. Not for simple CRUD." }
   ],
   "quiz": [
-    { "q": "GraphQL usually exposes…", "options": ["Many endpoints", "One endpoint with a typed schema", "SQL directly", "Files only"], "answer": 1, "explain": "A single /graphql endpoint with a strongly typed schema." },
-    { "q": "The classic fix for GraphQL's N+1 problem is…", "options": ["More servers", "DataLoader batching", "REST", "Disable caching"], "answer": 1, "explain": "DataLoader batches and dedupes keys per request." },
-    { "q": "GraphQL is a poor fit when…", "options": ["Clients need flexible field selection", "You have many different clients", "The API is simple CRUD with heavy HTTP caching", "You want to deprecate fields gradually"], "answer": 2, "explain": "REST's HTTP caching often wins for simple public CRUD." }
+    { "q": "Endpoints?", "options": ["Many like REST", "One /graphql POST", "None", "SOAP"], "answer": 1, "explain": "Single endpoint by design." },
+    { "q": "N+1 fix?", "options": ["Ignore", "DataLoader per-request batcher", "Cache everything", "SQL only"], "answer": 1, "explain": "Non-negotiable at scale." },
+    { "q": "Real-time push?", "options": ["Polling only", "Subscription over WebSocket", "Impossible", "SSE only"], "answer": 1, "explain": "Third operation type." },
+    { "q": "Query depth limits protect against?", "options": ["Nothing", "Malicious deeply-nested queries", "N+1", "Auth"], "answer": 1, "explain": "Also complexity analysis." },
+    { "q": "Federation is for?", "options": ["Firewall", "Splitting a schema across microservices with a composing gateway", "SSL", "Caching only"], "answer": 1, "explain": "Apollo's approach." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Write a schema + resolver for User { name, email } and query it." },
-    { "level": "Medium", "text": "Add a Mutation with input types and error handling." },
-    { "level": "Hard", "text": "Fix an N+1 in a nested list using DataLoader." },
-    { "level": "Expert", "text": "Add persisted queries + depth/complexity limits to a production GraphQL server." }
+    { "level": "Easy", "text": "Define type User + Query.user; return via Apollo Server." },
+    { "level": "Easy", "text": "Add Order with a User.orders field; query one user with 3 orders." },
+    { "level": "Medium", "text": "Fix an N+1 by adding a DataLoader for items-by-order." },
+    { "level": "Medium", "text": "Add Mutation.createUser; test in GraphQL Playground." },
+    { "level": "Hard", "text": "Subscription.onNewOrder pushed over WebSocket." },
+    { "level": "Hard", "text": "Query depth + complexity limits with graphql-query-complexity." },
+    { "level": "Expert", "text": "Federated schema: users + orders services + gateway." }
   ],
   "interviewQuestions": [
-    "GraphQL vs REST — when use each?",
-    "What is the N+1 problem and how do you fix it?",
-    "How do you handle authentication with GraphQL?",
-    "What are persisted queries?",
-    "Query vs Mutation vs Subscription?"
+    "What is GraphQL and how does it differ from REST?",
+    "What are Query, Mutation, and Subscription?",
+    "What's the N+1 problem in GraphQL and how do you solve it?",
+    "How do you secure GraphQL against malicious queries?",
+    "What is a resolver?",
+    "How does caching work in GraphQL?",
+    "When would you use GraphQL vs REST?",
+    "What is Apollo Federation?"
   ],
   "references": [
-    { "label": "GraphQL — official docs", "url": "https://graphql.org/learn/" }
+    { "label": "GraphQL — official", "url": "https://graphql.org" },
+    { "label": "Apollo GraphQL", "url": "https://www.apollographql.com" }
   ]
 }

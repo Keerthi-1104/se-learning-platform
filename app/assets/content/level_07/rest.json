@@ -2,51 +2,127 @@
   "id": "be.rest",
   "levelId": 7,
   "title": "REST APIs",
-  "xp": 50,
-  "estimatedMinutes": 30,
+  "xp": 45,
+  "estimatedMinutes": 35,
   "objectives": [
-    "Design URLs, methods and status codes correctly",
-    "Version, paginate and secure a REST API",
-    "Follow the six REST constraints"
+    "Understand REST via a real-life analogy",
+    "Master the six REST constraints and HTTP method semantics",
+    "Design pragmatic REST endpoints for a real app",
+    "Handle pagination, filtering, versioning, and errors correctly",
+    "Answer REST interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "REST (Representational State Transfer) is an architectural style: resources exposed at URLs, manipulated with HTTP verbs, returning representations (usually JSON). Its constraints are client-server, stateless, cacheable, layered, uniform interface, and (optional) code-on-demand." },
-    { "type": "code", "language": "http", "code": "GET    /v1/users              -> list\nGET    /v1/users/42           -> read one\nPOST   /v1/users              -> create\nPUT    /v1/users/42           -> replace\nPATCH  /v1/users/42           -> partial update\nDELETE /v1/users/42           -> remove\nGET    /v1/users/42/orders    -> nested resource" },
-    { "type": "table", "headers": ["Do", "Don't"], "rows": [
-      ["Nouns for resources (/orders)", "Verbs in URLs (/getOrders)"],
-      ["Correct status codes", "Always 200 + errorField"],
-      ["Version (/v1/)", "Ship breaking changes"],
-      ["Pagination + filtering", "Return the whole table"],
-      ["Idempotency keys on POST", "Duplicate charges on retry"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of REST as a restaurant where you order by pointing at the menu.**\n\n- The **menu** lists every dish (RESOURCE) — a burger, a salad, a lasagna. Each has a URL: `/burger/42`, `/salad/8`, `/lasagna/7`. You NEVER say 'get me item 42 from Chef Bob's private notebook' — you just point at the resource.\n- The **verbs** are universal: **GET** (please bring me), **POST** (please add), **PUT** (please replace), **PATCH** (please modify), **DELETE** (please remove). The waiter (server) knows what each verb means — no translation needed.\n- The **status codes** are the waiter's shorthand: **200** (here you go), **201** (added), **400** (you asked wrong), **401** (not identified), **403** (identified but not allowed), **404** (never heard of it), **500** (kitchen's on fire).\n- **Stateless:** every order is complete on its own. The waiter doesn't remember what you ordered last time. If you want the same burger again, you re-say 'bring burger 42'. That's what makes REST scale — any waiter can handle any order.\n\n**Why this matters:** REST is the single most common backend API style in the world. Every mobile app, every SaaS backend, every SDK you consume speaks HTTP + JSON in a roughly-RESTful shape. Understanding REST properly means understanding EVERY HTTP API you'll ever touch.\n\n**Fair warning:** almost no real API is 'perfectly RESTful' (Roy Fielding wrote a famous rant about this). Most are 'HTTP + JSON with REST vibes'. Learn REST as a strong default; know when to deviate." },
+    { "type": "callout", "variant": "definition", "markdown": "**REST (REpresentational State Transfer)** is an architectural style for HTTP APIs where **resources** (nouns like `user`, `order`, `product`) are addressed by URLs, and **actions** on them use HTTP methods (GET/POST/PUT/PATCH/DELETE). Coined by Roy Fielding in his 2000 doctoral dissertation. Six constraints: **client-server**, **stateless**, **cacheable**, **uniform interface**, **layered system**, and **code-on-demand** (optional). The vast majority of modern APIs are 'REST-ish' — they respect the spirit if not the strict letter." },
+    { "type": "theory", "markdown": "## HTTP methods and their contracts" },
+    { "type": "table", "headers": ["Method", "Purpose", "Idempotent?", "Body?"], "rows": [
+      ["`GET /users/42`", "Read a resource", "✅ Yes", "No"],
+      ["`POST /users`", "Create a resource; server assigns id", "❌ No (creates a new one each time)", "Yes"],
+      ["`PUT /users/42`", "Replace the whole resource", "✅ Yes", "Yes"],
+      ["`PATCH /users/42`", "Partially update a resource", "Usually yes", "Yes"],
+      ["`DELETE /users/42`", "Remove a resource", "✅ Yes", "No"],
+      ["`HEAD /users/42`", "GET without body — just headers", "✅ Yes", "No"],
+      ["`OPTIONS /users`", "What can I do here? (CORS preflight)", "✅ Yes", "No"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "REST maturity (Richardson's model): Level 0 = one URL/one verb (SOAP-ish); Level 1 = resources; Level 2 = HTTP verbs + status codes (where most APIs live); Level 3 = HATEOAS (hypermedia). Level 2 is 'good REST' in practice." },
-    { "type": "callout", "variant": "mistake", "markdown": "Building 'RPC-in-URL': POST /doAction, PUT /processStuff. That's not REST — it forfeits caching, discoverability, and correct semantics. Model actions as state transitions on resources." },
-    { "type": "callout", "variant": "best", "markdown": "Pagination via cursor (opaque next-token) beats offset for large sets. Support ?fields= projection to shrink payloads. Return 429 with Retry-After when rate-limited. Always include a request ID header for debugging." }
+    { "type": "callout", "variant": "interview", "markdown": "**The interview one-liner:** GET is safe AND idempotent (no side effects, calling twice = same result). PUT/DELETE are idempotent but NOT safe (they change server state). POST is NEITHER — each call creates something new. This distinction drives caching, retry logic, and API design." },
+    { "type": "theory", "markdown": "## HTTP status codes you MUST know" },
+    { "type": "table", "headers": ["Code", "Meaning", "When to send it"], "rows": [
+      ["**200 OK**", "Success with body", "Regular success on GET/PUT/PATCH"],
+      ["**201 Created**", "Resource created", "Successful POST — include `Location: /users/42` header"],
+      ["**204 No Content**", "Success, empty body", "DELETE, or PUT without a return"],
+      ["**301 / 302 / 304**", "Redirect / not modified", "301 = permanent; 302 = temporary; 304 = cache hit"],
+      ["**400 Bad Request**", "Client sent invalid data", "Validation failure, malformed JSON"],
+      ["**401 Unauthorized**", "Not authenticated (no/invalid credentials)", "Missing or expired token"],
+      ["**403 Forbidden**", "Authenticated but not allowed", "User trying admin action"],
+      ["**404 Not Found**", "Resource doesn't exist", "`/users/999999` where 999999 doesn't exist"],
+      ["**409 Conflict**", "Resource state conflicts", "Duplicate email on signup"],
+      ["**422 Unprocessable Entity**", "Valid syntax but semantically wrong", "Some frameworks use this for validation"],
+      ["**429 Too Many Requests**", "Rate-limited", "Client exceeded quota"],
+      ["**500 Internal Server Error**", "Server bug", "Uncaught exception; don't leak stack traces"],
+      ["**502 / 503 / 504**", "Upstream errors / unavailable / timeout", "Load balancer/gateway issues"]
+    ]},
+    { "type": "theory", "markdown": "## Sample program — a well-designed REST resource in Spring Boot" },
+    { "type": "code", "language": "java", "code": "// UserController.java\n@RestController\n@RequestMapping(\"/api/v1/users\")\npublic class UserController {\n\n  private final UserService users;\n\n  public UserController(UserService users) { this.users = users; }\n\n  // GET /api/v1/users?page=0&size=20&search=ada\n  @GetMapping\n  public Page<UserDto> list(\n      @RequestParam(defaultValue = \"0\") int page,\n      @RequestParam(defaultValue = \"20\") int size,\n      @RequestParam(required = false) String search) {\n    return users.list(PageRequest.of(page, size), search);\n  }\n\n  // GET /api/v1/users/42\n  @GetMapping(\"/{id}\")\n  public UserDto get(@PathVariable long id) {\n    return users.getById(id);   // throws NotFoundException if missing → 404\n  }\n\n  // POST /api/v1/users\n  @PostMapping\n  public ResponseEntity<UserDto> create(@Valid @RequestBody CreateUserRequest req) {\n    var created = users.create(req);\n    return ResponseEntity\n        .created(URI.create(\"/api/v1/users/\" + created.id()))   // 201 + Location\n        .body(created);\n  }\n\n  // PUT /api/v1/users/42 — replace entire user\n  @PutMapping(\"/{id}\")\n  public UserDto replace(@PathVariable long id, @Valid @RequestBody UpdateUserRequest req) {\n    return users.replace(id, req);\n  }\n\n  // PATCH /api/v1/users/42 — partial update\n  @PatchMapping(\"/{id}\")\n  public UserDto update(@PathVariable long id, @RequestBody PatchUserRequest req) {\n    return users.patch(id, req);\n  }\n\n  // DELETE /api/v1/users/42\n  @DeleteMapping(\"/{id}\")\n  public ResponseEntity<Void> delete(@PathVariable long id) {\n    users.delete(id);\n    return ResponseEntity.noContent().build();   // 204\n  }\n}\n\n// GlobalExceptionHandler.java — turn exceptions into proper HTTP status codes\n@RestControllerAdvice\npublic class GlobalExceptionHandler {\n\n  @ExceptionHandler(NotFoundException.class)\n  public ResponseEntity<ErrorResponse> notFound(NotFoundException e) {\n    return ResponseEntity.status(404).body(new ErrorResponse(\"NOT_FOUND\", e.getMessage()));\n  }\n\n  @ExceptionHandler(MethodArgumentNotValidException.class)\n  public ResponseEntity<ErrorResponse> validation(MethodArgumentNotValidException e) {\n    var fields = e.getBindingResult().getFieldErrors().stream()\n        .collect(Collectors.toMap(FieldError::getField, DefaultMessageSourceResolvable::getDefaultMessage));\n    return ResponseEntity.badRequest().body(new ErrorResponse(\"VALIDATION\", \"Invalid input\", fields));\n  }\n\n  @ExceptionHandler(DuplicateResourceException.class)\n  public ResponseEntity<ErrorResponse> conflict(DuplicateResourceException e) {\n    return ResponseEntity.status(409).body(new ErrorResponse(\"CONFLICT\", e.getMessage()));\n  }\n}\n\nrecord ErrorResponse(String code, String message, Map<String, String> fields) {\n  ErrorResponse(String code, String message) { this(code, message, null); }\n}" },
+    { "type": "theory", "markdown": "## Pagination, filtering, and versioning" },
+    { "type": "table", "headers": ["Concern", "Query pattern", "Notes"], "rows": [
+      ["**Offset pagination**", "`?page=0&size=20`", "Simple; slow for deep pages (skip becomes expensive)"],
+      ["**Cursor pagination**", "`?after=eyJpZCI6MTAwfQ&size=20`", "Fast at any depth; canonical for feeds"],
+      ["**Sort**", "`?sort=createdAt,desc`", "Multi-sort: `?sort=lastName,asc&sort=firstName,asc`"],
+      ["**Filter**", "`?status=active&role=admin`", "Simple equality; advanced → dedicated `?filter=…` DSL"],
+      ["**Field selection**", "`?fields=id,name,email`", "Reduce payload"],
+      ["**Versioning (URL)**", "`/api/v1/users` → `/api/v2/users`", "Explicit; most common"],
+      ["**Versioning (header)**", "`Accept: application/vnd.myapp.v2+json`", "Cleaner URLs; harder to test"],
+      ["**Versioning (subdomain)**", "`v1.api.example.com`", "Rare; useful for major migrations"]
+    ]},
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: 'GET /users/delete/42' — verbs in URLs.** URLs are NOUNS. Use `DELETE /users/42`. If you find yourself putting verbs in paths, you've drifted from REST." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: 200 OK for errors.** `{ \"success\": false, \"error\": \"...\" }` with 200 → clients can't distinguish success from failure. Use HTTP status codes: 400 / 404 / 409 / 500." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Leaking internals.** `500` responses returning stack traces, DB errors, or internal IDs. Attackers thank you. Return `{ code, message }` — log the rest server-side." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: No pagination.** `GET /users` returns 10 million rows → server dies, client dies. Always paginate list endpoints." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Ambiguous PUT vs PATCH.** PUT should REPLACE the whole resource (fields you omit are cleared). PATCH modifies subset. Getting this wrong causes 'why did my other fields become null?' bugs." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: No versioning.** Ship `/api/users` on day 1. Six months in, you need to change the response shape. Every existing client breaks. Fix: `/api/v1/users` from day 1." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Nouns in URLs; verbs are HTTP methods.** `POST /users` not `POST /createUser`." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Return proper status codes.** 201 for creation with `Location` header; 204 for empty responses; 4xx for client errors; 5xx for server errors." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Consistent error envelope.** `{ \"code\": \"USER_NOT_FOUND\", \"message\": \"...\", \"fields\": {...} }`. Clients can pattern-match on `code`." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Version from day one.** `/api/v1/`. Migration is much easier than retrofitting." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Pagination on every list.** Cursor-based for feeds; offset-based for admin tools." },
+    { "type": "callout", "variant": "best", "markdown": "**6. OpenAPI spec (`openapi.yaml`).** Generate client SDKs, docs, and mock servers from one file. Every serious API has one." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Rate limit + auth on every endpoint.** No exceptions." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Design a User resource.** Full CRUD: GET /users, GET /users/{id}, POST /users, PUT /users/{id}, PATCH /users/{id}, DELETE /users/{id}. Draw the request/response shape and status codes for each." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Add cursor pagination.** `GET /orders?after=<cursor>&size=20` returning `{ items: [...], nextCursor: '...' }`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Implement in Spring Boot.** Build the sample; return 404 for missing, 400 for validation, 409 for duplicates." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Versioning.** Add `/api/v2/users` that returns a slightly different shape; both work in parallel." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Full OpenAPI spec.** Write `openapi.yaml` for your API; generate a TypeScript client from it via `openapi-generator`; consume from a Flutter app via `swagger_dart_code_generator`." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is REST?**\n\n**A:** REST (REpresentational State Transfer) is an architectural style for HTTP APIs where you address **resources** (nouns like `user`, `order`) via URLs and act on them with HTTP methods (GET/POST/PUT/PATCH/DELETE). Defined by Roy Fielding in 2000. Six constraints: **client-server** separation, **stateless** requests, **cacheable** responses, **uniform interface**, **layered system**, optional **code-on-demand**. In practice, most 'REST APIs' are 'HTTP + JSON with REST vibes' — they respect the spirit (nouns as URLs, semantic status codes) even if they skip strict details like HATEOAS. It's the most common backend API style in the world." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: GET vs POST vs PUT vs PATCH vs DELETE?**\n\n**A:** **GET** — read a resource. Safe (no side effects) and idempotent. Cacheable. **POST** — create a new resource; server assigns the ID. NOT idempotent — calling twice creates two records. Not cacheable by default. **PUT** — REPLACE the entire resource. Idempotent (calling twice = one final state). Fields you omit are cleared. **PATCH** — PARTIAL update. Usually idempotent (unless you're incrementing). Only mentioned fields change. **DELETE** — remove a resource. Idempotent (calling twice = still gone). Common bug: choosing PUT when you mean PATCH → other fields accidentally cleared." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What does 'idempotent' mean in REST?**\n\n**A:** An operation is idempotent if calling it multiple times has the SAME effect as calling it once. GET is idempotent (each call returns the same resource). PUT is idempotent (each call sets the resource to the same final state). DELETE is idempotent (after the first call, the resource is gone; subsequent calls confirm this). POST is NOT idempotent — each call creates a new resource. **Why it matters:** networks are flaky; clients retry. If POST were retried on a timeout, you'd create duplicate records. Design write operations to be idempotent when possible — use client-generated IDs (`PUT /orders/{clientId}`) or idempotency-key headers." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What's the difference between 401 and 403?**\n\n**A:** **401 Unauthorized** — 'I don't know WHO you are.' Missing or invalid credentials. Fix: authenticate (log in, refresh token). **403 Forbidden** — 'I know who you are, but you're not allowed.' Authenticated but insufficient permissions. Fix: request access from an admin. **Common misuse:** returning 403 for missing tokens (should be 401) or 401 for insufficient permissions (should be 403). Getting this right lets clients handle each case correctly — 401 → try token refresh + retry; 403 → show 'you don't have access to this'. Never conflate them." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you version a REST API?**\n\n**A:** Three common approaches: **(1) URL path** — `/api/v1/users` → `/api/v2/users`. Most explicit, easiest to test with curl, easiest to route in load balancers. Most common. **(2) Custom header** — `Accept: application/vnd.myapp.v2+json`. Cleaner URLs but harder to test and debug. **(3) Query parameter** — `/api/users?v=2`. Uncommon; hurts caching. **Rule:** ship with `/api/v1/` FROM DAY 1. When you need to change the response shape, add `/api/v2/`, run both in parallel for 6-12 months, deprecate v1 with headers (`Sunset: ...`), then remove. Never break existing clients silently." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What's HATEOAS and does anyone use it?**\n\n**A:** **HATEOAS** (Hypermedia As The Engine Of Application State) — responses include LINKS the client can follow, so the client doesn't hard-code URLs. Example: a `User` response includes `{ \"self\": \"/users/42\", \"orders\": \"/users/42/orders\", \"delete\": \"/users/42\" }`. Roy Fielding says this is required for REAL REST; without it, you have 'HTTP + JSON'. **In practice:** almost nobody does full HATEOAS. Reason: mobile/SPA clients hard-code URLs anyway; the extra bytes and complexity don't pay off. **What does survive:** pagination cursors (`next`, `prev` links), and some hypermedia in banking / government APIs. Interview: mention it exists; note it's rarely used in the wild." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: REST vs GraphQL vs gRPC?**\n\n**A:** **REST** — HTTP + JSON, resource-oriented, universal, human-readable, weak types, over/under-fetching. Best for: public APIs, wide client compatibility, LLM-friendly. **GraphQL** — client picks exactly which fields it wants in ONE query. Solves over-fetching; complex to cache; excellent for feed-heavy apps. Facebook, GitHub. **gRPC** — Protocol Buffers over HTTP/2, strongly typed, binary, code-gen everywhere. Very fast; hard to debug in a browser. Best for: internal microservice communication, mobile push connections. **My rule:** REST for public + mobile-to-server; gRPC for microservice-to-microservice; GraphQL when the client legitimately needs field selection or the schema is enormous." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q8: How do you handle errors in REST?**\n\n**A:** Use **HTTP status codes** semantically: 400 for validation, 401/403 for auth, 404 for missing, 409 for conflicts, 429 for rate limits, 500 for server bugs. **Always return a JSON error envelope** with a consistent shape:\n```json\n{ \"code\": \"USER_NOT_FOUND\", \"message\": \"User 42 not found\", \"fields\": null, \"traceId\": \"abc123\" }\n```\nThe `code` is a stable machine-readable identifier clients can switch on. The `message` is human-friendly. `fields` maps to validation errors when applicable. `traceId` correlates with server logs. **Never** return stack traces or internal DB errors — log those server-side, expose only what's safe for clients." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every mobile app** — 99% of them talk to a REST API.\n- **Public APIs** — Stripe, Twilio, GitHub, Slack — all REST (with some GraphQL variants).\n- **OpenAPI (Swagger) docs** — the canonical way to document + generate SDKs.\n- **Postman / Bruno / Insomnia** — daily-driver clients for testing REST.\n- **`retrofit` (Android), `Dio` (Flutter), `axios` (JS)** — client libraries.\n- **Smart Consumer** — its backend is REST + JSON." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **HATEOAS** — full REST. Almost nobody does it. Fielding disagrees.\n- **HTTP/2 + `Server-Push`** — reduces latency; supported natively by REST.\n- **Idempotency-Key header** — `POST` becomes retry-safe via client-generated key.\n- **ETag + `If-None-Match`** — server-driven caching.\n- **`Content-Encoding: gzip`** — always enable.\n- **CORS** — server sends `Access-Control-Allow-Origin`; browsers enforce.\n- **Rate limiting** — `X-RateLimit-Limit / Remaining / Reset` headers.\n- **Webhooks** — reverse REST: server POSTs to client's URL.\n- **HAL / JSON:API** — attempts at REST standardization; JSON:API is decent for typed APIs.\n- **JSON:API pagination** — `?page[number]=2&page[size]=20`.\n- **`Prefer: return=representation`** vs `return=minimal` — client hints." }
   ],
   "flashcards": [
-    { "front": "REST's six constraints?", "back": "Client-server, stateless, cacheable, layered, uniform interface, code-on-demand (optional)." },
-    { "front": "Which HTTP methods are idempotent?", "back": "GET, PUT, DELETE, HEAD, OPTIONS. POST and PATCH are not (generally)." },
-    { "front": "Cursor vs offset pagination?", "back": "Cursor uses an opaque token pointing to the next page — stable under inserts; offset shifts on writes." }
+    { "front": "What is REST?", "back": "HTTP + resources as URLs + methods (GET/POST/PUT/PATCH/DELETE) + status codes. Coined by Fielding 2000." },
+    { "front": "GET vs POST vs PUT vs PATCH?", "back": "GET reads. POST creates (not idempotent). PUT replaces (idempotent). PATCH partial-updates." },
+    { "front": "Idempotent?", "back": "Calling multiple times = same effect as once. GET/PUT/DELETE yes; POST no." },
+    { "front": "401 vs 403?", "back": "401 = who are you? (missing/invalid creds). 403 = we know you, you're not allowed." },
+    { "front": "Version how?", "back": "URL path: /api/v1/. From day 1. Migrate by running v1 + v2 in parallel." },
+    { "front": "Pagination?", "back": "Offset (?page=0&size=20) for admin. Cursor (?after=X&size=20) for feeds — fast at any depth." }
   ],
   "quiz": [
-    { "q": "Which is the best REST URL for updating a user?", "options": ["POST /updateUser?id=42", "PUT /v1/users/42", "GET /v1/users/update/42", "POST /v1/updateUser/42"], "answer": 1, "explain": "Nouns for resources; PUT for full replace on a specific resource." },
-    { "q": "Which method is NOT idempotent?", "options": ["GET", "PUT", "DELETE", "POST"], "answer": 3, "explain": "POST creates a new resource each call; PUT/DELETE are idempotent." },
-    { "q": "A rate-limited response should use…", "options": ["500", "403", "429 with Retry-After", "418"], "answer": 2, "explain": "429 Too Many Requests + Retry-After tells the client when to try again." }
+    { "q": "GET is…", "options": ["Idempotent + safe", "Idempotent but not safe", "Neither", "Only cacheable"], "answer": 0, "explain": "No side effects + same-result-any-time." },
+    { "q": "201 Created must include?", "options": ["Nothing", "Location header pointing to the new resource", "GET result only", "Cookie"], "answer": 1, "explain": "Standard REST practice." },
+    { "q": "Not authenticated → status?", "options": ["403", "401", "404", "500"], "answer": 1, "explain": "401 = who are you." },
+    { "q": "PUT vs PATCH?", "options": ["Same", "PUT = replace whole; PATCH = partial", "PATCH = replace", "PUT = read"], "answer": 1, "explain": "Fields omitted in PUT are cleared." },
+    { "q": "Idempotent-by-default POST?", "options": ["Yes", "No — each POST creates something new", "Only if you retry", "Cacheable"], "answer": 1, "explain": "Use PUT or idempotency-key." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Design a REST endpoint set for a books catalog (CRUD + search)." },
-    { "level": "Medium", "text": "Add cursor pagination + filtering with ?field= projection." },
-    { "level": "Hard", "text": "Add idempotency keys to POST /orders and handle retries safely." },
-    { "level": "Expert", "text": "Design v1 → v2 migration with dual routes + deprecation headers + sunset dates." }
+    { "level": "Easy", "text": "Design GET/POST/PUT/PATCH/DELETE for a Product resource; assign correct status codes." },
+    { "level": "Easy", "text": "Return 404 for a missing user; return the correct JSON error envelope." },
+    { "level": "Medium", "text": "Implement offset + cursor pagination on /orders." },
+    { "level": "Medium", "text": "Add validation: return 400 with field-level errors." },
+    { "level": "Hard", "text": "Version an API: /api/v1/ + /api/v2/ with a different response shape; deprecate v1 with Sunset header." },
+    { "level": "Hard", "text": "Add idempotency-key support so retried POSTs don't duplicate." },
+    { "level": "Expert", "text": "Full OpenAPI spec + generated TypeScript SDK + Dart client + mock server." }
   ],
   "interviewQuestions": [
-    "State the REST constraints.",
-    "Which HTTP methods are idempotent?",
-    "How would you version a REST API?",
-    "Cursor vs offset pagination — trade-offs?",
-    "How do idempotency keys prevent duplicate charges?"
+    "What is REST?",
+    "GET vs POST vs PUT vs PATCH vs DELETE?",
+    "What does 'idempotent' mean in REST?",
+    "What's the difference between 401 and 403?",
+    "How do you version a REST API?",
+    "What's HATEOAS and does anyone use it?",
+    "REST vs GraphQL vs gRPC?",
+    "How do you handle errors in REST?"
   ],
   "references": [
-    { "label": "Stripe API — reference REST design", "url": "https://stripe.com/docs/api" }
+    { "label": "Fielding's REST dissertation (2000)", "url": "https://www.ics.uci.edu/~fielding/pubs/dissertation/rest_arch_style.htm" },
+    { "label": "OpenAPI Specification", "url": "https://spec.openapis.org/oas/latest.html" }
   ]
 }
