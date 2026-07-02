@@ -2,49 +2,109 @@
   "id": "java.lambdas",
   "levelId": 2,
   "title": "Lambda Expressions",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "xp": 40,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Write lambdas and method references",
-    "Use the standard functional interfaces",
-    "Understand variable capture rules"
+    "Understand lambdas through a real-life analogy",
+    "Read and write lambda syntax fluently — including method references",
+    "Know the 4 core functional interfaces (Function, Predicate, Consumer, Supplier)",
+    "Understand variable capture rules (effectively final)",
+    "Answer lambda interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "A lambda is an anonymous function you can pass around. It implements a **functional interface** (exactly one abstract method) concisely." },
-    { "type": "code", "language": "java", "code": "Runnable r = () -> System.out.println(\"hi\");\nComparator<String> byLen = (a, b) -> a.length() - b.length();\n// Method reference shorthand\nlist.forEach(System.out::println);\nlist.stream().map(String::toUpperCase);" },
-    { "type": "table", "headers": ["Interface", "Signature", "Use"], "rows": [
-      ["Function<T,R>", "R apply(T)", "Transform"],
-      ["Predicate<T>", "boolean test(T)", "Filter"],
-      ["Consumer<T>", "void accept(T)", "Side effect"],
-      ["Supplier<T>", "T get()", "Produce"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Imagine handing someone a sticky note with an instruction.**\n\n- **Before lambdas (Java 7):** to give someone 'sort these files by size', you had to write a whole class:\n  ```\n  Comparator<File> bySize = new Comparator<File>() {\n    public int compare(File a, File b) { return Long.compare(a.length(), b.length()); }\n  };\n  ```\n  That's 4 lines of ceremony for one line of instruction.\n- **With lambdas (Java 8+):** just write the instruction directly:\n  ```\n  Comparator<File> bySize = (a, b) -> Long.compare(a.length(), b.length());\n  ```\n  Same idea, no envelope. Java figures out the class from the target type.\n\n**A lambda is a sticky note with an instruction on it.** You can pass it around, hand it to methods, and Java delivers it as if it were a full class. That single change transformed how modern Java looks." },
+    { "type": "callout", "variant": "definition", "markdown": "**A lambda expression** is an anonymous function you can pass around as data. It targets a **functional interface** — an interface with exactly one abstract method — and gives you a compact way to provide the implementation right where it's needed." },
+    { "type": "theory", "markdown": "## Lambda syntax — the four forms" },
+    { "type": "code", "language": "java", "code": "// 1. No arguments → parentheses required\nRunnable hello = () -> System.out.println(\"hi\");\n\n// 2. One argument → parentheses optional\nFunction<String, Integer> len = s -> s.length();\n\n// 3. Multiple arguments → parentheses required\nComparator<String> byLen = (a, b) -> a.length() - b.length();\n\n// 4. Statement block → curly braces + explicit return\nFunction<Integer, String> classify = n -> {\n  if (n < 0) return \"negative\";\n  if (n == 0) return \"zero\";\n  return \"positive\";\n};\n\n// Types are usually inferred; you rarely need to write them out.\n// If you do: (String a, String b) -> a.length() - b.length();" },
+    { "type": "theory", "markdown": "## Method references — the ultra-compact form\n\nMost lambdas just call a single existing method. Method references make that explicit and often shorter than the lambda." },
+    { "type": "table", "headers": ["Method reference", "Equivalent lambda", "Called on"], "rows": [
+      ["System.out::println", "x -> System.out.println(x)", "Static method-like reference to an instance method on a specific object"],
+      ["String::toUpperCase", "s -> s.toUpperCase()", "Instance method of any String — first arg is the receiver"],
+      ["Integer::parseInt", "s -> Integer.parseInt(s)", "Static method"],
+      ["ArrayList::new", "() -> new ArrayList<>()", "Constructor"]
     ]},
-    { "type": "callout", "variant": "note", "markdown": "Lambdas capture **effectively final** local variables (you can't reassign them). They don't introduce a new scope for `this` — `this` refers to the enclosing instance, unlike anonymous classes." },
-    { "type": "callout", "variant": "tip", "markdown": "Prefer method references (String::toUpperCase) when they read clearly; fall back to lambdas for logic. Keep lambdas short — extract to a named method if they grow." }
+    { "type": "code", "language": "java", "code": "// All equivalent. Prefer the last form when it reads clearly.\nlist.forEach(x -> System.out.println(x));\nlist.forEach(System.out::println);\n\nnames.stream().map(s -> s.toUpperCase()).toList();\nnames.stream().map(String::toUpperCase).toList();" },
+    { "type": "theory", "markdown": "## The 4 core functional interfaces\n\n`java.util.function` has ~40 interfaces. **Learn these 4** — they cover 90% of daily use." },
+    { "type": "table", "headers": ["Interface", "Method", "Meaning", "Example"], "rows": [
+      ["Function<T, R>", "R apply(T t)", "Transform T into R", "String::length"],
+      ["Predicate<T>", "boolean test(T t)", "Test T for a condition", "s -> s.isEmpty()"],
+      ["Consumer<T>", "void accept(T t)", "Do something with T (side effect)", "System.out::println"],
+      ["Supplier<T>", "T get()", "Produce a T (no input)", "ArrayList::new"]
+    ]},
+    { "type": "callout", "variant": "note", "markdown": "**Also useful:** `BiFunction<T,U,R>` (two inputs), `UnaryOperator<T>` (T→T), `BinaryOperator<T>` (T,T→T), and primitive specializations `IntFunction`, `ToIntFunction`, `IntPredicate` (avoid autoboxing on hot paths)." },
+    { "type": "theory", "markdown": "## Variable capture — 'effectively final'\n\nLambdas can use variables from the enclosing scope — but only if they're **effectively final** (not reassigned after creation). This exists so lambdas can safely outlive the method that created them." },
+    { "type": "code", "language": "java", "code": "int base = 10;                              // effectively final (never reassigned)\nFunction<Integer, Integer> addBase = x -> x + base;   // OK\n\nint counter = 0;\nRunnable r = () -> counter++;               // COMPILE ERROR — must be effectively final\n\n// Workaround for accumulation: use AtomicInteger or a mutable holder\nAtomicInteger safeCounter = new AtomicInteger();\nRunnable r2 = () -> safeCounter.incrementAndGet();     // OK — the reference is final;\n                                                        // the object it points to is mutable" },
+    { "type": "theory", "markdown": "## Lambda vs anonymous class — differences that matter" },
+    { "type": "table", "headers": ["", "Lambda", "Anonymous class"], "rows": [
+      ["Syntax", "One expression", "Verbose class syntax"],
+      ["`this` refers to", "Enclosing instance", "The anonymous class itself"],
+      ["Can have state?", "No — pure function", "Yes — fields"],
+      ["Multiple methods?", "No — single functional method", "Yes"],
+      ["Bytecode", "invokedynamic — lightweight", "New .class file per instance"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**The `this` gotcha:** in an anonymous class, `this` refers to the anonymous class instance. In a lambda, `this` refers to the *enclosing* object — as if the lambda were a normal statement in that method. This surprises people migrating anonymous classes to lambdas." },
+    { "type": "theory", "markdown": "## A complete sample program — every lambda pattern in one file" },
+    { "type": "code", "language": "java", "code": "// File: LambdaDemo.java\n// Run: javac LambdaDemo.java && java LambdaDemo\nimport java.util.*;\nimport java.util.function.*;\nimport java.util.stream.*;\n\npublic class LambdaDemo {\n  public static void main(String[] args) {\n    // 1. Runnable — no arg, no return\n    Runnable greet = () -> System.out.println(\"hello\");\n    greet.run();\n\n    // 2. Function<T, R>\n    Function<String, Integer> length = String::length;    // method reference\n    System.out.println(\"length of 'hello' = \" + length.apply(\"hello\"));\n\n    // 3. Predicate<T>\n    Predicate<Integer> isEven = n -> n % 2 == 0;\n    Predicate<Integer> isPositive = n -> n > 0;\n    System.out.println(\"6 even? \" + isEven.test(6));\n    System.out.println(\"6 even AND positive? \" + isEven.and(isPositive).test(6));   // composition\n    System.out.println(\"NOT even? \" + isEven.negate().test(6));\n\n    // 4. Consumer<T>\n    Consumer<String> printer = System.out::println;\n    List.of(\"a\", \"b\", \"c\").forEach(printer);\n\n    // 5. Supplier<T>\n    Supplier<List<Integer>> newList = ArrayList::new;\n    List<Integer> fresh = newList.get();\n    fresh.add(42);\n    System.out.println(fresh);\n\n    // 6. BiFunction<T, U, R>\n    BiFunction<Integer, Integer, Integer> add = (a, b) -> a + b;\n    System.out.println(\"sum = \" + add.apply(3, 4));\n\n    // 7. Sorting with a lambda comparator\n    List<String> names = new ArrayList<>(List.of(\"Ada\", \"Zoe\", \"Kim\"));\n    names.sort((a, b) -> a.length() - b.length());\n    System.out.println(\"by length: \" + names);\n    names.sort(Comparator.reverseOrder());\n    System.out.println(\"reverse alpha: \" + names);\n\n    // 8. Function composition\n    Function<Integer, Integer> addOne = x -> x + 1;\n    Function<Integer, Integer> triple = x -> x * 3;\n    System.out.println(\"triple then addOne: \" + triple.andThen(addOne).apply(5));   // 16\n    System.out.println(\"addOne then triple: \" + addOne.andThen(triple).apply(5));   // 18\n\n    // 9. Variable capture (effectively final)\n    String prefix = \"user:\";\n    Function<Integer, String> label = id -> prefix + id;\n    System.out.println(label.apply(42));\n\n    // 10. Streams — the main destination of lambdas\n    int sumOfEvenSquares = IntStream.rangeClosed(1, 10)\n        .filter(n -> n % 2 == 0)\n        .map(n -> n * n)\n        .sum();\n    System.out.println(\"even squares 1..10: \" + sumOfEvenSquares);\n  }\n}\n\n// Expected output:\n//   hello\n//   length of 'hello' = 5\n//   6 even? true\n//   6 even AND positive? true\n//   NOT even? false\n//   a\n//   b\n//   c\n//   [42]\n//   sum = 7\n//   by length: [Ada, Zoe, Kim]\n//   reverse alpha: [Zoe, Kim, Ada]\n//   triple then addOne: 16\n//   addOne then triple: 18\n//   user:42\n//   even squares 1..10: 220" },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Reassigning a captured variable.**\n\n```java\nint count = 0;\nlist.forEach(x -> count++);   // ERROR — count must be effectively final\n```\n\nUse `AtomicInteger`, or `list.stream().count()`, or a `long[]{0}` holder. But usually there's a cleaner functional way (e.g., `.count()`)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Using `this` in a lambda expecting anonymous-class semantics.**\n\nIn an anonymous class, `this` = the anonymous instance. In a lambda, `this` = the enclosing outer instance. If you meant to reference the anonymous class you're inside — you're not inside one. Rewrite as an anonymous class if you need that." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Long, multi-line lambdas.**\n\nIf your lambda has more than 3–4 lines, extract it to a named method. Method references (`this::processOrder`) read better than sprawling `-> { ... }` blocks." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Prefer method references when clearer.** `String::toUpperCase` beats `s -> s.toUpperCase()`." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Keep lambdas short.** One expression or a couple lines. Extract longer logic to a named method." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Compose predicates with `.and()`, `.or()`, `.negate()`** instead of writing nested `&&`/`||`." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Reach for the primitive functional interfaces (`IntFunction`, `IntPredicate`) on hot paths** to avoid boxing." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Sort strings by length.** Given `[\"apple\", \"kiwi\", \"blueberry\"]`, sort by length using a lambda Comparator, then by reverse alphabetical order.\n\n**Why:** Foundational lambda + Comparator practice." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Compose functions.** Build `addTax = price -> price * 1.18`, `applyDiscount = price -> price * 0.9`. Then `net = addTax.andThen(applyDiscount)`. Explore both orders.\n\n**Why:** Function composition is a super-power once you see it." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — Mini event bus.** Register `Consumer<Event>` handlers by event type. `publish(event)` calls all handlers.\n\n**Why:** Real-world pattern using lambdas as callbacks." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Expert) — Currying.** Convert `BiFunction<A, B, R>` into `Function<A, Function<B, R>>` — partial application via lambdas.\n\n**Why:** Understanding this makes functional programming click." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is a lambda expression, and what problem does it solve?**\n\n**A:** A lambda is an anonymous function you can pass around as a value — literally an inline function definition. It solves the verbosity of anonymous inner classes, which required 4–5 lines of ceremony to express a single behavior. Compare: `Comparator<String> byLen = new Comparator<String>() { public int compare(String a, String b) { return a.length() - b.length(); } };` versus `Comparator<String> byLen = (a, b) -> a.length() - b.length();`. Lambdas also make functional-style APIs (Streams, CompletableFuture, event handlers) practical to use. They target **functional interfaces** — interfaces with exactly one abstract method — and the compiler produces the implementation for you." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What is a functional interface?**\n\n**A:** A functional interface is an interface with exactly **one abstract method** — it can have any number of `default` and `static` methods. Examples: `Runnable`, `Callable`, `Comparator`, `Function`, `Predicate`, `Consumer`, `Supplier`. Any lambda targets a functional interface — the compiler picks which one based on context. The `@FunctionalInterface` annotation is optional but useful: it makes the compiler enforce the single-abstract-method rule, catching bugs if someone adds another abstract method. Interviewers love to test whether you know `@FunctionalInterface` isn't strictly required — the compiler treats any single-abstract-method interface as functional." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What does 'effectively final' mean?**\n\n**A:** A local variable is 'effectively final' if it's never reassigned after its initial assignment — even if you didn't mark it `final`. Lambdas can only capture effectively final locals from their enclosing scope. **Why the restriction?** Lambdas may outlive the method that created them (running on a different thread or later in time). Allowing lambdas to mutate a captured variable would require complex heap-allocation and coordination — and would create data races. So Java sidesteps the issue: captured locals must not change. If you need mutable state, capture a reference to a mutable object (`AtomicInteger`, `long[]{0}`) — the *reference* is stable; the object it points to can change safely." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What's the difference between a lambda and an anonymous inner class?**\n\n**A:** Two major differences beyond syntax. **`this`**: in an anonymous class, `this` refers to the anonymous instance; in a lambda, `this` refers to the enclosing outer class instance. **Bytecode / performance**: anonymous classes compile to a new `.class` file per instance; lambdas compile to `invokedynamic` — a JVM instruction that generates the class only once, lazily. So lambdas are lighter on startup memory and often faster. Also: anonymous classes can have fields and multiple methods; lambdas cannot — they represent a single function. Use anonymous classes when you need state or multiple methods; use lambdas otherwise (which is 95% of the time)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: When would you use a method reference over a lambda?**\n\n**A:** When the lambda just delegates to an existing method and would be shorter or clearer as a reference. `String::toUpperCase` is clearer than `s -> s.toUpperCase()`. `System.out::println` is clearer than `x -> System.out.println(x)`. There are four kinds: static (`Integer::parseInt`), instance on a specific object (`obj::method`), instance on any object of a class (`String::length`), and constructor (`ArrayList::new`). Rule of thumb: if the lambda is just a call to one method with no manipulation of the args, use a method reference. If you're doing anything else, lambda." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: Name the core functional interfaces in `java.util.function`.**\n\n**A:** Four cover 90% of daily use. **`Function<T, R>`** transforms T into R via `apply(T)`. **`Predicate<T>`** tests T for a condition via `test(T)` returning boolean. **`Consumer<T>`** does something with T (side effect) via `accept(T)`. **`Supplier<T>`** produces a T with no input via `get()`. Then variants: `BiFunction<T, U, R>` (two inputs), `UnaryOperator<T>` (T → T), `BinaryOperator<T>` (T, T → T). And primitive specializations `IntFunction`, `IntPredicate`, `ToIntFunction`, `IntConsumer` — critical for avoiding boxing on hot paths. Knowing these makes Streams and modern APIs feel natural." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: Can a lambda throw a checked exception?**\n\n**A:** Only if the targeted functional interface's method declares that checked exception. Most standard interfaces (`Function`, `Predicate`, `Consumer`, `Runnable`) don't declare `throws`, so a lambda targeting them cannot throw checked exceptions — they must be caught inside the lambda or wrapped in an unchecked exception (`RuntimeException`). This is a real friction with checked exceptions and functional Java. Workarounds: catch-and-wrap inside the lambda; use a custom functional interface that declares `throws`; or use libraries like Vavr / jOOL that provide 'checked function' variants. The pain of checked exceptions in streams is one of the main reasons modern Java teams migrate to unchecked exceptions." },
+    { "type": "theory", "markdown": "## Real-world examples\n\n- **Every stream pipeline** is a chain of lambdas — filter, map, collect predicates.\n- **Spring's `@FunctionalInterface`** APIs (`Function`, `Consumer`, `Predicate`) are everywhere — `.thenApply`, `.filter`, event listeners.\n- **JavaFX and Swing event handlers** were transformed by lambdas — no more 5-line anonymous classes for a click listener.\n- **CompletableFuture pipelines** (`thenApply`, `thenCompose`, `exceptionally`) all take functional interfaces — natural fit for lambdas.\n- **Reactive libraries** (RxJava, Reactor) chain operators via lambdas exclusively." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`invokedynamic`** — the bytecode instruction that powers lambdas. The compiler emits a bootstrap method that lazily generates the lambda class on first use. Efficient and cache-friendly.\n- **Higher-order functions** — functions that take functions or return functions. Java supports both fully.\n- **Curried functions** — `Function<A, Function<B, R>>` — the technique of partial application.\n- **Function composition** — `f.andThen(g)` and `g.compose(f)` create new functions from existing ones. Simple, powerful.\n- **`Predicate.not`** (Java 11+) — `filter(Predicate.not(String::isEmpty))` is cleaner than `filter(s -> !s.isEmpty())`.\n- **Kotlin's lambda syntax** is even more concise, but Java's is competitive since 8. Learning both makes you effective in either." }
   ],
   "flashcards": [
-    { "front": "What is a functional interface?", "back": "An interface with exactly one abstract method (e.g. Runnable, Comparator), targetable by a lambda." },
-    { "front": "Function vs Predicate vs Consumer vs Supplier?", "back": "Function transforms (T→R), Predicate tests (T→boolean), Consumer accepts (T→void), Supplier produces (→T)." },
-    { "front": "What variables can a lambda capture?", "back": "Effectively final locals — variables not reassigned after initialization." }
+    { "front": "What is a functional interface?", "back": "An interface with exactly one abstract method (SAM). Target of every lambda." },
+    { "front": "The 4 core functional interfaces?", "back": "Function<T,R> (transform), Predicate<T> (test), Consumer<T> (side effect), Supplier<T> (produce)." },
+    { "front": "What does 'effectively final' mean?", "back": "A local variable is never reassigned after initial assignment. Lambdas can only capture such variables." },
+    { "front": "`this` in a lambda refers to…?", "back": "The enclosing outer class instance — NOT the lambda itself (unlike anonymous class)." },
+    { "front": "Method reference for constructor?", "back": "ClassName::new — equivalent to () -> new ClassName()." }
   ],
   "quiz": [
-    { "q": "A lambda can implement…", "options": ["Any interface", "A functional interface (one abstract method)", "Only Runnable", "Abstract classes"], "answer": 1, "explain": "Lambdas target functional interfaces with a single abstract method." },
-    { "q": "Which transforms T to R?", "options": ["Predicate", "Consumer", "Function", "Supplier"], "answer": 2, "explain": "Function<T,R> applies a transformation." },
-    { "q": "Lambdas can capture locals that are…", "options": ["Any local", "Effectively final", "Static only", "Volatile only"], "answer": 1, "explain": "Captured locals must be effectively final." }
+    { "q": "A lambda can implement…", "options": ["Any interface", "A functional interface (exactly one abstract method)", "Only Runnable", "Abstract classes"], "answer": 1, "explain": "Lambdas target SAM interfaces." },
+    { "q": "Which transforms T to R?", "options": ["Predicate<T>", "Consumer<T>", "Function<T, R>", "Supplier<T>"], "answer": 2, "explain": "Function.apply(T) returns R." },
+    { "q": "Lambdas can capture locals that are…", "options": ["Any local", "Effectively final", "Static only", "Volatile"], "answer": 1, "explain": "Captured locals must not be reassigned after creation." },
+    { "q": "Best replacement for `x -> x.length()`?", "options": ["String::length", "() -> String.length()", "s -> String::length", "String.length"], "answer": 0, "explain": "Instance method reference of any String." },
+    { "q": "Inside a lambda, `this` refers to…", "options": ["The lambda itself", "The enclosing outer class instance", "null", "A random object"], "answer": 1, "explain": "Unlike anonymous classes, lambdas' `this` is the outer instance." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Sort a list of strings by length using a lambda comparator." },
-    { "level": "Medium", "text": "Compose two Functions with andThen and compose." },
-    { "level": "Hard", "text": "Build a tiny event bus using Consumer<T> handlers." },
-    { "level": "Expert", "text": "Implement currying/partial application with nested Functions." }
+    { "level": "Easy", "text": "Sort a list of strings by length using a lambda Comparator, then by reverse alphabetical." },
+    { "level": "Easy", "text": "Build a Predicate<Integer> `isEvenAndPositive` using `.and()`." },
+    { "level": "Medium", "text": "Compose Functions: `addTax.andThen(applyDiscount)` for price transformations. Explore order-dependence." },
+    { "level": "Medium", "text": "Use a Supplier to lazily produce an expensive default value only when needed." },
+    { "level": "Hard", "text": "Build a small event bus: register Consumer<Event> handlers by type; publish() calls all matching handlers." },
+    { "level": "Hard", "text": "Implement `memoize(Function<K, V>)` using a ConcurrentHashMap so repeated calls return cached values." },
+    { "level": "Expert", "text": "Implement currying: convert `BiFunction<A, B, R>` into `Function<A, Function<B, R>>` and demonstrate partial application." }
   ],
   "interviewQuestions": [
+    "What is a lambda expression, and what problem does it solve?",
     "What is a functional interface?",
-    "Lambda vs anonymous class — differences (including this)?",
     "What does 'effectively final' mean?",
-    "When use a method reference over a lambda?",
-    "Name the core functional interfaces."
+    "What's the difference between a lambda and an anonymous inner class?",
+    "When would you use a method reference over a lambda?",
+    "Name the core functional interfaces in `java.util.function`.",
+    "Can a lambda throw a checked exception?",
+    "What's the difference between `andThen` and `compose` on Function?"
   ],
   "references": [
-    { "label": "Java Lambdas — Oracle", "url": "https://docs.oracle.com/javase/tutorial/java/javaOO/lambdaexpressions.html" }
+    { "label": "Java Lambdas — Oracle Tutorial", "url": "https://docs.oracle.com/javase/tutorial/java/javaOO/lambdaexpressions.html" },
+    { "label": "java.util.function API", "url": "https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/function/package-summary.html" }
   ]
 }

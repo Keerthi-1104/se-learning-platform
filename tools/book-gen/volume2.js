@@ -82,116 +82,24 @@ body.push(...topicToChapter(loadTopic("level_02", "jvm"),
 body.push(...topicToChapter(loadTopic("level_02", "gc"),
   { chapterNumber: 7, bookmarkId: "ch7" }));
 
-body.push(H1("8. Streams API", "ch8"));
-body.push(callout("definition", ["The Streams API (Java 8) processes sequences of elements declaratively through a pipeline — filter, map, reduce — instead of explicit loops."]));
-body.push(code([
-  "List<String> names = people.stream()",
-  "    .filter(p -> p.age() >= 18)     // intermediate (lazy)",
-  "    .map(Person::name)              // intermediate (lazy)",
-  "    .sorted()",
-  "    .collect(Collectors.toList());  // terminal (runs the pipeline)",
-], "stream pipeline"));
-body.push(callout("interview", ["Streams are lazy: intermediate ops don't run until a terminal op is called, enabling operation fusion and short-circuiting (findFirst stops at the first match)."]));
-body.push(callout("mistake", ["Reusing a consumed stream (IllegalStateException), or reaching for parallelStream() blindly — it adds overhead and breaks on shared mutable state; it rarely helps small or I/O-bound work."]));
-body.push(...summary([
-  "Pipelines = source → intermediate (lazy) → terminal (eager).",
-  "Laziness enables fusion + short-circuiting.",
-  "Collectors aggregate (toList, groupingBy, joining).",
-  "Parallel streams only help CPU-bound work on large data.",
-]));
-body.push(...interview([
-  "Intermediate vs terminal operations?",
-  "Why are streams lazy?",
-  "map vs flatMap?",
-  "When NOT to use parallel streams?",
-  "reduce vs collect?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Sum even numbers with a stream." },
-  { level: "Medium", text: "Group people by department with groupingBy." },
-  { level: "Hard", text: "Top-3 by frequency using streams." },
-  { level: "Expert", text: "Write a custom Collector and benchmark parallel vs sequential." },
-]));
-body.push(...realworld(["Data transformation pipelines (ETL, report generation, request mapping) read far clearer as streams than nested loops, and compose naturally."]));
-body.push(...miniproject(["Build a CSV analytics tool: load rows, then answer aggregate questions (group, average, top-N) entirely with streams + collectors."]));
-body.push(...advanced(["Spliterators & custom sources, teeing collector, primitive streams (IntStream) to avoid boxing."]));
+// 8. Streams API
+body.push(...topicToChapter(loadTopic("level_02", "streams"),
+  { chapterNumber: 8, bookmarkId: "ch8" }));
 
-// 9. Lambdas & Functional
-body.push(H1("9. Lambdas & Functional Programming", "ch9"));
-body.push(callout("definition", ["A lambda is an anonymous function implementing a functional interface (one abstract method). Functional programming favors pure functions, immutability and functions as values."]));
-body.push(code([
-  "Runnable r = () -> System.out.println(\"hi\");",
-  "Comparator<String> byLen = (a, b) -> a.length() - b.length();",
-  "list.forEach(System.out::println);   // method reference",
-  "Optional<User> u = repo.findById(id);",
-  "String name = u.map(User::name).orElse(\"guest\");",
-], "lambdas & optional"));
-body.push(table(["Interface", "Signature", "Use"], [
-  ["Function<T,R>", "R apply(T)", "Transform"],
-  ["Predicate<T>", "boolean test(T)", "Filter"],
-  ["Consumer<T>", "void accept(T)", "Side effect"],
-  ["Supplier<T>", "T get()", "Produce"],
-], [2400, 3000, 3960]));
-body.push(callout("mistake", ["Calling Optional.get() without checking — it throws and recreates the NPE you avoided. Use map/filter/orElse. Don't use Optional for fields or parameters."]));
-body.push(...summary([
-  "Lambdas target single-method functional interfaces.",
-  "Function/Predicate/Consumer/Supplier are the core SAM types.",
-  "Pure functions + immutability simplify testing and concurrency.",
-  "Optional models maybe-absent return values, not nulls everywhere.",
-]));
-body.push(...interview([
-  "What is a functional interface?",
-  "Lambda vs anonymous class (including this)?",
-  "What does 'effectively final' mean?",
-  "How does Optional improve on null?",
-  "What is a higher-order function?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Sort strings by length with a lambda comparator." },
-  { level: "Medium", text: "Compose Functions with andThen/compose." },
-  { level: "Hard", text: "Refactor a null-check chain to Optional.map/orElse." },
-  { level: "Expert", text: "Implement memoization for a pure expensive function." },
-]));
-body.push(...realworld(["Modern Java codebases lean functional: streams + lambdas + Optional replace loops and null checks, making intent obvious and reducing bugs."]));
-body.push(...miniproject(["Build a tiny rules engine where each rule is a Predicate and actions are Consumers, composed at runtime."]));
-body.push(...advanced(["Closures & capture semantics, currying/partial application, the cost of megamorphic lambda call sites."]));
+// 9. Lambdas
+body.push(...topicToChapter(loadTopic("level_02", "lambdas"),
+  { chapterNumber: 9, bookmarkId: "ch9" }));
 
-// 10. Reflection
-body.push(H1("10. Reflection", "ch10"));
-body.push(callout("definition", ["Reflection inspects and manipulates classes, methods and fields at runtime — even private ones — without compile-time knowledge of them."]));
-body.push(code([
-  "Class<?> c = Class.forName(\"com.app.User\");",
-  "Object u = c.getDeclaredConstructor().newInstance();",
-  "Method m = c.getMethod(\"setName\", String.class);",
-  "m.invoke(u, \"Ada\");",
-], "reflection"));
-body.push(callout("interview", ["Reflection + annotations power frameworks: Spring (@Autowired/@Component), JUnit (@Test discovery), Jackson (JSON mapping), Hibernate (ORM). Understanding it demystifies framework 'magic'."]));
-body.push(callout("mistake", ["Reaching for reflection in ordinary app code — it's slower, loses compile-time safety, breaks encapsulation, and can fail under the module system. Prefer interfaces and direct calls."]));
-body.push(...summary([
-  "Reflection enables runtime inspection/invocation, including private members.",
-  "It underpins DI, testing, serialization and ORM frameworks.",
-  "It costs performance and compile-time safety.",
-  "Cache lookups or use MethodHandles in hot paths.",
-]));
-body.push(...interview([
-  "What is reflection and when is it used?",
-  "How do Spring/JUnit use it?",
-  "Downsides of reflection?",
-  "What does setAccessible(true) do, and the risk?",
-  "Reflection vs MethodHandles?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Print all methods and fields of a class." },
-  { level: "Medium", text: "Instantiate by name and invoke a setter reflectively." },
-  { level: "Hard", text: "Build a tiny @Inject dependency injector." },
-  { level: "Expert", text: "Write a mini JSON serializer using field reflection." },
-]));
-body.push(...realworld(["When you write @Autowired or @Test, reflection is what wires and discovers it at runtime — every Java framework relies on it."]));
-body.push(...miniproject(["Build a minimal annotation-driven DI container that scans for @Component and injects @Inject fields."]));
-body.push(...advanced(["MethodHandles & VarHandles, the module system's effect on deep reflection, annotation processing (compile-time vs runtime)."]));
+// 10. Functional Programming
+body.push(...topicToChapter(loadTopic("level_02", "functional"),
+  { chapterNumber: 10, bookmarkId: "ch10" }));
 
-// 11. Records
-body.push(H1("11. Records (Java 16+)", "ch11"));
+// 11. Reflection
+body.push(...topicToChapter(loadTopic("level_02", "reflection"),
+  { chapterNumber: 11, bookmarkId: "ch11" }));
+
+// 12. Records
+body.push(H1("12. Records (Java 16+)", "ch12"));
 body.push(callout("definition", ["A record is a concise, immutable data carrier. The compiler generates the constructor, private final fields, accessors, equals, hashCode and toString."]));
 body.push(code([
   "record Point(int x, int y) {}   // full data class in one line",
@@ -223,8 +131,8 @@ body.push(...realworld(["APIs and event payloads are increasingly modeled as rec
 body.push(...miniproject(["Model a small domain (Order, LineItem, Money) entirely with records and write value-based tests."]));
 body.push(...advanced(["Record patterns for deconstruction, serialization of records, local records inside methods."]));
 
-// 12. Sealed + Pattern Matching
-body.push(H1("12. Sealed Classes & Pattern Matching (Java 17–21)", "ch12"));
+// 13. Sealed + Pattern Matching
+body.push(H1("13. Sealed Classes & Pattern Matching (Java 17–21)", "ch13"));
 body.push(callout("definition", ["A sealed type lists exactly which classes may extend it. Pattern matching tests a value's shape and binds its parts in one step (instanceof, switch, record deconstruction)."]));
 body.push(code([
   "sealed interface Shape permits Circle, Square {}",
@@ -261,11 +169,11 @@ body.push(...realworld(["State machines, parsers and result types become compile
 body.push(...miniproject(["Build a small calculator: a sealed Expr (Num, Add, Mul) evaluated with a pattern-matching switch."]));
 body.push(...advanced(["Exhaustiveness & dominance rules, nested/var patterns, the future of deconstruction patterns."]));
 
-// 13. Virtual Threads
+// 14. Virtual Threads
 body.push(...topicToChapter(loadTopic("level_02", "virtual_threads"),
-  { chapterNumber: 13, bookmarkId: "ch13" }));
+  { chapterNumber: 14, bookmarkId: "ch14" }));
 
-body.push(H1("14. Java 8 → Latest LTS: Version Guide", "ch14"));
+body.push(H1("15. Java 8 → Latest LTS: Version Guide", "ch15"));
 body.push(callout("definition", ["Since Java 9, a feature release ships every 6 months and a Long-Term Support (LTS) release every ~2–3 years (8, 11, 17, 21). Most teams target LTS versions."]));
 body.push(table(["Version", "Year", "Headline features"], [
   ["8 (LTS)", "2014", "Lambdas, Streams, Optional, default methods"],

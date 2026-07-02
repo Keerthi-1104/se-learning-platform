@@ -3,47 +3,106 @@
   "levelId": 2,
   "title": "Streams API",
   "xp": 50,
-  "estimatedMinutes": 25,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Build pipelines with intermediate and terminal operations",
-    "Understand laziness and short-circuiting",
-    "Use collectors and know when parallel streams help"
+    "Understand streams through a real-life analogy",
+    "Build pipelines with intermediate + terminal operations",
+    "Grasp laziness and short-circuiting — the source of stream speed",
+    "Use collectors (groupingBy, joining, toMap) fluently",
+    "Answer streams interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "The Streams API (Java 8) processes sequences of elements declaratively through a pipeline of operations — filter, map, reduce — instead of explicit loops." },
-    { "type": "code", "language": "java", "code": "List<String> names = people.stream()      // source\n    .filter(p -> p.age() >= 18)            // intermediate (lazy)\n    .map(Person::name)                     // intermediate (lazy)\n    .sorted()\n    .collect(Collectors.toList());         // terminal (triggers run)" },
-    { "type": "table", "headers": ["Kind", "Examples", "Returns"], "rows": [
-      ["Intermediate (lazy)", "filter, map, sorted, distinct", "A new stream"],
-      ["Terminal (eager)", "collect, forEach, reduce, count", "A result / side effect"],
-      ["Short-circuit", "findFirst, anyMatch, limit", "Stops early"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Imagine a factory assembly line.**\n\n- Bags of raw parts arrive at one end (the **source** — a collection, file, or generator).\n- The line has **stations** — one filters out bad parts, one polishes them, one sorts by size, one packages. That's your **intermediate operations** (`filter`, `map`, `sorted`).\n- At the far end, someone counts finished packages or ships them out. That's your **terminal operation** (`count`, `collect`, `forEach`).\n\nCrucially: **nothing actually moves along the line until the terminal station asks for output.** The stations are lazy — they wait until someone at the end says 'go.' That's why streams can be huge (or infinite) without blowing up memory.\n\n**A stream is not a data structure.** It's a *description* of a computation over data. The data doesn't sit in the stream — it flows through it, item by item, when demanded." },
+    { "type": "callout", "variant": "definition", "markdown": "**The Streams API (Java 8+)** processes sequences of elements declaratively through a **pipeline** of operations — `filter`, `map`, `reduce`, `collect` — instead of imperative loops. Streams are lazy, composable, and can transparently go parallel." },
+    { "type": "theory", "markdown": "## The anatomy of a pipeline" },
+    { "type": "code", "language": "java", "code": "List<String> names = people.stream()                 // source\n    .filter(p -> p.age() >= 18)                       // intermediate (lazy)\n    .map(Person::name)                                // intermediate (lazy)\n    .sorted()                                          // intermediate (lazy)\n    .distinct()                                        // intermediate (lazy)\n    .collect(Collectors.toList());                     // terminal — triggers execution\n\n// Nothing runs until .collect() is called.\n// Each element flows through filter → map → sorted → distinct → collector.\n// If people is 10 million items but only 100 are 18+, no wasted work." },
+    { "type": "table", "headers": ["Category", "Examples", "Behavior"], "rows": [
+      ["Intermediate — lazy", "filter, map, sorted, distinct, limit, peek, flatMap", "Return a new Stream. Don't execute anything."],
+      ["Terminal — eager", "collect, forEach, count, reduce, min/max, findFirst, toArray, allMatch/anyMatch", "Trigger the pipeline. Return a result or side effect."],
+      ["Short-circuit terminal", "findFirst, findAny, anyMatch, allMatch, noneMatch, limit", "Can stop early once they have an answer."]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "Streams are **lazy**: intermediate ops don't run until a terminal op is called, enabling fusion and short-circuiting (e.g., findFirst stops at the first match)." },
-    { "type": "callout", "variant": "mistake", "markdown": "Reusing a consumed stream (IllegalStateException) or using parallel streams blindly — they add overhead and can be slower for small or I/O-bound data, and break with shared mutable state." }
+    { "type": "callout", "variant": "interview", "markdown": "**Streams are LAZY. That's the whole point.** Chaining 5 intermediate operations doesn't do 5 passes over your data — it does *one* pass, applying each operation to each element. Short-circuit terminals like `findFirst` stop at the first match. On an infinite stream, `.limit(10).forEach(println)` prints 10 things and stops — the infinity is only theoretical." },
+    { "type": "theory", "markdown": "## Collectors — the terminal Swiss Army knife\n\n`Collectors` is where streams get truly expressive. Every real backend uses these one-liners hundreds of times." },
+    { "type": "table", "headers": ["Collector", "Result", "Use case"], "rows": [
+      ["toList()", "List<T>", "Materialize into a list"],
+      ["toSet()", "Set<T>", "Deduplicate"],
+      ["toMap(keyFn, valueFn)", "Map<K, V>", "Index by field"],
+      ["groupingBy(keyFn)", "Map<K, List<T>>", "Group items by category"],
+      ["groupingBy(keyFn, counting())", "Map<K, Long>", "Count items per group"],
+      ["partitioningBy(pred)", "Map<Boolean, List<T>>", "Split into two"],
+      ["joining(\", \")", "String", "Comma-separate values"],
+      ["averagingInt(fn)", "Double", "Average of extracted ints"]
+    ]},
+    { "type": "theory", "markdown": "## A complete sample program — see everything" },
+    { "type": "code", "language": "java", "code": "// File: StreamsDemo.java\n// Compile: javac StreamsDemo.java && java StreamsDemo\nimport java.util.*;\nimport java.util.stream.*;\nimport static java.util.stream.Collectors.*;\n\nrecord Person(String name, String dept, int salary) { }\n\npublic class StreamsDemo {\n  public static void main(String[] args) {\n    List<Person> people = List.of(\n      new Person(\"Ada\",  \"eng\",     900_000),\n      new Person(\"Bob\",  \"eng\",     800_000),\n      new Person(\"Kim\",  \"design\",  700_000),\n      new Person(\"Zoe\",  \"eng\",   1_100_000),\n      new Person(\"Sam\",  \"design\",  650_000),\n      new Person(\"Ivan\", \"pm\",      950_000));\n\n    // --- Basic filter/map/collect ---\n    List<String> engineers = people.stream()\n        .filter(p -> p.dept().equals(\"eng\"))\n        .map(Person::name)\n        .sorted()\n        .toList();                              // Java 16+: toList() shorthand\n    System.out.println(\"engineers      : \" + engineers);\n\n    // --- Aggregation: total salary ---\n    long total = people.stream()\n        .mapToInt(Person::salary)\n        .sum();\n    System.out.println(\"total salary   : \" + total);\n\n    // --- Grouping by department ---\n    Map<String, List<String>> byDept = people.stream()\n        .collect(groupingBy(Person::dept, mapping(Person::name, toList())));\n    System.out.println(\"by dept        : \" + byDept);\n\n    // --- Count per department ---\n    Map<String, Long> countByDept = people.stream()\n        .collect(groupingBy(Person::dept, counting()));\n    System.out.println(\"count by dept  : \" + countByDept);\n\n    // --- Average salary per department ---\n    Map<String, Double> avgSalary = people.stream()\n        .collect(groupingBy(Person::dept, averagingInt(Person::salary)));\n    System.out.println(\"avg by dept    : \" + avgSalary);\n\n    // --- Split into 'high paid' and 'other' ---\n    Map<Boolean, List<String>> split = people.stream()\n        .collect(partitioningBy(p -> p.salary() > 800_000,\n                                mapping(Person::name, toList())));\n    System.out.println(\"high paid?     : \" + split);\n\n    // --- Short-circuit — find first engineer > 900k ---\n    Optional<Person> found = people.stream()\n        .filter(p -> p.dept().equals(\"eng\") && p.salary() > 900_000)\n        .findFirst();\n    System.out.println(\"first hit      : \" + found.orElse(null));\n\n    // --- Joined names ---\n    String allNames = people.stream()\n        .map(Person::name)\n        .collect(joining(\", \"));\n    System.out.println(\"names          : \" + allNames);\n\n    // --- LAZY proof: infinite stream, but we only need 5 ---\n    List<Integer> squares = Stream.iterate(1, i -> i + 1)\n        .map(i -> i * i)\n        .limit(5)\n        .toList();\n    System.out.println(\"first 5 sq     : \" + squares);\n\n    // --- Parallel — same code, faster on big data (if it fits the criteria) ---\n    long count = IntStream.rangeClosed(1, 10_000_000)\n        .parallel()\n        .filter(n -> n % 7 == 0)\n        .count();\n    System.out.println(\"parallel count : \" + count);\n  }\n}\n\n// Expected output:\n//   engineers      : [Ada, Bob, Zoe]\n//   total salary   : 5100000\n//   by dept        : {design=[Kim, Sam], eng=[Ada, Bob, Zoe], pm=[Ivan]}\n//   count by dept  : {design=2, eng=3, pm=1}\n//   avg by dept    : {design=675000.0, eng=933333.3333, pm=950000.0}\n//   high paid?     : {false=[Bob, Kim, Sam], true=[Ada, Zoe, Ivan]}\n//   first hit      : Person[name=Zoe, ...]\n//   names          : Ada, Bob, Kim, Zoe, Sam, Ivan\n//   first 5 sq     : [1, 4, 9, 16, 25]\n//   parallel count : 1428571" },
+    { "type": "theory", "markdown": "## Parallel streams — when they actually help\n\n`.parallel()` on any stream splits the work across CPU cores using the common `ForkJoinPool`. Sounds like a free lunch — it isn't." },
+    { "type": "table", "headers": ["Use parallel when…", "Avoid parallel when…"], "rows": [
+      ["Very large collection (>10k elements)", "Small collection — overhead dominates"],
+      ["Truly CPU-bound work per element", "I/O-bound (use CompletableFuture or virtual threads instead)"],
+      ["Independent, side-effect-free operations", "Shared mutable state (races!)"],
+      ["Splittable, indexable sources (arrays, ArrayList)", "Poorly-splittable sources (LinkedList, HashSet iteration order)"]
+    ]},
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Reusing a stream after a terminal operation.**\n\n```java\nStream<Integer> s = list.stream();\ns.count();          // terminal — stream is now consumed\ns.forEach(...);     // IllegalStateException: stream has already been operated upon or closed\n```\n\nStreams are single-use. Create a new one from the source if you need to iterate twice." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: `parallel()` on everything.**\n\nParallel streams have real overhead — splitting work, coordinating threads, merging results. On small data or I/O-bound work, they're slower. Benchmark before parallelizing." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Side effects inside stream operations.**\n\n```java\nList<Integer> results = new ArrayList<>();\nnumbers.stream().parallel().forEach(n -> results.add(n * 2));   // RACE!\n```\n\nUse `.collect(toList())` — collectors handle parallelism correctly. Never mutate shared state from a stream." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Chain operations declaratively — no intermediate variables.** `stream().filter().map().collect()` reads top to bottom." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Prefer `toList()` (Java 16+) over `Collectors.toList()`** — returns unmodifiable, slightly faster." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Use `mapToInt` / `mapToLong` for numeric reductions.** Avoid autoboxing overhead. `stream().mapToInt(Person::salary).sum()`." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Use `groupingBy` + `counting` / `averaging` / `mapping` for one-line analytics.** These downstream collectors are extremely powerful." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Reach for parallel only when you have measured a benefit.**" },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Sum even numbers.** Use `IntStream.filter(n -> n % 2 == 0).sum()` on a list of 1–100.\n\n**Why:** Baseline stream fluency." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Group and rank.** Given a list of orders (customer, total), print top 3 customers by total spend using `groupingBy` + `summingDouble` + `.entrySet().stream().sorted().limit(3)`.\n\n**Why:** The single most common backend query in stream form." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — Word frequency.** Read a text file, split on whitespace, count occurrences of each word, print the top 10.\n\n**Why:** Classic text-analysis pattern; combines flatMap + groupingBy + sorted." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Expert) — Custom Collector.** Write a `Collector` that computes `(min, max, avg)` in one pass instead of three separate stream operations.\n\n**Why:** Once you can write your own Collector, streams stop feeling magical." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What are intermediate and terminal operations, and why does it matter?**\n\n**A:** **Intermediate operations** (`filter`, `map`, `sorted`, `distinct`, `limit`, `flatMap`, `peek`) return a new Stream and are **lazy** — they don't execute anything, they just describe what to do. **Terminal operations** (`collect`, `forEach`, `count`, `reduce`, `min/max`, `findFirst`, `toArray`, `anyMatch`) are **eager** — they trigger the pipeline. Why it matters: the pipeline executes only *once*, on demand, and can **short-circuit** with terminals like `findFirst` — no wasted work. Chaining 5 intermediate operations is still a single pass over the data, not five. This laziness is what makes streams both expressive and fast." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: Why are streams lazy, and what does that enable?**\n\n**A:** Laziness — no work happens until a terminal operation is invoked — enables three superpowers. **(1) Operation fusion:** the pipeline runs element-by-element in a single pass, applying all intermediate ops to each element before moving to the next. No intermediate lists get created. **(2) Short-circuiting:** `findFirst`, `anyMatch`, and `limit` can stop the pipeline the moment they have their answer — no scanning the rest of the data. **(3) Infinite streams:** `Stream.iterate` and `Stream.generate` produce infinite sequences that are safe because you only consume as much as a terminal like `limit(10)` needs. If streams were eager, none of this would be possible." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What's the difference between `map` and `flatMap`?**\n\n**A:** **`map(fn)`** applies `fn` to each element and produces one output per input. `Stream<String>` → `Stream<Integer>` via `map(String::length)`. **`flatMap(fn)`** takes a function that returns a *Stream*, then flattens the results — one input can produce zero or many outputs. Classic use: `Stream<List<X>>` → `Stream<X>` via `flatMap(List::stream)`. Or reading many files: `filenames.stream().flatMap(f -> readLines(f).stream())`. flatMap is what lets you build one big stream from many nested collections in one pipeline. Rule of thumb: use `map` for 1-to-1 transformations, `flatMap` for 1-to-many." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: When should you NOT use parallel streams?**\n\n**A:** Several situations. **Small data** — the overhead of splitting work, coordinating threads, and merging results dominates when you only have a few hundred elements. **I/O-bound work** — parallel streams use the ForkJoinPool common pool, which is sized for CPU-bound work. Blocking on network or DB inside a parallel stream starves the pool for other work. Use `CompletableFuture` or virtual threads for I/O. **Shared mutable state** — parallel streams race if you mutate outside collectors. Any `forEach` that touches a shared variable is a bug. **Non-splittable sources** — `LinkedList` splits poorly; `HashSet` iteration order is undefined. **Order-dependent pipelines** — some operations (`findFirst`, `limit`) are more expensive in parallel because ordering must be preserved. Rule: measure first, then parallelize." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What's the difference between `reduce` and `collect`?**\n\n**A:** Both are terminal operations that combine stream elements, but at different levels. **`reduce`** performs a fold: repeatedly combine two elements into one via a `BinaryOperator`. Great for numeric aggregates: `stream.reduce(0, Integer::sum)` sums ints. Requires the combining function to be **associative** for parallelism. **`collect`** uses a `Collector` — a more general accumulation pattern with three parts: create a mutable container, add elements to it, and combine partial containers. Better for building complex results — lists, maps, StringBuilder joins. Rule of thumb: `reduce` for numeric folds and immutable accumulation; `collect` for building mutable containers. `Collectors.toList()`, `groupingBy`, `joining` are all built on `collect`." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: Can you reuse a Stream?**\n\n**A:** No. A Stream is a one-time-use pipeline — once a terminal operation runs, the stream is 'consumed' and any further operation throws `IllegalStateException: stream has already been operated upon or closed`. If you need to run multiple pipelines, create a new stream each time from the source collection. This is a common trap when refactoring: extracting `Stream<X> s = list.stream()...` into a variable makes it tempting to reuse — don't. Streams are single-use by design; the alternative would be a lot of buffering." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What are `IntStream`, `LongStream`, and `DoubleStream` for?**\n\n**A:** They're specialized primitive streams to avoid autoboxing overhead. `Stream<Integer>` boxes every int into an Integer object — millions of allocations for millions of items. `IntStream` works with raw `int` values throughout — no boxing, no GC pressure, dramatically faster for numeric work. You get them via `.mapToInt(...)`, `.mapToLong(...)`, `IntStream.range(0, n)`, etc. They also expose numeric-specific terminals: `sum()`, `average()`, `min()`, `max()`, `summaryStatistics()`. Whenever your stream processes numbers, use the primitive variant." },
+    { "type": "theory", "markdown": "## Real-world examples\n\n- **Every REST endpoint** that transforms and returns data does `repo.findAll().stream().map(dtoMapper).toList()`.\n- **Reports and dashboards** are natural `groupingBy` + `averaging` + `counting` pipelines.\n- **Log analysis** — `files.stream().flatMap(readLines).filter(errorPattern).count()` is one line vs 30 lines of imperative code.\n- **Spring, Jackson, Hibernate** internally use streams for pipeline transformations.\n- **Every 'top N by X'** query becomes a stream one-liner." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Spliterators** — the underlying primitive of streams. Custom sources implement `Spliterator<T>` for parallel-friendly splitting.\n- **`teeing` (Java 12+)** — a collector that feeds elements to two downstream collectors and merges the results.\n- **`gathering` (Java 22+)** — advanced intermediate ops beyond what `map`/`filter` allow (custom window operations, running aggregates).\n- **Stream vs Iterable** — Streams are pull-based, lazy, single-use. Iterables are re-iterable but eager.\n- **Reactive Streams (Publisher/Subscriber)** — different beast, backpressure-aware, async. Similar API surface, very different semantics.\n- **`toList()` (Java 16+)** — unmodifiable, faster than `Collectors.toList()`. Prefer it." }
   ],
   "flashcards": [
-    { "front": "Intermediate vs terminal operation?", "back": "Intermediate ops are lazy and return a stream (filter/map); terminal ops trigger execution and return a result (collect/reduce)." },
-    { "front": "What makes streams efficient?", "back": "Laziness + operation fusion + short-circuiting — work happens only when a terminal op runs, and can stop early." },
-    { "front": "When are parallel streams risky?", "back": "Small datasets, I/O-bound work, or shared mutable state — overhead and correctness issues." }
+    { "front": "Intermediate vs terminal?", "back": "Intermediate ops are lazy and return a Stream (filter, map, sorted). Terminal ops trigger execution and return a result (collect, forEach, reduce)." },
+    { "front": "Why are streams lazy?", "back": "Enables operation fusion (single pass), short-circuiting (stop early), and infinite streams. No wasted work." },
+    { "front": "map vs flatMap?", "back": "map: 1-to-1 transformation. flatMap: 1-to-many, flattens Stream-of-Streams into one." },
+    { "front": "Best use of IntStream/LongStream/DoubleStream?", "back": "Numeric work — avoids autoboxing overhead of Stream<Integer>." },
+    { "front": "Can you reuse a Stream?", "back": "No — throws IllegalStateException after terminal op. Create a new one from the source." }
   ],
   "quiz": [
-    { "q": "Which is a terminal operation?", "options": ["filter", "map", "collect", "sorted"], "answer": 2, "explain": "collect triggers the pipeline; filter/map/sorted are lazy intermediates." },
-    { "q": "Streams execute their pipeline…", "options": ["Immediately per operation", "Only when a terminal op runs (lazily)", "On a background thread always", "Never"], "answer": 1, "explain": "Intermediate ops are deferred until a terminal operation is invoked." },
-    { "q": "findFirst() can be fast because it…", "options": ["Sorts everything", "Short-circuits at the first match", "Runs in parallel", "Caches results"], "answer": 1, "explain": "Short-circuiting terminal ops stop processing once they have an answer." }
+    { "q": "Which is a TERMINAL operation?", "options": ["filter", "map", "collect", "sorted"], "answer": 2, "explain": "collect triggers the pipeline; the others are lazy." },
+    { "q": "Streams execute their pipeline…", "options": ["Immediately", "Only when a terminal op runs (lazily)", "In parallel always", "Never"], "answer": 1, "explain": "Nothing runs until a terminal operation is invoked." },
+    { "q": "`findFirst()` can be fast because it…", "options": ["Sorts", "Short-circuits at the first match", "Runs in parallel", "Skips work"], "answer": 1, "explain": "Short-circuit terminals stop as soon as they have an answer." },
+    { "q": "Best for summing an int field?", "options": ["stream().map(x -> x.n).reduce(0, Integer::sum)", "stream().mapToInt(x -> x.n).sum()", "stream().count()", "stream().collect(toList())"], "answer": 1, "explain": "mapToInt avoids autoboxing; `.sum()` is a specialized terminal." },
+    { "q": "You should NOT parallelize when…", "options": ["Data is huge", "Work is CPU-bound", "Data is small or work is I/O-bound", "You need summing"], "answer": 2, "explain": "Overhead dominates on small data; parallel streams starve on I/O." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Sum the even numbers in a list using a stream." },
-    { "level": "Medium", "text": "Group people by department using Collectors.groupingBy." },
-    { "level": "Hard", "text": "Build a frequency map and return the top-3 entries with streams." },
-    { "level": "Expert", "text": "Write a custom Collector and compare a parallel vs sequential stream benchmark." }
+    { "level": "Easy", "text": "Sum the even numbers in [1..100] using IntStream.rangeClosed + filter + sum." },
+    { "level": "Easy", "text": "Given a list of names, count how many start with 'A' using stream + filter + count." },
+    { "level": "Medium", "text": "Given a list of orders (customer, total), print the top 3 customers by total spend." },
+    { "level": "Medium", "text": "Word-frequency counter for a text file. Use flatMap to split lines into words." },
+    { "level": "Hard", "text": "Read log lines, group by hour, count errors per hour, produce a sorted map." },
+    { "level": "Hard", "text": "Write a Collector that computes min/max/avg of a numeric field in one pass." },
+    { "level": "Expert", "text": "Benchmark: parallel vs sequential stream computing primes up to 10 million. Show the crossover point where parallel becomes faster." }
   ],
   "interviewQuestions": [
-    "Intermediate vs terminal operations?",
-    "Why are streams lazy and what does it enable?",
-    "map vs flatMap?",
+    "What are intermediate and terminal operations, and why does it matter?",
+    "Why are streams lazy, and what does that enable?",
+    "What's the difference between `map` and `flatMap`?",
     "When should you NOT use parallel streams?",
-    "reduce vs collect?"
+    "What's the difference between `reduce` and `collect`?",
+    "Can you reuse a Stream?",
+    "What are `IntStream`, `LongStream`, and `DoubleStream` for?",
+    "How do collectors like `groupingBy` and `partitioningBy` work?"
   ],
   "references": [
-    { "label": "Java Streams — Baeldung", "url": "https://www.baeldung.com/java-8-streams" }
+    { "label": "Java Streams — Baeldung", "url": "https://www.baeldung.com/java-8-streams" },
+    { "label": "Oracle Streams Package", "url": "https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/stream/package-summary.html" }
   ]
 }
