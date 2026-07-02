@@ -120,98 +120,21 @@ body.push(...topicToChapter(loadTopic("level_04", "state"),
 body.push(...topicToChapter(loadTopic("level_04", "animations"),
   { chapterNumber: 12, bookmarkId: "ch12" }));
 
-// 11 Slivers
-body.push(...chapter({
-  id: "ch13", title: "13. Slivers",
-  def: "A sliver is a scrollable area that renders itself given the viewport's scroll position. Slivers compose in a CustomScrollView for advanced scroll effects.",
-  blocks: [
-    code(["CustomScrollView(slivers: [",
-      "  SliverAppBar(expandedHeight: 200, pinned: true),",
-      "  SliverList(delegate: SliverChildBuilderDelegate(builder, childCount: 100)),",
-      "]);"], "dart"),
-    callout("interview", ["ListView is a CustomScrollView with one lazy SliverList. Slivers give lazy building (only visible items built) plus effects like collapsing/pinned headers you can't get by nesting normal widgets."]),
-    callout("mistake", ["Nesting scrollables badly instead of composing slivers — unbounded-height errors or double scrollbars. Use one CustomScrollView with multiple slivers."]),
-  ],
-  summary: ["Slivers render based on scroll offset, composed in CustomScrollView.", "ListView = CustomScrollView + lazy SliverList.", "Use builder delegates for long lists (lazy).", "Compose effects: SliverAppBar, SliverPersistentHeader."],
-  interview: ["What is a sliver?", "How does ListView relate to slivers?", "Build a collapsing app bar?", "Lazy vs eager sliver children?", "Avoid nested-scroll problems?"],
-  coding: [
-    { level: "Easy", text: "CustomScrollView with SliverAppBar + SliverList." },
-    { level: "Medium", text: "Mix SliverGrid and SliverList." },
-    { level: "Hard", text: "Pinned sticky header with SliverPersistentHeader." },
-    { level: "Expert", text: "Collapsing parallax header with custom behavior." }],
-  realworld: ["News and profile screens use collapsing headers + mixed lists/grids in a single CustomScrollView for smooth, lazy scrolling."],
-  miniproject: ["Build a profile screen with a parallax collapsing header, a pinned tab bar, and a lazy mixed feed."],
-  advanced: ["Custom RenderSliver, SliverPersistentHeaderDelegate, nested scroll coordination."],
-}));
+// 13. Slivers
+body.push(...topicToChapter(loadTopic("level_04", "slivers"),
+  { chapterNumber: 13, bookmarkId: "ch13" }));
 
-// 12 CustomPainter
-body.push(...chapter({
-  id: "ch14", title: "14. CustomPainter",
-  def: "CustomPainter draws directly on a Canvas — shapes, paths, text, gradients — for visuals awkward or impossible with standard widgets (charts, gauges, signatures).",
-  blocks: [
-    code(["class RingPainter extends CustomPainter {",
-      "  void paint(Canvas c, Size s) { c.drawCircle(s.center(Offset.zero), s.width/2, paint); }",
-      "  bool shouldRepaint(old) => false;",
-      "}"], "dart"),
-    callout("mistake", ["Returning true from shouldRepaint unnecessarily repaints every frame. Return true ONLY when drawing inputs changed. Wrap CustomPaint in RepaintBoundary."]),
-  ],
-  summary: ["Draw via paint(Canvas, Size) with Paint.", "Repaint only when shouldRepaint returns true.", "Isolate with RepaintBoundary.", "Use it when widgets can't express the visual."],
-  interview: ["When use CustomPainter?", "How does shouldRepaint affect perf?", "Animate a CustomPainter?", "Isolate a painter's repaints?", "Canvas vs widget composition?"],
-  coding: [
-    { level: "Easy", text: "Draw a circle and a line." },
-    { level: "Medium", text: "Progress ring that fills by value." },
-    { level: "Hard", text: "Simple line chart from points." },
-    { level: "Expert", text: "Efficient signature pad." }],
-  realworld: ["Charting libraries (fl_chart) and custom progress/gauge widgets are built on CustomPainter for full control over pixels."],
-  miniproject: ["Build a mini charts library: line, bar and donut charts via CustomPainter."],
-  advanced: ["Canvas saveLayer cost, Path metrics, custom shaders (FragmentProgram)."],
-}));
+// 14. CustomPainter
+body.push(...topicToChapter(loadTopic("level_04", "custompainter"),
+  { chapterNumber: 14, bookmarkId: "ch14" }));
 
-// 13 Platform Channels
-body.push(...chapter({
-  id: "ch15", title: "15. Platform Channels",
-  def: "Platform channels bridge Dart and native code (Kotlin/Java, Swift/Obj-C). Messages are serialized and passed asynchronously by channel name.",
-  blocks: [
-    table(["Channel", "Use"], [
-      ["MethodChannel", "Call a native method, get a result"],
-      ["EventChannel", "Stream native events to Dart (sensors)"],
-      ["BasicMessageChannel", "Arbitrary messages both ways"]], [3000, 6160]),
-    callout("interview", ["Channels are async with a standard codec (numbers/strings/lists/maps/bytes). Heavy byte transfers are better via FFI than serialized per call. Do long native work off the platform main thread and return via the result callback."]),
-  ],
-  summary: ["Channels bridge Dart ↔ native via named async messages.", "MethodChannel = call; EventChannel = stream.", "Calls are always asynchronous.", "Use FFI for heavy byte transfer."],
-  interview: ["What are platform channels?", "Method vs Event vs Basic channel?", "Are calls sync or async?", "Avoid blocking the UI from native?", "When use FFI instead?"],
-  coding: [
-    { level: "Easy", text: "Native method returning the battery level." },
-    { level: "Medium", text: "Stream accelerometer via EventChannel." },
-    { level: "Hard", text: "Run heavy native work off the main thread." },
-    { level: "Expert", text: "Wrap a native SDK in a typed plugin." }],
-  realworld: ["Plugins like camera and geolocator are platform channels wrapping native APIs behind a clean Dart interface."],
-  miniproject: ["Build a plugin exposing device battery + charging stream via Method and Event channels."],
-  advanced: ["Pigeon for type-safe channels, background isolates + channels, codec customization."],
-}));
+// 15. Platform Channels
+body.push(...topicToChapter(loadTopic("level_04", "platform_channels"),
+  { chapterNumber: 15, bookmarkId: "ch15" }));
 
-// 14 Engine
-body.push(...chapter({
-  id: "ch16", title: "16. Flutter Engine",
-  def: "The Flutter Engine (C++) provides the runtime: the Dart VM, graphics (Impeller/Skia), text layout and platform plumbing. The Dart framework runs on top.",
-  blocks: [
-    code(["Your app -> Framework (widgets) [Dart]",
-      "  -> Engine (Dart VM, Impeller/Skia, text) [C++]",
-      "    -> Embedder (Android/iOS/desktop) -> OS surface"], "architecture"),
-    callout("interview", ["Unlike React Native, Flutter does NOT use native UI widgets — it draws every pixel itself on a canvas the OS provides. That's why Flutter UIs look identical across platforms and OS versions."]),
-    table(["Thread", "Role"], [["Platform", "OS msgs, plugins"], ["UI (Dart)", "Build/layout/paint"], ["Raster", "GPU rasterize"], ["IO", "Asset/image decode"]], [2200, 6960]),
-  ],
-  summary: ["Engine (C++) hosts Dart VM + graphics + text.", "Flutter draws its own pixels (no native widgets).", "The embedder hosts the engine per platform.", "Threads: platform, UI, raster, IO."],
-  interview: ["What does the engine provide?", "Flutter vs React Native at render level?", "What is the embedder?", "Engine threads and roles?", "How does one codebase target many platforms?"],
-  coding: [
-    { level: "Easy", text: "Diagram engine/framework/embedder layers." },
-    { level: "Medium", text: "Map frame phases to threads." },
-    { level: "Hard", text: "Trace setState() to pixels." },
-    { level: "Expert", text: "Write up a custom embedder for an embedded target." }],
-  realworld: ["Flutter on cars, kiosks and smart displays works because the engine is portable C++ with a thin platform embedder."],
-  miniproject: ["Write a deep-dive doc tracing a button tap from gesture → setState → frame → pixels, naming each layer/thread."],
-  advanced: ["Custom embedders, the engine's C++ shell, platform views (hybrid composition)."],
-}));
+// 16. Flutter Engine
+body.push(...topicToChapter(loadTopic("level_04", "engine"),
+  { chapterNumber: 16, bookmarkId: "ch16" }));
 
 // 15 Impeller
 body.push(...chapter({

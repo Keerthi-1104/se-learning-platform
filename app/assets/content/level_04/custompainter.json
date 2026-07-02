@@ -2,43 +2,94 @@
   "id": "flutter.custompainter",
   "levelId": 4,
   "title": "CustomPainter",
-  "xp": 50,
-  "estimatedMinutes": 25,
+  "xp": 40,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Draw custom graphics with Canvas and Paint",
-    "Implement shouldRepaint correctly",
-    "Know when custom painting beats widgets"
+    "Understand CustomPainter via a real-life analogy",
+    "Draw shapes, paths, gradients, and text on a Canvas",
+    "Implement `shouldRepaint` correctly to avoid wasted paints",
+    "Combine with animations for smooth custom visuals",
+    "Answer CustomPainter interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "CustomPainter lets you draw directly on a Canvas — shapes, paths, text, gradients — for visuals that would be awkward or impossible with standard widgets (charts, gauges, signatures, custom progress)." },
-    { "type": "code", "language": "dart", "code": "class RingPainter extends CustomPainter {\n  @override void paint(Canvas canvas, Size size) {\n    final p = Paint()..color = Colors.blue..strokeWidth = 8\n      ..style = PaintingStyle.stroke;\n    canvas.drawCircle(size.center(Offset.zero), size.width/2, p);\n  }\n  @override bool shouldRepaint(covariant RingPainter old) => false;\n}" },
-    { "type": "callout", "variant": "mistake", "markdown": "Returning true (or rebuilding) from shouldRepaint unnecessarily repaints every frame. Return true ONLY when the inputs that affect the drawing changed." },
-    { "type": "callout", "variant": "tip", "markdown": "Wrap a CustomPaint in a RepaintBoundary so its repaints don't affect siblings. For animated painters, pass the animation to repaint and isolate it; avoid expensive ops (large paths/blurs) per frame." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of a **blank cardboard sign** and a **stack of markers.**\n\n- Flutter hands you a `Canvas` and a `Size`: 'here's a blank rectangle 300 by 200 pixels. Draw whatever you want.'\n- **`Paint`** is your marker: pick a color, a stroke width, anti-aliased or not, gradient fill or solid.\n- **`Path`** is what you'd sketch first in pencil — a line from A to B to C, a curve, an arc — before you outline in marker.\n- **`Canvas`** exposes the drawing verbs — `drawLine`, `drawCircle`, `drawPath`, `drawArc`, `drawImage`, `drawText`. Save/restore + rotate/translate to build compositions.\n- **`shouldRepaint`** is your judgement 'do I need to redraw this sign?' — return `true` only when a property that AFFECTS THE DRAWING has actually changed. Return `false` and Flutter reuses the last picture — free performance.\n\n**When to reach for CustomPainter:** anything that isn't a stock widget — signature capture, charts, custom progress rings, particle effects, waveforms, radar sweeps, watermarks, thermometer bars. Once you can draw with `Canvas`, entire UI categories open up." },
+    { "type": "callout", "variant": "definition", "markdown": "**`CustomPainter`** is Flutter's escape hatch to direct 2D drawing. You extend it, implement `paint(canvas, size)` and `shouldRepaint(oldDelegate)`, then feed it to a `CustomPaint` widget. Inside `paint`, you call into a `Canvas` (drawLine, drawPath, drawImage, drawText, ...) with `Paint` objects (color, stroke, gradient). Repaints are optimized via `shouldRepaint` — return true only when drawing-affecting props changed." },
+    { "type": "theory", "markdown": "## The four things you'll use every time" },
+    { "type": "table", "headers": ["Object", "Purpose", "Example"], "rows": [
+      ["**`Canvas`**", "The drawing surface (methods: drawLine, drawCircle, drawPath, drawText...)", "`canvas.drawCircle(offset, radius, paint)`"],
+      ["**`Paint`**", "How to draw: color, stroke width, style, shader, blend mode", "`Paint()..color = Colors.red..strokeWidth = 4`"],
+      ["**`Path`**", "A sequence of moves/lines/curves you can then fill or stroke", "`Path()..moveTo(0,0)..lineTo(10, 20)`"],
+      ["**`Offset` / `Rect` / `Size`**", "Positioning and dimensions", "`Rect.fromLTWH(10, 10, 200, 100)`"]
+    ]},
+    { "type": "theory", "markdown": "## Sample program — a progress ring + smiley + wave" },
+    { "type": "code", "language": "dart", "code": "import 'dart:math';\nimport 'package:flutter/material.dart';\n\nvoid main() => runApp(const MaterialApp(home: PainterDemo()));\n\nclass PainterDemo extends StatelessWidget {\n  const PainterDemo({super.key});\n  @override\n  Widget build(BuildContext context) => Scaffold(\n    appBar: AppBar(title: const Text('CustomPainter demo')),\n    body: Center(\n      child: SizedBox(\n        width: 300, height: 300,\n        child: CustomPaint(painter: _RingSmileyPainter(progress: 0.72)),\n      ),\n    ),\n  );\n}\n\nclass _RingSmileyPainter extends CustomPainter {\n  _RingSmileyPainter({required this.progress});\n  final double progress;   // 0.0 - 1.0\n\n  @override\n  void paint(Canvas canvas, Size size) {\n    final center = size.center(Offset.zero);\n    final radius = size.shortestSide / 2 * 0.85;\n\n    // 1. Background ring (grey)\n    final bg = Paint()\n      ..color = Colors.grey.shade300\n      ..style = PaintingStyle.stroke\n      ..strokeWidth = 20;\n    canvas.drawCircle(center, radius, bg);\n\n    // 2. Progress arc — sweeps from top clockwise\n    final progressPaint = Paint()\n      ..shader = const LinearGradient(colors: [Colors.deepPurple, Colors.pinkAccent])\n          .createShader(Rect.fromCircle(center: center, radius: radius))\n      ..style = PaintingStyle.stroke\n      ..strokeWidth = 20\n      ..strokeCap = StrokeCap.round;\n    canvas.drawArc(\n      Rect.fromCircle(center: center, radius: radius),\n      -pi / 2,               // start at 12 o'clock\n      2 * pi * progress,     // sweep angle\n      false,\n      progressPaint,\n    );\n\n    // 3. Smiley eyes\n    final eye = Paint()..color = Colors.deepPurple;\n    canvas.drawCircle(center + const Offset(-30, -20), 8, eye);\n    canvas.drawCircle(center + const Offset(30, -20), 8, eye);\n\n    // 4. Smiley mouth — a Path\n    final mouth = Path()..moveTo(center.dx - 30, center.dy + 20)\n      ..quadraticBezierTo(center.dx, center.dy + 60, center.dx + 30, center.dy + 20);\n    canvas.drawPath(\n      mouth,\n      Paint()..color = Colors.deepPurple..style = PaintingStyle.stroke..strokeWidth = 4,\n    );\n\n    // 5. Percentage text (uses TextPainter)\n    final tp = TextPainter(\n      text: TextSpan(text: '${(progress * 100).toInt()}%',\n        style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black)),\n      textDirection: TextDirection.ltr,\n    )..layout();\n    tp.paint(canvas, center + Offset(-tp.width / 2, radius - 40));\n  }\n\n  // Only repaint when progress actually changed — free perf.\n  @override\n  bool shouldRepaint(covariant _RingSmileyPainter old) => old.progress != progress;\n}" },
+    { "type": "theory", "markdown": "## Combining with animation for smooth custom visuals" },
+    { "type": "code", "language": "dart", "code": "// Wrap the CustomPaint with an AnimationController + CustomPaint whose delegate\n// is rebuilt each frame with the current animation value. This is how you\n// build a spinning loader, an animated progress ring, or a waveform.\n\nclass AnimatedRing extends StatefulWidget {\n  const AnimatedRing({super.key});\n  @override State<AnimatedRing> createState() => _AnimatedRingState();\n}\n\nclass _AnimatedRingState extends State<AnimatedRing> with SingleTickerProviderStateMixin {\n  late final _ctrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat();\n\n  @override\n  void dispose() { _ctrl.dispose(); super.dispose(); }\n\n  @override\n  Widget build(BuildContext context) => RepaintBoundary(\n    // Wrapping in RepaintBoundary isolates the ring's frequent repaints\n    // from the surrounding UI — huge perf win.\n    child: AnimatedBuilder(\n      animation: _ctrl,\n      builder: (context, _) => CustomPaint(\n        size: const Size(200, 200),\n        painter: _RingSmileyPainter(progress: _ctrl.value),\n      ),\n    ),\n  );\n}" },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Returning `true` from `shouldRepaint` unconditionally.** Flutter repaints every frame even when nothing changed. Compare only the fields that affect drawing." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Allocating `Paint`s / `Path`s inside `paint()`.** `paint()` runs at 60 fps. Cache them as fields on the painter or as `late final` in `initState`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Not wrapping animated painters in `RepaintBoundary`.** Every frame invalidates the ancestor's layer, re-recording neighbors unnecessarily." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Doing heavy computation in `paint()`.** Precompute `Path`s and offsets in the constructor or on prop change; `paint()` should be nearly-pure canvas calls." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Ignoring `size` and hard-coding pixels.** Use `size.width`, `size.height`, `size.center(Offset.zero)`. Makes the painter responsive." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Compare **only drawing-relevant** props in `shouldRepaint`.**" },
+    { "type": "callout", "variant": "best", "markdown": "**2. Precompute `Path`s once** when input changes — reuse in `paint`." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Wrap animated `CustomPaint` in `RepaintBoundary`.**" },
+    { "type": "callout", "variant": "best", "markdown": "**4. Use `Path.combine` / `Path.transform`** for compositional drawing." },
+    { "type": "callout", "variant": "best", "markdown": "**5. For text, use `TextPainter`.** Never assume text has a fixed size; call `layout()` first." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Consider a shader / Rive / Lottie for very complex visuals.** CustomPainter is powerful but Flutter's shader system or Rive can outperform hand-drawn 2D at scale." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Draw a circle** filled and stroked; play with `strokeWidth` and `strokeCap`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Progress ring.** Build the sample; drive `progress` with an AnimationController." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Signature pad.** Capture drag events, append to a `Path`, redraw." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Line chart** from a `List<double>`; label axes; auto-scale." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Animated waveform** with a smooth sine curve driven by an AnimationController." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is `CustomPainter` and when do you use it?**\n\n**A:** `CustomPainter` is Flutter's low-level 2D drawing API. You extend it, implement `paint(canvas, size)` (draw whatever you want on the `Canvas`) and `shouldRepaint(oldDelegate)` (decide when to redraw), and feed it to a `CustomPaint` widget. Use it when the design isn't achievable with standard widgets: signature capture, charts, progress rings, waveforms, particle effects, custom badges, watermarks. For very complex visuals with many pieces, consider `Rive` (interactive vector animations) or shaders instead — but `CustomPainter` is the workhorse for one-off custom 2D." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: Why is `shouldRepaint` important?**\n\n**A:** `paint()` can run at 60fps (or more). Flutter calls `shouldRepaint(oldDelegate)` to decide whether the CANVAS RECORDING needs to be redone. If you return `false`, Flutter reuses the last recorded picture — **free performance**. If you return `true` unconditionally, you paint every frame even when nothing changed. **Correct implementation:** compare the fields on `this` (the new delegate) against `oldDelegate`; return `true` only if a field that AFFECTS the drawing has changed. `bool shouldRepaint(_MyPainter old) => old.progress != progress || old.color != color;`" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What's the difference between `paint()` running and the pipeline repainting?**\n\n**A:** `CustomPainter.paint()` records drawing commands into a `Picture`. The picture becomes the content of the `CustomPaint`'s RenderObject's layer. The layer is composited by the raster thread onto the GPU. So `paint()` running fast doesn't magically produce pixels — those are the raster thread's job. But `paint()` is on the UI thread; slow `paint()` is UI-thread jank. **Optimizations for `paint()`:** cache Paints / Paths, minimize allocations, avoid heavy math. **Optimizations for the raster side:** wrap in `RepaintBoundary` (isolates the layer), use simple Paint modes (avoid `saveLayer` unless needed)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: When should you use `Path` vs multiple draw calls?**\n\n**A:** A `Path` batches related drawing into ONE draw call. If you're drawing many segments that will be filled or stroked together, build a `Path` and call `canvas.drawPath(path, paint)` once. Cheaper than many `canvas.drawLine` calls. Also enables `Path.combine`, `Path.transform`, `Path.contains(point)` — great for hit-testing. **Use multiple draw calls** for independent shapes with different paints or when the shapes come from different data — a path can only carry one paint at a time. Rule: same paint → path; different paints → separate calls." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you draw text in a CustomPainter?**\n\n**A:** Use `TextPainter`:\n```dart\nfinal tp = TextPainter(\n  text: TextSpan(text: 'Hello', style: TextStyle(fontSize: 20, color: Colors.black)),\n  textDirection: TextDirection.ltr,\n)..layout();\ntp.paint(canvas, Offset(x, y));\n```\n**Steps:** create a `TextPainter` with a `TextSpan`, call `.layout()` (measures the text), then `.paint(canvas, offset)`. Read `tp.width` and `tp.height` for measurements. **Common trap:** forgetting `layout()` — you'll get an assertion. **Perf:** cache the `TextPainter` on your painter object; only re-layout when text changes." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How do you handle taps inside a CustomPainter?**\n\n**A:** Wrap the `CustomPaint` in a `GestureDetector` and translate the tap coordinates to painter coordinates. Then use `Path.contains(offset)` to test which shape was hit. Example: a pie chart with clickable slices — each slice is a `Path`, and on tap you iterate the slice-paths and find the containing one. **Alternative:** override `CustomPainter.hitTest(Offset position)` — Flutter calls it during hit-testing; return `true` if the position is inside your custom shape. This is more sophisticated than a whole-widget `GestureDetector` because you get slice-level (not rect-level) hit-testing." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What's the difference between `CustomPainter` and a shader?**\n\n**A:** **`CustomPainter`** — Dart-side 2D drawing. You issue commands to the Canvas from Dart; each frame's paint is recorded and rasterized. Good for complex vector shapes, dynamic geometry, hit-testable custom UI. **`Shader` / `ImageShader` / `FragmentProgram`** — GPU-side program written in a shading language (recent Flutter supports SPIR-V fragment shaders). Runs on the GPU per-pixel. Blazing fast; ideal for effects (blur, distortion, glow), image processing, procedural graphics. **Rule:** shapes → CustomPainter; per-pixel effects → shader. Shaders require more setup and shader-specific knowledge (GLSL-like syntax) but massively outperform `CustomPainter` for pixel-level work." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Progress rings, circular meters** — CustomPainter with an arc.\n- **Line/bar/pie charts** — the `fl_chart` package uses CustomPainter internally.\n- **Signature pads, drawing apps** — capture drag events → append to Path.\n- **Waveforms / audio visualizers** — animated CustomPainter.\n- **Custom badges, ribbons, notification dots** — geometric shapes.\n- **Onboarding illustrations** — either CustomPainter, Rive, or Lottie.\n- **Watermarks** — a full-screen CustomPainter overlaid over content." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`saveLayer` / `restore`** — offscreen layer for blend modes and clipping; expensive.\n- **`Canvas.clipPath`** — clip subsequent drawing to a path.\n- **`Canvas.rotate`, `Canvas.translate`, `Canvas.scale`** — transform composition; wrap in `save/restore`.\n- **`Canvas.drawImage` / `drawImageRect`** — blit images into a painter.\n- **`ui.PictureRecorder`** — record commands without a widget for programmatic image generation.\n- **`FragmentProgram`** — SPIR-V shaders (Impeller only).\n- **`Path.combine(Op.union, a, b)`** — union / intersect / subtract paths.\n- **`Paint.imageFilter`, `Paint.maskFilter`** — blurs and other Skia-side filters.\n- **`Paint.blendMode`** — Porter-Duff blending.\n- **`Canvas.drawShadow`** — cheap shadow rendering.\n- **`Semantics` widgets around `CustomPaint`** — accessibility annotations." }
   ],
   "flashcards": [
-    { "front": "What does CustomPainter give you?", "back": "Direct Canvas drawing (shapes, paths, text, gradients) for custom graphics." },
-    { "front": "When does paint repaint?", "back": "When shouldRepaint returns true (or the CustomPaint is rebuilt with a new painter)." },
-    { "front": "How to isolate painter repaints?", "back": "Wrap CustomPaint in a RepaintBoundary." }
+    { "front": "CustomPainter interface?", "back": "extend CustomPainter, implement paint(canvas, size) and shouldRepaint(oldDelegate)." },
+    { "front": "shouldRepaint rule?", "back": "Return true only when drawing-affecting props changed." },
+    { "front": "Text?", "back": "Use TextPainter — create → layout() → paint(canvas, offset)." },
+    { "front": "Perf wrap?", "back": "RepaintBoundary around animated CustomPaint isolates repaints." },
+    { "front": "Multiple shapes with same paint?", "back": "Build a Path and drawPath once instead of many draw calls." },
+    { "front": "Hit-testing?", "back": "GestureDetector + Path.contains(offset), or override hitTest in the painter." }
   ],
   "quiz": [
-    { "q": "You draw inside…", "options": ["build()", "paint(Canvas, Size)", "initState", "dispose"], "answer": 1, "explain": "CustomPainter.paint receives the Canvas and Size." },
-    { "q": "shouldRepaint should return true…", "options": ["Always", "Only when drawing inputs change", "Never", "On dispose"], "answer": 1, "explain": "Returning true needlessly repaints every frame." },
-    { "q": "Custom painting is best for…", "options": ["A standard button", "Charts/gauges/signatures", "Navigation", "Networking"], "answer": 1, "explain": "Use it when widgets can't express the visual." }
+    { "q": "CustomPainter needs…", "options": ["paint only", "paint + shouldRepaint", "build + dispose", "Timer"], "answer": 1, "explain": "Both are required." },
+    { "q": "shouldRepaint returning true unconditionally is…", "options": ["Fine", "Bad — repaints every frame wastefully", "Required", "Faster"], "answer": 1, "explain": "Return true ONLY when props actually changed." },
+    { "q": "Drawing text?", "options": ["Canvas.drawText string", "TextPainter with layout()", "TextSpan directly", "Text widget"], "answer": 1, "explain": "TextPainter is the drawing API." },
+    { "q": "Animated painter should be wrapped in…", "options": ["Container", "RepaintBoundary", "Padding", "Nothing"], "answer": 1, "explain": "Isolates repaints." },
+    { "q": "For per-pixel effects prefer…", "options": ["CustomPainter", "Shaders (FragmentProgram)", "AnimatedBuilder", "Lottie"], "answer": 1, "explain": "GPU-side, massively faster." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Draw a circle and a line with Canvas/Paint." },
-    { "level": "Medium", "text": "Draw a progress ring that fills based on a value." },
-    { "level": "Hard", "text": "Build a simple line chart from a list of points." },
-    { "level": "Expert", "text": "Implement a signature pad capturing and rendering strokes efficiently." }
+    { "level": "Easy", "text": "Draw a filled + stroked circle; try strokeCap.round vs square." },
+    { "level": "Easy", "text": "Progress ring using drawArc + LinearGradient shader." },
+    { "level": "Medium", "text": "Animated ring driven by an AnimationController (repeat)." },
+    { "level": "Medium", "text": "Draw a smiley with drawCircle + Path curves + TextPainter percent." },
+    { "level": "Hard", "text": "Signature pad: capture drag Offsets, append to a Path, redraw." },
+    { "level": "Hard", "text": "Simple line chart from List<double>; auto-scale axes." },
+    { "level": "Expert", "text": "Animated waveform — sine curve driven by controller, wrapped in RepaintBoundary." }
   ],
   "interviewQuestions": [
-    "When use CustomPainter over widgets?",
-    "How does shouldRepaint affect performance?",
-    "How do you animate a CustomPainter?",
-    "How do you isolate a painter's repaints?",
-    "Canvas vs widget composition trade-offs?"
+    "What is CustomPainter and when do you use it?",
+    "Why is shouldRepaint important?",
+    "What's the difference between paint() running and the pipeline repainting?",
+    "When should you use Path vs multiple draw calls?",
+    "How do you draw text in a CustomPainter?",
+    "How do you handle taps inside a CustomPainter?",
+    "What's the difference between CustomPainter and a shader?"
   ],
   "references": [
-    { "label": "Flutter — CustomPaint", "url": "https://api.flutter.dev/flutter/widgets/CustomPaint-class.html" }
+    { "label": "CustomPainter API", "url": "https://api.flutter.dev/flutter/rendering/CustomPainter-class.html" },
+    { "label": "Canvas API", "url": "https://api.flutter.dev/flutter/dart-ui/Canvas-class.html" }
   ]
 }

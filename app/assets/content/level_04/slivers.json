@@ -1,45 +1,105 @@
 {
   "id": "flutter.slivers",
   "levelId": 4,
-  "title": "Slivers",
-  "xp": 50,
-  "estimatedMinutes": 25,
+  "title": "Slivers & Advanced Scrolling",
+  "xp": 45,
+  "estimatedMinutes": 35,
   "objectives": [
-    "Explain what a sliver is",
-    "Build complex scroll effects with CustomScrollView",
-    "Use lazy slivers for performance"
+    "Understand slivers via a real-life analogy",
+    "Compose SliverAppBar + SliverList + SliverGrid in a CustomScrollView",
+    "Use pinned/floating/snap headers correctly",
+    "Know when to reach for slivers vs a normal ListView",
+    "Answer sliver interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "A sliver is a scrollable area that knows how to render itself given a viewport's scroll position. Slivers compose inside a CustomScrollView to build advanced scroll effects (collapsing headers, mixed lists/grids)." },
-    { "type": "code", "language": "dart", "code": "CustomScrollView(slivers: [\n  SliverAppBar(expandedHeight: 200, floating: true, pinned: true),\n  SliverList(delegate: SliverChildBuilderDelegate(\n     (c, i) => ListTile(title: Text('Item $i')), childCount: 100)),\n  SliverGrid.count(crossAxisCount: 2, children: [...]),\n]);" },
-    { "type": "callout", "variant": "interview", "markdown": "ListView is actually a CustomScrollView with one SliverList under the hood. Slivers give you lazy building (only visible items are built) plus effects like collapsing/pinned headers that you can't do by nesting normal widgets." },
-    { "type": "callout", "variant": "mistake", "markdown": "Nesting scrollables badly (a ListView inside a Column inside another scroll) instead of composing slivers — causes unbounded-height errors or double scrollbars. Use one CustomScrollView with multiple slivers." },
-    { "type": "callout", "variant": "tip", "markdown": "Use SliverChildBuilderDelegate (lazy) for long lists; reserve the children: [] form for short, known lists. Combine SliverPersistentHeader for sticky sections." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of a supermarket conveyor belt at the checkout.**\n\n- A regular `ListView` is like a **flat conveyor belt** that only moves in one direction — items scroll past uniformly, all the same width. It's fine for simple lists, but you can't have the belt suddenly shrink, or add a fixed-position display, or run TWO belts side by side.\n- A **`CustomScrollView`** is the whole **checkout station** — a viewport with a scroll gesture. Inside it you drop in individual **belts (slivers)**, each with its own behavior:\n  - `SliverAppBar` — a header that shrinks as you scroll (like the store's welcome banner rolling up).\n  - `SliverList` — the endless list of items.\n  - `SliverGrid` — a grid section.\n  - `SliverToBoxAdapter` — 'wedge in this one regular widget'.\n  - `SliverPersistentHeader` — a sticky mid-list header.\n- **A sliver knows about the viewport** — it receives constraints like 'the user has scrolled 300 px past your start; you're allowed to paint 500 px'. That awareness is what enables collapsing app bars, sticky headers, parallax, and infinite lists with far fewer allocations than a naive approach.\n\n**Why this matters:** every polished modern app has scrolling that isn't 'just a list'. Instagram Explore, Twitter profile pages, Amazon product screens, Spotify playlist views — all built on slivers. Learning the API unlocks entire categories of UI." },
+    { "type": "callout", "variant": "definition", "markdown": "**Slivers** are scrollable regions inside a `CustomScrollView`. Unlike box widgets that just say 'give me a size', a sliver says 'given this viewport scroll offset and available space, here's how much of me is visible and painted'. This viewport-awareness enables the advanced scroll effects that plain `ListView` / `GridView` cannot: collapsing headers, pinned headers, parallax, mixed content (list + grid + fixed widget in one scroll)." },
+    { "type": "theory", "markdown": "## The sliver primitives you'll actually use" },
+    { "type": "table", "headers": ["Sliver", "Purpose"], "rows": [
+      ["`SliverAppBar`", "App bar that scrolls, pins, floats, or expands. Modern Material 3 large-headers use this."],
+      ["`SliverList`", "Vertical list of children, lazily built."],
+      ["`SliverGrid`", "Grid of children, lazily built."],
+      ["`SliverToBoxAdapter`", "Wraps a single normal widget so it can live inside a CustomScrollView."],
+      ["`SliverPersistentHeader`", "Custom sticky header — pinned or floating, with your own shrinking animation."],
+      ["`SliverFillRemaining`", "Fills the leftover space (e.g., empty state)."],
+      ["`SliverPadding`", "Adds padding around another sliver."],
+      ["`SliverAnimatedList`", "Insert/remove items with animation."]
+    ]},
+    { "type": "theory", "markdown": "## Sample program — a complete scrolling story" },
+    { "type": "code", "language": "dart", "code": "import 'package:flutter/material.dart';\n\nvoid main() => runApp(const MaterialApp(home: SliverDemo()));\n\nclass SliverDemo extends StatelessWidget {\n  const SliverDemo({super.key});\n\n  @override\n  Widget build(BuildContext context) => Scaffold(\n    body: CustomScrollView(\n      slivers: [\n        // 1. Collapsing app bar with expanded background image\n        SliverAppBar(\n          expandedHeight: 240,\n          pinned: true,               // header stays visible when collapsed\n          flexibleSpace: FlexibleSpaceBar(\n            title: const Text('Sliver Demo'),\n            background: Image.network(\n              'https://picsum.photos/800/400',\n              fit: BoxFit.cover,\n            ),\n          ),\n        ),\n\n        // 2. A single non-scrolling widget inside the scroll\n        const SliverToBoxAdapter(\n          child: Padding(\n            padding: EdgeInsets.all(16),\n            child: Text('Featured', style: TextStyle(fontSize: 22)),\n          ),\n        ),\n\n        // 3. A grid section\n        SliverPadding(\n          padding: const EdgeInsets.symmetric(horizontal: 16),\n          sliver: SliverGrid(\n            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(\n              crossAxisCount: 3, mainAxisSpacing: 8, crossAxisSpacing: 8,\n            ),\n            delegate: SliverChildBuilderDelegate(\n              (context, i) => Container(\n                color: Colors.primaries[i % Colors.primaries.length].shade200,\n                child: Center(child: Text('$i')),\n              ),\n              childCount: 9,\n            ),\n          ),\n        ),\n\n        // 4. Another header, then a list\n        const SliverToBoxAdapter(\n          child: Padding(\n            padding: EdgeInsets.all(16),\n            child: Text('All items', style: TextStyle(fontSize: 22)),\n          ),\n        ),\n        SliverList(\n          delegate: SliverChildBuilderDelegate(\n            (context, i) => ListTile(\n              leading: const Icon(Icons.article),\n              title: Text('Item $i'),\n            ),\n            childCount: 100,\n          ),\n        ),\n      ],\n    ),\n  );\n}\n\n// Try it: the app bar collapses as you scroll → shows a small header → the\n// grid stays put → the list scrolls under it. All in ONE CustomScrollView." },
+    { "type": "theory", "markdown": "## SliverAppBar flags — pinned, floating, snap, stretch" },
+    { "type": "table", "headers": ["Flag", "Behavior"], "rows": [
+      ["`pinned: true`", "Header stays visible (collapsed) at the top after scrolling past it"],
+      ["`floating: true`", "Header comes back into view when the user scrolls UP, even mid-list"],
+      ["`floating: true` + `snap: true`", "Header snaps to fully visible on scroll-up (no partial state)"],
+      ["`stretch: true`", "Header stretches past its natural height when overscrolled at the top"],
+      ["`expandedHeight`", "Max height when fully visible (before collapsing to `kToolbarHeight`)"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**The 60-second rule of thumb:** a normal `ListView.builder` is enough 80% of the time. Reach for `CustomScrollView` + slivers when you need (a) a collapsing app bar, (b) mixed list/grid content in one scroll, (c) sticky mid-list headers, or (d) massive lists where you want infinite lazy loading with the header pinned." },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Putting a normal `Column` / `ListView` inside a `CustomScrollView`.** Doesn't work — slivers only. Wrap regular widgets with `SliverToBoxAdapter`, or use `SliverList` for many children." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Using `SliverToBoxAdapter` for a big list.** Defeats lazy loading — the whole subtree builds up front. Use `SliverList` / `SliverGrid`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Nesting a `CustomScrollView` inside another scroller.** Conflicting scroll gestures. Use `NestedScrollView` for the collapsing-app-bar + inner-tabs pattern." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Slivers everywhere.** For a plain scrollable list, `ListView.builder` is simpler and just as performant. Slivers add value only when you're doing something the flat `ListView` can't." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Missing `childCount:` in a delegate.** `SliverChildBuilderDelegate((_, i) => ...)` without `childCount:` builds infinitely — the scroller expects a bounded count for the scrollbar and overscroll behavior." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Default to `ListView.builder`. Escalate to slivers when the design demands it.**" },
+    { "type": "callout", "variant": "best", "markdown": "**2. For collapsing-header + tabbed content, use `NestedScrollView`.** The idiomatic pattern for profile pages, product pages." },
+    { "type": "callout", "variant": "best", "markdown": "**3. `SliverPersistentHeader` for custom sticky headers.** Full control over collapse animation." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Pair large images with `cacheExtent:` on the scroll view** to pre-decode nearby items." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Use `RepaintBoundary` around image-heavy slivers** to isolate repaints from the header/animation area." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — SliverAppBar demo.** Collapsing header + SliverList of 50 items; try pinned/floating combos." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Mixed content.** Header → SliverGrid (3 cols, 6 items) → SliverList (30 items). One CustomScrollView." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — Sticky section headers.** Group items by category using `SliverPersistentHeader` per category." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — NestedScrollView.** Profile page: collapsing hero + TabBar with two inner scrollables." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Custom SliverPersistentHeaderDelegate.** Custom parallax header that shrinks + fades + moves as you scroll." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is a Sliver?**\n\n**A:** A sliver is a scrollable region inside a `CustomScrollView` that's viewport-aware. Unlike box widgets that just answer 'what's my size given these constraints?', a sliver answers 'given the current scroll offset and available viewport extent, how much of me is visible, how much space do I claim, and how much cache do I need?'. This awareness is what enables collapsing app bars, sticky headers, parallax, and mixing multiple layout modes (grid + list + fixed widget) inside one scrollable area. Under the hood, slivers are `RenderSliver`s with `SliverConstraints` + `SliverGeometry` — the scrollable-axis counterpart to `RenderBox` / `BoxConstraints`." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: `ListView` vs `CustomScrollView` + `SliverList`?**\n\n**A:** **`ListView`** — a convenience widget that wraps a single `SliverList` inside a viewport. Fine for plain scrollable lists. **`CustomScrollView`** — the raw viewport that hosts multiple slivers. Use when you need MORE than one scrollable region in a single scroll gesture: a collapsing app bar + a list, a grid + a list, a sticky header mid-list. **Rule:** if a design fits `ListView.builder`, use it. If the design needs any of {collapsing header, mid-list section headers, mixed content types, parallax} — reach for `CustomScrollView` + slivers. Performance-wise both are identical for a plain list; the choice is about capability." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What are `pinned`, `floating`, `snap` on `SliverAppBar`?**\n\n**A:** **`pinned: true`** — the app bar stays visible (collapsed to its minimum height) after you scroll past it. Common for persistent titles. **`floating: true`** — the app bar returns to view any time the user scrolls UP, even in the middle of a long list. Nice for quick-access nav. **`snap: true`** (only with `floating`) — instead of the app bar gradually appearing as you scroll up, it snaps to fully-visible on any upward scroll. **Combine:** `pinned: true, floating: true` — pinned collapsed at the top; on upward scroll, reappears fully. Design decision guided by content and expected UX." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you build a collapsing profile-page pattern?**\n\n**A:** Use **`NestedScrollView`** — designed exactly for this. Its `headerSliverBuilder` returns the collapsing part (a `SliverAppBar` + optional other slivers). Its `body` is a normal scrollable (like `TabBarView` with inner `ListView`s). The outer scroll controller coordinates so scrolling the inner list also collapses the outer header, gluing the two scrolls into one continuous gesture. Without `NestedScrollView`, you'd have nested-scroll fighting between the outer collapsing area and the inner list. It's the canonical answer for a profile page with hero + tabs." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: When would you write a custom `SliverPersistentHeaderDelegate`?**\n\n**A:** When the built-in `SliverAppBar` doesn't animate the way you want. `SliverPersistentHeader` accepts a delegate that returns a widget given the current `shrinkOffset` (how much the header has collapsed) and `overlapsContent` bool. You compute the current opacity, size, position, blur — anything — from `shrinkOffset`. Example uses: parallax background that scrolls slower than the header, header that morphs from a big card into a compact toolbar, avatar that shrinks + moves to a corner. Give the delegate a `minExtent` and `maxExtent` and Flutter drives the transition. Full artistic control at the cost of doing the animation math yourself." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: `SliverList` vs `SliverGrid` — what's the difference?**\n\n**A:** Same lazy-building idea, different layout algorithms. **`SliverList`** — vertical stack, one item per row, unbounded child heights. **`SliverGrid`** — 2D grid, cells sized by a `SliverGridDelegate` (`SliverGridDelegateWithFixedCrossAxisCount` for N columns, `SliverGridDelegateWithMaxCrossAxisExtent` for adaptive breakpoint sizing). Both use `SliverChildBuilderDelegate` for lazy building (build only what's visible + cache extent). Both accept `childCount:` to bound the scroll. Use `SliverList` for feed-like content, `SliverGrid` for icon grids / photo grids / product grids." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What is `cacheExtent` and when do you tune it?**\n\n**A:** `cacheExtent` on a scroll view is how many pixels beyond the visible viewport Flutter pre-builds and pre-paints — so that when the user scrolls, the next items are ready instantly instead of building on-the-fly (which can jank). Default is 250 pixels. Increase (e.g., 1000) for image-heavy lists so images are pre-decoded before they scroll into view. Trade-off: more memory. Decrease (or 0) for extremely memory-constrained cases. Also see `ScrollPhysics.applyPhysicsToUserOffset` for advanced tuning. In practice, tuning `cacheExtent` is one of the more impactful small levers for jank in image-heavy scrolling." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Instagram profile / Twitter profile** — NestedScrollView with hero + tabs.\n- **Amazon / Flipkart / Smart Consumer product page** — SliverAppBar hero image + product content + reviews list.\n- **Spotify album view** — parallax header + track list.\n- **Feed apps** — SliverList backed by a Paging source.\n- **Photo gallery** — SliverGrid for the grid; tap opens a Hero → detail." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`SliverConstraints`** and **`SliverGeometry`** — the actual protocol between viewport and sliver.\n- **`ScrollController` + `ScrollNotification`** — coordinate scroll events across widgets.\n- **`InfiniteScrollDelegate`** — pattern for infinite lazy loading with a bottom sentinel.\n- **`SliverFadeTransition`, `SliverAnimatedOpacity`** — animated sliver wrappers.\n- **`SliverLayoutBuilder`** — like `LayoutBuilder` but for the sliver constraints.\n- **`ExtendedSliverAppBar`** (community package) — more flexibility than the built-in.\n- **`ScrollPhysics`** — customize overscroll (BouncingScrollPhysics vs ClampingScrollPhysics vs PageScrollPhysics)." }
   ],
   "flashcards": [
-    { "front": "What is a sliver?", "back": "A scrollable region that renders itself based on the viewport's scroll offset; composed in a CustomScrollView." },
-    { "front": "What is ListView under the hood?", "back": "A CustomScrollView with a single lazy SliverList." },
-    { "front": "Why use a builder delegate?", "back": "It builds only visible items (lazy), saving memory and time for long lists." }
+    { "front": "Sliver key property?", "back": "Viewport-aware: it knows the scroll offset and paints accordingly." },
+    { "front": "ListView vs CustomScrollView?", "back": "ListView = single sliver wrapped. CustomScrollView = host for MANY slivers (collapsing header + list + grid ...)." },
+    { "front": "SliverAppBar pinned?", "back": "Stays visible collapsed at the top after scrolling past." },
+    { "front": "Wrap a normal widget?", "back": "SliverToBoxAdapter(child: yourWidget)." },
+    { "front": "Profile page with tabs?", "back": "NestedScrollView — headerSliverBuilder (collapsing) + body (TabBarView)." },
+    { "front": "Sticky mid-list headers?", "back": "SliverPersistentHeader with a custom delegate." }
   ],
   "quiz": [
-    { "q": "Slivers are composed inside a…", "options": ["Column", "CustomScrollView", "Stack", "Form"], "answer": 1, "explain": "CustomScrollView hosts a list of slivers in one viewport." },
-    { "q": "A collapsing app bar uses…", "options": ["AppBar", "SliverAppBar", "Container", "ListTile"], "answer": 1, "explain": "SliverAppBar provides expand/collapse/pinned/floating behavior." },
-    { "q": "Lazy building of list items uses…", "options": ["children: []", "SliverChildBuilderDelegate", "a Column", "setState"], "answer": 1, "explain": "The builder delegate creates only visible children." }
+    { "q": "Wrap a Text inside a CustomScrollView?", "options": ["Column", "SliverToBoxAdapter", "ListView", "Text directly"], "answer": 1, "explain": "Everything inside CustomScrollView must be a sliver." },
+    { "q": "Collapsing app bar that stays visible?", "options": ["floating: true", "pinned: true", "snap: true", "stretch: true"], "answer": 1, "explain": "Pinned keeps it collapsed at top." },
+    { "q": "Profile page with tabs uses…", "options": ["ListView", "NestedScrollView", "PageView only", "Stack"], "answer": 1, "explain": "Coordinates outer collapse + inner scroll." },
+    { "q": "Big list inside CustomScrollView?", "options": ["SliverToBoxAdapter(child: ListView)", "SliverList", "Container", "Column"], "answer": 1, "explain": "Lazy building; SliverToBoxAdapter defeats laziness." },
+    { "q": "cacheExtent controls…", "options": ["Nothing", "Pixels pre-built beyond viewport", "Widget cache", "Image cache"], "answer": 1, "explain": "Lookahead pre-build." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Build a CustomScrollView with a SliverAppBar + SliverList." },
-    { "level": "Medium", "text": "Mix a SliverGrid and SliverList in one scroll view." },
-    { "level": "Hard", "text": "Create a pinned sticky header with SliverPersistentHeader." },
-    { "level": "Expert", "text": "Build a collapsing parallax header with custom scroll behavior." }
+    { "level": "Easy", "text": "SliverAppBar (pinned + expandedHeight) + SliverList of 50 items." },
+    { "level": "Easy", "text": "Try floating + snap; observe UX." },
+    { "level": "Medium", "text": "Combine SliverToBoxAdapter (section title) + SliverGrid + SliverList in one scroll." },
+    { "level": "Medium", "text": "NestedScrollView profile page with hero + 2 tabs." },
+    { "level": "Hard", "text": "Custom SliverPersistentHeaderDelegate — header that fades + shrinks + moves an avatar." },
+    { "level": "Hard", "text": "Sticky section headers grouped by category." },
+    { "level": "Expert", "text": "Infinite scroll with pagination sentinel + bottom loader in a CustomScrollView." }
   ],
   "interviewQuestions": [
-    "What is a sliver and why use it?",
-    "How does ListView relate to slivers?",
-    "How do you build a collapsing app bar?",
-    "Lazy vs eager sliver children?",
-    "How do you avoid nested-scroll problems?"
+    "What is a Sliver?",
+    "ListView vs CustomScrollView + SliverList?",
+    "What are pinned, floating, snap on SliverAppBar?",
+    "How do you build a collapsing profile-page pattern?",
+    "When would you write a custom SliverPersistentHeaderDelegate?",
+    "SliverList vs SliverGrid — what's the difference?",
+    "What is cacheExtent and when do you tune it?"
   ],
   "references": [
-    { "label": "Flutter — Slivers", "url": "https://docs.flutter.dev/ui/layout/scrolling/slivers" }
+    { "label": "Slivers — Flutter docs", "url": "https://docs.flutter.dev/ui/advanced/slivers" },
+    { "label": "NestedScrollView", "url": "https://api.flutter.dev/flutter/widgets/NestedScrollView-class.html" }
   ]
 }

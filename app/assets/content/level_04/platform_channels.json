@@ -2,49 +2,97 @@
   "id": "flutter.platform_channels",
   "levelId": 4,
   "title": "Platform Channels",
-  "xp": 50,
-  "estimatedMinutes": 25,
+  "xp": 45,
+  "estimatedMinutes": 35,
   "objectives": [
-    "Call native code from Dart and back",
-    "Choose Method/Event/Basic message channels",
-    "Handle threading and serialization correctly"
+    "Understand platform channels via a real-life analogy",
+    "Distinguish MethodChannel, EventChannel, BasicMessageChannel",
+    "Send / receive typed messages between Dart and native (Kotlin / Swift)",
+    "Know when to use Pigeon for type-safety",
+    "Answer platform-channel interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Platform channels are the bridge between Dart and native (Kotlin/Java, Swift/Obj-C) code. Messages are serialized and passed asynchronously across the channel by name." },
-    { "type": "table", "headers": ["Channel", "Use"], "rows": [
-      ["MethodChannel", "Call a native method, get a result"],
-      ["EventChannel", "Stream events from native to Dart (sensors, location)"],
-      ["BasicMessageChannel", "Send arbitrary messages both ways"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of an intercom system between the front office and the kitchen at a restaurant.**\n\n- **Flutter** runs on ONE side (the front office, taking orders). **Native code** (Kotlin on Android, Swift on iOS, C++ on desktop) runs on the other side (the kitchen). They live in the same building (the app process) but on different floors.\n- **A platform channel is the intercom.** You press a button, speak your message, the other side hears it and can respond.\n- **`MethodChannel`** — 'I press the intercom and ASK for something: fry me an egg.' The other side responds when done: 'here's your egg.' Request/response.\n- **`EventChannel`** — 'I open a live channel: keep me updated whenever a new dish is ready.' The kitchen streams updates until Flutter cancels.\n- **`BasicMessageChannel`** — 'Just relay this note; no strict request/response semantics.'\n- **`Pigeon`** — someone writes a template of every intercom conversation you can have, and generates the intercom on both sides so you never mis-say a message. Type-safe.\n\n**Why this matters:** any time Flutter needs functionality that only the OS provides — battery level, biometrics, custom camera, background service, native SDK from a partner — platform channels are the bridge. Every serious Flutter app uses them, usually via a plugin." },
+    { "type": "callout", "variant": "definition", "markdown": "**Platform channels** are Flutter's message-passing bridge between Dart code and platform-native code (Kotlin/Java on Android, Swift/Objective-C on iOS, C++ on desktop, JS on web). Messages are serialized via a `MessageCodec` (default: standard binary codec supporting nulls, bools, numbers, strings, byte arrays, lists, maps). Three flavors: **`MethodChannel`** (call methods with args, get a result), **`EventChannel`** (subscribe to a stream), **`BasicMessageChannel`** (raw two-way messaging). Modern Flutter apps use **Pigeon** for type-safe channel generation." },
+    { "type": "theory", "markdown": "## The three channel types" },
+    { "type": "table", "headers": ["Channel", "Semantics", "Use case"], "rows": [
+      ["**MethodChannel**", "Call → response (one shot)", "'get battery level', 'launch camera'"],
+      ["**EventChannel**", "Subscribe → stream of events", "sensor readings, location updates, keyboard visibility"],
+      ["**BasicMessageChannel**", "Two-way raw messages", "custom protocols, rare in app code"]
     ]},
-    { "type": "code", "language": "dart", "code": "const ch = MethodChannel('app/battery');\nfinal level = await ch.invokeMethod<int>('getBatteryLevel');" },
-    { "type": "callout", "variant": "interview", "markdown": "Channels are asynchronous and use a standard message codec (numbers, strings, lists, maps, bytes). Heavy/synchronous data (lots of bytes) is better moved via FFI or shared memory than serialized over a channel each call." },
-    { "type": "callout", "variant": "mistake", "markdown": "Doing long native work on the platform main thread (blocks the UI), or assuming channel calls are synchronous — they're always async. Use a background thread/dispatcher natively and return via the result callback." },
-    { "type": "callout", "variant": "tip", "markdown": "Wrap channels in a typed Dart API (a plugin) so the rest of the app doesn't touch raw invokeMethod. Match method names and argument shapes exactly on both sides." }
+    { "type": "theory", "markdown": "## Sample program — battery level (MethodChannel)" },
+    { "type": "code", "language": "dart", "code": "// FLUTTER (Dart)\nimport 'package:flutter/services.dart';\n\nclass BatteryService {\n  static const _channel = MethodChannel('com.myapp/battery');\n\n  Future<int> getBatteryLevel() async {\n    try {\n      final level = await _channel.invokeMethod<int>('getBatteryLevel');\n      return level ?? -1;\n    } on PlatformException catch (e) {\n      throw StateError('Failed to get battery: ${e.message}');\n    }\n  }\n}" },
+    { "type": "code", "language": "kotlin", "code": "// ANDROID (MainActivity.kt)\nimport android.content.Context\nimport android.os.BatteryManager\nimport io.flutter.embedding.android.FlutterActivity\nimport io.flutter.embedding.engine.FlutterEngine\nimport io.flutter.plugin.common.MethodChannel\n\nclass MainActivity : FlutterActivity() {\n  private val CHANNEL = \"com.myapp/battery\"\n\n  override fun configureFlutterEngine(engine: FlutterEngine) {\n    super.configureFlutterEngine(engine)\n\n    MethodChannel(engine.dartExecutor.binaryMessenger, CHANNEL)\n      .setMethodCallHandler { call, result ->\n        if (call.method == \"getBatteryLevel\") {\n          val bm = getSystemService(Context.BATTERY_SERVICE) as BatteryManager\n          val level = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)\n          if (level != -1) result.success(level) else result.error(\"UNAVAILABLE\", \"Battery info unavailable\", null)\n        } else {\n          result.notImplemented()\n        }\n      }\n  }\n}" },
+    { "type": "code", "language": "swift", "code": "// iOS (AppDelegate.swift)\nimport UIKit\nimport Flutter\n\n@main\n@objc class AppDelegate: FlutterAppDelegate {\n  override func application(_ application: UIApplication,\n    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {\n\n    let controller = window?.rootViewController as! FlutterViewController\n    let channel = FlutterMethodChannel(name: \"com.myapp/battery\", binaryMessenger: controller.binaryMessenger)\n\n    channel.setMethodCallHandler { call, result in\n      guard call.method == \"getBatteryLevel\" else { result(FlutterMethodNotImplemented); return }\n      UIDevice.current.isBatteryMonitoringEnabled = true\n      let level = Int(UIDevice.current.batteryLevel * 100)\n      if level >= 0 { result(level) } else { result(FlutterError(code: \"UNAVAILABLE\", message: \"Battery info unavailable\", details: nil)) }\n    }\n\n    GeneratedPluginRegistrant.register(with: self)\n    return super.application(application, didFinishLaunchingWithOptions: launchOptions)\n  }\n}" },
+    { "type": "theory", "markdown": "## EventChannel — a stream of sensor updates" },
+    { "type": "code", "language": "dart", "code": "// Dart side — subscribe to accelerometer events\nconst _events = EventChannel('com.myapp/accelerometer');\n\nfinal Stream<List<double>> stream =\n  _events.receiveBroadcastStream().map((e) => List<double>.from(e));\n\nStreamSubscription? _sub;\n\n@override\nvoid initState() {\n  super.initState();\n  _sub = stream.listen((xyz) => print(xyz));\n}\n\n@override\nvoid dispose() { _sub?.cancel(); super.dispose(); }\n// (Kotlin/Swift side: implement EventChannel.StreamHandler.onListen(events) —\n// call events.success(...) repeatedly; on onCancel(), stop the sensor.)" },
+    { "type": "theory", "markdown": "## Pigeon — type-safe channels (recommended)" },
+    { "type": "code", "language": "dart", "code": "// pubspec: pigeon: ^22.0 (dev)\n// Define your API in a `.dart` file — Pigeon generates Dart + Kotlin + Swift.\n\nimport 'package:pigeon/pigeon.dart';\n\n@ConfigurePigeon(PigeonOptions(\n  dartOut: 'lib/battery_api.dart',\n  kotlinOut: 'android/app/src/main/kotlin/com/myapp/BatteryApi.kt',\n  swiftOut: 'ios/Runner/BatteryApi.swift',\n))\n\n@HostApi()\nabstract class BatteryHostApi {\n  int getBatteryLevel();\n}\n\n// Then: `dart run pigeon --input pigeons/battery.dart`\n// Both sides get typed method signatures, generated codecs, and null-safety.\n// No more `invokeMethod<int>('getBatteryLevel')` strings — call\n// BatteryHostApi().getBatteryLevel() directly." },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Passing complex custom objects.** The default codec supports primitives + lists/maps of primitives. Pass a `Map<String, dynamic>` or use Pigeon which handles typed classes." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Calling channels from a background isolate.** Channels only work from the main isolate. Use `RootIsolateToken` + `BackgroundIsolateBinaryMessenger` in modern Flutter for background-isolate access." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Forgetting to handle errors on either side.** Dart: `try` around `invokeMethod`, catch `PlatformException`. Native: call `result.error(...)` on failure — otherwise the Dart Future hangs forever." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Not canceling EventChannel subscriptions.** Sensors keep running, drain battery, leak. `subscription.cancel()` in `dispose`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Reinventing existing plugins.** Before writing a channel, search pub.dev — there's likely already a `battery_plus`, `geolocator`, `permission_handler`, etc." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Prefer an existing plugin from pub.dev.** Save yourself weeks — well-maintained ones exist for battery, biometrics, WebView, permissions, camera, sensors." },
+    { "type": "callout", "variant": "best", "markdown": "**2. If you must write channels, use Pigeon.** Type-safe, generated on both sides, catches drift at compile time." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Keep channels thin.** Put business logic in Dart; native side should be a shallow wrapper over OS APIs." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Handle errors on both sides.** Send `result.error()` on native failure; catch `PlatformException` on Dart." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Cancel EventChannel subscriptions in `dispose`.** Leaks drain battery." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Version your channel names.** `com.myapp/battery-v2` if the contract changes; avoids silent breakage during migrations." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Battery level.** Implement the sample end-to-end (Android + iOS)." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — EventChannel accelerometer.** Stream accelerometer data on both platforms; render a bar chart." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Convert to Pigeon.** Take the battery MethodChannel and regenerate with Pigeon; typed API on both sides." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Biometric prompt.** Bridge `BiometricPrompt` (Android) / `LAContext` (iOS) — use `local_auth` plugin as a reference for structure." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Custom camera plugin.** Wrap `CameraX` / `AVFoundation`; expose a TextureView the Flutter side displays." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is a platform channel and why is it needed?**\n\n**A:** A platform channel is Flutter's message-passing bridge between Dart code and platform-native code (Kotlin/Java on Android, Swift/Objective-C on iOS, C++ on desktop, JS on web). Needed because Dart doesn't have direct access to platform-specific APIs — you can't call `BatteryManager` or `Bluetooth` or `HealthKit` from Dart. The channel gives Dart a way to invoke native methods with arguments, receive results, and subscribe to native streams. Every non-trivial Flutter app uses platform channels — either directly, or (more commonly) through a plugin from pub.dev that wraps them." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What are the three channel types?**\n\n**A:** **(1) `MethodChannel`** — request/response. Dart calls `invokeMethod('foo', args)` and awaits a single result. Native side sets a method-call handler and calls `result.success(x)` or `result.error(...)`. Best for one-shot operations. **(2) `EventChannel`** — subscribe/stream. Dart calls `receiveBroadcastStream()`, gets a `Stream`. Native side implements a `StreamHandler` and calls `events.success(...)` multiple times. Best for continuous data (sensors, location). **(3) `BasicMessageChannel`** — raw two-way messages with a custom codec. Rare in app code; useful for custom protocols. **Rule:** MethodChannel for one-shots, EventChannel for streams, BasicMessageChannel almost never." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What is Pigeon and why use it?**\n\n**A:** Pigeon is a code generator that turns a Dart interface declaration into type-safe channel code on both sides (Dart + Kotlin + Swift + optionally C++/Java/Objective-C). Without Pigeon, you write raw `MethodChannel('com.myapp/foo').invokeMethod('bar', args)` — untyped, stringly-typed, easy to break. With Pigeon, you write:\n```dart\n@HostApi()\nabstract class BatteryApi {\n  int getBatteryLevel();\n}\n```\nRun `pigeon` — you get typed classes on both sides. **Wins:** compile-time type safety, generated codecs, refactor-safe (renaming a method updates both sides), documentation-friendly. **Modern Flutter apps that write custom channels should use Pigeon.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What data types can travel through platform channels?**\n\n**A:** The default codec (`StandardMessageCodec`) supports: `null`, `bool`, `int` (`int32` or `int64`), `double`, `String`, `Uint8List`, `Int32List`, `Int64List`, `Float64List`, and `List`/`Map` of any of these. **Cannot pass:** custom classes directly — you must serialize to a `Map<String, dynamic>` or use Pigeon (which generates class serialization). Byte arrays travel efficiently as `Uint8List`. For huge payloads, consider passing a file path or use a shared memory region instead." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: Can you call a platform channel from a background isolate?**\n\n**A:** Historically NO — channels only worked on the main isolate because they needed the platform message dispatcher. **Modern Flutter (3.7+)** added `RootIsolateToken` + `BackgroundIsolateBinaryMessenger.ensureInitialized(token)` — pass the token from the main isolate, initialize the binary messenger on the background isolate, then channels work there too. Use case: a WorkManager callback isolate that needs to talk to native code. This is essential for reliable background work in modern Flutter apps." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What is a Flutter plugin?**\n\n**A:** A plugin is a Dart package that includes both a Dart-side API AND native code (Android/iOS/etc.) implementing platform channels. Consumers add it to `pubspec.yaml`; the plugin's Dart API delegates to its native code via channels. **Plugin structure:** `lib/` (Dart), `android/` (Kotlin), `ios/` (Swift), `macos/`/`linux/`/`windows/`/`web/` for each supported platform. **Federated plugins** split the Dart interface (`plugin`) from per-platform implementations (`plugin_android`, `plugin_ios`) so third parties can add platforms. Popular examples: `camera`, `geolocator`, `permission_handler`, `local_auth`, `webview_flutter`. Reach for a plugin BEFORE writing your own channel." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: How do you debug a platform channel?**\n\n**A:** **Dart side:** wrap `invokeMethod` in try/catch, log `PlatformException.code` + `.message`. **Android:** attach `adb logcat | grep MyApp` to see native `Log.d()` output; use Android Studio's breakpoints in the Kotlin code (attach debugger to the running Flutter process). **iOS:** attach Xcode's debugger to the Runner target; add `print(...)` in Swift; use Xcode's console. **Verify channel name matches** on both sides (typo = silent hang). **Trace with `flutter run -v`** — verbose Flutter output shows channel activity. **`dart:developer` `log()`** shows in DevTools. The typical bug is name-typo or forgetting to call `result.success` — Dart waits forever." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **`battery_plus`, `geolocator`, `sensors_plus`** — pure MethodChannel + EventChannel wrappers.\n- **`camera`, `webview_flutter`** — plugins with a native `PlatformView` (embedding native views in Flutter).\n- **`firebase_*`** — massive federated plugins with per-platform implementations.\n- **`local_auth`** — biometric prompt bridge.\n- **`permission_handler`** — runtime permission request bridge.\n- **`workmanager`** — background execution with channel-based communication back to Dart.\n- **Enterprise apps** — company-specific native SDKs (payment gateways, tracking libs) often wrapped in custom channels." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`PlatformView`** — embed a native UIView / Android View inside a Flutter widget (rare, expensive). Used by WebView.\n- **`FlutterPlatformViewController`** — the machinery behind PlatformView.\n- **`BinaryMessenger`** — the low-level transport; channels are wrappers.\n- **`Method codecs`** — StandardMessageCodec (default), JSONMessageCodec, StringCodec, BinaryCodec.\n- **Isolates + channels** — `RootIsolateToken` + `BackgroundIsolateBinaryMessenger.ensureInitialized(token)`.\n- **Federated plugins** — `platform_interface` package pattern.\n- **`FFI` (Foreign Function Interface)** — alternative for calling C libraries directly (see FFI topic); MUCH faster than channels for hot paths.\n- **Debugging** — `--verbose` flutter run, `flutter logs`, `flutter attach`.\n- **Testing** — mock channels in unit tests with `defaultBinaryMessenger.setMockMethodCallHandler`." }
   ],
   "flashcards": [
-    { "front": "What are platform channels for?", "back": "Calling native platform code from Dart (and streaming back), via named, serialized async messages." },
-    { "front": "MethodChannel vs EventChannel?", "back": "MethodChannel for request/response calls; EventChannel for a stream of native events." },
-    { "front": "Are channel calls sync or async?", "back": "Always asynchronous; results come back via Futures/streams." }
+    { "front": "Three channel types?", "back": "MethodChannel (call/response), EventChannel (stream), BasicMessageChannel (raw)." },
+    { "front": "Type-safe channels?", "back": "Pigeon — generate typed API on both sides from a Dart interface declaration." },
+    { "front": "Data types allowed?", "back": "null/bool/int/double/String/typed lists/List/Map of these. No custom classes without Pigeon." },
+    { "front": "Background isolate + channels?", "back": "RootIsolateToken + BackgroundIsolateBinaryMessenger.ensureInitialized(token) (Flutter 3.7+)." },
+    { "front": "Before writing a channel…", "back": "Check pub.dev — likely a plugin exists." },
+    { "front": "Common bug?", "back": "Channel name typo or forgetting result.success() → Dart Future hangs forever." }
   ],
   "quiz": [
-    { "q": "To stream sensor events from native to Dart, use…", "options": ["MethodChannel", "EventChannel", "FFI only", "A Future"], "answer": 1, "explain": "EventChannel exposes a native stream to Dart." },
-    { "q": "Platform channel calls are…", "options": ["Synchronous", "Asynchronous", "GPU calls", "Database queries"], "answer": 1, "explain": "Messages cross the boundary asynchronously." },
-    { "q": "For large byte transfers prefer…", "options": ["More MethodChannel calls", "FFI / shared memory", "JSON strings", "EventChannel"], "answer": 1, "explain": "FFI avoids per-call serialization overhead for heavy data." }
+    { "q": "One-shot native call?", "options": ["EventChannel", "MethodChannel", "BasicMessageChannel", "StreamChannel"], "answer": 1, "explain": "Request/response." },
+    { "q": "Continuous sensor updates?", "options": ["MethodChannel", "EventChannel", "Timer", "BasicMessageChannel"], "answer": 1, "explain": "Streaming semantics." },
+    { "q": "Type-safe channel gen?", "options": ["Provider", "Pigeon", "GetX", "Riverpod"], "answer": 1, "explain": "Codegen from Dart interfaces." },
+    { "q": "Passing a custom class needs…", "options": ["It works", "Serialize to Map or use Pigeon", "Only enum", "Not supported"], "answer": 1, "explain": "Default codec is primitives + collections." },
+    { "q": "Background isolate + channel (modern)?", "options": ["Impossible", "RootIsolateToken + BackgroundIsolateBinaryMessenger", "Deprecated", "Only main"], "answer": 1, "explain": "Flutter 3.7+ supports it." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Call a native method that returns the battery level." },
-    { "level": "Medium", "text": "Stream accelerometer events to Dart via EventChannel." },
-    { "level": "Hard", "text": "Run heavy native work off the main thread and return a result." },
-    { "level": "Expert", "text": "Wrap a native SDK in a typed Flutter plugin with method + event channels." }
+    { "level": "Easy", "text": "Battery level MethodChannel end-to-end on Android." },
+    { "level": "Medium", "text": "Add iOS side; verify from both platforms." },
+    { "level": "Medium", "text": "Convert your channel to Pigeon." },
+    { "level": "Hard", "text": "EventChannel for accelerometer; render as a live bar chart." },
+    { "level": "Hard", "text": "Handle errors on both sides — `result.error(...)` and `PlatformException`." },
+    { "level": "Expert", "text": "Bridge a native biometric prompt (BiometricPrompt / LAContext)." },
+    { "level": "Expert", "text": "Federated plugin: interface + Android impl + iOS impl in a single pub package." }
   ],
   "interviewQuestions": [
-    "What are platform channels and how do they work?",
-    "MethodChannel vs EventChannel vs BasicMessageChannel?",
-    "Are channel calls sync or async?",
-    "How do you avoid blocking the UI from native work?",
-    "When use FFI instead of a channel?"
+    "What is a platform channel and why is it needed?",
+    "What are the three channel types?",
+    "What is Pigeon and why use it?",
+    "What data types can travel through platform channels?",
+    "Can you call a platform channel from a background isolate?",
+    "What is a Flutter plugin?",
+    "How do you debug a platform channel?"
   ],
   "references": [
-    { "label": "Flutter — Platform channels", "url": "https://docs.flutter.dev/platform-integration/platform-channels" }
+    { "label": "Platform channels — Flutter docs", "url": "https://docs.flutter.dev/platform-integration/platform-channels" },
+    { "label": "Pigeon", "url": "https://pub.dev/packages/pigeon" }
   ]
 }
