@@ -136,73 +136,17 @@ body.push(...topicToChapter(loadTopic("level_04", "platform_channels"),
 body.push(...topicToChapter(loadTopic("level_04", "engine"),
   { chapterNumber: 16, bookmarkId: "ch16" }));
 
-// 15 Impeller
-body.push(...chapter({
-  id: "ch17", title: "17. Impeller",
-  def: "Impeller is Flutter's modern rendering engine replacing the Skia-based renderer, designed to eliminate 'shader compilation jank' by precompiling shaders at build time.",
-  blocks: [
-    table(["", "Skia (old)", "Impeller"], [
-      ["Shaders", "Compiled at runtime (jank)", "Precompiled at build"],
-      ["Backend", "GL/Metal/Vulkan via Skia", "Metal (iOS), Vulkan (Android)"]], [1700, 3830, 3830]),
-    callout("interview", ["The old problem: Skia compiled shaders the first time an effect appeared, causing a one-time stutter. Impeller precompiles a fixed shader set ahead of time, so first-run animations are smooth."]),
-  ],
-  summary: ["Impeller fixes shader compilation jank.", "Shaders precompiled at build, not runtime.", "Metal on iOS, Vulkan on Android.", "Default on iOS; rolling out on Android."],
-  interview: ["What is Impeller and why created?", "What is shader jank?", "Impeller vs Skia?", "Which backends?", "Platform status?"],
-  coding: [
-    { level: "Easy", text: "Explain shader jank and Impeller's fix." },
-    { level: "Medium", text: "Compare first-run smoothness with Impeller on/off." },
-    { level: "Hard", text: "Profile a complex animation on each renderer." },
-    { level: "Expert", text: "Adapt a custom shader that differs on Impeller." }],
-  realworld: ["Teams that battled first-run jank with SkSL warm-up scripts now get it for free with Impeller — a major DX/UX win."],
-  miniproject: ["Build an animation-heavy screen and document first-run smoothness across renderers."],
-  advanced: ["Impeller's tessellation, FragmentProgram support, platform rollout caveats."],
-}));
+// 17. Impeller
+body.push(...topicToChapter(loadTopic("level_04", "impeller"),
+  { chapterNumber: 17, bookmarkId: "ch17" }));
 
-// 16 FFI
-body.push(...chapter({
-  id: "ch18", title: "18. FFI (Foreign Function Interface)",
-  def: "dart:ffi lets Dart call C functions and use C structures directly — no serialization — ideal for existing C/C++/Rust libraries (crypto, codecs, ML, SQLite).",
-  blocks: [
-    code(["final lib = DynamicLibrary.open('libnative.so');",
-      "final add = lib.lookupFunction<Int32 Function(Int32,Int32),",
-      "  int Function(int,int)>('add');"], "dart"),
-    callout("interview", ["Use FFI to call C libraries or move lots of data cheaply; use platform channels for platform services in Kotlin/Swift. FFI is synchronous, so still offload heavy work to an isolate."]),
-    callout("mistake", ["Leaking native memory — malloc'd memory must be freed; mismatched struct layouts crash. Use ffigen to generate bindings."]),
-  ],
-  summary: ["FFI calls C ABI libraries directly, no serialization.", "FFI = C libs; channels = platform code.", "FFI is synchronous — offload heavy work.", "Manage native memory; use ffigen."],
-  interview: ["What is dart:ffi and when use it?", "FFI vs channels?", "Manage native memory?", "Is FFI sync? Avoid blocking?", "What is ffigen?"],
-  coding: [
-    { level: "Easy", text: "Call C add(int,int) from a shared lib." },
-    { level: "Medium", text: "Pass/read a C struct, freeing memory." },
-    { level: "Hard", text: "Generate bindings with ffigen." },
-    { level: "Expert", text: "Wrap a Rust function and run it off-isolate." }],
-  realworld: ["High-performance packages (sqlite3, image codecs, crypto) use FFI to reuse battle-tested C libraries instead of reimplementing in Dart."],
-  miniproject: ["Bind a small C math/crypto library and expose a safe typed Dart API over it."],
-  advanced: ["NativeFinalizer for cleanup, isolates + FFI callbacks, ffigen + native assets."],
-}));
+// 18. FFI
+body.push(...topicToChapter(loadTopic("level_04", "ffi"),
+  { chapterNumber: 18, bookmarkId: "ch18" }));
 
-// 17 Packages
-body.push(...chapter({
-  id: "ch19", title: "19. Package Development",
-  def: "A package is reusable code on pub.dev. A pure Dart package has no platform code; a plugin adds native (channel or FFI) implementations per platform.",
-  blocks: [
-    table(["Type", "Contains", "Example"], [
-      ["Dart package", "Pure Dart", "intl, collection"],
-      ["Plugin (federated)", "Dart + native per platform", "camera, geolocator"],
-      ["FFI plugin", "Dart + C/C++", "sqlite3"]], [2100, 3500, 3760]),
-    callout("interview", ["Modern plugins are 'federated': a platform-interface package defines the contract and each platform provides its own implementation, so third parties can add support without touching the core."]),
-  ],
-  summary: ["Package = pure Dart; plugin = + native.", "Federated = interface + per-platform impls.", "Use semantic versioning (MAJOR breaks).", "Ship example, tests, docs for adoption."],
-  interview: ["Package vs plugin vs FFI plugin?", "What is a federated plugin?", "How version and publish?", "Design a good public API?", "What earns pub.dev points?"],
-  coding: [
-    { level: "Easy", text: "Pure Dart package with a tested utility." },
-    { level: "Medium", text: "Plugin exposing one native method." },
-    { level: "Hard", text: "Make it federated with platform interface." },
-    { level: "Expert", text: "Publish to pub.dev with example, tests, CI." }],
-  realworld: ["Companies extract shared widgets/clients into internal packages so many apps reuse one tested implementation."],
-  miniproject: ["Extract a reusable component from an app into a published (or local) package with tests and an example app."],
-  advanced: ["Melos monorepos, platform-interface design, native assets, pub scoring."],
-}));
+// 19. Packages
+body.push(...topicToChapter(loadTopic("level_04", "packages"),
+  { chapterNumber: 19, bookmarkId: "ch19" }));
 
 // Revision
 body.push(H1("Volume 4 Revision Cheat Sheet", "cheat"));

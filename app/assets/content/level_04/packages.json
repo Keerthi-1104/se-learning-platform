@@ -1,49 +1,99 @@
 {
   "id": "flutter.packages",
   "levelId": 4,
-  "title": "Package Development",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "title": "Packages & pub.dev",
+  "xp": 35,
+  "estimatedMinutes": 25,
   "objectives": [
-    "Distinguish a Dart package, Flutter plugin and FFI plugin",
-    "Structure and publish a reusable package",
-    "Apply versioning and good API design"
+    "Understand packages via a real-life analogy",
+    "Read/write `pubspec.yaml` fluently",
+    "Distinguish packages vs plugins vs federated plugins",
+    "Publish your own package to pub.dev",
+    "Answer package interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "A package is reusable code published to pub.dev (or used locally). A pure Dart package has no platform code; a plugin adds native (platform-channel or FFI) implementations per platform." },
-    { "type": "table", "headers": ["Type", "Contains", "Example"], "rows": [
-      ["Dart package", "Pure Dart", "intl, collection"],
-      ["Plugin (federated)", "Dart + native per platform", "camera, geolocator"],
-      ["FFI plugin", "Dart + C/C++", "sqlite3, crypto libs"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of packages as ready-made LEGO kits at a hardware store.**\n\n- Every Flutter app is built on top of dozens of packages. You COULD write your own HTTP client, your own state manager, your own image decoder — or you could grab a kit from **pub.dev** in one line of `pubspec.yaml`.\n- **`dart` packages** — pure Dart code, no native side. Runs anywhere Dart runs. Example: `dio`, `intl`, `collection`.\n- **`flutter` packages** — Dart code that depends on Flutter widgets/APIs but is still pure Dart. Example: `go_router`, `flutter_hooks`, `provider`.\n- **`plugin` packages** — Dart PLUS platform-specific native code (Kotlin/Swift/etc.). They wrap platform channels or FFI. Example: `camera`, `geolocator`, `firebase_core`.\n- **Federated plugins** — the plugin is split across MANY packages: `myplug` (interface), `myplug_android` (Android impl), `myplug_ios` (iOS impl). Lets third parties add platform support without touching the main package.\n\n**Why this matters:** pub.dev is Flutter's economy. Reading pubspec, evaluating packages, and eventually publishing your own is table-stakes for a Flutter engineer. Smart Consumer already ships with 20+ transitive package dependencies — understanding this map is essential." },
+    { "type": "callout", "variant": "definition", "markdown": "**A Flutter package** is a shareable unit of Dart/Flutter code hosted on **pub.dev**. Packages come in three flavors: **pure Dart** (no Flutter deps), **Flutter** (uses Flutter widgets/APIs), **plugin** (Dart + platform-native code via channels or FFI). Every package has a `pubspec.yaml` declaring name, version, dependencies, SDK constraints, and (for plugins) the native code paths per platform." },
+    { "type": "theory", "markdown": "## `pubspec.yaml` — every line explained" },
+    { "type": "code", "language": "yaml", "code": "name: se_learning_platform          # Your package name — must be snake_case, unique on pub.dev\ndescription: >-                     # 60-180 char description (Pub Scoring uses this)\n  An AI-powered Software Engineer learning platform for interview prep.\npublish_to: 'none'                  # 'none' = never publish. Remove or set for pub.dev.\nversion: 1.0.0+1                    # semver + optional build number after `+`\n\nrepository: https://github.com/…    # Optional but boosts pub scoring\nhomepage: https://myapp.example     # Optional\nissue_tracker: https://…            # Optional\n\nenvironment:\n  sdk: ^3.5.0                       # Dart SDK constraint\n  flutter: '>=3.24.0'               # Flutter version constraint (packages using Flutter)\n\ndependencies:                       # runtime deps — bundled into your app\n  flutter:\n    sdk: flutter                    # ← the Flutter framework itself\n  http: ^1.2.2                      # Caret constraint: >=1.2.2 <2.0.0 (semver-major)\n  go_router: ^14.6.2\n  hive: ^2.2.3\n\ndev_dependencies:                   # tools + tests, NOT shipped with the app\n  flutter_lints: ^5.0.0\n  build_runner: ^2.4.0\n  freezed: ^2.5.0\n\ndependency_overrides:               # emergency escape hatch — force a specific version\n  # only use when you MUST pin a transitive dep\n  http: 1.2.2\n\nflutter:\n  uses-material-design: true\n  assets:\n    - assets/images/\n    - assets/content/roadmap.json\n  fonts:\n    - family: SFPro\n      fonts:\n        - asset: assets/fonts/SFPro-Regular.ttf\n        - asset: assets/fonts/SFPro-Bold.ttf\n          weight: 700\n  # For plugins — declare platforms and their entry points:\n  # plugin:\n  #   platforms:\n  #     android:\n  #       package: com.myapp.myplugin\n  #       pluginClass: MyPlugin\n  #     ios:\n  #       pluginClass: MyPlugin" },
+    { "type": "theory", "markdown": "## Version constraints — what the symbols mean" },
+    { "type": "table", "headers": ["Constraint", "Meaning", "Example range"], "rows": [
+      ["`^1.2.3`", "Compatible with 1.2.3 — no major bump", ">=1.2.3 <2.0.0"],
+      ["`>=1.2.3 <2.0.0`", "Explicit range", "Same as above"],
+      ["`1.2.3`", "**Exact** version pin (rarely a good idea)", "= 1.2.3"],
+      ["`any`", "Any version — risky", "no bound"],
+      ["`>=1.2.3 <1.3.0`", "Narrow patch range", "1.2.x only"],
+      ["`git:` / `path:`", "Load from git URL / local path", "For unpublished / private code"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "Modern plugins are 'federated': a platform-interface package defines the contract, and each platform (android/ios/web) provides its own implementation package. This lets third parties add platform support without touching the core." },
-    { "type": "callout", "variant": "note", "markdown": "Use semantic versioning (MAJOR.MINOR.PATCH): breaking changes bump MAJOR. A clear CHANGELOG, example app, tests, and good doc comments earn pub.dev points and adoption." },
-    { "type": "callout", "variant": "tip", "markdown": "Design a small, stable public API; keep internals in src/ (not exported). Add example/, write tests, and run `dart pub publish --dry-run` before releasing." }
+    { "type": "callout", "variant": "interview", "markdown": "**The default `^` prefix follows semver.** `^1.2.3` = 'any version compatible with 1.2.3'. Semver says a MAJOR bump (1.x → 2.x) may break APIs; `^` prevents auto-upgrade to it. You get patch and minor updates for free (`pub upgrade`), major bumps are a conscious decision." },
+    { "type": "theory", "markdown": "## Publishing a package to pub.dev" },
+    { "type": "code", "language": "bash", "code": "# 1. Scaffold a package (or plugin)\ndart create --template=package my_awesome_pkg     # pure Dart\nflutter create --template=package my_awesome_pkg  # Flutter package\nflutter create --template=plugin \\                # plugin with native code\n  --platforms=android,ios,macos,windows,linux \\\n  --org=com.myapp my_awesome_plug\n\n# 2. Write code + tests + docs\n\n# 3. Verify metadata — pub.dev SCORES packages\nflutter pub publish --dry-run\n#    Fixes any warnings: missing description, missing license, missing example, etc.\n\n# 4. Publish (login the first time; requires a Google account)\ndart pub publish\n\n# 5. Pub SCORE checks:\n#      - Follows Dart conventions (analyzer warnings)\n#      - Provides docs (README, dartdoc)\n#      - Uses null safety\n#      - Supports latest Dart/Flutter\n#      - License declared (usually MIT/BSD/Apache-2.0)\n#      - Has an example/ directory\n#\n#    Aim for the pub-dev score in the 130s+ (out of 150) — top ~10% of packages." },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Adding to `dependencies:` what should be in `dev_dependencies:`.** Test / codegen / lint tools go under dev — they shouldn't ship with the app." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Pinning exact versions everywhere.** `http: 1.2.3` (no `^`) prevents auto-upgrades and creates dependency-hell when two packages disagree." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Ignoring `pub outdated`.** Run it every couple of weeks — surfaces packages with security fixes or bug fixes." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Adding heavy packages 'just in case'.** Every dep enters your APK. Check pub score, weekly downloads, last-updated date; abandoned packages become tech debt." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Publishing without a LICENSE + README + example.** Pub score plummets; users can't tell what your package does; nobody uses it." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Use `^` version constraints.** Semver-compatible upgrades happen automatically." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Vet packages before adding.** Score (Popularity / Likes / Points), last-updated date, maintainer, issue tracker health." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Run `dart pub outdated` regularly.** Stay on current for security + performance." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Prefer packages by 'verified publishers' on pub.dev.** Signed by Google or well-known orgs; a strong quality signal." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Keep dev-only tools in `dev_dependencies`.** Reduces prod APK bloat." },
+    { "type": "callout", "variant": "best", "markdown": "**6. When publishing: LICENSE + README + example + tests + null-safety + Docs.** These are the top-scoring criteria." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Explore pubspec.yaml.** Open Smart Consumer's pubspec — identify every dep, dev-dep, asset, and constraint." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Easy) — pub outdated.** Run `flutter pub outdated`; upgrade one package; verify tests pass." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Scaffold a package.** `dart create --template=package my_math_pkg`; write a simple `add(int, int)` function; run tests." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Medium) — Local `path:` dep.** From another Flutter project, add `my_math_pkg` via `path: ../my_math_pkg`; use it." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard) — Publish to pub.dev.** Write a small, useful package; ensure it scores 130+; publish; add its badge to your GitHub." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert) — Federated plugin.** Split a plugin into interface + Android + iOS implementations; publish all three." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Package vs Plugin vs Federated Plugin?**\n\n**A:** **Package** — pure Dart or Flutter Dart code; no native side. Examples: `intl`, `go_router`. Ships as source. **Plugin** — Dart AND platform-specific native code (Kotlin/Swift/etc.). Wraps platform channels or FFI. Examples: `camera`, `geolocator`. Ships Dart source + platform-native code per target. **Federated Plugin** — a plugin split across multiple packages so third parties can add platforms independently: `myplug` (Dart interface), `myplug_android` (Android impl), `myplug_ios` (iOS impl), `myplug_web` (web impl). Common in the Firebase / Google plugins. **Choose:** package if pure Dart, plugin if you need native APIs, federated plugin if you want an extensible platform-agnostic ecosystem." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What is `pubspec.yaml`?**\n\n**A:** A YAML file at every Flutter project's root that declares: **name / description / version** (semver), **`environment.sdk`** (Dart version), **`environment.flutter`** (Flutter version), **`dependencies`** (runtime — bundled with your app), **`dev_dependencies`** (build-time only — tests, codegen, lints), optional **`dependency_overrides`** (force a version), and the **`flutter:`** section (assets, fonts, plugin declarations). It's the single source of truth for what your app depends on and what ships. `pub get` / `flutter pub get` reads it, downloads packages, and writes `pubspec.lock` (which pins resolved versions)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: `^1.2.3` — what does the caret mean?**\n\n**A:** '**Compatible with 1.2.3**' — any version >= 1.2.3 and < 2.0.0. Follows **semantic versioning**: MAJOR (2.0.0) is allowed to break APIs; MINOR / PATCH (1.3.0, 1.2.4) are backwards-compatible. `^` lets you get bug fixes and features for free while preventing surprise API breaks from a major bump. `flutter pub upgrade` respects `^` and pulls the latest compatible version. If you need to move to 2.x, you change the constraint deliberately. **This is the default** and almost always the right choice." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: `dependencies` vs `dev_dependencies` — what goes where?**\n\n**A:** **`dependencies`** — runtime deps bundled with the app. HTTP client, state manager, JSON serializer, DB, plugins. These are what your app IMPORTS and needs at runtime. **`dev_dependencies`** — build-time only, NOT shipped with the app. Testing frameworks (`flutter_test`, `mockito`), code generators (`build_runner`, `freezed`, `json_serializable`), lints (`flutter_lints`), local test utilities. **The distinction matters:** dev-deps don't bloat your APK; also, downstream users of your package don't get transitively burdened by dev-only packages. **Rule:** if it's needed to RUN the app, `dependencies`. If it's needed to DEVELOP / TEST / GENERATE code, `dev_dependencies`." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you evaluate a package before adding it?**\n\n**A:** On pub.dev, check the four pillars: **(1) Score (Points / 150)** — measures null safety, docs, example, license, dependencies. Aim for 130+. **(2) Popularity** — download rank; more usage = more real-world testing. **(3) Likes** — community sentiment. **(4) Verified Publisher** badge — signed by an organization, adds trust. Also: **last-updated date** (if > 1 year old and Flutter has moved, be cautious), **issues** (open bug count + response rate on GitHub), **maintainer's track record**, **example/ folder present**. **Rule:** for a critical dep, spend 10 minutes vetting — abandoned packages become tech debt years later. `dio` vs an unmaintained fork isn't a hard choice." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How do you publish your own package to pub.dev?**\n\n**A:** **(1) Scaffold:** `dart create --template=package my_pkg` (pure Dart) or `flutter create --template=plugin --platforms=android,ios my_plug`. **(2) Write:** implement your Dart API, add tests, write a README, add an `example/` app, declare a LICENSE (MIT/BSD/Apache-2.0). **(3) Verify:** `flutter pub publish --dry-run` — surfaces every scoring issue. Fix them. **(4) Publish:** `dart pub publish`. First time asks you to log in with a Google account. **(5) Post-publish:** monitor pub score, respond to issues, ship updates. **The pub-dev score** rewards: null safety, up-to-date SDK, complete metadata, example folder, no analyzer warnings, no unpublished dependency-overrides. **Rule:** aim for 130+ points; anything less signals a quick-and-dirty package." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: How do you deal with a dependency you can't upgrade?**\n\n**A:** Two situations. **(1) A transitive dep** conflicts between two of YOUR dependencies. Fix: figure out which top-level dep pulls the outdated version (`pub deps`), upgrade THAT one to a version compatible with the newer transitive. If impossible, use `dependency_overrides:` to force a version (emergency escape hatch). **(2) YOUR direct dep** has a critical bug or a breaking API change. Fix: fork on GitHub, apply a patch, use `git:` in pubspec (`http: git: https://github.com/…`) pointing to your fork; open a PR upstream so you can revert to the pub version once merged. **Rule:** avoid `dependency_overrides:` unless truly stuck — it's a maintenance smell." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Smart Consumer's `pubspec.yaml`** — likely `dio`, `provider`/`bloc`, `intl`, `flutter_svg`, `image_picker`, and 15 more.\n- **`pub.dev`** — the central package registry; every serious Flutter app depends on it.\n- **Verified publishers** — `google.dev`, `firebase.google.com`, `bloclibrary.dev`, `riverpod.dev` — high-trust badges.\n- **Enterprise private packages** — companies host internal packages via git URLs or self-hosted registries (`pub_hosted`).\n- **`melos`** — tool for managing multi-package Dart repositories (a monorepo of packages)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`pubspec.lock`** — pins resolved versions; commit it for apps, DON'T commit it for library packages.\n- **`.pub-cache`** — Dart's package cache. Clear with `dart pub cache clean` if a corrupt package is suspected.\n- **`pub_hosted`** — self-host a private pub registry.\n- **`melos`** — monorepo management for Dart / Flutter packages.\n- **`workspaces:` field (pubspec)** — Dart 3.5+ supports pubspec workspaces (multiple packages sharing one lock file).\n- **`dart pub deps`** — inspect the dependency graph.\n- **`dart pub upgrade --major-versions`** — bump majors (with care).\n- **`dart pub outdated`** — report outdated packages.\n- **`flutter pub run <tool>`** — execute a package's binary from your project.\n- **`.pubignore`** — files to skip when publishing (like `.gitignore` for pub.dev)." }
   ],
   "flashcards": [
-    { "front": "Package vs plugin?", "back": "A package is pure Dart; a plugin adds native platform implementations (channels or FFI)." },
-    { "front": "What is a federated plugin?", "back": "A platform-interface + separate per-platform implementation packages, so support can be added independently." },
-    { "front": "What is semantic versioning?", "back": "MAJOR.MINOR.PATCH — MAJOR for breaking changes, MINOR for features, PATCH for fixes." }
+    { "front": "Package vs plugin?", "back": "Package = pure Dart/Flutter. Plugin = also has native Kotlin/Swift/etc. code." },
+    { "front": "Federated plugin?", "back": "Split across interface + per-platform implementation packages so third parties can add platforms." },
+    { "front": "^1.2.3 means?", "back": ">=1.2.3 <2.0.0 — semver-compatible upgrades free; blocks breaking major bumps." },
+    { "front": "dependencies vs dev_dependencies?", "back": "dependencies = runtime, bundled. dev_dependencies = build/test/gen tools; NOT in the app." },
+    { "front": "Vet a package?", "back": "Score, popularity, likes, verified publisher, last-updated, issue health." },
+    { "front": "Publishing steps?", "back": "Scaffold → LICENSE + README + example → pub publish --dry-run → fix warnings → dart pub publish." }
   ],
   "quiz": [
-    { "q": "A pure Dart package contains…", "options": ["Native code per platform", "Only Dart code", "C++ only", "Just assets"], "answer": 1, "explain": "Plugins add native code; pure packages are Dart-only." },
-    { "q": "Federated plugins split into…", "options": ["One giant file", "Platform-interface + per-platform implementations", "Only Android", "Only Dart"], "answer": 1, "explain": "An interface package plus implementation packages per platform." },
-    { "q": "A breaking change bumps the…", "options": ["PATCH", "MINOR", "MAJOR", "Build number"], "answer": 2, "explain": "Semantic versioning increments MAJOR for breaking changes." }
+    { "q": "What does ^1.2.3 allow?", "options": ["Only 1.2.3", "Up to but not including 2.0.0", "Any version", "Only 1.2.x"], "answer": 1, "explain": "Semver-compatible upgrades." },
+    { "q": "flutter_test belongs in…", "options": ["dependencies", "dev_dependencies", "dependency_overrides", "assets"], "answer": 1, "explain": "Test tool, not shipped with app." },
+    { "q": "Plugin = package that…", "options": ["Has Dart only", "Includes platform-native code (Kotlin/Swift)", "Is deprecated", "Only web"], "answer": 1, "explain": "Bridges Dart to native." },
+    { "q": "Score aim on pub.dev?", "options": ["<50", "130+", "Doesn't matter", "Exactly 100"], "answer": 1, "explain": "Top-tier packages." },
+    { "q": "dependency_overrides is a…", "options": ["Default", "Emergency escape hatch — use sparingly", "Free upgrade", "Required"], "answer": 1, "explain": "Bypasses normal resolution." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Create a pure Dart package with a tested utility function." },
-    { "level": "Medium", "text": "Build a Flutter plugin exposing one native method via a channel." },
-    { "level": "Hard", "text": "Make the plugin federated with a platform interface + Android/iOS impls." },
-    { "level": "Expert", "text": "Publish a package to pub.dev with example, tests, CI, and semantic versioning." }
+    { "level": "Easy", "text": "Read Smart Consumer's pubspec — list every runtime + dev dep." },
+    { "level": "Easy", "text": "Add flutter_lints in dev_dependencies; enable them; fix warnings." },
+    { "level": "Medium", "text": "Run flutter pub outdated; upgrade one dep; verify tests." },
+    { "level": "Medium", "text": "Scaffold `my_pkg` with `dart create --template=package`; write a helper + tests." },
+    { "level": "Hard", "text": "Import `my_pkg` from another project via `path:` dep; use its API." },
+    { "level": "Hard", "text": "Publish a small package to pub.dev; aim for 130+ score." },
+    { "level": "Expert", "text": "Build a federated plugin — interface + Android + iOS implementations, all publishable." }
   ],
   "interviewQuestions": [
-    "Package vs plugin vs FFI plugin?",
-    "What is a federated plugin and why?",
-    "How do you version and publish a package?",
-    "How do you design a good public API?",
-    "What earns pub.dev points?"
+    "Package vs Plugin vs Federated Plugin?",
+    "What is pubspec.yaml?",
+    "^1.2.3 — what does the caret mean?",
+    "dependencies vs dev_dependencies — what goes where?",
+    "How do you evaluate a package before adding it?",
+    "How do you publish your own package to pub.dev?",
+    "How do you deal with a dependency you can't upgrade?"
   ],
   "references": [
-    { "label": "Flutter — Developing packages & plugins", "url": "https://docs.flutter.dev/packages-and-plugins/developing-packages" }
+    { "label": "Creating packages — Flutter", "url": "https://docs.flutter.dev/packages-and-plugins/developing-packages" },
+    { "label": "pub.dev", "url": "https://pub.dev" }
   ]
 }

@@ -1,49 +1,95 @@
 {
   "id": "flutter.impeller",
   "levelId": 4,
-  "title": "Impeller",
+  "title": "Impeller (Rendering Engine)",
   "xp": 40,
-  "estimatedMinutes": 20,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Explain why Impeller replaced Skia's runtime shader compilation",
-    "Describe how Impeller avoids shader jank",
-    "Know its platform status"
+    "Understand Impeller via a real-life analogy",
+    "Know why Flutter moved from Skia to Impeller",
+    "Distinguish Impeller vs Skia trade-offs",
+    "Enable / disable Impeller and diagnose issues",
+    "Answer Impeller interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Impeller is Flutter's modern rendering engine, built to replace the Skia-based renderer. Its main goal: eliminate 'shader compilation jank' by precompiling shaders at build time instead of at runtime." },
-    { "type": "callout", "variant": "interview", "markdown": "The old problem: with Skia, shaders were compiled the first time an effect appeared, causing a one-time stutter (jank) on first run of an animation. Impeller precompiles a fixed set of shaders ahead of time, so first-run animations are smooth." },
-    { "type": "table", "headers": ["", "Skia (old)", "Impeller"], "rows": [
-      ["Shaders", "Compiled at runtime (jank)", "Precompiled at build"],
-      ["Backend", "GL/Metal/Vulkan via Skia", "Metal (iOS), Vulkan (Android)"],
-      ["Goal", "General 2D graphics", "Predictable, jank-free frames"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of a restaurant that pre-preps its sauces vs one that makes each sauce from scratch when you order.**\n\n- **Skia (the old renderer)** was the from-scratch restaurant. The first time you ordered pasta with cream sauce, the chef opened flour, cream, butter, and *cooked the sauce right then* — the wait was noticeable ('shader compilation jank'). Once cooked, subsequent orders were fast. But every dish combination triggered another first-time cook.\n- **Impeller** is the pre-prep restaurant. Every sauce is made ahead of time, kept warm, and portioned. When you order, it's on the plate in 30 seconds — every time, first time. No first-run stall.\n- **Same ingredients** (pixels, geometry, GPU); different **kitchen strategy**. The pre-prep costs more space (larger app bundle) but delivers **predictable, jank-free performance from frame one**.\n\n**Why this matters:** every senior Flutter interview in 2024–25 asks about Impeller. It's the biggest internal shift since Flutter 1.0. Understanding it separates 'I use Flutter' from 'I know Flutter'." },
+    { "type": "callout", "variant": "definition", "markdown": "**Impeller** is Flutter's modern rendering engine (Flutter 3.10+; default on iOS since 3.10, default on Android since Flutter 3.16 / 3.24 on capable devices). It replaces Skia for most Flutter apps. Key idea: **precompile all shaders at build time** into the app bundle, eliminating first-frame shader-compilation jank. Written from scratch by the Flutter team; talks directly to Metal (iOS/macOS), Vulkan (Android/Linux/Windows), or OpenGL ES (fallback)." },
+    { "type": "theory", "markdown": "## Skia vs Impeller — the real differences" },
+    { "type": "table", "headers": ["Aspect", "Skia (legacy)", "Impeller"], "rows": [
+      ["Shader compilation", "**JIT at runtime** — first use of a shader stalls the raster thread (~100–300 ms)", "**Precompiled at build time** — zero first-use stalls"],
+      ["Graphics backend", "OpenGL ES, Metal, Vulkan (via Skia's abstraction)", "Direct Metal / Vulkan / OpenGL ES — one thin abstraction"],
+      ["Shading language", "SkSL (Skia's language)", "Impeller's own SPIR-V pipeline"],
+      ["App bundle size", "Smaller (shaders compile on demand)", "Larger (precompiled binary shaders bundled)"],
+      ["Debugging", "Skia's tools + Chrome tracing", "Impeller's own tracing + Flutter DevTools"],
+      ["Maturity", "20+ years, powers Chrome", "New; some edge-case glyphs / effects still catching up"]
     ]},
-    { "type": "callout", "variant": "note", "markdown": "Impeller is the default on iOS and increasingly on Android (Vulkan). It's tuned specifically for Flutter's drawing patterns rather than being a general-purpose 2D library." },
-    { "type": "callout", "variant": "tip", "markdown": "If you ever saw first-run animation stutters, Impeller is the fix. For deep custom effects, test on Impeller specifically, since some Skia-era shader tricks behave differently." }
+    { "type": "callout", "variant": "interview", "markdown": "**The killer insight:** Skia was designed for a browser environment where shaders come and go dynamically. Flutter, though, has a *fixed* set of visual primitives per build. Impeller exploits that — precompute everything possible at build time. It's not that Skia is 'bad', it's that Flutter finally has a graphics engine designed *for Flutter's constraints*." },
+    { "type": "theory", "markdown": "## What Impeller fixed — the first-run jank story" },
+    { "type": "code", "language": "text", "code": "Before Impeller (Skia era):\n\n  User taps a button first time  →\n    Flutter records draw commands  →\n      Raster thread sees a new shader combination it hasn't compiled  →\n        [~150 ms shader compile on the raster thread]  →\n          Rasterize + present\n  → USER SEES: 'the app hitched for a moment'\n\n  Same tap second time  →  cached shader  →  no hitch\n\nWith Impeller:\n\n  User taps button first time  →\n    Flutter records draw commands  →\n      Raster thread uses precompiled shader  →\n        Rasterize + present\n  → USER SEES: smooth\n\nThe fix: shift shader compilation from raster-thread runtime to build time." },
+    { "type": "theory", "markdown": "## Sample program — check + toggle Impeller" },
+    { "type": "code", "language": "dart", "code": "// See if Impeller is active for the current session — via Flutter's implicit view\n// (this is descriptive; there's no direct 'isImpeller' API — you check indirectly).\n\nimport 'package:flutter/foundation.dart';\nimport 'package:flutter/material.dart';\n\nclass ImpellerCheckPage extends StatelessWidget {\n  const ImpellerCheckPage({super.key});\n\n  @override\n  Widget build(BuildContext context) => Scaffold(\n    appBar: AppBar(title: const Text('Renderer info')),\n    body: Center(\n      child: Column(\n        mainAxisSize: MainAxisSize.min,\n        children: [\n          const Text('Compilation mode:', style: TextStyle(fontSize: 12)),\n          Text(kDebugMode ? 'debug (JIT)'\n              : kProfileMode ? 'profile (AOT)' : 'release (AOT)',\n            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),\n\n          const SizedBox(height: 24),\n          const Text('Platform:', style: TextStyle(fontSize: 12)),\n          Text(defaultTargetPlatform.name,\n            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),\n\n          // The real check: launch with --enable-impeller or --no-enable-impeller\n          // and observe first-run animation smoothness. Impeller = smooth from\n          // frame 1; Skia = potential shader-compile jank on complex first frames.\n        ],\n      ),\n    ),\n  );\n}\n\n// Toggle at run/build time via CLI flags:\n//\n//   flutter run --enable-impeller      # force ON (default on iOS/modern Android)\n//   flutter run --no-enable-impeller   # force OFF — use legacy Skia\n//\n// Or in AndroidManifest.xml / Info.plist via metadata:\n//   <meta-data android:name=\"io.flutter.embedding.android.EnableImpeller\"\n//              android:value=\"true\" />\n//\n// Check the initial log lines in `flutter run -v` — 'Using Impeller' or 'Using Skia'." },
+    { "type": "theory", "markdown": "## Common misconceptions" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Misconception 1: 'Impeller is a graphics library.'** No — it's Flutter's OWN rendering engine, purpose-built for Flutter's needs. It talks directly to Metal / Vulkan / OpenGL ES." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Misconception 2: 'You can write custom shaders differently in Impeller.'** Almost the same API (`FragmentProgram`), but the toolchain compiles them ahead of time. Same GLSL-like syntax as before." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Disabling Impeller in production 'because it's new'.** Modern Impeller has been stable on iOS for years and on Android since 3.16+. Disabling brings back first-run jank." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Misconception 4: 'Skia is deprecated.'** Skia still ships as the fallback and is used on some platforms/paths. Google keeps investing in both, but Impeller is the future for Flutter." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Use the default renderer.** Modern iOS + Android = Impeller. Don't turn it off unless you're diagnosing a specific bug." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Report edge-case bugs.** Impeller occasionally has glyph or blur bugs on niche devices — file on the Flutter engine tracker; a fix usually lands quickly." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Combine with Baseline Profiles on Android.** Impeller kills shader jank; Baseline Profiles kill first-launch AOT-warmup jank. Both together = smooth cold start." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Test on OpenGL ES fallback devices.** Older Android hardware without Vulkan falls back to OpenGL — verify your custom shaders still render correctly." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Use `FragmentProgram` for GPU effects.** Impeller-compatible; blazing fast for per-pixel work like blur, distortion, gradients." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Toggle Impeller.** Run your app twice: once with `--enable-impeller`, once with `--no-enable-impeller`. Note the log line. Feel the first-run difference." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Complex animation first-run.** Build a heavy animation (blur + gradient + rotation). Run with Skia — measure first-frame timing. Run with Impeller — measure again." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — Custom FragmentProgram shader.** Write a simple SPIR-V shader that gradients based on distance from center." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Expert) — Compare on an older Android device.** Run on Android 8 or lower where Vulkan may be missing — observe OpenGL fallback behavior." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is Impeller and why did Flutter build it?**\n\n**A:** Impeller is Flutter's modern rendering engine, built to replace Skia for most Flutter apps. **Why:** Skia compiled shaders JIT at runtime — the first time a novel shader combination was used, the raster thread would stall 100–300 ms compiling it, causing infamous 'first-run jank' especially on iOS. Impeller **precompiles all shaders at build time** into the app bundle, so the first frame is as fast as the millionth. Also: Impeller talks directly to Metal / Vulkan / OpenGL ES (via a thin abstraction), giving Flutter tighter control over the GPU pipeline. The tradeoff is a slightly larger app bundle. Impeller is default on iOS (since Flutter 3.10) and on modern Android (since 3.16+)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What was 'shader compilation jank' and how did Impeller fix it?**\n\n**A:** Skia's rendering pipeline uses shader programs (small GPU programs) to draw complex effects like gradients, shadows, blurs, and transitions. Skia compiled these lazily — on first use, the compilation ran on the raster thread. On iOS especially, this could take 100–300 ms, causing a very visible hitch when the user triggered an animation for the first time. **Impeller's fix:** precompile every shader Flutter will ever need at BUILD time, ship the compiled bytecode inside the app bundle. At runtime, shaders are just loaded — no compilation. Result: consistent frame times from the very first frame. It's the single biggest UX win Impeller delivers." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: Impeller vs Skia — what are the trade-offs?**\n\n**A:** **Impeller pros:** no shader jank, tighter Metal/Vulkan control, purpose-built for Flutter's needs, forward-looking (Google's future investment). **Impeller cons:** larger app bundle (precompiled shaders), a few edge-case rendering differences from Skia (glyphs, some blurs) that occasionally need fixes, newer so less battle-tested outside Flutter. **Skia pros:** 20+ years of maturity, powers Chrome, thoroughly tested across every hardware combo. **Skia cons:** the shader-jank problem is inherent to its design. **Rule:** default to Impeller. Switch to Skia (`--no-enable-impeller`) only when diagnosing a specific rendering bug you've confirmed is Impeller-only." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you enable or disable Impeller?**\n\n**A:** **Enable/disable at build/run time via CLI flags:** `flutter run --enable-impeller` or `flutter run --no-enable-impeller`. **In the manifest (Android):** `<meta-data android:name=\"io.flutter.embedding.android.EnableImpeller\" android:value=\"true\"/>`. **In Info.plist (iOS):** `FLTEnableImpeller = YES / NO`. **Verify:** run with `-v` and watch for 'Using Impeller' vs 'Using Skia' in the initial engine log. Modern Flutter versions default to Impeller on iOS + modern Android — you don't need to enable it unless you're testing." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: Does Impeller change how you write Flutter code?**\n\n**A:** Almost never. The Dart-side APIs (`CustomPainter`, `Canvas`, `Paint`, `Path`, `ImageFilter`) are identical. **Custom `FragmentProgram` shaders** use the same GLSL-like syntax as before, but the toolchain now precompiles them to SPIR-V and bundles them. **Edge cases:** some very old Skia hacks (specific `saveLayer` blend modes, exotic path operations) may render slightly differently — but for 99% of app code, Impeller is a drop-in replacement. **Rule:** write normal Flutter code; Impeller is an engine-level detail invisible to your Dart source." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What is a `FragmentProgram` and how does it work with Impeller?**\n\n**A:** A `FragmentProgram` is a GPU fragment shader you write for per-pixel effects (blurs, distortions, gradients, procedural graphics). You write it in a Flutter-flavored GLSL, save it as a `.frag` file, and declare it in `pubspec.yaml`. At build time, the Flutter tool compiles it to SPIR-V (Impeller's IR) and bundles it. At runtime you load it with `FragmentProgram.fromAsset('shaders/foo.frag')`, get a `FragmentShader`, set uniforms, and draw with `Paint()..shader = fragmentShader`. **With Impeller:** shaders are precompiled — zero first-run jank. **Use cases:** the reason to reach for this over `CustomPainter` is pure GPU speed for per-pixel work — thousands of times faster for large effects." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What platforms does Impeller support?**\n\n**A:** **iOS + macOS**: Impeller uses **Metal**. Default since Flutter 3.10 (2023). **Android**: Impeller uses **Vulkan** on capable devices (Android 10+ with Vulkan 1.1), falls back to **OpenGL ES** on older devices. Default on capable devices since Flutter 3.16 (2023), broader default since 3.24 (2024). **Windows / Linux**: Impeller support is progressing; currently Skia is still default on most desktops. **Flutter Web**: does NOT use Impeller — Web uses CanvasKit (Skia compiled to WebAssembly) or the HTML renderer. **Rule of thumb:** if you build for mobile in 2025, you're on Impeller by default." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every modern mobile Flutter app** — Impeller is the default renderer.\n- **BMW MyBMW, Google Ads, Google Pay, Alibaba** — all run on Impeller now.\n- **Impeller Playground** (community) — a testing app showing per-primitive rendering behavior.\n- **Custom shaders in production** — Rive, Lottie, `flutter_shaders` package all work with Impeller.\n- **Older Android devices without Vulkan** — silent OpenGL ES fallback; works, marginally slower.\n- **Fallback to Skia** — sometimes recommended for very specific enterprise devices with known Impeller issues; usually resolved by upgrading Flutter." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`impellerc`** — Impeller's shader compiler; part of the Flutter tool.\n- **SPIR-V** — the intermediate representation for GPU code Impeller emits.\n- **`FragmentProgram.compile()`** — runtime compile fallback (avoid).\n- **`ImageFilter.blur`** — much smoother on Impeller than Skia.\n- **`Canvas.saveLayer`** — was very expensive on Skia; Impeller mitigates but still not free.\n- **Impeller's own DevTools tab** — inspects layer trees and rasterization details.\n- **Impeller-only features** — some new rendering effects may ship Impeller-first (with a Skia fallback).\n- **Vulkan on Android** — Impeller requires Vulkan 1.1 for the fast path; falls back to OpenGL ES 3 otherwise.\n- **`Rive Renderer`** — an alternative built on top of Impeller for interactive vector animations.\n- **Testing on both renderers** — CI matrices sometimes include `--no-enable-impeller` runs to catch regressions." }
   ],
   "flashcards": [
-    { "front": "What problem does Impeller solve?", "back": "Shader compilation jank — the first-run stutter when Skia compiled shaders at runtime." },
-    { "front": "How does Impeller avoid it?", "back": "It precompiles shaders at build time instead of on first use." },
-    { "front": "Which backends does Impeller use?", "back": "Metal on iOS and Vulkan on Android." }
+    { "front": "What is Impeller?", "back": "Flutter's modern rendering engine — replaces Skia; precompiles shaders at build time." },
+    { "front": "Killer feature?", "back": "No first-run shader-compilation jank — same shader is precompiled and bundled." },
+    { "front": "Default on which platforms?", "back": "iOS (since 3.10), modern Android (since 3.16+). Not Web (which uses CanvasKit)." },
+    { "front": "Trade-off?", "back": "Slightly larger app bundle (bundled shader binaries)." },
+    { "front": "Enable/disable?", "back": "flutter run --enable-impeller / --no-enable-impeller; also via AndroidManifest / Info.plist meta." },
+    { "front": "Does it change Dart code?", "back": "Almost never. Same CustomPainter/Canvas/FragmentProgram API." }
   ],
   "quiz": [
-    { "q": "Impeller's primary goal is to…", "options": ["Add native widgets", "Eliminate shader compilation jank", "Shrink app size", "Replace Dart"], "answer": 1, "explain": "Precompiled shaders remove first-run animation stutter." },
-    { "q": "Impeller precompiles shaders…", "options": ["At runtime", "At build time", "Never", "On the server"], "answer": 1, "explain": "Ahead-of-time shader compilation is the key idea." },
-    { "q": "On Android, Impeller targets…", "options": ["OpenGL only", "Vulkan", "DirectX", "WebGL"], "answer": 1, "explain": "Impeller uses Vulkan on Android and Metal on iOS." }
+    { "q": "Impeller's biggest win?", "options": ["Smaller app size", "No first-run shader-compile jank", "Web support", "Faster hot reload"], "answer": 1, "explain": "Precompiled shaders bundled." },
+    { "q": "Default on iOS since?", "options": ["Flutter 1.0", "Flutter 3.10 (2023)", "Flutter 2.0", "Never"], "answer": 1, "explain": "Modern default." },
+    { "q": "Impeller on Android uses…", "options": ["Only OpenGL", "Vulkan (fallback OpenGL ES)", "Metal", "DirectX"], "answer": 1, "explain": "Vulkan preferred; OpenGL fallback." },
+    { "q": "FragmentProgram + Impeller?", "options": ["Not supported", "Precompiled at build time → zero first-run jank", "Deprecated", "Skia only"], "answer": 1, "explain": "That's the whole idea." },
+    { "q": "Does Impeller change Dart-side rendering API?", "options": ["Yes major", "Almost never — same CustomPainter/Canvas API", "Deprecates CustomPainter", "Requires migration"], "answer": 1, "explain": "Engine-level change; invisible to app code." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Explain shader jank and how Impeller addresses it in your own words." },
-    { "level": "Medium", "text": "Toggle Impeller on/off and compare first-run animation smoothness." },
-    { "level": "Hard", "text": "Profile a complex animation on Impeller vs the legacy renderer." },
-    { "level": "Expert", "text": "Investigate a custom shader/effect that renders differently on Impeller and adapt it." }
+    { "level": "Easy", "text": "Run your app twice: with and without --enable-impeller; note the log line." },
+    { "level": "Easy", "text": "Read Info.plist / AndroidManifest to find where Impeller is toggled." },
+    { "level": "Medium", "text": "Build a first-time-complex animation; measure first-frame time on both renderers." },
+    { "level": "Medium", "text": "Add ImageFilter.blur to a scrollable; feel the smoothness on Impeller." },
+    { "level": "Hard", "text": "Write a small .frag FragmentProgram (radial gradient); render via Paint().shader." },
+    { "level": "Hard", "text": "Compare app-bundle size before/after enabling Impeller." },
+    { "level": "Expert", "text": "On older Android (no Vulkan), force OpenGL ES fallback and profile the perf gap." }
   ],
   "interviewQuestions": [
-    "What is Impeller and why was it created?",
-    "What is shader compilation jank?",
-    "How does Impeller differ from Skia?",
-    "Which graphics backends does Impeller use?",
-    "What is Impeller's platform status?"
+    "What is Impeller and why did Flutter build it?",
+    "What was 'shader compilation jank' and how did Impeller fix it?",
+    "Impeller vs Skia — what are the trade-offs?",
+    "How do you enable or disable Impeller?",
+    "Does Impeller change how you write Flutter code?",
+    "What is a FragmentProgram and how does it work with Impeller?",
+    "What platforms does Impeller support?"
   ],
   "references": [
-    { "label": "Flutter — Impeller", "url": "https://docs.flutter.dev/perf/impeller" }
+    { "label": "Impeller — Flutter docs", "url": "https://docs.flutter.dev/perf/impeller" },
+    { "label": "Impeller engine tracking", "url": "https://github.com/flutter/flutter/wiki/Impeller" }
   ]
 }
