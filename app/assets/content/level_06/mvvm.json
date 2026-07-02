@@ -1,49 +1,107 @@
 {
   "id": "arch.mvvm",
   "levelId": 6,
-  "title": "MVVM",
+  "title": "MVVM — Model / View / ViewModel",
   "xp": 40,
-  "estimatedMinutes": 20,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Describe the three MVVM roles",
-    "Bind View to ViewModel via observable state",
-    "Keep the View 'dumb' and the Model 'pure'"
+    "Understand MVVM via a real-life analogy",
+    "Distinguish View / ViewModel / Model responsibilities",
+    "Implement MVVM cleanly with ChangeNotifier / Riverpod / Bloc",
+    "Recognize modern Flutter apps as MVVM-flavored",
+    "Answer MVVM interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "MVVM (Model-View-ViewModel) is a UI pattern where the **View** observes an immutable state exposed by the **ViewModel**, which orchestrates the **Model** (data + business rules). Perfect fit for Flutter's declarative UI." },
-    { "type": "table", "headers": ["Role", "Responsibility"], "rows": [
-      ["Model", "Domain data + business rules (framework-free)"],
-      ["ViewModel", "UI state + user actions; no Flutter imports ideally"],
-      ["View", "Widgets that render state and call VM methods"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of MVVM as a modern airport check-in counter with a digital display board.**\n\n- **The Model** is the backstage — flight schedules, gate assignments, weather delays — the ground truth. It doesn't format anything or handle passengers.\n- **The ViewModel** is the airline's dispatcher: watches the backstage data, translates it into 'FLIGHT AA123 → NOW BOARDING GATE 4', announces changes, and hands ready-to-display strings to the display board.\n- **The View** (the display board) shows whatever the dispatcher publishes. When the dispatcher updates 'boarding' → 'departed', the board changes automatically. It doesn't ASK for updates; it just reflects the latest data.\n\nCrucially, the passengers (users) tap 'Check In' → their tap goes to the DISPATCHER (ViewModel), not directly to the backstage (Model). The dispatcher decides what to do, updates the Model, and the display refreshes.\n\n**Why MVVM is the modern default:** the View doesn't have to know when to redraw — it BINDS to ViewModel state and auto-refreshes. That single change fixes 80% of MVC's mobile problems. It's why Android Jetpack shipped a `ViewModel` class, why WPF/UWP was built on it, why every Riverpod `Notifier` is essentially a ViewModel in disguise. **Modern Flutter apps written 'idiomatically' are basically MVVM whether they say so or not.**" },
+    { "type": "callout", "variant": "definition", "markdown": "**MVVM (Model-View-ViewModel)** is an architectural pattern where the **ViewModel** sits between View and Model. It exposes **observable / reactive state** (via `ChangeNotifier`, `Notifier`, `Cubit`, `StreamController`, etc.). The **View** binds to that state declaratively and rebuilds when it changes. The **Model** is the domain / data layer, framework-free. **Data flow is unidirectional**: state flows View ← ViewModel ← Model; user intents flow View → ViewModel → Model." },
+    { "type": "theory", "markdown": "## The three roles — with concrete Flutter examples" },
+    { "type": "table", "headers": ["Role", "Owns", "Flutter typical form"], "rows": [
+      ["**Model**", "Domain data, business rules, DTOs, persistence", "Plain Dart classes (`User`, `Cart`) + Repository"],
+      ["**ViewModel**", "UI state + input handlers + async orchestration", "`ChangeNotifier`, Riverpod `Notifier`, `Cubit`, `Bloc`, `AsyncNotifier`"],
+      ["**View**", "Rendering only; forwards taps to ViewModel", "`ConsumerWidget` / `BlocBuilder` / `StatelessWidget` with `context.watch<VM>()`"]
     ]},
-    { "type": "code", "language": "dart", "code": "class HomeViewModel {\n  final Repo repo;\n  final _state = ValueNotifier(HomeState.loading());\n  ValueListenable<HomeState> get state => _state;\n  Future<void> load() async {\n    _state.value = HomeState.loading();\n    try { _state.value = HomeState.data(await repo.get()); }\n    catch (e) { _state.value = HomeState.error(e); }\n  }\n}" },
-    { "type": "callout", "variant": "interview", "markdown": "MVVM works because it enforces **one-way data flow**: state flows View ← ViewModel, actions flow View → ViewModel. Riverpod NotifierProviders, BLoC/Cubit, and ChangeNotifier are all ways to implement the ViewModel in Flutter." },
-    { "type": "callout", "variant": "mistake", "markdown": "Putting business logic (validation, network, mapping) inside widgets — that's a Massive-View anti-pattern. Widgets should read state and call VM methods; nothing more." }
+    { "type": "theory", "markdown": "## Sample program — MVVM with plain `ChangeNotifier`" },
+    { "type": "code", "language": "dart", "code": "import 'package:flutter/material.dart';\n\n// ============ MODEL ============\nclass User {\n  const User({required this.id, required this.name});\n  final int id;\n  final String name;\n}\n\n// Repository — the boundary between ViewModel and the outside world (network, DB).\nclass UserRepository {\n  Future<User> fetch(int id) async {\n    await Future.delayed(const Duration(milliseconds: 500));\n    return User(id: id, name: 'User $id');\n  }\n}\n\n// ============ VIEW MODEL ============\n// A ChangeNotifier is the simplest ViewModel — mutable UI-shaped state\n// with a `notifyListeners()` broadcast on change.\nclass UserViewModel extends ChangeNotifier {\n  UserViewModel(this._repo);\n  final UserRepository _repo;\n\n  // UI-consumable state — the View reads THESE fields, not the Model directly.\n  bool _loading = false;\n  User? _user;\n  String? _error;\n\n  bool get loading => _loading;\n  User? get user => _user;\n  String? get error => _error;\n\n  // Input handlers — View calls these; ViewModel decides what to do.\n  Future<void> loadUser(int id) async {\n    _loading = true; _error = null; notifyListeners();\n    try {\n      _user = await _repo.fetch(id);\n    } catch (e) {\n      _error = e.toString();\n    } finally {\n      _loading = false; notifyListeners();\n    }\n  }\n\n  void clear() {\n    _user = null; _error = null; notifyListeners();\n  }\n}\n\n// ============ VIEW ============\nclass UserScreen extends StatefulWidget {\n  const UserScreen({super.key});\n  @override State<UserScreen> createState() => _UserScreenState();\n}\n\nclass _UserScreenState extends State<UserScreen> {\n  late final _vm = UserViewModel(UserRepository());\n\n  @override\n  void initState() {\n    super.initState();\n    _vm.addListener(_rebuild);\n    _vm.loadUser(42);   // kick off the initial load\n  }\n\n  @override\n  void dispose() { _vm.removeListener(_rebuild); _vm.dispose(); super.dispose(); }\n\n  void _rebuild() => setState(() {});\n\n  @override\n  Widget build(BuildContext context) => Scaffold(\n    appBar: AppBar(title: const Text('MVVM demo')),\n    body: Center(\n      child: _vm.loading\n          ? const CircularProgressIndicator()\n          : _vm.error != null\n              ? Text('Error: ${_vm.error}')\n              : Text('Hi, ${_vm.user?.name}',\n                  style: const TextStyle(fontSize: 24)),\n    ),\n    floatingActionButton: FloatingActionButton(\n      onPressed: () => _vm.loadUser(43),   // View delegates to ViewModel\n      child: const Icon(Icons.refresh),\n    ),\n  );\n}\n\nvoid main() => runApp(const MaterialApp(home: UserScreen()));\n\n// The View never calls the Repository. It never mutates the User. It reads\n// state from the ViewModel and forwards taps back. Business rules live in\n// the ViewModel (and its Repository). Migration to Provider, Riverpod, Bloc,\n// or MobX is a mechanical exercise — the same ViewModel, wrapped differently." },
+    { "type": "theory", "markdown": "## MVVM in the four state-management libraries" },
+    { "type": "table", "headers": ["Library", "ViewModel is…", "View binds via…"], "rows": [
+      ["**ChangeNotifier + Provider**", "`class UserVM extends ChangeNotifier`", "`context.watch<UserVM>()` inside `build`"],
+      ["**Riverpod**", "`class UserVM extends Notifier<UserState>` (or `AsyncNotifier`)", "`ref.watch(userVmProvider)`"],
+      ["**Bloc**", "`class UserCubit extends Cubit<UserState>` (or `Bloc<Event, State>`)", "`BlocBuilder<UserCubit, UserState>`"],
+      ["**MobX**", "A `Store` with `@observable` fields + `@action` methods", "`Observer(builder: (_) => …)`"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**The insight to quote:** every popular Flutter state-management library is a flavor of MVVM. The 'M-V-VM' triangle stays the same; only the observability mechanism differs. Once you see this, choosing a library becomes a preference decision (codegen? boilerplate? ergonomics?), not an architectural one." },
+    { "type": "theory", "markdown": "## MVVM vs MVC vs MVP — the tiny differences" },
+    { "type": "table", "headers": ["Pattern", "Communication style", "Best for"], "rows": [
+      ["**MVC**", "Controller pushes updates to View; View may observe Model", "Server-side web (Rails); legacy iOS"],
+      ["**MVP** (Presenter)", "Presenter holds a reference to View; explicit method calls", "Older Android; strict TDD codebases"],
+      ["**MVVM**", "ViewModel exposes observable state; View auto-binds", "Modern reactive UI (Flutter, WPF, Vue)"],
+      ["**MVI**", "State is a single immutable value; reducer applies Intent", "Kotlin Android; also Bloc-style Flutter"]
+    ]},
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: View mutates Model directly.** `context.read<CartModel>()._items.add(item)` — bypasses the ViewModel; hides business rules; unbreakable in test. Always go through a ViewModel method." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: ViewModel imports `package:flutter/material.dart`.** The ViewModel should be UI-framework-agnostic (or at least widget-free). If it uses `BuildContext` or `Navigator`, testing requires widget infrastructure." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: One giant ViewModel for the whole app.** Feature-scoped ViewModels beat mega-VMs. Split by screen, by responsibility, by user flow." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: View reads Model fields.** If your widget accesses `vm.model.count`, you've leaked the Model into the View. Expose a `vm.count` getter on the ViewModel; keep the Model private." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Business logic in the View.** `if (loading && !error && user != null && user.age >= 18)` — that's a decision. Move it to a ViewModel getter (`vm.canProceed`)." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Keep ViewModels widget-free.** No `BuildContext`, no `Navigator.of`. Use callbacks or events for navigation." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Expose UI-shaped state.** Don't leak DB rows or DTOs; expose `bool loading`, `String? error`, `List<UserSummary> users` — what the UI actually needs." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Repositories under the ViewModel.** The ViewModel calls Repository, the Repository handles network + cache." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Test the ViewModel like a plain Dart class.** No widget pumping. If you can't, your ViewModel has widget dependencies — refactor." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Use sealed classes for state.** `sealed class UserState { Loading, Loaded(user), Error(msg) }` — compiler enforces exhaustive matching." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Same architecture, different libraries.** MVVM works with any state-management library — Provider, Riverpod, Bloc, MobX are just observability mechanisms." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Counter MVVM.** Convert your MVC counter to MVVM with `ChangeNotifier`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — User fetch.** Build the sample; verify no Flutter imports in ViewModel or Repository." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Test the ViewModel.** Pure Dart tests: `test('loads user', () async { … })` — no widget tree needed." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Same ViewModel, four libraries.** Same `UserViewModel` logic, wrapped in Provider / Riverpod / Bloc / MobX. Notice the ViewModel logic stays IDENTICAL." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Handle navigation from the ViewModel.** ViewModel emits an event; a top-level listener translates events to `Navigator.push`. No context in the ViewModel." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is MVVM?**\n\n**A:** MVVM (Model-View-ViewModel) is an architectural pattern where a **ViewModel** exposes UI-shaped observable state, the **View** binds declaratively to that state (auto-rebuild on change), and the **Model** holds domain data + business rules + persistence. Data flows unidirectionally: state flows View ← ViewModel ← Model; user intents flow the other way. Originated in WPF/UWP (Microsoft); popularized on Android by Jetpack's `ViewModel` class; ubiquitous in modern Flutter via `ChangeNotifier`, Riverpod, Bloc, MobX. **Modern Flutter apps written 'idiomatically' are almost always MVVM whether they say so or not.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How does MVVM differ from MVC?**\n\n**A:** Both separate Model / View / mediator. **MVC** — Controller handles user input, updates Model, then TELLS the View to refresh. Often bidirectional coupling. **MVVM** — ViewModel exposes observable state; View BINDS to it declaratively. When state changes, the View rebuilds automatically without the ViewModel needing to know about the View. **Key differences:** (1) MVVM is **reactive** — View auto-refreshes on state change. (2) MVVM has **unidirectional data flow** — state flows one way; commands flow the other. (3) MVVM's ViewModel is **framework-independent** — testable as plain Dart. (4) MVVM's View **doesn't know about the Model** — only about the ViewModel's UI-shaped state." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What does a ViewModel expose?**\n\n**A:** UI-SHAPED state, not raw domain data. Examples: `bool loading`, `String? error`, `List<UserSummary> users`, `bool canSave`, `String buttonLabel`. Never `User` (that's the Model); never `Response<UserDto>` (that's the network layer). The ViewModel translates domain objects into whatever the View actually renders. It also exposes **input handlers** — methods the View calls when the user taps: `void onRefreshTapped()`, `Future<void> loadMore()`. **Rule:** if you replaced the View with a totally different UI (CLI, web, watch), the ViewModel should still work — because it's UI-agnostic." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: Where does the Repository fit in MVVM?**\n\n**A:** Between ViewModel and the outside world. The **Repository** is the single source of truth for a data type — it combines API, cache, DB into one clean interface. The ViewModel calls the Repository (`await _repo.fetchUser(id)`), never Retrofit or Dio directly. This gives you: **(1) Testability** — mock the Repository, test the ViewModel with fake data. **(2) Cache logic in ONE place**, not scattered across screens. **(3) Reusability** — multiple ViewModels can share one Repository. **The layered pattern is:** View → ViewModel → Repository → (API / DB / Cache). This mirrors Google's official Android + Flutter architecture guidance." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How does MVVM work with Flutter's declarative UI?**\n\n**A:** Perfectly. Flutter's `build()` is a pure function of state; MVVM's ViewModel exposes the state. When state changes, Flutter's framework diffs the widget tree and updates minimally. **Concrete flow:** ViewModel `notifyListeners()` (or updates a `StateFlow` / emits a `state`) → the state-management library marks the observing widget dirty → Flutter re-runs `build()` → the tree re-computes → the framework applies minimal changes to the render tree. **Compare to imperative UI (UIKit, Android XML views):** you had to manually call `view.setText(...)`. In Flutter, the `build()` handles it. **This is why MVVM feels 'native' in Flutter** — the pattern and the framework co-evolved." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What's the difference between a ViewModel and a Controller?**\n\n**A:** Overlapping but not identical. **Controller (MVC)** — mediates user input, updates Model, may call View to refresh. Often bidirectional; sometimes tied to UI framework (iOS `UIViewController`). **ViewModel (MVVM)** — exposes observable state, handles user intents. UI-framework-agnostic. Doesn't push updates to View; View subscribes to state. In practice, if you take a mobile MVC Controller, remove all View references, and expose its state as reactive properties → you've built a ViewModel. That evolution is exactly what Android Jetpack did with its `ViewModel` class and what Flutter's state-management libraries encourage." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: Is BLoC an MVVM pattern?**\n\n**A:** Yes, with a specific flavor. In BLoC: **Bloc/Cubit is the ViewModel** — it holds state and exposes it via a Stream. **State classes are the Model** (in the immutable-value-object sense) — plain Dart objects representing UI-shaped state. **BlocBuilder is the binding** — the View binds to state changes. **The 'event' concept** is BLoC's extra layer on top of vanilla MVVM: instead of the View calling arbitrary methods on the ViewModel (like `.increment()`), it dispatches named events. That's MVVM + explicit event log. **So:** BLoC is MVVM with unidirectional flow enforced by events. Same for Riverpod's `Notifier`, MobX's Store, Redux — all MVVM flavors." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **99% of production Flutter apps** — implicitly MVVM whether they call it that or not.\n- **Android Jetpack `ViewModel`** — MVVM built into the framework.\n- **WPF / UWP / Xamarin** — MVVM from birth.\n- **Vue.js, Knockout.js** — MVVM in the web world.\n- **Google's official Flutter architecture guide** — MVVM + Repository." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`ChangeNotifier` vs `ValueNotifier`** — `ValueNotifier<T>` is a mini ViewModel holding one value.\n- **State restoration** — `RestorableChangeNotifier` variants preserve state across process death.\n- **Nested ViewModels** — one VM per screen, plus a top-level session/auth VM.\n- **Testing** — plain Dart unit tests on the ViewModel; mock the Repository.\n- **Navigation from ViewModel** — controversial; usually via a callback or event stream, not direct `Navigator.push`.\n- **AsyncNotifier / AsyncValue** — Riverpod's async-first ViewModel style.\n- **Cubit** — a minimalist ViewModel from the Bloc package.\n- **Freezed for state** — sealed unions with generated equality + `copyWith`.\n- **Reactive collections** — `ObservableList` in MobX, `StateNotifier<List<T>>` in Riverpod.\n- **MVI as MVVM sibling** — Model-View-Intent is MVVM with an explicit `Intent` sealed hierarchy; used in Kotlin/Android." }
   ],
   "flashcards": [
-    { "front": "The three MVVM roles?", "back": "Model (data + rules), ViewModel (state + actions), View (renders state, dispatches actions)." },
-    { "front": "MVVM data flow?", "back": "State flows View ← VM; actions flow View → VM. Strictly one-way rendering." },
-    { "front": "How is MVVM implemented in Flutter?", "back": "With ChangeNotifier, ValueNotifier, Riverpod Notifiers, or BLoC/Cubit exposing state." }
+    { "front": "MVVM three roles?", "back": "Model (data + rules), ViewModel (observable UI state + input handlers), View (binds declaratively)." },
+    { "front": "Data flow?", "back": "One-way: state flows Model → ViewModel → View. Intents flow the other way." },
+    { "front": "MVVM's key upgrade over MVC?", "back": "View binds to observable state — no manual 'tell view to refresh'." },
+    { "front": "Where does the Repository fit?", "back": "Between ViewModel and outside world. VM calls Repo; Repo owns API + cache." },
+    { "front": "ViewModel exposes what?", "back": "UI-shaped state (bool loading, String? error, List of items) — not raw domain objects." },
+    { "front": "Is Flutter MVVM?", "back": "Idiomatic Flutter with any state library is MVVM in practice. The framework naturally fits it." }
   ],
   "quiz": [
-    { "q": "In MVVM, the View should…", "options": ["Contain business logic", "Only render state and dispatch actions", "Own the database", "Own network code"], "answer": 1, "explain": "Widgets stay dumb; the ViewModel owns behavior." },
-    { "q": "MVVM data flow is…", "options": ["View → Model directly", "Two-way with implicit sync", "One-way: state down, actions up", "Random"], "answer": 2, "explain": "State flows down from VM; actions flow up from View." },
-    { "q": "Which is NOT a common ViewModel in Flutter?", "options": ["ChangeNotifier", "NotifierProvider", "Cubit", "A raw SQLite Cursor"], "answer": 3, "explain": "The others expose observable UI state; a Cursor is a data-layer primitive." }
+    { "q": "MVVM's View updates via…", "options": ["Direct call from ViewModel", "Auto-rebuild from observable state binding", "Timer", "setState only"], "answer": 1, "explain": "Reactive binding." },
+    { "q": "MVVM's biggest upgrade over MVC?", "options": ["More code", "View auto-binds to observable state (no manual refresh)", "Cheaper", "Async"], "answer": 1, "explain": "Reactive UI." },
+    { "q": "ViewModel should…", "options": ["Import Flutter Material", "Be UI-framework-agnostic (widget-free)", "Depend on Navigator", "Own colors"], "answer": 1, "explain": "Testable in pure Dart." },
+    { "q": "Repository sits…", "options": ["Above View", "Between ViewModel and outside world (API, DB, cache)", "In build()", "In main.dart"], "answer": 1, "explain": "Single source of truth for a data type." },
+    { "q": "Riverpod's Notifier is essentially a…", "options": ["Model", "ViewModel", "View", "Repository"], "answer": 1, "explain": "That's what makes Riverpod MVVM-flavored." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Extract a widget's business logic into a ChangeNotifier VM." },
-    { "level": "Medium", "text": "Model a screen's UI as an immutable state class (loading/data/error)." },
-    { "level": "Hard", "text": "Unit-test the ViewModel with a fake Model without any Flutter imports." },
-    { "level": "Expert", "text": "Migrate a Flutter screen from setState soup to a testable MVVM with Riverpod." }
+    { "level": "Easy", "text": "Convert your MVC counter to MVVM with ChangeNotifier." },
+    { "level": "Easy", "text": "Verify the ViewModel has no `package:flutter/material` imports." },
+    { "level": "Medium", "text": "Build the UserViewModel sample; add a `refresh()` and a `clear()`." },
+    { "level": "Medium", "text": "Write pure Dart tests for UserViewModel using a fake Repository." },
+    { "level": "Hard", "text": "Handle navigation without importing Navigator in the ViewModel — emit events, subscribe from the widget." },
+    { "level": "Hard", "text": "Same ViewModel, four wrappers: Provider / Riverpod / Bloc / MobX. Observe the shared architecture." },
+    { "level": "Expert", "text": "Design a nested MVVM for a screen with sub-features: a page-level VM composing feature VMs." }
   ],
   "interviewQuestions": [
-    "Roles of Model, View, ViewModel?",
-    "Why one-way data flow?",
-    "MVVM implementations in Flutter?",
-    "MVVM vs MVC vs MVP?",
-    "How do you test a ViewModel?"
+    "What is MVVM?",
+    "How does MVVM differ from MVC?",
+    "What does a ViewModel expose?",
+    "Where does the Repository fit in MVVM?",
+    "How does MVVM work with Flutter's declarative UI?",
+    "What's the difference between a ViewModel and a Controller?",
+    "Is BLoC an MVVM pattern?"
   ],
   "references": [
-    { "label": "Flutter — App architecture", "url": "https://docs.flutter.dev/app-architecture" }
+    { "label": "Google's Flutter architecture guide", "url": "https://docs.flutter.dev/app-architecture/guide" },
+    { "label": "Android Jetpack ViewModel", "url": "https://developer.android.com/topic/libraries/architecture/viewmodel" }
   ]
 }

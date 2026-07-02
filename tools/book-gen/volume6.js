@@ -1,5 +1,6 @@
 // VOLUME 6 — Mobile Architecture
 const L = require("./lib");
+const { loadTopic, topicToChapter } = require("./topic_to_chapter");
 const {
   C, P, H1, H2, bullet, num, callout, code, table, rule, chip,
   makeDoc, pageProps, save, Paragraph, TextRun, PageBreak, AlignmentType,
@@ -58,142 +59,20 @@ body.push(callout("note", [["Each topic ends with: ", { t: "✅ Summary · 🎯 
 body.push(callout("interview", ["Senior-level questions rarely ask 'what is MVVM?' — they ask 'how would you structure this app?' Have a default answer that combines feature-first + Clean layers + repositories + DI + offline-first, and know when to deviate."]));
 
 // 1. Clean Architecture
-body.push(H1("1. Clean Architecture", "ch1"));
-body.push(callout("definition", ["Clean Architecture (Uncle Bob) organizes code into concentric layers where dependencies point inward. Framework details (UI, DB, network) sit outside; pure business rules sit at the center."]));
-body.push(code([
-  "  [ Frameworks & Drivers ]     (Flutter, Retrofit, Room)",
-  "     [ Interface Adapters ]    (repositories, mappers, VMs)",
-  "        [ Use Cases ]          (application-specific business rules)",
-  "           [ Entities ]        (enterprise/pure business rules)",
-  "  dependencies ONLY point INWARD",
-], "the dependency rule"));
-body.push(callout("interview", ["The killer idea is the dependency rule: business rules never import Flutter/Retrofit/Hive. They depend on abstractions the outer layers implement. Swap UI, DB or network without rewriting logic — and unit-test it without any of them."]));
-body.push(callout("mistake", ["Building 'Clean' as three folders that all import Flutter and each other. Real Clean means the domain layer has zero framework imports. If it uses BuildContext or dart:io, it's not clean."]));
-body.push(...summary([
-  "Dependencies point inward: outer knows inner, never the reverse.",
-  "Domain (entities + use cases) is framework-free.",
-  "Outer layers implement domain interfaces — Dependency Inversion in the large.",
-  "Payoff: swappable UI/DB/network + testable business logic.",
-]));
-body.push(...interview([
-  "State the Clean Architecture dependency rule.",
-  "Name the layers and what belongs in each.",
-  "How does DIP make it work?",
-  "When is Clean worth the boilerplate?",
-  "How do you test business logic without the UI?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Extract a domain Entity + UseCase from a widget's logic." },
-  { level: "Medium", text: "Define a Repository interface in domain, fake it in tests." },
-  { level: "Hard", text: "Refactor a screen so its ViewModel only calls use cases." },
-  { level: "Expert", text: "Add a second data source behind the same interface with zero domain changes." },
-]));
-body.push(...realworld(["Long-lived apps (banking, healthcare, enterprise) live and die by testable business logic. Clean lets them replace the entire backend or UI without rewriting the rules."]));
-body.push(...miniproject(["Refactor one feature (e.g., search) to strict Clean: entity + use cases + repo interface + data impl + view model + view; run business tests without Flutter."]));
-body.push(...advanced(["Domain events, hexagonal ports/adapters, when Clean is overkill (tiny apps), and how DDD extends it."]));
+body.push(...topicToChapter(loadTopic("level_06", "clean"),
+  { chapterNumber: 1, bookmarkId: "ch1" }));
 
 // 2. MVVM
-body.push(H1("2. MVVM", "ch2"));
-body.push(callout("definition", ["MVVM is a UI pattern where the View observes immutable state from the ViewModel, which orchestrates the Model. Perfect fit for Flutter's declarative UI."]));
-body.push(table(["Role", "Responsibility"], [
-  ["Model", "Domain data + rules (framework-free)"],
-  ["ViewModel", "UI state + user actions"],
-  ["View", "Renders state, calls VM methods"],
-], [2200, 7160]));
-body.push(callout("interview", ["MVVM enforces one-way data flow: state flows View ← VM, actions flow View → VM. Riverpod NotifierProviders, BLoC/Cubit, and ChangeNotifier are all ways to implement the VM in Flutter."]));
-body.push(...summary([
-  "Roles: Model (data/rules), ViewModel (state/actions), View (renders).",
-  "One-way flow: state down, actions up.",
-  "The View stays dumb; logic lives in the VM.",
-  "VMs are unit-testable without Flutter.",
-]));
-body.push(...interview([
-  "Roles of Model / View / ViewModel?",
-  "Why one-way data flow?",
-  "MVVM implementations in Flutter?",
-  "MVVM vs MVC vs MVP?",
-  "How do you test a ViewModel?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Extract widget logic into a ChangeNotifier VM." },
-  { level: "Medium", text: "Model UI as an immutable state class (loading/data/error)." },
-  { level: "Hard", text: "Unit-test the VM with a fake Model and no Flutter imports." },
-  { level: "Expert", text: "Migrate a setState-heavy screen to Riverpod MVVM." },
-]));
-body.push(...realworld(["Modern Android and Flutter apps default to MVVM (or its cousins) because it aligns perfectly with declarative UI and testable state."]));
-body.push(...miniproject(["Rebuild a small screen (list + detail) as strict MVVM with immutable states and 100% VM test coverage."]));
-body.push(...advanced(["MVI/UDF and Compose/Flutter state hoisting; VM-scoped vs feature-scoped state."]));
+body.push(...topicToChapter(loadTopic("level_06", "mvvm"),
+  { chapterNumber: 2, bookmarkId: "ch2" }));
 
 // 3. MVC
-body.push(H1("3. MVC", "ch3"));
-body.push(callout("definition", ["MVC (Model-View-Controller) is a classic UI pattern where the Controller receives input, updates the Model, and the View renders it. Common on the server and legacy UIKit; less directly used in modern Flutter."]));
-body.push(table(["", "MVC", "MVP", "MVVM"], [
-  ["Middle role", "Controller", "Presenter", "ViewModel"],
-  ["View knows Model?", "Yes", "No (via Presenter)", "No (observes state)"],
-  ["Testability", "Medium", "Better", "Best in Flutter"],
-], [1900, 2500, 2500, 2460]));
-body.push(callout("interview", ["In UIKit's MVC the Controller became the 'Massive View Controller' anti-pattern — one big class doing everything. It's why patterns like MVVM/MVI became dominant on modern mobile."]));
-body.push(...summary([
-  "MVC: Controller handles input, updates Model, View renders.",
-  "Very common on server frameworks (Spring MVC, Rails).",
-  "In modern Flutter, prefer MVVM/MVI.",
-  "Still valuable to know for interviews and legacy code.",
-]));
-body.push(...interview([
-  "MVC vs MVP vs MVVM?",
-  "Why less natural in Flutter?",
-  "What is the Massive View Controller anti-pattern?",
-  "How does MVC show up on the server side?",
-  "When might you choose MVC?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Diagram MVC vs MVVM for a login screen." },
-  { level: "Medium", text: "Map a Spring MVC endpoint's parts onto Flutter." },
-  { level: "Hard", text: "Refactor a massive VC-style Dart file into MVVM." },
-  { level: "Expert", text: "Compare unit-test coverage of the same feature under MVC vs MVVM." },
-]));
-body.push(...realworld(["Backend teams still ship MVC daily (controllers, models, templates). Recognizing it helps mobile engineers speak the same language as their backend counterparts."]));
-body.push(...miniproject(["Build a small server MVC feature (Node/Spring) and consume it from an MVVM Flutter screen to compare the two roles explicitly."]));
-body.push(...advanced(["MVP variants (Supervising Controller, Passive View), and how MVI removes the state divergence problem."]));
+body.push(...topicToChapter(loadTopic("level_06", "mvc"),
+  { chapterNumber: 3, bookmarkId: "ch3" }));
 
-// 4. Repository
-body.push(H1("4. Repository Pattern", "ch4"));
-body.push(callout("definition", ["A Repository is an abstraction over data sources. It exposes domain-shaped operations while hiding whether data comes from network, cache, DB, or a mix."]));
-body.push(code([
-  "abstract class UserRepository {",
-  "  Future<User> getUser(String id);",
-  "  Stream<List<User>> watchAll();",
-  "}",
-  "class UserRepositoryImpl implements UserRepository {",
-  "  final RemoteSource api; final LocalSource db;",
-  "  Future<User> getUser(String id) async {",
-  "    try { final u = await api.fetch(id); await db.upsert(u); return u; }",
-  "    catch (_) { return db.get(id); }   // fall back to cache",
-  "  }",
-  "}",
-], "repository"));
-body.push(callout("interview", ["The repository is where offline-first lives. Callers see one API; internally it reads-through/writes-through cache and network, exposing a Stream so the UI updates on either source. Domain never touches Dio or Room."]));
-body.push(callout("mistake", ["Leaking data-layer types (DTOs, HTTP responses, DB entities) through the repository interface. Return domain models — mappers convert at the boundary."]));
-body.push(...summary([
-  "Repositories hide data sources behind a domain-shaped API.",
-  "They enable offline-first via read-through/write-through.",
-  "They must return domain models, not DTOs.",
-  "One repository per aggregate, not per table.",
-]));
-body.push(...interview([
-  "What does a repository abstract?",
-  "How does it enable offline-first?",
-  "What must repositories NOT expose?",
-  "One repository per table or per aggregate?",
-  "How do you test a repository?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Wrap a Dio call behind a Repository returning a domain model." },
-  { level: "Medium", text: "Add Hive/Room caching with read-through fallback." },
-  { level: "Hard", text: "Expose a Stream that emits on cache OR network updates." },
-  { level: "Expert", text: "Add conflict resolution across cache + remote." },
-]));
-body.push(...realworld(["Netflix/Spotify/Google Play cache aggressively behind repositories so scrolling and playback feel instant even on flaky networks."]));
+// 4. Repository Pattern
+body.push(...topicToChapter(loadTopic("level_06", "repository"),
+  { chapterNumber: 4, bookmarkId: "ch4" }));
 body.push(...miniproject(["Build an OrderRepository with local cache + remote sync exposing a Stream; test both online and offline paths."]));
 body.push(...advanced(["Unit of Work, aggregate roots, and the distinction between DDD Repositories and DAOs."]));
 

@@ -1,48 +1,104 @@
 {
   "id": "arch.mvc",
   "levelId": 6,
-  "title": "MVC",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "title": "MVC — Model / View / Controller",
+  "xp": 35,
+  "estimatedMinutes": 25,
   "objectives": [
-    "Explain classic MVC roles",
-    "Know how MVC differs from MVP and MVVM",
-    "Understand why MVVM/MVI dominate modern Flutter"
+    "Understand MVC via a real-life analogy",
+    "Know the roles of Model, View, and Controller",
+    "See MVC's original 1979 formulation vs modern web MVC vs mobile MVC",
+    "Recognize why pure MVC struggled in mobile — and what replaced it",
+    "Answer MVC interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "MVC (Model-View-Controller) is a classic UI pattern where the **Controller** receives input, updates the **Model**, and the **View** renders the Model. Common on the server (Spring MVC) and iOS UIKit, less directly used in modern Flutter." },
-    { "type": "table", "headers": ["", "MVC", "MVP", "MVVM"], "rows": [
-      ["Middle role", "Controller", "Presenter", "ViewModel"],
-      ["View knows Model?", "Yes (renders)", "No (via Presenter)", "No (observes VM state)"],
-      ["Testability", "Medium", "Better", "Best in Flutter"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of MVC as a professional kitchen with three specialized roles.**\n\n- **The Model** is the pantry + fridge — where the raw ingredients (data, business rules) live. The pantry doesn't cook; it just knows what's on the shelves.\n- **The View** is the plating station — takes finished dishes (data) and arranges them on the plate. Doesn't cook either; just displays what it's given.\n- **The Controller** is the chef — receives customer orders (user input), fetches ingredients from the pantry, cooks (business logic), and hands the plated result to the view.\n\n**The idea, from 1979 Smalltalk:** separate WHAT the app knows (Model), WHAT the user sees (View), and WHAT happens between them (Controller). Change the plate design (View) without touching the recipe (Model). Add a new ingredient (Model field) without redesigning every plate.\n\n**Why this matters:** MVC is the ANCESTOR of every mobile architecture — MVP, MVVM, MVI, Clean Architecture, BLoC, Redux — all trace their lineage back to MVC's separation of concerns. Understanding pure MVC teaches you WHY those descendants exist: pure MVC ran into problems in mobile that each of its successors tried to fix." },
+    { "type": "callout", "variant": "definition", "markdown": "**MVC (Model-View-Controller)** is an architectural pattern originally from Smalltalk-80 (1979) that separates an application into three roles: **Model** (data + business rules + notifications), **View** (renders the model), **Controller** (mediates user input, updates the model, tells the view to re-render). Different frameworks interpret 'the boundaries' differently — 'classic' Smalltalk MVC, 'web' MVC (Rails / ASP.NET), and 'mobile' MVC (iOS UIKit) are quite different pattern-flavors." },
+    { "type": "theory", "markdown": "## The three roles" },
+    { "type": "table", "headers": ["Role", "What it owns", "What it doesn't"], "rows": [
+      ["**Model**", "Business rules, domain data, persistence, notifications ('data changed')", "UI, formatting, screen state"],
+      ["**View**", "Rendering pixels, receiving raw taps and passing them to Controller", "Business logic, decisions"],
+      ["**Controller**", "Mediates user input; decides what happens; updates model; refreshes view", "The rendering itself, the raw data"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "In classic web MVC (Rails/Spring), the Controller handles a request, calls the Model, and returns a View. In iOS UIKit's MVC the Controller became a 'Massive View Controller' anti-pattern — one big class doing everything." },
-    { "type": "callout", "variant": "tip", "markdown": "For Flutter, prefer MVVM (or MVI/BLoC). MVC is worth knowing because backend frameworks and legacy iOS code use it, and interviewers compare the three." }
+    { "type": "theory", "markdown": "## The three flavors of MVC — same name, different diagrams" },
+    { "type": "table", "headers": ["Flavor", "How data flows", "Notes"], "rows": [
+      ["**Classic Smalltalk MVC (1979)**", "View → Controller → Model; Model → View (via 'observer')", "The View OBSERVES the Model directly and re-renders on notify. Controller only handles input."],
+      ["**Web MVC (Rails, ASP.NET)**", "Request → Controller → Model → View → Response", "Server-side. Controller receives HTTP request; picks a Model; hands rendered View back."],
+      ["**Mobile MVC (iOS UIKit era)**", "View ↔ Controller ↔ Model", "iOS UIViewController holds both View and Controller responsibilities → known as 'Massive View Controller' problem."]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**The interview insight:** when someone says 'MVC', ASK 'which MVC?'. Web MVC is server-request-driven; mobile MVC has bidirectional widget-controller coupling. Confusing them causes half the arguments about 'is Flutter MVC?' — the answer depends on which MVC." },
+    { "type": "theory", "markdown": "## Sample program — MVC in Dart (mobile flavor)" },
+    { "type": "code", "language": "dart", "code": "// A classic mobile-MVC counter, showing where each role's responsibility lies.\nimport 'package:flutter/material.dart';\n\n// ============ MODEL ============\n// Owns the data + business rules. Doesn't know Flutter exists.\nclass CounterModel {\n  int _count = 0;\n  int get count => _count;\n\n  // The Model publishes changes via listeners — the classic Observer pattern.\n  final _listeners = <VoidCallback>[];\n  void addListener(VoidCallback fn) => _listeners.add(fn);\n  void removeListener(VoidCallback fn) => _listeners.remove(fn);\n  void _notify() { for (final fn in _listeners) fn(); }\n\n  // Business rules\n  void increment() { _count++; _notify(); }\n  void reset()     { _count = 0; _notify(); }\n}\n\n// ============ CONTROLLER ============\n// Mediates user input. Decides what happens. Never renders.\nclass CounterController {\n  CounterController(this.model);\n  final CounterModel model;\n\n  void onIncrementPressed() {\n    // In a real app: validation, logging, analytics — before mutating.\n    model.increment();\n  }\n\n  void onResetPressed() => model.reset();\n}\n\n// ============ VIEW ============\n// Renders the model. Passes user input to the controller.\nclass CounterView extends StatefulWidget {\n  const CounterView({super.key});\n  @override State<CounterView> createState() => _CounterViewState();\n}\n\nclass _CounterViewState extends State<CounterView> {\n  final _model = CounterModel();\n  late final _controller = CounterController(_model);\n\n  @override\n  void initState() {\n    super.initState();\n    _model.addListener(_rebuild);   // View observes Model changes\n  }\n\n  @override\n  void dispose() {\n    _model.removeListener(_rebuild);\n    super.dispose();\n  }\n\n  void _rebuild() => setState(() {});\n\n  @override\n  Widget build(BuildContext context) => Scaffold(\n    body: Center(child: Text('${_model.count}',\n      style: const TextStyle(fontSize: 40))),\n    floatingActionButton: Column(\n      mainAxisAlignment: MainAxisAlignment.end,\n      children: [\n        FloatingActionButton(\n          heroTag: 'inc',\n          onPressed: _controller.onIncrementPressed,\n          child: const Icon(Icons.add),\n        ),\n        const SizedBox(height: 8),\n        FloatingActionButton(\n          heroTag: 'reset',\n          onPressed: _controller.onResetPressed,\n          child: const Icon(Icons.refresh),\n        ),\n      ],\n    ),\n  );\n}\n\nvoid main() => runApp(const MaterialApp(home: CounterView()));\n\n// Notice:\n//   * Model has NO Flutter imports. It's pure Dart.\n//   * View doesn't call model.increment() directly — it goes through Controller.\n//   * Controller doesn't render — it just orchestrates.\n// This is 'pure' MVC. Compare to modern MVVM (Level 6.2) — very similar in\n// structure; the biggest difference is that MVVM's ViewModel exposes\n// observable/reactive state, and the View binds to it declaratively." },
+    { "type": "theory", "markdown": "## Why pure MVC struggled on mobile" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Problem 1: 'Massive View Controller'.** On iOS UIKit, the `UIViewController` did double duty as both View AND Controller. As screens got complex, controllers ballooned to 2000+ lines. Same happens in Flutter if you cram all logic into a `StatefulWidget`'s `State`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Problem 2: View → Model direct coupling.** In classic Smalltalk MVC, the View OBSERVES the Model. On mobile, that means UI code knows about domain classes → hard to test, hard to migrate." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Problem 3: No async story.** MVC was designed for desktop apps in 1979 where 'load' was instant. Mobile is I/O-heavy — network, DB — and MVC has no opinion on how to model 'loading' or 'error'." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Problem 4: Testing.** With View and Controller intertwined, you can't unit-test controllers without a real widget tree. Modern replacements (MVVM/BLoC/Riverpod) put logic in a plain-Dart class that's trivially testable." },
+    { "type": "theory", "markdown": "## What replaced MVC in modern mobile" },
+    { "type": "table", "headers": ["Successor", "What it fixed", "Where it's used"], "rows": [
+      ["**MVP** (Model-View-Presenter)", "Presenter decouples View from Model; testable via interface", "Older Android"],
+      ["**MVVM** (Model-View-ViewModel)", "ViewModel exposes reactive state; View binds declaratively", "Android Jetpack, WPF, Vue"],
+      ["**MVI** (Model-View-Intent)", "Unidirectional flow: intent → state → view", "Kotlin/Android community"],
+      ["**BLoC**", "Event → State pipeline; strict unidirectional", "Flutter (flutter_bloc)"],
+      ["**Redux / Flux**", "Single store + pure reducers + actions", "React, occasionally Flutter"],
+      ["**Clean Architecture**", "Concentric layers with dependency inversion", "Enterprise apps everywhere"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**The pattern:** every modern mobile architecture takes MVC's 'separate concerns' idea and adds ONE more constraint — 'data flows in one direction' (MVI/BLoC/Redux) OR 'the view binds to reactive state' (MVVM/Riverpod) OR 'the layers can only depend inward' (Clean Architecture). Understanding MVC's problems makes all of them make sense." },
+    { "type": "theory", "markdown": "## Best practices — if you still use MVC" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Keep the Model framework-free.** Pure Dart, no `import 'package:flutter/...'`. Testable without a widget tree." },
+    { "type": "callout", "variant": "best", "markdown": "**2. View NEVER calls Model directly.** Always through Controller. Otherwise the boundary erodes." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Extract controllers OUT of widgets.** Don't let your `_StateName` class balloon — move logic to a `SomethingController` plain Dart class." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Consider promoting to MVVM.** The ViewModel is basically 'Controller + observable state built-in'. Cleaner in Flutter." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Test the Controller in pure Dart tests.** No widget pumping needed if you've kept it framework-free." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Counter in strict MVC.** Build the sample; verify Model has no Flutter imports." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — 'Massive View Controller' anti-pattern.** Deliberately cram model + view + controller into ONE widget class. Then refactor into three parts. Feel the difference." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Add unit tests.** Write pure Dart tests for `CounterController` — no widget pumping." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Migrate to MVVM.** Convert your MVC counter to MVVM with a reactive `ChangeNotifier` ViewModel." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Compare across frameworks.** Same counter, five ways: pure MVC, MVVM, BLoC, Riverpod, Redux. Write a 500-word essay on when each shines." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is MVC?**\n\n**A:** MVC (Model-View-Controller) is an architectural pattern originally from Smalltalk-80 (1979) that separates an application into three roles: **Model** (business rules + domain data + change notifications), **View** (renders the Model, catches raw user input), **Controller** (mediates user input, updates the Model, tells the View to refresh). The goal is **separation of concerns**: change the Model without touching the View, redesign the View without touching business rules. MVC is the ancestor of every modern architectural pattern used in mobile — MVP, MVVM, MVI, BLoC, Clean Architecture — all evolved from MVC's core idea." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What are the three flavors of MVC?**\n\n**A:** Same name, different diagrams. **(1) Classic Smalltalk MVC (1979)** — View observes Model directly; Controller only handles input. **(2) Web MVC (Rails, ASP.NET, Django)** — server-side: request comes to Controller → Controller consults Model → renders View → sends response. **(3) Mobile MVC (iOS UIKit)** — `UIViewController` bundles View and Controller roles together, causing the famous 'Massive View Controller' problem. Same acronym, three quite different patterns. Whenever someone says 'MVC', clarifying WHICH one prevents the arguments about 'is Flutter MVC?'." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What is 'Massive View Controller' and why did it happen?**\n\n**A:** On iOS UIKit (and equivalently in a Flutter `State<T>` class), the object that hosted the View also hosted the Controller — so all lifecycle callbacks, input handlers, data-transform code, and rendering wound up in ONE class. Real screens rapidly grew to 2000+ lines. Nothing was easy to test — you couldn't instantiate a `UIViewController` in a unit test without a whole UI stack. **The fix** was to extract controllers into plain Dart/Swift classes that don't depend on UI — hence MVP (Presenter), MVVM (ViewModel), BLoC. All descendants of MVC that specifically address the 'don't cram logic into your widget' problem." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How does MVC compare to MVVM?**\n\n**A:** Both separate Model / View / mediator. **MVC** — Controller handles user input, updates Model, tells View to refresh. Communication often bidirectional. **MVVM** — ViewModel exposes **observable/reactive state**; View **binds** to it declaratively. The ViewModel doesn't tell the View to refresh; the View auto-refreshes when its observed state changes. **Advantage of MVVM:** unidirectional data flow (state → View), less coupling, natural fit for reactive frameworks (`ChangeNotifier`, `Riverpod` `Notifier`, Android Jetpack `ViewModel`). **Advantage of MVC:** simpler mental model, no observability machinery. Modern Flutter code that uses Riverpod is essentially MVVM: `Notifier` is the ViewModel, `ConsumerWidget` is the View, plain data classes are the Model." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: Is Flutter MVC?**\n\n**A:** Flutter has no built-in architecture — the framework leaves that decision to you. You CAN write MVC in Flutter (see the counter sample), and many quick-and-dirty apps essentially do (`StatefulWidget`'s `State` acts as View + Controller; a separate class holds Model). **But Flutter's declarative model + reactive state libraries (Riverpod, Bloc, MobX)** push you toward MVVM-style architectures naturally — you have observable state, and widgets rebuild when it changes. So the accurate answer: 'Flutter is architecture-agnostic. You can write MVC in Flutter, but the ergonomics push toward MVVM or BLoC once you introduce a state library.'" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: Why isn't pure MVC common on mobile anymore?**\n\n**A:** Four reasons: **(1) The View-Controller coupling on mobile (UIKit's UIViewController, Flutter's State) causes 'Massive View Controller' bloat.** **(2) No async story — MVC was designed for 1979 desktops where I/O was rare.** Mobile is async-first. **(3) Testing is hard — with UI + Controller intertwined, you can't unit-test controllers.** **(4) Modern reactive frameworks provide state observability out of the box, so MVVM's benefits come for free.** MVC survives in server-side web (Rails, ASP.NET) where it's actually a great fit. On mobile, it's mostly historical." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Legacy iOS apps** — UIKit's default architecture.\n- **Server-side web (Rails, Django, Spring MVC)** — thriving.\n- **Quick prototypes / demos** — everyone starts by cramming everything into a widget; that's implicit MVC.\n- **Educational content** — MVC is the pattern used to explain 'separation of concerns'.\n- **Almost never in production Flutter** — MVVM / BLoC / Riverpod dominates." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Coordinators** (iOS pattern) — introduced to move navigation logic OUT of `UIViewController`; MVC's answer to the 'controllers know too much' problem.\n- **VIPER** — an over-elaborate mobile MVC with View / Interactor / Presenter / Entity / Router; overkill for most apps but shows how far architectures went to escape MVC's problems.\n- **Rails Fat Model, Skinny Controller** — the design guideline that emerged when Rails devs realized controllers were becoming a dumping ground.\n- **PAC (Presentation-Abstraction-Control)** — Smalltalk contemporary; slightly different but same era.\n- **Understanding MVC's origin** — the Smalltalk paper by Trygve Reenskaug is the canonical source (1979).\n- **Modern hybrids** — 'MVC with Combine/Rx' basically becomes MVVM.\n- **Testing legacy MVC** — usually requires headless UI test harnesses; a red flag." }
   ],
   "flashcards": [
-    { "front": "MVC roles?", "back": "Model (data/rules), View (renders), Controller (handles input, updates model)." },
-    { "front": "MVC vs MVVM in Flutter?", "back": "MVVM's observable state fits Flutter's declarative UI better than direct controller updates." },
-    { "front": "What is the 'Massive View Controller'?", "back": "An iOS anti-pattern where all logic lives in one huge UIViewController." }
+    { "front": "MVC three roles?", "back": "Model (data + rules), View (renders), Controller (handles input + orchestrates)." },
+    { "front": "Three flavors of MVC?", "back": "Classic Smalltalk (View observes Model), Web (request → Controller → View response), Mobile (UIViewController = View + Controller)." },
+    { "front": "Massive View Controller?", "back": "Mobile MVC's bloat problem — Controller balloons because it also hosts View. Fixed by MVVM / BLoC / etc." },
+    { "front": "MVC's mobile problem?", "back": "View-Controller coupling, no async story, hard to test, no observability built-in." },
+    { "front": "Is Flutter MVC?", "back": "Architecture-agnostic. Can be MVC. Reactive state libraries push you toward MVVM naturally." },
+    { "front": "MVC vs MVVM?", "back": "MVVM adds observable/reactive state — View binds to ViewModel declaratively, no manual refresh." }
   ],
   "quiz": [
-    { "q": "In MVC the Controller…", "options": ["Renders the View", "Handles input and updates the Model", "Stores data", "Runs SQL"], "answer": 1, "explain": "Input → Controller → Model → View." },
-    { "q": "MVC is common in…", "options": ["Modern Flutter apps", "Server frameworks and legacy UIKit", "Kernel code", "Compilers"], "answer": 1, "explain": "Spring MVC, Rails, UIKit — that's classic MVC's home." },
-    { "q": "Flutter apps usually prefer…", "options": ["MVC", "MVVM/MVI/BLoC", "Direct DB → widget", "Global state only"], "answer": 1, "explain": "Observable-state patterns match Flutter's declarative UI." }
+    { "q": "MVC's C role?", "options": ["Configures widgets", "Handles input + updates Model + refreshes View", "Renders pixels", "Stores state"], "answer": 1, "explain": "Mediator." },
+    { "q": "Web MVC (Rails)?", "options": ["Same as mobile", "Server-side: request → controller → model → view response", "Same as Smalltalk", "Deprecated"], "answer": 1, "explain": "Very different from mobile MVC." },
+    { "q": "Massive View Controller?", "options": ["Feature", "Mobile MVC's bloat problem when UIViewController = View + Controller", "Buffer overflow", "Thread issue"], "answer": 1, "explain": "Why MVP/MVVM/BLoC exist." },
+    { "q": "MVC's async story?", "options": ["Great", "Basically none — pattern predates modern async", "Best in class", "Depends on library"], "answer": 1, "explain": "1979 desktop-era." },
+    { "q": "Is Flutter MVC?", "options": ["Yes strictly", "No, it's MVVM only", "Architecture-agnostic; you choose", "Redux only"], "answer": 2, "explain": "Framework leaves it to you." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Diagram MVC vs MVVM for a login screen." },
-    { "level": "Medium", "text": "Take a classic Spring MVC endpoint and map its parts onto Flutter." },
-    { "level": "Hard", "text": "Convert a Massive-View-Controller-style Dart file into MVVM." },
-    { "level": "Expert", "text": "Compare testability of the same feature under MVC vs MVVM with unit tests." }
+    { "level": "Easy", "text": "Build the counter in strict MVC (see sample). Verify Model has no Flutter imports." },
+    { "level": "Easy", "text": "Write pure Dart unit tests for the Controller (no widget pumping)." },
+    { "level": "Medium", "text": "Refactor a bloated 500-line StatefulWidget into MVC roles." },
+    { "level": "Medium", "text": "Migrate your MVC counter to MVVM with a ChangeNotifier ViewModel." },
+    { "level": "Hard", "text": "Build the same counter three ways — MVC, MVVM, BLoC — and write a 300-word compare." },
+    { "level": "Expert", "text": "Take a real 'Massive View Controller' anti-pattern from a Flutter codebase and refactor it. Measure LOC per file before/after." }
   ],
   "interviewQuestions": [
-    "MVC vs MVP vs MVVM?",
-    "Why is MVC less natural in Flutter?",
-    "What is the Massive View Controller anti-pattern?",
-    "How does MVC show up on the server side?",
-    "When would you choose MVC over MVVM?"
+    "What is MVC?",
+    "What are the three flavors of MVC?",
+    "What is 'Massive View Controller' and why did it happen?",
+    "How does MVC compare to MVVM?",
+    "Is Flutter MVC?",
+    "Why isn't pure MVC common on mobile anymore?"
   ],
   "references": [
-    { "label": "Fowler — GUI Architectures", "url": "https://martinfowler.com/eaaDev/uiArchs.html" }
+    { "label": "Trygve Reenskaug's MVC paper (1979)", "url": "https://folk.universitetetioslo.no/trygver/2007/MVC_Originals.pdf" },
+    { "label": "Apple's classic MVC guide", "url": "https://developer.apple.com/library/archive/documentation/General/Conceptual/CocoaEncyclopedia/Model-View-Controller/Model-View-Controller.html" }
   ]
 }
