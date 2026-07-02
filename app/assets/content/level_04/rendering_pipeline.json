@@ -1,51 +1,113 @@
 {
   "id": "flutter.rendering_pipeline",
   "levelId": 4,
-  "title": "Rendering Pipeline",
+  "title": "The Rendering Pipeline (A Frame's Journey)",
   "xp": 50,
-  "estimatedMinutes": 25,
+  "estimatedMinutes": 40,
   "objectives": [
-    "List the phases of a frame",
-    "Explain how a frame is scheduled and drawn",
-    "Connect rebuilds to layout, paint and raster"
+    "Walk a frame end-to-end via a real-life analogy",
+    "Understand vsync, build, layout, paint, composite, rasterize",
+    "Know why we say 'UI thread' vs 'raster thread'",
+    "Recognize jank causes at each pipeline stage",
+    "Answer rendering-pipeline interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "The rendering pipeline is the sequence of phases Flutter runs each frame to turn your widget tree into pixels, driven by the vsync signal from the device's display." },
-    { "type": "code", "language": "text", "code": "vsync -> Animations/build -> LAYOUT -> PAINT -> COMPOSITE\n      -> RASTERIZE (GPU) -> on screen\nUI thread builds layers; Raster thread turns them into pixels." },
-    { "type": "table", "headers": ["Phase", "What happens"], "rows": [
-      ["Build", "Rebuild dirty widgets"],
-      ["Layout", "Size & position render objects"],
-      ["Paint", "Record paint commands into layers"],
-      ["Composite", "Assemble the layer tree"],
-      ["Rasterize", "GPU converts layers to pixels (raster thread)"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of publishing a newspaper on a strict daily deadline.**\n\n- Every day (every **vsync tick** — 16.67 ms at 60 fps), the printer says 'GIVE ME THE NEXT ISSUE'. That's the whistle.\n- The editorial team runs a strict pipeline: **(1) writers draft articles (build widgets), (2) editors arrange page layout (layout), (3) illustrators draw graphics (paint), (4) production team compiles the plates (composite), (5) printer rolls it (rasterize)**. Miss any step, and the paper doesn't ship — same frame reprints twice → jank.\n- The **UI thread** is the editorial team: writers + editors + illustrators. Fast, human, single-threaded (one editor).\n- The **raster thread** (or GPU) is the printing press. It receives plates from editorial (the layer tree) and prints in parallel — usually fast, sometimes jammed if the plates are complex (shader compilation, big bitmaps).\n- If the editorial team is late by 4 ms, the printer waits, no big deal. If they're late by 20 ms, the printer PRINTS THE SAME ISSUE AGAIN — that's jank.\n\n**Understanding this pipeline is what separates 'my app is slow, help' from 'the paint phase is spending 12 ms on this animation, let me RepaintBoundary it.' The pipeline is where all Flutter performance thinking begins.**" },
+    { "type": "callout", "variant": "definition", "markdown": "**The rendering pipeline** is the sequence of phases Flutter runs each frame to turn your widget tree into on-screen pixels: **vsync → animation callbacks → build → layout → paint → composite → rasterize → present**. Some run on the **UI thread** (Dart), some on the **raster thread** (native code + GPU). The whole pipeline must complete within one refresh interval (~16.67 ms at 60 fps) or the user sees a dropped frame." },
+    { "type": "theory", "markdown": "## The eight stages of a frame" },
+    { "type": "table", "headers": ["Stage", "Thread", "What happens"], "rows": [
+      ["**vsync**", "OS → UI", "Display fires; Flutter engine wakes the UI thread"],
+      ["**Animate**", "UI", "AnimationControllers tick; SchedulerBinding runs frame callbacks"],
+      ["**Build**", "UI", "Dirty StatefulElements call `build()` — new widget subtrees returned"],
+      ["**Layout**", "UI", "Constraints flow down, sizes flow up (see render tree topic)"],
+      ["**Paint**", "UI", "RenderObjects record drawing commands into layers (`Picture`s)"],
+      ["**Composite**", "UI", "Layer tree finalized and handed to raster thread"],
+      ["**Rasterize**", "Raster (native/GPU)", "Impeller/Skia turns layers into GPU commands; GPU produces the frame"],
+      ["**Present**", "GPU → Display", "The final framebuffer is shown at next vsync"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "Flutter targets one frame every ~16ms (60fps) or ~8ms (120fps). Work splits across the UI thread (build/layout/paint) and the raster thread (GPU). Jank happens when either thread overruns the frame budget." },
-    { "type": "callout", "variant": "tip", "markdown": "Reduce per-frame work: minimize rebuilt subtrees (const, granular setState/selectors), use RepaintBoundary for animations, and avoid expensive paint (large blurs/shadows, saveLayer) in hot paths." }
+    { "type": "callout", "variant": "interview", "markdown": "**The classic senior interview question:** 'Walk me through a Flutter frame from vsync to pixel.' If you can answer this cleanly (~1 minute), naming each stage and what thread it runs on, you've mastered the internals." },
+    { "type": "theory", "markdown": "## The two threads — UI vs Raster (also called 'GPU thread')" },
+    { "type": "table", "headers": ["Aspect", "UI thread", "Raster thread"], "rows": [
+      ["Runs", "Dart code (build/layout/paint recording)", "C++ engine + GPU driver (Impeller/Skia)"],
+      ["Budget", "~10 ms of the 16 ms frame", "~6 ms of the 16 ms frame"],
+      ["Blocked by", "Heavy Dart work, big layouts, complex paint recording", "Shader compilation, large bitmaps, complex layers"],
+      ["Detect jank", "'UI thread' bar in DevTools", "'Raster' bar in DevTools — often the shader-compilation culprit"],
+      ["Fix jank", "Move CPU to isolate; simpler layouts; RepaintBoundary; const widgets", "Baseline Profiles / Impeller shader precompilation; smaller images"]
+    ]},
+    { "type": "theory", "markdown": "## Sample program — force a rebuild, feel the pipeline" },
+    { "type": "code", "language": "dart", "code": "import 'package:flutter/material.dart';\nimport 'package:flutter/scheduler.dart';\n\nvoid main() => runApp(const MaterialApp(home: FrameDemo()));\n\nclass FrameDemo extends StatefulWidget {\n  const FrameDemo({super.key});\n  @override State<FrameDemo> createState() => _FrameDemoState();\n}\n\nclass _FrameDemoState extends State<FrameDemo> {\n  int _tick = 0;\n\n  @override\n  void initState() {\n    super.initState();\n    // Log every frame the pipeline runs — you'll see it ~60 times per second.\n    SchedulerBinding.instance.addPostFrameCallback(_onFrame);\n  }\n\n  void _onFrame(Duration t) {\n    debugPrint('[frame] t=${t.inMilliseconds}ms tick=$_tick');\n    // Ask for the next frame — sustains the loop.\n    SchedulerBinding.instance.addPostFrameCallback(_onFrame);\n  }\n\n  @override\n  Widget build(BuildContext context) {\n    debugPrint('[build] tick=$_tick');\n    return Scaffold(\n      appBar: AppBar(title: const Text('Pipeline demo')),\n      body: Center(\n        // A RepaintBoundary around the changing part — its neighbors are STATIC.\n        // Enable DevTools' 'Highlight Repaints' to see only this box flash.\n        child: RepaintBoundary(\n          child: Container(\n            width: 100 + (_tick % 100).toDouble(),\n            height: 100 + (_tick % 100).toDouble(),\n            color: Colors.deepPurple.withOpacity(0.6),\n            child: Center(child: Text('$_tick')),\n          ),\n        ),\n      ),\n      floatingActionButton: FloatingActionButton(\n        onPressed: () => setState(() => _tick++),\n        child: const Icon(Icons.play_arrow),\n      ),\n    );\n  }\n}\n\n// What to observe:\n//  * [build] fires once per setState. If you also add a PerformanceOverlay,\n//    you'll see the UI bar (top) tick a tiny amount, and the Raster bar\n//    (bottom) tick separately.\n//  * With the RepaintBoundary, only the Container's layer re-records —\n//    the AppBar and Scaffold don't. Toggle it off and watch neighboring\n//    layers flash in Highlight Repaints." },
+    { "type": "theory", "markdown": "## Where jank comes from at each stage" },
+    { "type": "table", "headers": ["Stage", "Common jank cause", "Fix"], "rows": [
+      ["Build", "Huge build methods, `Provider.of` chains, expensive computations in `build()`", "Extract widgets, memoize, do work in State/controller"],
+      ["Layout", "Deep tree, IntrinsicWidth/Height (double-pass), unbounded constraints re-measuring", "Simplify tree, avoid IntrinsicHeight in hot paths"],
+      ["Paint", "Complex `CustomPainter`, blur/opacity everywhere, missing RepaintBoundary", "RepaintBoundary, cache paths in painter, avoid full-tree opacity"],
+      ["Composite/Raster", "Shader compilation jank on first-run animations, large bitmaps", "Impeller (Flutter 3.10+), Baseline Profiles, image downsampling"]
+    ]},
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Blaming 'the framework' for jank.** 99% of jank is app-code work on the UI thread. Enable DevTools and see which stage's bar is fat." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Ignoring shader compilation on iOS.** Skia backend on iOS used to compile shaders JIT — first-run of an animation caused a 200 ms stall. **Impeller** (Flutter 3.10+, default on iOS/Android) pre-compiles all shaders offline, killing this class of jank." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Using `Opacity` on a big subtree.** `Opacity` forces its subtree onto its own offscreen layer, then blends. Expensive. For fixed opacity, prefer `AnimatedOpacity` briefly, or use `Color.withOpacity` on individual paint calls." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Not enabling the Performance Overlay during dev.** `showPerformanceOverlay: true` on `MaterialApp` — draws the UI + Raster bars. Free, always-on jank detector." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Testing on debug builds.** Debug is 2–10x slower than release. Perf-profile release/profile builds only." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Measure with DevTools Performance tab.** UI thread bar? Optimize Dart. Raster bar? Optimize shaders/bitmaps." },
+    { "type": "callout", "variant": "best", "markdown": "**2. `RepaintBoundary` around anything that animates independently.** One of the highest-leverage perf wins." },
+    { "type": "callout", "variant": "best", "markdown": "**3. `const` every possible widget constructor.** Skip-rebuilds mean skip-paints." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Prefer `Image.asset(...)` with cache_width / cache_height** for downsampling; avoid loading a 4K image into a 200 px slot." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Enable Impeller** (default now); ship a Baseline Profile for release builds — first-run jank dies." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Profile in `--profile` mode.** `flutter run --profile` gives realistic timings without debug overhead." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Enable Performance Overlay.** `MaterialApp(showPerformanceOverlay: true)`; scroll a list; observe both bars." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Highlight Repaints.** In DevTools, enable it; wrap an animation in `RepaintBoundary` and see the difference." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Frame callback logger.** Build the sample; observe frames tick even without user input (once you request them)." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Deliberate jank + profile.** Build a screen with a `for` loop of `10_000_000` in `build`; profile it in DevTools; move the loop off to an isolate; re-profile." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Impeller vs Skia.** Toggle Impeller on/off (`--no-enable-impeller`) on iOS; profile a first-run animation to see shader-compilation jank on Skia and its absence on Impeller." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Walk me through a Flutter frame from vsync to pixel.**\n\n**A:** **(1) vsync fires** — the OS tells the engine 'ready for a new frame'. The Flutter engine wakes the UI thread. **(2) Animate** — the SchedulerBinding runs registered frame callbacks; AnimationControllers advance. **(3) Build** — any Element marked dirty (setState, didUpdateWidget, InheritedWidget change) invokes `build()`, producing a new widget subtree. **(4) Layout** — the render tree is walked; constraints flow down, sizes flow up. **(5) Paint** — each RenderObject records drawing commands into a `Picture` inside its Layer. **(6) Composite** — the finalized Layer tree is handed to the raster thread. **(7) Rasterize** — the raster thread (Impeller or Skia) turns the Layer tree into GPU commands; the GPU produces pixels. **(8) Present** — the framebuffer is shown at the next vsync. All of this must finish within ~16.67 ms at 60 fps, or the frame is dropped and the last frame reshows — that's jank." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What is the UI thread vs the Raster thread?**\n\n**A:** The **UI thread** runs your Dart code — animations, build, layout, paint recording — single-threaded per isolate. The **Raster thread** runs native C++ engine code + GPU driver calls to actually rasterize the layer tree. They're separate so they can pipeline: while the raster thread rasterizes frame N, the UI thread can start building frame N+1. **DevTools Performance tab** shows both as parallel bars per frame. **Jank diagnosis:** fat UI bar = your Dart is slow (fix build/layout/paint). Fat Raster bar = shader compilation, complex layers, big bitmaps. Different fixes for each — that's why the split matters." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What causes jank?**\n\n**A:** Missing the 16.67 ms frame budget. Sources: **UI thread jank** — heavy build methods, huge layouts (IntrinsicHeight in a hot path), expensive `CustomPainter.paint`, allocating lots in build. **Raster thread jank** — shader compilation stall (first-run animations on Skia), large bitmaps decoded on the raster thread, complex layer compositing. **Fixes:** move CPU work off UI thread (`Isolate.run` or `compute`), extract subtrees + `const`, add `RepaintBoundary` around animations, adopt **Impeller** to avoid shader-compilation jank, ship a **Baseline Profile** for release. **Measure first** — DevTools' Performance tab is definitive; guess and you'll optimize the wrong thing." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What is Impeller?**\n\n**A:** Flutter's newer rendering backend (Flutter 3.10+, default on iOS and Android in modern versions), replacing the classic Skia backend. **Key win: precompiled shaders.** Skia compiled shaders JIT — the first time you triggered a complex animation, the raster thread stalled for hundreds of ms to compile the needed shaders, causing famous 'first-run jank' on iOS. Impeller compiles all shaders **offline at build time** using its own shading language, so runtime is deterministic — no JIT compilation stalls. Also uses Metal on iOS, Vulkan on Android for closer-to-metal graphics access. Trade-off: larger app size (shipped shader binaries) but much smoother first-run UX." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: When do you use `RepaintBoundary`?**\n\n**A:** Whenever you have a subtree that changes at a different cadence from its neighbors. Classic case: a running animation next to a static list — without a boundary, the entire ancestor layer re-records every animation frame. Wrap the animation in a `RepaintBoundary` and its layer re-records in isolation. **Detect need with DevTools 'Highlight Repaints':** layers turn different colors each time they re-record; if a static area is flashing along with an animation, wrap one of them. **Don't over-boundary:** every boundary costs GPU memory for its cached layer. Use sparingly, guided by DevTools." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What are Baseline Profiles and Compose Baseline Profiles?**\n\n**A:** **Baseline Profiles** (an Android concept, applicable to Flutter Android apps) are a list of method signatures that the Android Runtime (ART) AOT-compiles ahead of first use. Without them, ART compiles methods JIT, causing early-launch and first-scroll jank. Shipping a Baseline Profile pre-warms the critical path. **How Flutter uses them:** the Flutter engine and framework ship Baseline Profiles; you can additionally generate one for YOUR app's specific hot paths using Macrobenchmark (Android). Typical improvement: **20–40% cold-start reduction**, noticeably smoother first scroll. Compose Baseline Profiles are the same concept for Jetpack Compose apps — not directly relevant to Flutter." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What is the Performance Overlay and how do you read it?**\n\n**A:** Turn on with `MaterialApp(showPerformanceOverlay: true)` or via DevTools. Two stacked graphs at the top of the screen: **UI thread (top bar)** and **Raster thread (bottom bar)**. Each vertical stripe = one frame. Green = fast, red = over budget. **Read it:** if the UI bar is consistently taller than the raster bar, your Dart is the bottleneck (build/layout/paint). If the raster bar is taller, your compositing is expensive (complex layers, big bitmaps, shader stalls on Skia). Free, always-on jank indicator during dev; disable for release." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every Flutter app** — this pipeline runs 60–120 times per second while the app is visible.\n- **DevTools Performance tab** — the industry-standard tool for pipeline analysis.\n- **Skia vs Impeller migration** — the biggest Flutter perf shift of 2023–24.\n- **Baseline Profiles** — ship them for Android release; measurable startup improvement.\n- **`SchedulerBinding`** — hooks into the pipeline for custom frame callbacks.\n- **Testing** — `WidgetTester.pump()` runs a single pipeline pass; `pumpAndSettle()` runs until no more animation frames are requested." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`Ticker`** — the pulse that drives animation callbacks; ticks each frame (one per vsync).\n- **`SchedulerBinding.addPostFrameCallback`** — fires once after the current frame paints.\n- **`WidgetsBinding.instance.scheduleFrame`** — request a frame explicitly.\n- **`RendererBinding.instance.pipelineOwner`** — the object coordinating layout/paint.\n- **`Layer.retain`** — hint to keep a layer cached across frames.\n- **`FlutterView` / `PlatformDispatcher`** — modern APIs replacing `Window`; a Flutter app can have multiple views (multi-window).\n- **`FrameTiming`** — API to get per-frame durations; used by Firebase Perf, Sentry.\n- **`FlutterEngine.performanceOverlayLayer`** — programmatic access.\n- **`--trace-startup`, `--trace-skia`** — advanced CLI flags for engine-level tracing." }
   ],
   "flashcards": [
-    { "front": "Phases of a frame?", "back": "Build → Layout → Paint → Composite → Rasterize, driven by vsync." },
-    { "front": "UI thread vs raster thread?", "back": "UI thread builds/layouts/paints (records layers); raster thread rasterizes layers to pixels on the GPU." },
-    { "front": "Frame budget at 60fps?", "back": "~16ms; exceed it on either thread and you get jank." }
+    { "front": "Pipeline stages in order?", "back": "vsync → animate → build → layout → paint → composite → rasterize → present." },
+    { "front": "UI vs Raster thread?", "back": "UI = Dart (build/layout/paint recording). Raster = native + GPU (rasterization)." },
+    { "front": "Frame budget?", "back": "16.67 ms at 60 fps. Overrun = jank." },
+    { "front": "Impeller advantage?", "back": "Precompiled shaders — no first-run compilation stall." },
+    { "front": "RepaintBoundary use?", "back": "Wrap anything animating independently from neighbors." },
+    { "front": "Two ways to profile?", "back": "Performance Overlay (dev-time) + DevTools Performance tab." }
   ],
   "quiz": [
-    { "q": "What drives each frame?", "options": ["A timer", "The vsync signal", "User taps only", "The network"], "answer": 1, "explain": "Vsync from the display schedules frames." },
-    { "q": "Rasterization happens on the…", "options": ["UI thread", "Raster (GPU) thread", "Platform thread", "Isolate"], "answer": 1, "explain": "The raster thread converts recorded layers into pixels via the GPU." },
-    { "q": "The order of phases is…", "options": ["Paint → Layout → Build", "Build → Layout → Paint → Composite → Raster", "Layout → Build → Raster", "Raster → Build → Paint"], "answer": 1, "explain": "Build, then layout, then paint, composite, and rasterize." }
+    { "q": "Frame budget at 60fps?", "options": ["10 ms", "16.67 ms", "33 ms", "60 ms"], "answer": 1, "explain": "1000/60." },
+    { "q": "UI thread runs…", "options": ["GPU", "Dart (build/layout/paint recording)", "OS", "Only animations"], "answer": 1, "explain": "Editorial team." },
+    { "q": "Impeller kills…", "options": ["Widgets", "First-run shader-compilation jank", "Widgets tree", "State"], "answer": 1, "explain": "Precompiled shaders." },
+    { "q": "Highlight Repaints in DevTools shows…", "options": ["Widgets", "Layer repaint activity per frame", "State object", "Threads"], "answer": 1, "explain": "Layer-level view." },
+    { "q": "Profile in…", "options": ["Debug", "Profile or Release mode", "Any mode", "Web only"], "answer": 1, "explain": "Debug adds 2-10x overhead." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Use the performance overlay to view UI vs raster thread timings." },
-    { "level": "Medium", "text": "Find a jank source with DevTools timeline and fix it." },
-    { "level": "Hard", "text": "Reduce rebuilds with const + a granular state selector and measure the difference." },
-    { "level": "Expert", "text": "Profile and eliminate a costly saveLayer/shadow in a scrolling list." }
+    { "level": "Easy", "text": "Enable showPerformanceOverlay in MaterialApp; scroll a list and observe UI/Raster bars." },
+    { "level": "Easy", "text": "Enable Highlight Repaints in DevTools; identify one layer that's re-recording unnecessarily." },
+    { "level": "Medium", "text": "Wrap a running animation in RepaintBoundary; measure the delta." },
+    { "level": "Medium", "text": "Add a post-frame callback that logs frame timings." },
+    { "level": "Hard", "text": "Reproduce shader-compilation jank on Skia (--no-enable-impeller) on iOS; retest with Impeller." },
+    { "level": "Hard", "text": "Move a 400-ms computation off the UI thread with Isolate.run; measure frame-time before/after." },
+    { "level": "Expert", "text": "Generate a Baseline Profile for a Flutter Android app; ship + measure cold-start delta with Macrobenchmark." }
   ],
   "interviewQuestions": [
-    "Walk through the rendering pipeline phases.",
-    "UI thread vs raster thread — what runs where?",
-    "What causes jank and how do you diagnose it?",
-    "How does vsync relate to frames?",
-    "How do you reduce per-frame work?"
+    "Walk me through a Flutter frame from vsync to pixel.",
+    "What is the UI thread vs the Raster thread?",
+    "What causes jank?",
+    "What is Impeller?",
+    "When do you use RepaintBoundary?",
+    "What are Baseline Profiles?",
+    "What is the Performance Overlay and how do you read it?"
   ],
   "references": [
-    { "label": "Flutter — Rendering pipeline (Inside Flutter)", "url": "https://docs.flutter.dev/resources/inside-flutter" }
+    { "label": "Flutter performance profiling", "url": "https://docs.flutter.dev/perf/ui-performance" },
+    { "label": "Impeller", "url": "https://docs.flutter.dev/perf/impeller" }
   ]
 }

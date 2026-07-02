@@ -88,60 +88,25 @@ body.push(...topicToChapter(loadTopic("level_04", "widget_lifecycle"),
 body.push(...topicToChapter(loadTopic("level_04", "buildcontext"),
   { chapterNumber: 4, bookmarkId: "ch4" }));
 
-// 5 The three trees
-body.push(...chapter({
-  id: "ch5", title: "5. The Three Trees: Widget · Element · Render",
-  def: "Flutter maintains three parallel trees: the Widget tree (immutable config), the Element tree (living instances + state), and the RenderObject tree (layout, paint, hit-test).",
-  blocks: [
-    code(["Widget (config) --inflate--> Element (instance, holds State)",
-      "                                 |  creates/updates",
-      "                                 v",
-      "                            RenderObject (layout + paint)"], "the three trees"),
-    table(["Tree", "Mutable?", "Job"], [
-      ["Widget", "No (rebuilt often)", "Describe the UI"],
-      ["Element", "Yes (long-lived)", "Hold state, reconcile, bridge"],
-      ["RenderObject", "Yes", "Layout, paint, hit-test"]], [2200, 3000, 4160]),
-    callout("interview", ["On rebuild, Element.updateChild reuses the existing Element (and its State + RenderObject) when the new widget has the same runtimeType and key; otherwise it unmounts and recreates. This is why type/key stability drives performance, and why keys preserve state when widgets reorder."]),
-    callout("mistake", ["Reordering stateful list items without keys mixes up state. Use ValueKey/ObjectKey so elements follow their data."]),
-  ],
-  summary: ["Widget = config, Element = instance+state, RenderObject = layout/paint.", "Elements are reused when runtimeType + key match.", "Keys preserve identity during reconciliation.", "BuildContext is an Element."],
-  interview: ["Explain the Widget/Element/RenderObject trees.", "When does Flutter reuse vs recreate an Element?", "What problem do keys solve?", "Where is State stored?", "ValueKey vs GlobalKey?"],
-  coding: [
-    { level: "Easy", text: "Add prints to observe element reuse on rebuild." },
-    { level: "Medium", text: "Reproduce a list state mix-up; fix with ValueKey." },
-    { level: "Hard", text: "Use a GlobalKey to read a child's state; note the cost." },
-    { level: "Expert", text: "Write a custom RenderBox with performLayout + paint." }],
-  realworld: ["Animated reorderable lists and shared-element transitions rely on correct keys so the framework moves elements instead of rebuilding them."],
-  miniproject: ["Build a reorderable, animated list where each item keeps its own expand/collapse state correctly via keys."],
-  advanced: ["RenderObject protocols, the layout boundary & relayout boundaries, the Flutter inspector's three-tree view."],
-}));
+// 5. Widget Tree
+body.push(...topicToChapter(loadTopic("level_04", "widget_tree"),
+  { chapterNumber: 5, bookmarkId: "ch5" }));
 
-// 6 Rendering pipeline
-body.push(...chapter({
-  id: "ch6", title: "6. Rendering Pipeline",
-  def: "The rendering pipeline is the per-frame sequence — Build → Layout → Paint → Composite → Rasterize — that turns your widget tree into pixels, driven by vsync.",
-  blocks: [
-    code(["vsync -> Build -> LAYOUT -> PAINT -> COMPOSITE -> RASTERIZE(GPU)",
-      "UI thread: build/layout/paint (records layers)",
-      "Raster thread: turns layers into pixels"], "frame"),
-    callout("interview", ["Flutter targets ~16ms/frame (60fps). Work splits across the UI thread (build/layout/paint) and the raster thread (GPU). Jank occurs when either overruns the budget. Layout is single-pass: constraints down, sizes up, parent positions — making it O(n)."]),
-    callout("tip", ["Cut per-frame work: minimize rebuilt subtrees (const, selectors), RepaintBoundary around animations, avoid expensive paint (big blurs/saveLayer) in hot paths."]),
-  ],
-  summary: ["Phases: Build → Layout → Paint → Composite → Rasterize.", "UI thread records layers; raster thread rasterizes on GPU.", "Layout is single-pass: constraints down, sizes up.", "Jank = either thread exceeds the frame budget."],
-  interview: ["Walk through the rendering pipeline.", "UI vs raster thread?", "What causes jank and how to diagnose?", "Explain constraints down, sizes up.", "How reduce per-frame work?"],
-  coding: [
-    { level: "Easy", text: "Read UI vs raster timings on the performance overlay." },
-    { level: "Medium", text: "Find and fix a jank source with the DevTools timeline." },
-    { level: "Hard", text: "Reduce rebuilds with const + a selector; measure." },
-    { level: "Expert", text: "Eliminate a costly saveLayer/shadow in a scrolling list." }],
-  realworld: ["Smooth 60/120fps scrolling in production apps comes from profiling this pipeline and trimming rebuilds/repaints — a core senior skill."],
-  miniproject: ["Take a janky screen and bring it to a stable 60fps, documenting each fix with DevTools numbers."],
-  advanced: ["Layer trees, RepaintBoundary metrics, raster cache, shader warm-up."],
-}));
+// 6. Element Tree
+body.push(...topicToChapter(loadTopic("level_04", "element_tree"),
+  { chapterNumber: 6, bookmarkId: "ch6" }));
+
+// 7. Render Tree
+body.push(...topicToChapter(loadTopic("level_04", "render_tree"),
+  { chapterNumber: 7, bookmarkId: "ch7" }));
+
+// 8. Rendering Pipeline
+body.push(...topicToChapter(loadTopic("level_04", "rendering_pipeline"),
+  { chapterNumber: 8, bookmarkId: "ch8" }));
 
 // 7 Navigation
 body.push(...chapter({
-  id: "ch7", title: "7. Navigation",
+  id: "ch9", title: "9. Navigation",
   def: "Navigation moves between screens (routes) — imperatively with Navigator (a route stack) or declaratively with a router (go_router) mapping URLs/state to screens.",
   blocks: [
     code(["final r = await Navigator.push(context, MaterialPageRoute(builder: ...));",
@@ -163,7 +128,7 @@ body.push(...chapter({
 
 // 8 Forms
 body.push(...chapter({
-  id: "ch8", title: "8. Forms & Validation",
+  id: "ch10", title: "10. Forms & Validation",
   def: "Flutter forms group inputs under a Form widget with a GlobalKey<FormState>, enabling collective validation, saving and reset.",
   blocks: [
     code(["final _key = GlobalKey<FormState>();",
@@ -185,7 +150,7 @@ body.push(...chapter({
 
 // 9 State Management
 body.push(...chapter({
-  id: "ch9", title: "9. State Management",
+  id: "ch11", title: "11. State Management",
   def: "State management is how you store, update and share UI-affecting data: ephemeral (local) state via setState, and app/shared state via Provider/Riverpod/BLoC.",
   blocks: [
     table(["Approach", "Best for"], [
@@ -210,7 +175,7 @@ body.push(...chapter({
 
 // 10 Animations
 body.push(...chapter({
-  id: "ch10", title: "10. Animations",
+  id: "ch12", title: "12. Animations",
   def: "Animations interpolate values over time. Implicit animations (AnimatedFoo) handle simple cases; explicit animations (AnimationController + Tween) give full control.",
   blocks: [
     code(["final c = AnimationController(vsync: this, duration: 1.s)..forward();",
@@ -232,7 +197,7 @@ body.push(...chapter({
 
 // 11 Slivers
 body.push(...chapter({
-  id: "ch11", title: "11. Slivers",
+  id: "ch13", title: "13. Slivers",
   def: "A sliver is a scrollable area that renders itself given the viewport's scroll position. Slivers compose in a CustomScrollView for advanced scroll effects.",
   blocks: [
     code(["CustomScrollView(slivers: [",
@@ -256,7 +221,7 @@ body.push(...chapter({
 
 // 12 CustomPainter
 body.push(...chapter({
-  id: "ch12", title: "12. CustomPainter",
+  id: "ch14", title: "14. CustomPainter",
   def: "CustomPainter draws directly on a Canvas — shapes, paths, text, gradients — for visuals awkward or impossible with standard widgets (charts, gauges, signatures).",
   blocks: [
     code(["class RingPainter extends CustomPainter {",
@@ -279,7 +244,7 @@ body.push(...chapter({
 
 // 13 Platform Channels
 body.push(...chapter({
-  id: "ch13", title: "13. Platform Channels",
+  id: "ch15", title: "15. Platform Channels",
   def: "Platform channels bridge Dart and native code (Kotlin/Java, Swift/Obj-C). Messages are serialized and passed asynchronously by channel name.",
   blocks: [
     table(["Channel", "Use"], [
@@ -302,7 +267,7 @@ body.push(...chapter({
 
 // 14 Engine
 body.push(...chapter({
-  id: "ch14", title: "14. Flutter Engine",
+  id: "ch16", title: "16. Flutter Engine",
   def: "The Flutter Engine (C++) provides the runtime: the Dart VM, graphics (Impeller/Skia), text layout and platform plumbing. The Dart framework runs on top.",
   blocks: [
     code(["Your app -> Framework (widgets) [Dart]",
@@ -325,7 +290,7 @@ body.push(...chapter({
 
 // 15 Impeller
 body.push(...chapter({
-  id: "ch15", title: "15. Impeller",
+  id: "ch17", title: "17. Impeller",
   def: "Impeller is Flutter's modern rendering engine replacing the Skia-based renderer, designed to eliminate 'shader compilation jank' by precompiling shaders at build time.",
   blocks: [
     table(["", "Skia (old)", "Impeller"], [
@@ -347,7 +312,7 @@ body.push(...chapter({
 
 // 16 FFI
 body.push(...chapter({
-  id: "ch16", title: "16. FFI (Foreign Function Interface)",
+  id: "ch18", title: "18. FFI (Foreign Function Interface)",
   def: "dart:ffi lets Dart call C functions and use C structures directly — no serialization — ideal for existing C/C++/Rust libraries (crypto, codecs, ML, SQLite).",
   blocks: [
     code(["final lib = DynamicLibrary.open('libnative.so');",
@@ -370,7 +335,7 @@ body.push(...chapter({
 
 // 17 Packages
 body.push(...chapter({
-  id: "ch17", title: "17. Package Development",
+  id: "ch19", title: "19. Package Development",
   def: "A package is reusable code on pub.dev. A pure Dart package has no platform code; a plugin adds native (channel or FFI) implementations per platform.",
   blocks: [
     table(["Type", "Contains", "Example"], [
