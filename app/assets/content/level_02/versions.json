@@ -1,59 +1,111 @@
 {
   "id": "java.versions",
   "levelId": 2,
-  "title": "Java 8 → Latest LTS",
-  "xp": 50,
-  "estimatedMinutes": 30,
+  "title": "Java Versions: 8 → Latest LTS",
+  "xp": 40,
+  "estimatedMinutes": 35,
   "objectives": [
-    "Know the headline features of each major release",
-    "Identify the LTS versions and why they matter",
-    "Plan a migration from Java 8"
+    "Understand LTS vs feature releases via a real-life analogy",
+    "Memorize the killer feature of each LTS (8, 11, 17, 21)",
+    "Handle 'which version added X?' interview questions",
+    "Know the migration pain points (Java 8 → 11 → 17 → 21)",
+    "Recognize preview features and how to use them"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Since Java 9, a new feature release ships every 6 months, with a Long-Term Support (LTS) release roughly every 2–3 years (8, 11, 17, 21). Most companies target LTS versions." },
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of car model years.**\n\n- **Feature releases** are like new model years — every 6 months, Java ships a new version (18, 19, 20, 22, 23…) with fresh features. Most teams skip these — they're too short-lived to invest a migration in.\n- **LTS (Long-Term Support) releases** are like the model years the manufacturer commits to service for 8+ years — a solid workhorse you can plan a fleet around. Java's LTS versions are **8, 11, 17, and 21** — arriving roughly every 2–3 years. Almost every enterprise Java project targets an LTS.\n\n**Interview reality:** interviewers absolutely love asking 'which version added X?' — because if you can answer, you clearly work with modern Java, not just Java 8 patterns from 2015. Anchor the timeline in your head:\n\n> **8** = lambdas + streams (functional Java arrived) — 2014\n> **11** = the first modern LTS, first fully-modular era — 2018\n> **17** = records + sealed classes + switch expressions — 2021\n> **21** = virtual threads + pattern matching + record patterns — 2023" },
+    { "type": "callout", "variant": "definition", "markdown": "Since Java 9, Oracle ships a **feature release every 6 months** and marks **one release every ~2 years as LTS** (Long-Term Support — commercial vendors like Oracle, Red Hat, Amazon Corretto, and Azul provide multi-year updates and security patches). Non-LTS releases still work, but they get replaced 6 months later." },
+    { "type": "theory", "markdown": "## The LTS timeline at a glance" },
     { "type": "table", "headers": ["Version", "Year", "Headline features"], "rows": [
-      ["8 (LTS)", "2014", "Lambdas, Streams, Optional, default methods"],
-      ["11 (LTS)", "2018", "var in lambdas, HttpClient, single-file run"],
-      ["17 (LTS)", "2021", "Sealed classes, records (16), pattern switch (preview)"],
-      ["21 (LTS)", "2023", "Virtual threads, record patterns, sequenced collections"]
+      ["**8 (LTS)**", "2014", "Lambdas, Streams API, Optional, default methods, `java.time`, method references"],
+      ["**11 (LTS)**", "2018", "`var` in lambda params, `HttpClient` (final), `String.strip`, single-file source runner, `Files.readString`"],
+      ["**17 (LTS)**", "2021", "Sealed classes (final), records (final at 16), pattern matching for instanceof, text blocks, switch expressions (final at 14)"],
+      ["**21 (LTS)**", "2023", "Virtual threads, pattern matching for switch, record patterns, sequenced collections, unnamed patterns/variables"]
     ]},
-    { "type": "table", "headers": ["Feature", "Introduced"], "rows": [
-      ["Lambdas & Streams", "Java 8"],
-      ["Modules (JPMS)", "Java 9"],
-      ["var (local inference)", "Java 10"],
-      ["Switch expressions", "Java 14"],
-      ["Text blocks", "Java 15"],
-      ["Records", "Java 16"],
-      ["Sealed classes", "Java 17"],
-      ["Virtual threads", "Java 21"]
+    { "type": "theory", "markdown": "## The 'which version added X?' cheatsheet" },
+    { "type": "table", "headers": ["Feature", "Introduced", "Finalized"], "rows": [
+      ["Lambdas + Streams + Optional", "8", "8"],
+      ["`java.time` (JSR-310)", "8", "8"],
+      ["JPMS / modules", "9", "9"],
+      ["`var` (local inference)", "10", "10"],
+      ["`HttpClient` (final API)", "11", "11"],
+      ["Switch expressions", "12 (preview)", "14"],
+      ["Text blocks (`\"\"\"`)", "13 (preview)", "15"],
+      ["Records", "14 (preview)", "16"],
+      ["Pattern matching for `instanceof`", "14 (preview)", "16"],
+      ["Sealed classes", "15 (preview)", "17"],
+      ["Pattern matching for `switch`", "17 (preview)", "21"],
+      ["Record patterns", "19 (preview)", "21"],
+      ["Virtual threads", "19 (preview)", "21"],
+      ["Sequenced collections", "21", "21"],
+      ["Unnamed patterns (`_`)", "21 (preview)", "ongoing"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "Know which version introduced what — a classic question. Anchor it: 8 = functional Java; 11 = first modern LTS; 17 = records/sealed; 21 = virtual threads." },
-    { "type": "callout", "variant": "mistake", "markdown": "Migrating off Java 8 and hitting removed/internal APIs (sun.misc.Unsafe, JAXB/Java EE modules removed in 11) and the module system. Plan dependency upgrades and run jdeps first." }
+    { "type": "callout", "variant": "interview", "markdown": "**The single most-asked interview question in this area:** 'When were virtual threads introduced?' Answer: **previewed in Java 19, finalized in Java 21**. Same shape for records (14 preview → 16 final), sealed (15 preview → 17 final), pattern-matching switch (17 preview → 21 final). Memorize the LTS-year anchors (8/11/17/21) and you can guess most feature dates." },
+    { "type": "theory", "markdown": "## Sample program — features across versions" },
+    { "type": "code", "language": "java", "code": "// File: VersionsDemo.java — showcases features from Java 8 through 21\n// Run on Java 21+: javac VersionsDemo.java && java VersionsDemo\nimport java.util.*;\nimport java.util.stream.*;\n\npublic class VersionsDemo {\n\n  // Java 16+ — record\n  record Person(String name, int age) {}\n\n  // Java 17+ — sealed hierarchy\n  sealed interface Shape permits Circle, Square {}\n  record Circle(double r) implements Shape {}\n  record Square(double s) implements Shape {}\n\n  public static void main(String[] args) {\n    // Java 8 — lambda + streams + Optional\n    List<Person> people = List.of(\n      new Person(\"Ada\", 34),\n      new Person(\"Ben\", 17),\n      new Person(\"Cara\", 22)\n    );\n    List<String> adults = people.stream()\n        .filter(p -> p.age() >= 18)\n        .map(Person::name)\n        .toList();                        // Java 16+ — Stream.toList()\n    System.out.println(adults);           // [Ada, Cara]\n\n    // Java 10+ — var inference\n    var byAge = people.stream().sorted(Comparator.comparingInt(Person::age)).toList();\n    System.out.println(byAge);\n\n    // Java 14+ — switch expression\n    Person p = people.get(0);\n    String bucket = switch (p.age() / 10) {\n      case 0, 1 -> \"minor\";\n      case 2    -> \"twenties\";\n      case 3    -> \"thirties\";\n      default   -> \"older\";\n    };\n    System.out.println(bucket);\n\n    // Java 15+ — text blocks\n    String json = \"\"\"\n        {\n          \"name\": \"Ada\",\n          \"age\": 34\n        }\n        \"\"\";\n    System.out.println(json);\n\n    // Java 21 — pattern-matching switch + record deconstruction\n    Shape sh = new Circle(2);\n    double area = switch (sh) {\n      case Circle(double r)   -> Math.PI * r * r;\n      case Square(double s)   -> s * s;\n    };\n    System.out.printf(\"area=%.2f%n\", area);\n\n    // Java 21 — sequenced collections\n    List<Integer> ints = new ArrayList<>(List.of(1, 2, 3));\n    ints.addFirst(0);         // sequenced-collection method\n    ints.addLast(4);\n    System.out.println(ints); // [0, 1, 2, 3, 4]\n  }\n}\n\n// Output:\n//   [Ada, Cara]\n//   [Person[name=Ben, age=17], Person[name=Cara, age=22], Person[name=Ada, age=34]]\n//   thirties\n//   {\"name\":\"Ada\",\"age\":34}   (approximately)\n//   area=12.57\n//   [0, 1, 2, 3, 4]" },
+    { "type": "theory", "markdown": "## Migration pain points" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Java 8 → 11 — the biggest jump.** Java 9 removed Java EE modules (JAXB, JAX-WS, Corba, activation) from the JDK. Apps depending on them break. Fix: add explicit dependencies (`javax.xml.bind:jaxb-api`, etc.). Also `sun.misc.Unsafe` and other internal APIs became inaccessible under JPMS." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Java 11 → 17 — smoother.** Most breaking changes: removal of Nashorn JS engine (JDK 15), stricter access to internal APIs. Check with `jdeps --jdk-internals YourApp.jar`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Java 17 → 21 — mostly additive.** Very few removals. Main gotchas: deprecation of `sun.misc.Unsafe` (going away in future versions) and Security Manager finally removed. Virtual threads: watch for `synchronized` blocks — they pin virtual threads to platform threads." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Common across all migrations:** third-party dependencies. Old versions of Spring, Hibernate, Lombok often don't work on newer JDKs. Upgrade deps first, then upgrade the JDK." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Target an LTS.** For production apps, stick to 8/11/17/21. Non-LTS releases lose vendor support in 6 months." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Move off Java 8.** Public updates from Oracle stopped years ago. Even Amazon Corretto 8 support has a sunset. Migrating to 17 or 21 is a real security win." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Adopt new features gradually.** You don't need to refactor everything on Day 1 of a migration. Start with records for new DTOs, sealed for new state machines, pattern matching for new switches." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Use `jdeps` before migrating.** `jdeps --jdk-internals` and `jdeps --generate-module-info` catch problems before they blow up in production." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Enable preview features cautiously.** `--enable-preview` lets you use pre-final features (e.g. Java 20 previewed virtual threads before 21 finalized them). Great for hobby projects; too risky for production." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Timeline flash cards.** Write a quiz to yourself: for each of the LTS versions (8/11/17/21), list the 3 most important features. Recite it.\n\n**Why:** Interview reliability." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Modernize a Java 8 snippet.** Take any Java 8 code — a stream + anonymous class + explicit types — and rewrite with `var`, records, and switch expressions.\n\n**Why:** You'll see the readability lift firsthand." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — Run `jdeps`.** On a real Java 8 project, run `jdeps --jdk-internals` and note every deprecated/removed API. Draft a migration plan.\n\n**Why:** This is exactly the exercise you'd do at work before a migration." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Expert) — Java 8 → 21 mini migration.** Take a small Java 8 project, upgrade to 21, replace: anonymous classes → lambdas, POJOs → records, if-else chains → pattern-matching switches, threads → virtual threads. Document each change.\n\n**Why:** This is the exact interview story that impresses at senior levels: 'I led a Java 8 → 21 migration; here's what changed and why.'" },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Which Java versions are LTS and why does it matter?**\n\n**A:** LTS (Long-Term Support) versions are **8, 11, 17, and 21**, released roughly every 2–3 years. Non-LTS feature releases ship every 6 months but lose vendor updates after 6 months. Enterprises target LTS versions because they get 8+ years of security patches from vendors (Oracle, Red Hat, Amazon Corretto, Azul Zulu, Adoptium/Eclipse Temurin). If a security CVE hits Java 22 (a non-LTS), your only fix is to upgrade to Java 23 or higher. On Java 17, you'll get a patched 17.x.y for years. That's why almost every production Java system runs on an LTS." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: Key features of Java 8?**\n\n**A:** Java 8 (2014) transformed the language:\n- **Lambdas** — anonymous functions as first-class values.\n- **Streams API** — declarative data processing pipelines.\n- **Optional** — model absent values without null.\n- **Method references** — `String::length`.\n- **Default methods** on interfaces — evolve interfaces without breaking implementers.\n- **`java.time`** (JSR-310) — a proper date/time API replacing `Date`/`Calendar`.\n- **Nashorn JS engine** (later removed in 15).\n\nJava 8 is when Java became a functional-friendly language. It's also the version most legacy apps still run on, which is why interviewers love asking about it." },
+    { "type": "callout", "invariant": "interview", "variant": "interview", "markdown": "**Q3: Key features of Java 11?**\n\n**A:** Java 11 (2018) was the first modern LTS after 8:\n- **`var`** for local type inference (arrived in 10; Java 11 allowed it in lambda parameters).\n- **`HttpClient`** finalized — a proper built-in HTTP/2 client, replacing `HttpURLConnection`.\n- **`String.strip`, `.repeat`, `.lines`, `.isBlank`** — small but useful additions.\n- **`Files.readString`, `writeString`** — simple file I/O without streams.\n- **Single-file source runner** — `java MyProgram.java` (no compile step for one-file scripts).\n- **JEP 320** — Java EE + CORBA modules removed. Biggest migration break from Java 8.\n\nJava 11 marks the era of 'modern Java': modular, HTTP-native, and past the Java 8 removals." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: Key features of Java 17?**\n\n**A:** Java 17 (2021) is the big 'modern LTS with expressive types':\n- **Sealed classes** (final) — closed hierarchies with `permits`.\n- **Records** (final at 16) — immutable data carriers.\n- **Pattern matching for `instanceof`** (final at 16) — `if (o instanceof String s)`.\n- **Text blocks** (final at 15) — multi-line strings with `\"\"\"`.\n- **Switch expressions** (final at 14) — `switch` that returns a value.\n- **Random number generator refactor** — new `RandomGenerator` interface.\n- **Removal of the Applet API and Security Manager (deprecated).**\n\nJava 17 makes Java feel a lot more like Kotlin/Scala for domain modeling — records + sealed + pattern matching = ADT. Almost every new-Java interview centers here or on 21." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: Key features of Java 21?**\n\n**A:** Java 21 (2023) is the current LTS and the biggest jump since 8:\n- **Virtual threads** (final) — massively cheap concurrency; write blocking code that scales.\n- **Pattern matching for `switch`** (final) — dispatch by type, deconstruct records inline.\n- **Record patterns** (final) — `case Point(int x, int y) ->`.\n- **Sequenced collections** — `addFirst`, `addLast`, `reversed()` on List/Set/Map that have order.\n- **Unnamed patterns and variables** (preview) — `_` when you don't care about a value.\n- **String Templates** (preview) — safer interpolation.\n- **Generational ZGC** (final) — much better throughput on huge heaps.\n\nJava 21 finally answers 'Kotlin does X better' for many X: coroutines (via virtual threads), pattern matching, ADTs. It's the version to target for any new project in 2024+." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What are the challenges migrating off Java 8?**\n\n**A:** Three main categories: **(1) Removed APIs.** Java 9 removed the Java EE modules bundled with the JDK (JAXB, JAX-WS, activation, Corba). Apps that used them need explicit Maven/Gradle dependencies. **(2) Restricted internal APIs.** JPMS (Java 9+) locks down `sun.misc.*` — including `Unsafe`, which was widely abused. Fix: use the public replacements or `--add-opens`. **(3) Third-party dependencies.** Old Spring, Hibernate, Lombok, Groovy versions often break on newer JDKs. Rule: **upgrade dependencies first, THEN upgrade the JDK.** Use `jdeps --jdk-internals YourApp.jar` and `jdeps --generate-module-info` to find issues before they blow up. Once past Java 11, each further LTS jump (11→17, 17→21) is much smoother." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What is the module system (JPMS) and did it succeed?**\n\n**A:** JPMS (Java Platform Module System, aka Project Jigsaw) shipped in Java 9. It's a way to declare *modules* — units bigger than JARs — with explicit `requires` / `exports` in a `module-info.java`. **Goals:** reliable configuration, strong encapsulation (no more `sun.misc.Unsafe` from anywhere), scalable JDK (build custom runtime images with `jlink`). **Reality:** the JDK itself is modularized, and this delivered real benefits (smaller runtimes via `jlink`, no leaky internal APIs). But *application-level* adoption has been modest — most Spring/microservice apps still ship classpath-based, unnamed-module JARs. It's a success for JDK vendors and library authors, a mixed story for app teams. Still, understanding `module-info.java`, `requires`, `exports`, `opens`, `--add-opens`, `--add-reads` is essential for modern Java troubleshooting." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q8: What are preview features and how do you use them?**\n\n**A:** Preview features are 'final-ish' language/API features that ship in a JDK release but need `--enable-preview` on the compiler and runtime to use. They're not experimental — they're feature-complete and expected to become permanent — but Oracle reserves the right to change them based on feedback. Records, sealed classes, pattern matching, and virtual threads all shipped as previews before being finalized. **Usage:** `javac --enable-preview --release 21 MyApp.java` and `java --enable-preview MyApp`. **When to use:** hobby projects, learning, giving early feedback. **When not to use:** production — you'll be forced to migrate when the feature finalizes or changes. Rule: use preview features to LEARN what's coming; use final features in production." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Most enterprise Java in 2026** — still 11 or 17, migrating to 21.\n- **Modern Spring Boot 3.x** — requires Java 17+.\n- **Android** — historically Java 8 (with backports); recent versions support up to Java 17 features via desugaring.\n- **Big Data / Kafka / Cassandra** — moved off 8 slowly; most support 17.\n- **Startups + new projects** — target 21 by default now.\n- **Legacy TCS/Infosys/Accenture projects** — often still Java 8. Being able to migrate is a career-multiplier skill." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Release cadence** — 6 months between feature releases, ~2 years between LTS (currently 8→11→17→21→next LTS is 25 in Sept 2025).\n- **Vendor distributions** — Oracle JDK (commercial for prod), OpenJDK (reference), Amazon Corretto, Azul Zulu, Eclipse Temurin (Adoptium), Red Hat OpenJDK, GraalVM. All compatible; differ in support, tuning, features.\n- **`--enable-preview` vs incubator modules** — preview = final-almost, expect to migrate. Incubator = experimental API, expect to break.\n- **Multi-release JARs (MRJARs)** — package version-specific class files (`META-INF/versions/17/`) so one JAR runs on multiple JDKs with tailored bytecode.\n- **`jlink`, `jpackage`, `jshell`** — Java 9+ tools for custom runtimes, native installers, and REPL.\n- **JVM options every senior should know** — `-Xmx`, `-Xms`, `-XX:+UseG1GC` / `-XX:+UseZGC`, `--enable-preview`, `--add-opens`.\n- **Compatibility matrix** — Android Studio / Gradle / Spring Boot / Hibernate versions each require specific JDK ranges; check before upgrading." }
   ],
   "flashcards": [
-    { "front": "Which Java versions are LTS?", "back": "8, 11, 17, 21 (a new LTS roughly every 2–3 years)." },
-    { "front": "What landed in Java 8?", "back": "Lambdas, the Streams API, Optional, default methods — functional Java." },
-    { "front": "What landed in Java 21?", "back": "Virtual threads, record patterns, sequenced collections (all final)." }
+    { "front": "LTS versions?", "back": "8, 11, 17, 21 — roughly every 2–3 years." },
+    { "front": "Java 8 headline?", "back": "Lambdas + Streams + Optional + java.time." },
+    { "front": "Java 11 headline?", "back": "var, HttpClient, first LTS after 8; JPMS is fully in place." },
+    { "front": "Java 17 headline?", "back": "Sealed classes + records + pattern-matching instanceof + text blocks." },
+    { "front": "Java 21 headline?", "back": "Virtual threads + pattern-matching switch + record patterns + sequenced collections." },
+    { "front": "Preview feature?", "back": "Final-almost feature guarded by --enable-preview; may change before finalization." }
   ],
   "quiz": [
-    { "q": "Which versions are LTS?", "options": ["9, 10, 12", "8, 11, 17, 21", "All of them", "Only 8"], "answer": 1, "explain": "8, 11, 17 and 21 are the LTS releases most teams target." },
-    { "q": "Records were introduced in…", "options": ["Java 8", "Java 11", "Java 16", "Java 21"], "answer": 2, "explain": "Records arrived as a standard feature in Java 16." },
-    { "q": "Virtual threads were finalized in…", "options": ["Java 11", "Java 17", "Java 21", "Java 8"], "answer": 2, "explain": "Project Loom's virtual threads were finalized in Java 21." }
+    { "q": "LTS versions of Java?", "options": ["7, 8, 9", "8, 11, 17, 21", "6, 7, 8", "17, 18, 19"], "answer": 1, "explain": "8/11/17/21 are the LTS versions." },
+    { "q": "Records were finalized in…", "options": ["Java 8", "Java 14", "Java 16", "Java 21"], "answer": 2, "explain": "Preview in 14, final in 16." },
+    { "q": "Virtual threads were finalized in…", "options": ["11", "17", "19", "21"], "answer": 3, "explain": "Preview in 19; final in 21." },
+    { "q": "First LTS after Java 8?", "options": ["9", "10", "11", "17"], "answer": 2, "explain": "Java 11 is the next LTS after 8." },
+    { "q": "`--enable-preview` is for…", "options": ["Beta plugins", "Preview language features not yet final", "Native image", "GC tuning"], "answer": 1, "explain": "Enables features previewed before finalization." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Convert anonymous classes to lambdas across a Java 8 codebase." },
-    { "level": "Medium", "text": "Replace verbose switches with Java 14 switch expressions and text blocks." },
-    { "level": "Hard", "text": "Refactor a DTO + visitor design to records + sealed + pattern matching (17+)." },
-    { "level": "Expert", "text": "Plan and execute a Java 8 → 17 migration: run jdeps, fix removed APIs, update build." }
+    { "level": "Easy", "text": "Recite the LTS timeline and one headline feature of each: 8, 11, 17, 21." },
+    { "level": "Easy", "text": "Match each feature to its Java version: `var`, records, sealed, virtual threads, text blocks, switch expressions." },
+    { "level": "Medium", "text": "Rewrite a Java 8 sample using Java 21 features: records + switch expression + pattern matching." },
+    { "level": "Medium", "text": "Run `jdeps --jdk-internals` on any old JAR and list the problematic APIs." },
+    { "level": "Hard", "text": "Plan a Java 8 → 17 migration for a small project (Spring 5 → Spring 6, Hibernate 5 → 6, JDK 8 → 17)." },
+    { "level": "Hard", "text": "Explain the JPMS module system to a colleague and show a `module-info.java` example." },
+    { "level": "Expert", "text": "Take a Java 8 codebase, run it on Java 21, adopt records/sealed/pattern-matching, and measure LOC before/after." }
   ],
   "interviewQuestions": [
-    "Which Java versions are LTS and why does that matter?",
-    "Name key features added in 8, 11, 17 and 21.",
-    "What challenges arise migrating off Java 8?",
-    "What is the Java module system (JPMS)?",
-    "Switch statement vs switch expression?"
+    "Which Java versions are LTS and why does it matter?",
+    "Key features of Java 8?",
+    "Key features of Java 11?",
+    "Key features of Java 17?",
+    "Key features of Java 21?",
+    "What are the challenges migrating off Java 8?",
+    "What is the module system (JPMS) and did it succeed?",
+    "What are preview features and how do you use them?"
   ],
   "references": [
-    { "label": "OpenJDK releases", "url": "https://openjdk.org/projects/jdk/" }
+    { "label": "Java LTS timeline — OpenJDK", "url": "https://openjdk.org/projects/jdk/" },
+    { "label": "JEP index (features per version)", "url": "https://openjdk.org/jeps/0" }
   ]
 }

@@ -1,45 +1,92 @@
 {
   "id": "java.pattern_matching",
   "levelId": 2,
-  "title": "Pattern Matching",
+  "title": "Pattern Matching (Java 16–21)",
   "xp": 40,
-  "estimatedMinutes": 20,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Use instanceof pattern matching",
-    "Switch on types and deconstruct records",
-    "Write exhaustive, guarded switches"
+    "Understand pattern matching via a real-life analogy",
+    "Use `instanceof` pattern to test-and-bind in one step",
+    "Write pattern-matching `switch` with exhaustive cases",
+    "Deconstruct records inside patterns (Java 21)",
+    "Answer pattern-matching interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Pattern matching lets you test a value's shape and bind its parts in one step — for instanceof, switch, and record deconstruction (Java 16–21)." },
-    { "type": "code", "language": "java", "code": "// Old\nif (o instanceof String) { String s = (String) o; use(s); }\n// Pattern matching for instanceof\nif (o instanceof String s) { use(s); }   // s bound automatically\n\n// Switch + record deconstruction + guard\nString describe(Shape sh) => switch (sh) {\n  case Circle(double r) when r > 10 -> \"big circle\";\n  case Circle c -> \"circle\";\n  case Square s -> \"square\";\n};" },
-    { "type": "callout", "variant": "interview", "markdown": "Record deconstruction patterns (Circle(double r)) destructure data directly in a switch case. Combined with sealed types, the switch is exhaustive and needs no default." },
-    { "type": "callout", "variant": "note", "markdown": "Guards (`when condition`) refine a case. Order matters: more specific/guarded cases come before broader ones, or the compiler flags dominance." },
-    { "type": "callout", "variant": "tip", "markdown": "Pattern matching replaces verbose instanceof-and-cast chains and the visitor pattern boilerplate. It reads top-to-bottom like the data's shape." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of airport security scanning your bag.**\n\n- **Before pattern matching (old Java):** the scanner has to (1) test what's in the bag with instanceof — 'is this a laptop?' — then (2) tell the guard to open the bag and pull out the laptop with an explicit cast — 'yes, this is a Laptop; now unpack the laptop.' Two steps: test, then cast. Every single time.\n\n```java\nif (item instanceof Laptop) {\n  Laptop laptop = (Laptop) item;    // redundant cast — we JUST tested it!\n  scan(laptop.getSerial());\n}\n```\n\n- **With pattern matching:** the scanner combines test + unpack. 'Is this a Laptop? If so, hand me the laptop as `laptop`.' One step.\n\n```java\nif (item instanceof Laptop laptop) {   // test AND bind\n  scan(laptop.getSerial());\n}\n```\n\n**And with record deconstruction (Java 21):** 'Is this a Laptop? If so, hand me its serial and its owner.' The scanner reaches inside and pulls out the parts you asked for:\n\n```java\nif (item instanceof Laptop(String serial, String owner)) {\n  scan(serial);\n}\n```\n\nPattern matching lets you write **what you're looking for** instead of **the mechanics of finding it**." },
+    { "type": "callout", "variant": "definition", "markdown": "**Pattern matching** tests the shape of a value and simultaneously binds its parts to variables. Java's pattern matching evolved in three stages: **(1) `instanceof` patterns** (Java 16) — test-and-bind, **(2) pattern-matching `switch`** (Java 21) — exhaustive dispatch by type, **(3) record patterns** (Java 21) — destructure records inside cases." },
+    { "type": "theory", "markdown": "## The evolution — three types of pattern" },
+    { "type": "table", "headers": ["Kind", "Java version", "Example"], "rows": [
+      ["`instanceof` pattern", "16", "`if (o instanceof String s) { print(s.length()); }`"],
+      ["Type pattern in switch", "21", "`case Integer i -> i * 2`"],
+      ["Record pattern (deconstruction)", "21", "`case Point(int x, int y) -> x + y`"],
+      ["Guarded pattern (when-clause)", "21", "`case Circle c when c.r() > 10 -> …`"],
+      ["`null` case", "21", "`case null -> \"empty\"` (added to switch)"]
+    ]},
+    { "type": "theory", "markdown": "## Before vs after — the readability win" },
+    { "type": "code", "language": "java", "code": "// BEFORE (traditional Java) — instanceof-and-cast\nObject o = ...;\nif (o instanceof String) {\n  String s = (String) o;              // manual, error-prone\n  System.out.println(s.length());\n} else if (o instanceof Integer) {\n  Integer i = (Integer) o;\n  System.out.println(i * 2);\n} else if (o instanceof List) {\n  List<?> list = (List<?>) o;         // unchecked cast, warnings\n  System.out.println(list.size());\n}\n\n// AFTER (Java 21+) — pattern-matching switch\nString result = switch (o) {\n  case String s        -> \"str length \" + s.length();\n  case Integer i       -> \"int doubled \" + (i * 2);\n  case List<?> list    -> \"list size \" + list.size();\n  case null            -> \"was null\";\n  default              -> \"unknown\";\n};" },
+    { "type": "theory", "markdown": "## A complete sample program — instanceof patterns, switch, records, guards" },
+    { "type": "code", "language": "java", "code": "// File: PatternMatchingDemo.java  (Java 21+)\n// Run: javac PatternMatchingDemo.java && java PatternMatchingDemo\n\npublic class PatternMatchingDemo {\n\n  sealed interface Shape permits Circle, Square, Triangle {}\n  record Circle(double r) implements Shape {}\n  record Square(double side) implements Shape {}\n  record Triangle(double base, double height) implements Shape {}\n\n  // 1. instanceof pattern — test AND bind in one step\n  static void describe1(Object o) {\n    if (o instanceof String s && !s.isBlank()) {\n      System.out.println(\"non-blank string len=\" + s.length());\n    } else if (o instanceof Integer i) {\n      System.out.println(\"integer=\" + i);\n    } else {\n      System.out.println(\"other\");\n    }\n  }\n\n  // 2. Pattern-matching switch with record deconstruction\n  static double area(Shape s) {\n    return switch (s) {\n      case Circle(double r)                -> Math.PI * r * r;\n      case Square(double side)             -> side * side;\n      case Triangle(double b, double h)    -> 0.5 * b * h;\n      // NO default — the compiler proves the switch is exhaustive over Shape\n    };\n  }\n\n  // 3. Guarded pattern — refine a case with a when-clause\n  static String category(Shape s) {\n    return switch (s) {\n      case Circle c when c.r() > 10   -> \"big circle\";\n      case Circle c                    -> \"small circle\";\n      case Square sq when sq.side() > 10 -> \"big square\";\n      case Square sq                   -> \"small square\";\n      case Triangle t                  -> \"triangle base=\" + t.base();\n    };\n  }\n\n  // 4. Null-safe switch\n  static String describe2(Object o) {\n    return switch (o) {\n      case null           -> \"was null\";     // explicit null case\n      case String s       -> \"string: \" + s;\n      case Integer i      -> \"int: \" + i;\n      default             -> \"other: \" + o.getClass().getSimpleName();\n    };\n  }\n\n  public static void main(String[] args) {\n    describe1(\"hello\");\n    describe1(42);\n    describe1(3.14);\n\n    Shape[] shapes = { new Circle(2), new Circle(15), new Square(3), new Triangle(4, 5) };\n    for (Shape sh : shapes) {\n      System.out.printf(\"%-15s area=%.2f%n\", category(sh), area(sh));\n    }\n\n    System.out.println(describe2(null));\n    System.out.println(describe2(\"hi\"));\n    System.out.println(describe2(99));\n  }\n}\n\n// Output:\n//   non-blank string len=5\n//   integer=42\n//   other\n//   small circle    area=12.57\n//   big circle      area=706.86\n//   small square    area=9.00\n//   triangle base=4.0 area=10.00\n//   was null\n//   string: hi\n//   int: 99" },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Using an old-style `instanceof`-and-cast when you have Java 16+.**\n\n`if (o instanceof String) { String s = (String) o; ... }` — the cast is redundant. Use `if (o instanceof String s) { ... }`. Cleaner and eliminates a class of bugs where the cast target doesn't match the tested type." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Adding `default:` to an exhaustive switch over a sealed type.**\n\nOnce your switch handles every permitted subtype, a `default:` is unreachable — but worse, it disables the compiler's exhaustiveness check. If you later add a new subtype, the switch will silently fall through to `default` instead of forcing you to handle the new case." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Case-label ordering with guards.**\n\nCases are evaluated top-to-bottom. `case Circle c` will match ALL circles — so `case Circle c when c.r() > 10 -> ...` must come BEFORE `case Circle c -> ...`, or the guarded case is unreachable and the compiler complains." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Forgetting the `case null` when sealed types shouldn't be null.**\n\nIn a pattern-matching switch, unlike traditional switch, `null` no longer throws `NullPointerException` immediately IF you have a `case null`. But if you DON'T have one, `null` throws. Add `case null` explicitly if null is possible, or make sure to null-check before switching." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Use pattern-matching `switch` for type-based dispatch over sealed hierarchies.** This is the cleanest and safest form — exhaustive, no default, compiler catches missed cases." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Use record deconstruction to pull data out inline.** `case Circle(double r) -> ...` reads better than `case Circle c -> c.r()`." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Put more specific / guarded patterns first.** The compiler helps, but be intentional about ordering." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Handle `null` explicitly.** Either with a `case null ->` or by null-checking before the switch." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Skip the `default:` on switches over sealed types.** That's the whole point — let the compiler catch missing cases." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Modernize old code.** Take an `instanceof`-and-cast chain and rewrite it with `instanceof` patterns.\n\n**Why:** You'll feel the boilerplate disappear." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Sealed + pattern-matching switch.** Model `sealed interface Vehicle permits Car, Truck, Motorcycle` (each a record) and switch to compute a toll.\n\n**Why:** Classic ADT dispatch." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — Guarded patterns.** Model `sealed interface HttpResponse permits Ok, ClientError, ServerError` (each a record with a status code). Switch with guards to categorize retryable vs non-retryable.\n\n**Why:** Guards let you split a case by data, not just by type." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Expert) — Nested record patterns.** Given `record Point(int x, int y) {}` and `record Circle(Point center, double r) {}`, deconstruct the point inside the circle pattern: `case Circle(Point(int x, int y), double r) -> ...`.\n\n**Why:** Nested deconstruction pulls data out of arbitrarily deep structures in one line — the killer feature of Java 21 patterns." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is pattern matching and why was it added to Java?**\n\n**A:** Pattern matching lets you test the *shape* of a value and simultaneously bind its parts to variables. Java added it to eliminate the extremely common `instanceof + cast` boilerplate pattern that was noisy, error-prone (a mismatched cast throws `ClassCastException`), and produced unchecked-cast warnings. It arrived in three stages: **`instanceof` patterns** (Java 16, `o instanceof String s`), **pattern-matching switch** (Java 21, `case String s ->`), and **record patterns** (Java 21, `case Point(int x, int y) ->`). Together with sealed types and records, patterns give Java modern algebraic-data-type ergonomics." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What does `if (o instanceof String s)` do?**\n\n**A:** Three things in one operator: (1) tests whether `o` is a `String` (not null), (2) if so, casts it to `String` under the hood, (3) binds the result to a NEW variable `s` in scope for the rest of the `if` block. It replaces the two-step `if (o instanceof String) { String s = (String) o; ... }`. Bonus: the scope of `s` is precisely 'the branches where the pattern definitely matched' — the compiler is smart enough to allow `s` inside `if (... && s.something())` and forbid it in the `else` branch. This is called *flow scoping*." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What's a pattern-matching switch?**\n\n**A:** A switch where cases match by TYPE (and shape), not just by constant value:\n```java\nreturn switch (obj) {\n  case Integer i        -> \"int \" + i;\n  case String s         -> \"string \" + s.length();\n  case null             -> \"null\";\n  default               -> \"other\";\n};\n```\nWith sealed types + records, this becomes exhaustive: the compiler proves every permitted subtype is handled and no `default:` is needed. Cases evaluate top-to-bottom; specific/guarded patterns must come before general ones. Java's version fuses the ideas of Kotlin's `when`, Scala's `match`, Rust's `match`, and F#'s `match` into the switch statement Java already had — with the same syntax." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What are record patterns / deconstruction patterns?**\n\n**A:** They let you 'reach inside' a record and bind its components inline:\n```java\nrecord Point(int x, int y) {}\n\n// Traditional:\nif (obj instanceof Point p) {\n  int x = p.x();\n  int y = p.y();\n}\n\n// With record pattern:\nif (obj instanceof Point(int x, int y)) {\n  use(x, y);\n}\n```\nThey work inside `switch` cases too, and nest arbitrarily deep — `case Circle(Point(int x, int y), double r) -> ...`. This is a huge readability win when you're pulling data out of nested value objects. Available in Java 21." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What is a guarded pattern (`when` clause)?**\n\n**A:** A pattern followed by a boolean condition that further restricts when the case matches:\n```java\nswitch (shape) {\n  case Circle c when c.r() > 10 -> \"big circle\";\n  case Circle c                  -> \"small circle\";\n  ...\n}\n```\nThe `when c.r() > 10` clause is a *guard*. Guards let you split a case by data, not just by type — extremely useful when the type alone doesn't tell you enough. Order matters: guarded cases must come before their unguarded equivalents, or they're unreachable. Java 21+." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How does pattern matching change how you write Java?**\n\n**A:** Three noticeable shifts. **(1) The visitor pattern goes away.** You used to write a `Visitor` interface with a method per subtype; now you write one switch. **(2) Instanceof-and-cast disappears.** Every `if (o instanceof X) { X x = (X) o; ... }` collapses to `if (o instanceof X x) { ... }`. **(3) Domain models trend toward sealed + records + pattern switch.** Result types, state machines, ASTs, and command/event models become dramatically shorter and safer. Java 21 code often reads like Kotlin or Scala — because Java learned the same lessons those languages learned first." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: How does pattern-matching switch handle null?**\n\n**A:** Traditional `switch` on a null value throws `NullPointerException` immediately. Pattern-matching switch (Java 21) fixes this by allowing an explicit `case null ->` — if present, null falls into that case cleanly. If NOT present, null still throws NPE, so you must either add `case null` or null-check before the switch. There's also a compact form `case null, default ->` that groups both. Bottom line: patterns give you first-class null handling as an option, so you can decide whether to reject null loudly or handle it gracefully — instead of the old accidentally-NPE behavior." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **State machines** — dispatch state transitions with a pattern-matching switch over sealed states.\n- **AST evaluators / interpreters** — the classic use case; each node type gets a case, deconstruction pulls out fields.\n- **HTTP response handlers** — sealed HttpResponse + switch by kind.\n- **Command / event processors** — CQRS handlers.\n- **Business rules engines** — pattern + guard neatly express 'if the shape is X and value > threshold'.\n- **API mapping** — `Object` values from JSON deserialization get dispatched by concrete type." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Exhaustiveness rules** — the compiler considers all permitted subtypes of a sealed type; a switch is exhaustive if every one appears (or is subsumed by a broader case).\n- **Dominance** — a case dominates another if it would match everything the other would; this is an error.\n- **Flow scoping** — the compiler tracks where a bound pattern variable is in-scope, allowing narrow use inside `if`/`&&`.\n- **Preview features** — pattern features were previewed under `--enable-preview` before final release; unnamed patterns (`_`) are still evolving as of Java 21+.\n- **Kotlin/Scala comparison** — Java's syntax is deliberately close to `switch` for familiarity; the ergonomics are equivalent to Kotlin's `when` with type checks and Scala's `match`.\n- **Performance** — pattern-matching switch compiles to `invokedynamic` bootstrap and is typically as fast as hand-written `instanceof`+cast; can even be faster due to JIT-friendly shape checks." }
   ],
   "flashcards": [
-    { "front": "What does `o instanceof String s` do?", "back": "Tests the type AND binds o to a String variable s if it matches — no explicit cast." },
-    { "front": "What is a record deconstruction pattern?", "back": "Destructures a record's components in a switch case, e.g. case Circle(double r)." },
-    { "front": "What is a guard in a switch pattern?", "back": "A `when` condition that further constrains a case." }
+    { "front": "instanceof pattern?", "back": "`if (o instanceof String s)` — tests AND binds in one step." },
+    { "front": "Pattern-matching switch?", "back": "`case String s -> …` — dispatch by type; exhaustive over sealed hierarchies." },
+    { "front": "Record pattern?", "back": "`case Point(int x, int y) ->` — deconstructs the record inline (Java 21)." },
+    { "front": "Guarded pattern?", "back": "`case Circle c when c.r() > 10 ->` — refine a case by data." },
+    { "front": "case null?", "back": "Explicit null handling in a pattern-matching switch — avoids surprise NPE." }
   ],
   "quiz": [
-    { "q": "`if (o instanceof String s)`…", "options": ["Throws if not a String", "Binds s only when o is a String", "Always binds s", "Is invalid Java"], "answer": 1, "explain": "The pattern variable s is in scope only where the match holds." },
-    { "q": "Deconstructing a record in a switch is called a…", "options": ["Guard", "Record pattern", "Lambda", "Wildcard"], "answer": 1, "explain": "Record patterns destructure components directly in case labels." },
-    { "q": "A `when` clause in a switch is a…", "options": ["Loop", "Guard refining the case", "Type cast", "Comment"], "answer": 1, "explain": "Guards add a boolean condition to a pattern case." }
+    { "q": "`if (o instanceof String s)` does…", "options": ["Tests only", "Tests + casts + binds s", "Only casts", "Throws if not a String"], "answer": 1, "explain": "One step — test-and-bind." },
+    { "q": "Exhaustive switch over a sealed type needs a default?", "options": ["Yes always", "No — compiler proves exhaustiveness", "Only for enums", "Only in Java 17"], "answer": 1, "explain": "Skip default so missed cases fail to compile." },
+    { "q": "Record patterns arrived in Java…", "options": ["11", "16", "17", "21"], "answer": 3, "explain": "Record patterns are Java 21." },
+    { "q": "A guard clause uses…", "options": ["when", "if", "case", "guard"], "answer": 0, "explain": "`case X x when boolean-expression ->`." },
+    { "q": "Best practice with sealed + switch is…", "options": ["Always add default", "Order cases alphabetically", "Skip default and let the compiler catch missing cases", "Use if-else instead"], "answer": 2, "explain": "That's the whole safety net." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Rewrite an instanceof-and-cast chain with pattern matching." },
-    { "level": "Medium", "text": "Switch over a sealed Shape with record deconstruction." },
-    { "level": "Hard", "text": "Add guards to classify ranges of values within one switch." },
-    { "level": "Expert", "text": "Evaluate a nested expression AST using nested record patterns." }
+    { "level": "Easy", "text": "Rewrite an `if (o instanceof X) { X x = (X) o; … }` chain with `instanceof` patterns." },
+    { "level": "Easy", "text": "Given `Object o`, use pattern-matching switch to return a `String` describing its type." },
+    { "level": "Medium", "text": "Model `sealed interface Vehicle permits Car, Truck, Motorcycle` (each a record) and compute a toll via pattern-matching switch." },
+    { "level": "Medium", "text": "Add a guard: circles with radius > 10 get 'large', others 'small'." },
+    { "level": "Hard", "text": "Model `sealed interface HttpResponse permits Ok, ClientError, ServerError` and use guarded patterns to categorize retryable vs non-retryable." },
+    { "level": "Hard", "text": "Use nested record patterns: `case Circle(Point(int x, int y), double r) -> …`." },
+    { "level": "Expert", "text": "Evaluate an AST (Num, Add, Mul, Neg) with a pattern-matching switch using record deconstruction." }
   ],
   "interviewQuestions": [
-    "What is pattern matching for instanceof?",
-    "What are record patterns / deconstruction?",
-    "How do guards work in switch patterns?",
-    "How do sealed types make switches exhaustive?",
-    "How does pattern matching replace the visitor pattern?"
+    "What is pattern matching and why was it added to Java?",
+    "What does `if (o instanceof String s)` do?",
+    "What's a pattern-matching switch?",
+    "What are record patterns / deconstruction patterns?",
+    "What is a guarded pattern (when clause)?",
+    "How does pattern matching change how you write Java?",
+    "How does pattern-matching switch handle null?"
   ],
   "references": [
-    { "label": "JEP 440/441: Record & Pattern Matching", "url": "https://openjdk.org/jeps/441" }
+    { "label": "JEP 441 — Pattern Matching for switch", "url": "https://openjdk.org/jeps/441" },
+    { "label": "JEP 440 — Record Patterns", "url": "https://openjdk.org/jeps/440" }
   ]
 }

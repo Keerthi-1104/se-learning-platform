@@ -1,49 +1,92 @@
 {
   "id": "java.sealed",
   "levelId": 2,
-  "title": "Sealed Classes",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "title": "Sealed Classes (Java 17)",
+  "xp": 35,
+  "estimatedMinutes": 25,
   "objectives": [
-    "Restrict which types can extend a class/interface",
-    "Combine sealed types with pattern matching for exhaustiveness",
-    "Model closed hierarchies (algebraic data types)"
+    "Understand sealed types via a real-life analogy",
+    "Know why 'closed' hierarchies matter (exhaustive switching)",
+    "Use `permits`, `final`, `sealed`, `non-sealed`",
+    "Combine sealed + records for algebraic data types",
+    "Answer sealed-class interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "A sealed class/interface (Java 17+) explicitly lists which classes may extend or implement it, giving you a closed, known set of subtypes." },
-    { "type": "code", "language": "java", "code": "sealed interface Shape permits Circle, Square {}\nrecord Circle(double r) implements Shape {}\nrecord Square(double s) implements Shape {}\n\n// Exhaustive switch — compiler knows all cases, no default needed\ndouble area(Shape s) => switch (s) {\n  case Circle c -> Math.PI*c.r()*c.r();\n  case Square q -> q.s()*q.s();\n};" },
-    { "type": "callout", "variant": "interview", "markdown": "Sealed types + records + pattern matching give Java **algebraic data types**: a fixed set of shapes the compiler can check exhaustively, eliminating the 'forgot a case' bug." },
-    { "type": "table", "headers": ["A permitted subtype must be", "Meaning"], "rows": [
-      ["final", "No further extension"],
-      ["sealed", "Continues the restriction"],
-      ["non-sealed", "Re-opens for extension"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of a menu at a small restaurant.**\n\n- A **regular class hierarchy** is like a food court — anyone can open a new stall selling anything, and the food court has no way to list *all* possible foods. That's what a normal `class Shape` gives you: any code, anywhere, can `extends Shape` and add a new subtype. You can never write a truly complete list of shapes.\n- A **sealed class** is like a curated tasting menu: 'This restaurant serves EXACTLY these three dishes — Pizza, Pasta, or Salad. That's the whole menu.' The menu is *closed*. If a customer asks 'do you have burgers?', the waiter can say NO with certainty because burgers aren't in the permits list.\n\n**Why this matters:** once the compiler knows the complete list of possibilities, it can PROVE that your `switch` handled every case. If tomorrow you add 'Dessert' to the menu, every switch that doesn't handle Dessert stops compiling — no more 'forgot a case' bugs." },
+    { "type": "callout", "variant": "definition", "markdown": "**A sealed type explicitly lists which classes may extend it.** `sealed class Shape permits Circle, Square, Triangle {}` — only Circle, Square, and Triangle may `extends Shape`, and each of them must be `final`, `sealed`, or `non-sealed`. This closes the hierarchy so the compiler can reason exhaustively about it." },
+    { "type": "theory", "markdown": "## Syntax — the three permitted-subtype variants" },
+    { "type": "code", "language": "java", "code": "// Parent — sealed with an explicit permits list\nsealed interface Shape permits Circle, Square, Group {}\n\n// Variant 1: final — leaf, cannot be extended further\nfinal class Circle implements Shape {\n  private final double r;\n  Circle(double r) { this.r = r; }\n}\n\n// Variant 2: sealed — this subtype ALSO closes its own hierarchy\nsealed class Square implements Shape permits UnitSquare {}\nfinal class UnitSquare extends Square { }\n\n// Variant 3: non-sealed — opts BACK OUT of sealing\n//            (this subtype can be extended freely by anyone)\nnon-sealed class Group implements Shape { }\nclass CustomGroup extends Group { }   // OK, Group opened itself up" },
+    { "type": "theory", "markdown": "## Rules the compiler enforces" },
+    { "type": "table", "headers": ["Rule", "What it means"], "rows": [
+      ["Every permitted subtype must be `final`, `sealed`, or `non-sealed`", "No middle ground — you must decide the sealing at each level"],
+      ["All permitted subtypes must be in the same module (or same package if unnamed module)", "Sealed hierarchies are tightly coupled"],
+      ["The `permits` list can be omitted if all subtypes are in the same file", "For small hierarchies, you can skip it"],
+      ["Sealed + records + pattern-matching switch → exhaustive matching", "The compiler proves every case is handled — no default needed"]
     ]},
-    { "type": "callout", "variant": "tip", "markdown": "Use sealed hierarchies when the set of subtypes is meant to be closed (results, states, AST nodes). It documents intent and unlocks exhaustive switches." }
+    { "type": "callout", "variant": "interview", "markdown": "**The key insight:** sealed classes solve the OOP paradox — inheritance is powerful but also uncontrolled. Before Java 17, if you wrote `class Shape`, anyone could add a `class Hexagon extends Shape`, and your `switch` on shapes would silently ignore it. Sealed types put you in charge of the hierarchy again, letting the compiler catch missed cases." },
+    { "type": "theory", "markdown": "## A complete sample program — sealed + records + exhaustive switch" },
+    { "type": "code", "language": "java", "code": "// File: SealedDemo.java (requires Java 17+, --enable-preview on 17-20 for record patterns)\n// Run: javac SealedDemo.java && java SealedDemo\n\npublic class SealedDemo {\n\n  // Closed hierarchy — Shape has EXACTLY three implementations\n  sealed interface Shape permits Circle, Square, Triangle {}\n\n  record Circle(double r) implements Shape {}\n  record Square(double side) implements Shape {}\n  record Triangle(double base, double height) implements Shape {}\n\n  // Exhaustive switch — compiler proves every case is handled\n  // NO default needed. If we add a new Shape subtype tomorrow,\n  // this stops compiling until we handle it.\n  static double area(Shape s) {\n    return switch (s) {\n      case Circle c   -> Math.PI * c.r() * c.r();\n      case Square sq  -> sq.side() * sq.side();\n      case Triangle t -> 0.5 * t.base() * t.height();\n    };\n  }\n\n  // Same, but using record deconstruction (Java 21+)\n  static String describe(Shape s) {\n    return switch (s) {\n      case Circle(double r)             -> \"circle r=\" + r;\n      case Square(double side)          -> \"square \" + side;\n      case Triangle(double b, double h) -> \"triangle \" + b + \"x\" + h;\n    };\n  }\n\n  public static void main(String[] args) {\n    Shape[] shapes = {\n      new Circle(2),\n      new Square(3),\n      new Triangle(4, 5),\n    };\n\n    for (Shape sh : shapes) {\n      System.out.printf(\"%-30s area=%.2f%n\", describe(sh), area(sh));\n    }\n  }\n}\n\n// Output:\n//   circle r=2.0                   area=12.57\n//   square 3.0                     area=9.00\n//   triangle 4.0x5.0               area=10.00\n//\n// NOW imagine we add `record Pentagon(...) implements Shape {}`.\n// The `sealed interface Shape` will FAIL TO COMPILE until we add Pentagon\n// to the permits list, and both `area()` and `describe()` will fail to compile\n// until we handle Pentagon. That's the safety net sealed types give you." },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Forgetting to mark permitted subtypes as `final` / `sealed` / `non-sealed`.**\n\n`sealed interface Shape permits Circle {}` — but if `Circle` is a plain class (not `final` or `sealed` or `non-sealed`), the code won't compile. Every permitted subtype must explicitly declare its own sealing." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Cross-module permits list.**\n\nSealed hierarchies must fit within a single module (or single package for unnamed modules). You cannot have a `permits` list that names classes in another module. This is intentional — sealing is a strong coupling." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Confusing sealed with `final`.**\n\n`final` means 'no subtypes at all'. `sealed` means 'only THESE specific subtypes'. Sealed is the middle ground between wide-open inheritance and no inheritance." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Adding `default:` to an exhaustive switch.**\n\nOnce your switch handles every permitted subtype, a `default:` is unreachable — but worse, adding a `default` disables the exhaustiveness check. Now if you add a new subtype, the switch silently ignores it. Skip the `default` on sealed-type switches." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Use sealed + record + switch for algebraic data types.** This is the modern Java pattern for closed domain models — Result, Option, tree nodes, expression evaluators, state machines." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Prefer `final` for leaves.** Only use `sealed` at the leaf level if you genuinely need another level of hierarchy." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Skip the `default:` on exhaustive switches.** The whole point is that the compiler catches missing cases; a `default` hides that." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Keep the hierarchy small.** If your permits list has 20 items, it's a sign that class-per-behavior might not be the best shape — consider strategy or enum." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Combine with records.** Records + sealed = zero-boilerplate ADTs. This is one of Java's biggest steps toward Kotlin/Scala/Rust ergonomics." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Model a payment status.** `sealed interface PaymentStatus permits Pending, Paid, Refunded, Failed`. Write an exhaustive switch that returns a display message.\n\n**Why:** Sealed types shine for state machines." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Result<T> type.** `sealed interface Result<T> permits Success<T>, Failure`. Add `map` and `orElse` methods.\n\n**Why:** This replaces null/exception patterns with a compiler-checked one." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — HTTP response modeling.** Model `sealed interface HttpResponse permits Ok, Redirect, ClientError, ServerError` (with a status code in each) and switch to handle each family.\n\n**Why:** Real-world APIs are naturally sealed hierarchies." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Expert) — Expression tree.** `sealed interface Expr permits Num, Add, Mul, Neg` and evaluate + print. Add `Sub` and watch every switch fail to compile until you handle it.\n\n**Why:** Classic AST modeling with compile-time exhaustiveness — this is what makes writing a mini interpreter fun in modern Java." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is a sealed class and why was it introduced?**\n\n**A:** A sealed class (Java 17) is a class or interface that explicitly lists which classes may extend/implement it via `permits`. Before sealed types, Java's inheritance was open — anyone could subclass your public class from anywhere in the codebase. This made it impossible to reason about the complete set of subtypes, so switches over type hierarchies could silently miss new subtypes. Sealed types close the hierarchy, giving the compiler enough information to enforce exhaustive pattern matching. This eliminates 'forgot a case' bugs and enables ergonomic algebraic data types (sealed + records + pattern switch)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What are the three modifiers a permitted subtype can have?**\n\n**A:** Every permitted subtype must be one of: **(1) `final`** — cannot be subclassed further; the leaf of the hierarchy. Most common choice. **(2) `sealed`** — introduces another level of controlled hierarchy; must have its own `permits` list. **(3) `non-sealed`** — explicitly opts back out; the subtype can be extended freely by anyone. Useful when part of the hierarchy is open-ended (e.g. `non-sealed class UserException extends AppException` — a controlled family plus a wildcard for extension). The compiler forces you to pick one; there is no default." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do sealed types enable exhaustive `switch`?**\n\n**A:** Because a sealed type has a *known* set of subtypes, the compiler can verify that a `switch` covers every one. When it does, no `default:` clause is needed — and the compiler will emit an error if any case is missed. Combined with pattern matching (Java 21), you can write:\n```java\nreturn switch (shape) {\n  case Circle c   -> Math.PI * c.r() * c.r();\n  case Square s   -> s.side() * s.side();\n  case Triangle t -> 0.5 * t.base() * t.height();\n};\n```\nAdd a `Pentagon` to `permits`? Every such switch stops compiling until updated. This is a fundamental correctness win — Java catches bugs that used to require careful code review or runtime testing." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: When would you use `non-sealed`?**\n\n**A:** When part of a sealed hierarchy needs to remain open for extension by unknown code. Example: `sealed interface Exception permits IOException, AppException, non-sealed UserException`. Here you want `IOException` and `AppException` to be closed families, but `UserException` is meant to be subclassed by application code you haven't seen. `non-sealed` says 'this branch of the tree opts back out of the sealing constraint.' It's the escape hatch. Use it sparingly — if half your permits list is `non-sealed`, you've lost most of the benefit of sealing." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What's the relationship between sealed types, records, and pattern matching?**\n\n**A:** They form a trio that gives Java **algebraic data types** — a modeling pattern where a value is *one of* a fixed set of shapes.\n- **`sealed`** closes the type hierarchy (fixed set).\n- **`record`** gives each shape a zero-boilerplate data carrier.\n- **Pattern-matching `switch`** dispatches on the shape and destructures its data in one step.\n\nTogether:\n```java\nsealed interface Tree permits Leaf, Node {}\nrecord Leaf(int value) implements Tree {}\nrecord Node(Tree left, Tree right) implements Tree {}\n\nint sum(Tree t) {\n  return switch (t) {\n    case Leaf(int v)      -> v;\n    case Node(var l, var r) -> sum(l) + sum(r);\n  };\n}\n```\nThat's a complete recursive tree in ~5 lines, with compile-time exhaustiveness. Kotlin's `sealed class`, Rust's `enum`, and Scala's `case class` all provide the same triad." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: Sealed classes vs enums — when to use which?**\n\n**A:** Use an **enum** when each case is a *singleton value* with a fixed identity (`RED`, `GREEN`, `BLUE`; `PENDING`, `PAID`, `FAILED`). Use a **sealed hierarchy** when each case is a *type* that carries its own data (`Circle(radius)`, `Square(side)`; `Success<T>(value)`, `Failure(error)`). Enums are simpler and more concise for pure-value cases; sealed types are more expressive when the cases carry different shapes of data. Both give exhaustive switching. A good rule: if you find yourself adding fields via `enum X { A(1), B(2); ...}` for each constant, and the fields differ, promote to a sealed hierarchy." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: Where must permitted subtypes live relative to the sealed parent?**\n\n**A:** They must be in the **same module** (for named modules) or the **same package** (for unnamed modules — i.e. classpath-based apps). Also, if all subtypes are in the *same file* as the sealed parent, you can omit the `permits` clause entirely. This module/package restriction is intentional — sealing is a strong contract between the parent and its subtypes, and letting them be defined arbitrarily far away would undermine the guarantee." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **State machines** — order status, connection state, user session lifecycle.\n- **Result/Either types** — Success | Failure, with `map`/`flatMap` — a compiler-checked alternative to exceptions.\n- **HTTP responses** — Ok, Redirect, ClientError, ServerError — each carrying different data.\n- **Command/event modeling** — commands and events in CQRS are naturally sealed.\n- **AST / expression trees** — parsers, compilers, DSLs.\n- **Domain events in event sourcing** — a bounded set of what can happen." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Sealed permitting sealed** — hierarchies can be arbitrarily deep, each level closed independently.\n- **Reflection** — `Class.isSealed()`, `Class.getPermittedSubclasses()` — used by frameworks that need to enumerate the hierarchy.\n- **Compile-time exhaustiveness** — Java 21+ makes this fully seamless; earlier versions needed `--enable-preview`.\n- **Interaction with modules** — `permits` classes must be in the same module; useful pattern is `module-info.java` `exports com.app.model` where the sealed types live.\n- **Serialization** — sealed hierarchies serialize fine (Jackson handles the polymorphism via `@JsonTypeInfo` or Jackson 2.15+ native sealed-type support).\n- **Migration** — you can retrofit `sealed` onto existing classes if you own all the subtypes; if you don't, you'll need to declare `non-sealed` at each unknown extension point." }
   ],
   "flashcards": [
-    { "front": "What does 'sealed' do?", "back": "Restricts which classes may extend/implement a type via a permits list." },
-    { "front": "What must a permitted subtype be?", "back": "final, sealed, or non-sealed." },
-    { "front": "Why combine sealed + switch?", "back": "The compiler can check the switch is exhaustive — no default needed, no missed case." }
+    { "front": "What does `sealed` mean?", "back": "The type explicitly lists (via `permits`) which classes may extend it." },
+    { "front": "Three variants for permitted subtypes?", "back": "`final` (leaf), `sealed` (further controlled), `non-sealed` (opts back out)." },
+    { "front": "Why sealed?", "back": "Closes the hierarchy so the compiler can enforce exhaustive pattern matching." },
+    { "front": "Sealed + record + switch?", "back": "Algebraic data types with zero boilerplate + compile-time exhaustiveness." },
+    { "front": "Sealed vs enum?", "back": "Enum = fixed singletons; sealed = fixed types each carrying different data." }
   ],
   "quiz": [
-    { "q": "A sealed type…", "options": ["Can be extended by anyone", "Lists exactly which types may extend it", "Cannot be extended at all", "Is always final"], "answer": 1, "explain": "The permits clause names the allowed subtypes." },
-    { "q": "A permitted subclass may NOT be…", "options": ["final", "sealed", "non-sealed", "public-but-unrestricted"], "answer": 3, "explain": "It must be final, sealed, or non-sealed to control the hierarchy." },
-    { "q": "Sealed + records + pattern matching enables…", "options": ["Reflection", "Exhaustive, type-safe switches (ADTs)", "Faster GC", "Multithreading"], "answer": 1, "explain": "The compiler knows all cases, enabling exhaustive matching." }
+    { "q": "`sealed` differs from `final` because…", "options": ["Sealed is deprecated", "Final = no subtypes; sealed = only listed subtypes", "Sealed = only interfaces", "No difference"], "answer": 1, "explain": "Sealed is the middle ground between no-inheritance and open-inheritance." },
+    { "q": "Every permitted subtype must be…", "options": ["public", "final, sealed, or non-sealed", "abstract", "static"], "answer": 1, "explain": "The compiler forces the choice at every level." },
+    { "q": "Best combo for algebraic data types?", "options": ["Records + generics", "Sealed + records + pattern switch", "Enums + reflection", "Lombok + inheritance"], "answer": 1, "explain": "The trio gives Java ADTs." },
+    { "q": "`non-sealed` means…", "options": ["Deprecated", "This subtype opts BACK OUT and can be extended freely", "Never subclassed", "Private"], "answer": 1, "explain": "Escape hatch for open-ended parts of a sealed hierarchy." },
+    { "q": "Sealed permits list must be in…", "options": ["Any classpath", "Same module (or same package for unnamed modules)", "A separate JAR", "META-INF"], "answer": 1, "explain": "Sealing is a same-module contract." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Define a sealed Shape with Circle and Square records." },
-    { "level": "Medium", "text": "Write an exhaustive switch over a sealed type without a default." },
-    { "level": "Hard", "text": "Model a Result = Success | Failure sealed hierarchy and handle both." },
-    { "level": "Expert", "text": "Build an expression evaluator over a sealed AST (Num, Add, Mul)." }
+    { "level": "Easy", "text": "Write `sealed interface PaymentStatus permits Pending, Paid, Refunded, Failed` and exhaustively switch to a display string." },
+    { "level": "Easy", "text": "Explain the difference between `final`, `sealed`, and `non-sealed` with a code example of each." },
+    { "level": "Medium", "text": "Write `sealed interface Result<T> permits Success<T>, Failure` and add `map` + `orElse`." },
+    { "level": "Medium", "text": "Model `sealed interface HttpResponse permits Ok, Redirect, ClientError, ServerError` (with a status code)." },
+    { "level": "Hard", "text": "Retrofit sealed types onto an existing hierarchy — add `permits` and choose `final`/`sealed`/`non-sealed` at each subtype." },
+    { "level": "Hard", "text": "Add a `Pentagon` subtype to a sealed `Shape` hierarchy and watch every exhaustive switch break — then fix them." },
+    { "level": "Expert", "text": "Model a small AST (Num, Add, Mul, Neg) with sealed + records and evaluate it with pattern matching." }
   ],
   "interviewQuestions": [
-    "What are sealed classes and why use them?",
-    "What forms can a permitted subtype take?",
-    "How do sealed types enable exhaustive switches?",
-    "Sealed types vs enums for modeling alternatives?",
-    "What are algebraic data types in Java?"
+    "What is a sealed class and why was it introduced?",
+    "What are the three modifiers a permitted subtype can have?",
+    "How do sealed types enable exhaustive switch?",
+    "When would you use non-sealed?",
+    "What's the relationship between sealed types, records, and pattern matching?",
+    "Sealed classes vs enums — when to use which?",
+    "Where must permitted subtypes live relative to the sealed parent?"
   ],
   "references": [
-    { "label": "JEP 409: Sealed Classes", "url": "https://openjdk.org/jeps/409" }
+    { "label": "JEP 409 — Sealed Classes", "url": "https://openjdk.org/jeps/409" },
+    { "label": "Sealed classes tutorial — Baeldung", "url": "https://www.baeldung.com/java-sealed-classes-interfaces" }
   ]
 }

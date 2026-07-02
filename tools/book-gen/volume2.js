@@ -99,121 +99,24 @@ body.push(...topicToChapter(loadTopic("level_02", "reflection"),
   { chapterNumber: 11, bookmarkId: "ch11" }));
 
 // 12. Records
-body.push(H1("12. Records (Java 16+)", "ch12"));
-body.push(callout("definition", ["A record is a concise, immutable data carrier. The compiler generates the constructor, private final fields, accessors, equals, hashCode and toString."]));
-body.push(code([
-  "record Point(int x, int y) {}   // full data class in one line",
-  "record Range(int lo, int hi) {",
-  "  Range { if (lo > hi) throw new IllegalArgumentException(\"lo>hi\"); }",
-  "}",
-], "records"));
-body.push(callout("tip", ["Records pair beautifully with sealed types and pattern matching to form algebraic data types — closed, exhaustively-checkable data models."]));
-body.push(...summary([
-  "Records remove data-class boilerplate.",
-  "They are final and immutable with value semantics.",
-  "Compact constructors add validation.",
-  "Great for DTOs, map keys and value objects.",
-]));
-body.push(...interview([
-  "What does a record generate?",
-  "Can records be extended or mutated?",
-  "Record vs Lombok @Data vs a plain class?",
-  "How do you validate record inputs?",
-  "Why are records ideal as map keys?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Replace a boilerplate DTO with a record." },
-  { level: "Medium", text: "Add validation via a compact constructor." },
-  { level: "Hard", text: "Use a record as a HashMap key." },
-  { level: "Expert", text: "Model an expression tree with sealed interface + record nodes." },
-]));
-body.push(...realworld(["APIs and event payloads are increasingly modeled as records — immutable, self-documenting, and safe to share across threads."]));
-body.push(...miniproject(["Model a small domain (Order, LineItem, Money) entirely with records and write value-based tests."]));
-body.push(...advanced(["Record patterns for deconstruction, serialization of records, local records inside methods."]));
+body.push(...topicToChapter(loadTopic("level_02", "records"),
+  { chapterNumber: 12, bookmarkId: "ch12" }));
 
-// 13. Sealed + Pattern Matching
-body.push(H1("13. Sealed Classes & Pattern Matching (Java 17–21)", "ch13"));
-body.push(callout("definition", ["A sealed type lists exactly which classes may extend it. Pattern matching tests a value's shape and binds its parts in one step (instanceof, switch, record deconstruction)."]));
-body.push(code([
-  "sealed interface Shape permits Circle, Square {}",
-  "record Circle(double r) implements Shape {}",
-  "record Square(double s) implements Shape {}",
-  "",
-  "double area(Shape sh) => switch (sh) {        // exhaustive, no default",
-  "  case Circle(double r) -> Math.PI * r * r;   // record deconstruction",
-  "  case Square(double s) -> s * s;",
-  "};",
-], "sealed + pattern matching"));
-body.push(callout("interview", ["Sealed + records + pattern matching give Java algebraic data types: a fixed set of cases the compiler checks exhaustively, eliminating the 'forgot a case' bug and the visitor-pattern boilerplate."]));
-body.push(callout("note", ["instanceof pattern: 'if (o instanceof String s)' tests and binds s in one step. Guards ('case Circle c when c.r() > 10') refine a case."]));
-body.push(...summary([
-  "Sealed types close a hierarchy via a permits list.",
-  "Permitted subtypes are final, sealed, or non-sealed.",
-  "Pattern matching removes instanceof-and-cast and visitor boilerplate.",
-  "Sealed + switch = exhaustive, no default needed.",
-]));
-body.push(...interview([
-  "What are sealed classes and why use them?",
-  "How do sealed types enable exhaustive switches?",
-  "What is pattern matching for instanceof?",
-  "What are record patterns / deconstruction?",
-  "Sealed types vs enums?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Rewrite an instanceof-and-cast chain with pattern matching." },
-  { level: "Medium", text: "Exhaustive switch over a sealed Shape with no default." },
-  { level: "Hard", text: "Model Result = Success | Failure and handle both." },
-  { level: "Expert", text: "Evaluate a nested AST with nested record patterns." },
-]));
-body.push(...realworld(["State machines, parsers and result types become compiler-checked and concise — a major readability win over enum+switch or visitor classes."]));
-body.push(...miniproject(["Build a small calculator: a sealed Expr (Num, Add, Mul) evaluated with a pattern-matching switch."]));
-body.push(...advanced(["Exhaustiveness & dominance rules, nested/var patterns, the future of deconstruction patterns."]));
+// 13. Sealed Classes
+body.push(...topicToChapter(loadTopic("level_02", "sealed"),
+  { chapterNumber: 13, bookmarkId: "ch13" }));
 
-// 14. Virtual Threads
-body.push(...topicToChapter(loadTopic("level_02", "virtual_threads"),
+// 14. Pattern Matching
+body.push(...topicToChapter(loadTopic("level_02", "pattern_matching"),
   { chapterNumber: 14, bookmarkId: "ch14" }));
 
-body.push(H1("15. Java 8 → Latest LTS: Version Guide", "ch15"));
-body.push(callout("definition", ["Since Java 9, a feature release ships every 6 months and a Long-Term Support (LTS) release every ~2–3 years (8, 11, 17, 21). Most teams target LTS versions."]));
-body.push(table(["Version", "Year", "Headline features"], [
-  ["8 (LTS)", "2014", "Lambdas, Streams, Optional, default methods"],
-  ["11 (LTS)", "2018", "var in lambdas, HttpClient, run single file"],
-  ["17 (LTS)", "2021", "Sealed classes, records (16), pattern switch (preview)"],
-  ["21 (LTS)", "2023", "Virtual threads, record patterns, sequenced collections"],
-], [1500, 1200, 6660]));
-body.push(table(["Feature", "Introduced"], [
-  ["Modules (JPMS)", "Java 9"],
-  ["var (local inference)", "Java 10"],
-  ["Switch expressions", "Java 14"],
-  ["Text blocks", "Java 15"],
-  ["Records", "Java 16"],
-  ["Sealed classes", "Java 17"],
-  ["Virtual threads", "Java 21"],
-], [4680, 4680]));
-body.push(callout("interview", ["Anchor the timeline: 8 = functional Java; 11 = first modern LTS; 17 = records/sealed; 21 = virtual threads. 'Which version added X?' is one of the most common Java screening questions."]));
-body.push(callout("mistake", ["Migrating off Java 8 and tripping on removed Java EE/JAXB modules (gone in 11), internal sun.* APIs, and the module system. Run jdeps and upgrade dependencies first."]));
-body.push(...summary([
-  "LTS versions: 8, 11, 17, 21.",
-  "8 = lambdas/streams; 17 = records/sealed; 21 = virtual threads.",
-  "New features ship every 6 months; LTS every 2–3 years.",
-  "Plan migrations with jdeps and dependency upgrades.",
-]));
-body.push(...interview([
-  "Which Java versions are LTS and why does it matter?",
-  "Key features of 8, 11, 17, 21?",
-  "Challenges migrating off Java 8?",
-  "What is the module system (JPMS)?",
-  "Switch statement vs switch expression?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Convert anonymous classes to lambdas across a Java 8 codebase." },
-  { level: "Medium", text: "Adopt switch expressions and text blocks." },
-  { level: "Hard", text: "Refactor a visitor design to records + sealed + pattern matching." },
-  { level: "Expert", text: "Execute a Java 8 → 17 migration: jdeps, fix removed APIs, update build." },
-]));
-body.push(...realworld(["Teams budget real time to jump LTS versions (8 → 17 → 21); knowing what changed and what breaks is exactly what makes a migration smooth."]));
-body.push(...miniproject(["Take a small Java 8 project and modernize it to 21: lambdas→records, switches→switch expressions, threads→virtual threads; document each change."]));
-body.push(...advanced(["Preview features & --enable-preview, multi-release JARs, the 6-month release train and how to keep up."]));
+// 15. Virtual Threads
+body.push(...topicToChapter(loadTopic("level_02", "virtual_threads"),
+  { chapterNumber: 15, bookmarkId: "ch15" }));
+
+// 16. Version Guide
+body.push(...topicToChapter(loadTopic("level_02", "versions"),
+  { chapterNumber: 16, bookmarkId: "ch16" }));
 
 // Revision
 body.push(H1("Volume 2 Revision Cheat Sheet", "cheat"));

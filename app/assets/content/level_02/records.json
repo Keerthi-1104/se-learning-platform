@@ -1,50 +1,94 @@
 {
   "id": "java.records",
   "levelId": 2,
-  "title": "Records",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "title": "Records (Java 16+)",
+  "xp": 35,
+  "estimatedMinutes": 25,
   "objectives": [
-    "Use records for immutable data carriers",
-    "Know what the compiler generates",
-    "Add validation with compact constructors"
+    "Understand records via a real-life analogy",
+    "See the boilerplate records replace and what the compiler generates",
+    "Know when to use a record vs a class",
+    "Add validation with compact constructors",
+    "Answer record interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "A record (Java 16+) is a concise, immutable data carrier. The compiler generates the constructor, private final fields, accessors, equals, hashCode and toString for you." },
-    { "type": "code", "language": "java", "code": "record Point(int x, int y) {}\n// auto: constructor, x(), y(), equals, hashCode, toString\n\nrecord Range(int lo, int hi) {\n  Range {                       // compact constructor: validation\n    if (lo > hi) throw new IllegalArgumentException(\"lo>hi\");\n  }\n}" },
-    { "type": "table", "headers": ["Record gives", "You skip writing"], "rows": [
-      ["Final fields + accessors", "Boilerplate getters"],
-      ["equals + hashCode", "Manual value equality"],
-      ["toString", "Debug formatting"],
-      ["Canonical constructor", "Field assignment code"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of a passport.**\n\n- A passport is a **read-only data document** — name, date of birth, nationality, number. Once printed, you cannot change any field. Two passports with the exact same values represent the same person's identity. If you need a change, you get a new passport.\n- A **record in Java is exactly that**: an immutable data carrier. You declare the fields, the compiler prints the passport — constructor, accessors, `equals`, `hashCode`, `toString` — all for free. Two records with the same field values are `equals`. And you can't mutate them; if you need a change, you construct a new one.\n\nBefore records (Java 16+), you'd write 40 lines of `Point { private final int x; private final int y; public Point(int x, int y) {...} public int getX() {...} @Override equals/hashCode/toString...}`. **A record collapses that entire ceremony into one line: `record Point(int x, int y) {}`.**" },
+    { "type": "callout", "variant": "definition", "markdown": "**A record is a concise, immutable data carrier.** The compiler generates: a canonical constructor, `private final` fields, accessor methods, `equals`, `hashCode`, and `toString`. Records are implicitly `final` (cannot be extended), and their state is fixed at construction." },
+    { "type": "theory", "markdown": "## Syntax — every form you'll see" },
+    { "type": "code", "language": "java", "code": "// 1. The one-liner — 90% of records look like this\nrecord Point(int x, int y) {}\n\n// 2. With a compact constructor for validation (NO parameter list, NO field assignment — those are automatic)\nrecord Range(int lo, int hi) {\n  Range {\n    if (lo > hi) throw new IllegalArgumentException(\"lo > hi\");\n  }\n}\n\n// 3. With extra static factory + instance methods\nrecord Money(long amountCents, String currency) {\n  static Money usd(long cents) { return new Money(cents, \"USD\"); }\n  double toDollars() { return amountCents / 100.0; }\n}\n\n// 4. Implementing an interface\ninterface Named { String name(); }\nrecord Person(String name, int age) implements Named {}\n\n// 5. Overriding a generated accessor (defensive copy)\nrecord Team(String name, List<String> members) {\n  public List<String> members() {\n    return List.copyOf(members);   // return an unmodifiable copy\n  }\n}" },
+    { "type": "theory", "markdown": "## What the compiler generates for you" },
+    { "type": "table", "headers": ["You wrote", "Compiler adds"], "rows": [
+      ["`record Point(int x, int y) {}`", "`private final int x; private final int y;`"],
+      ["", "Canonical constructor `Point(int x, int y)` that assigns both fields"],
+      ["", "Accessor methods `int x()` and `int y()` (NOT getX/getY)"],
+      ["", "`equals` — value equality (same values → equal)"],
+      ["", "`hashCode` — consistent with `equals`"],
+      ["", "`toString` — `Point[x=1, y=2]`"]
     ]},
-    { "type": "callout", "variant": "mistake", "markdown": "Expecting to mutate a record or extend it — records are final and their fields are final. Use them for immutable values (DTOs, keys), not entities you mutate." },
-    { "type": "callout", "variant": "tip", "markdown": "Records pair beautifully with sealed types + pattern matching for modeling closed data hierarchies — the basis of algebraic data types in Java." }
+    { "type": "callout", "variant": "interview", "markdown": "**Note:** record accessors are `x()`, not `getX()` — records don't follow the JavaBean naming convention. This trips people up when integrating with older frameworks that reflect on `get*`/`set*` patterns. Modern frameworks (Jackson 2.12+, Spring 6+) handle records natively." },
+    { "type": "theory", "markdown": "## A complete sample program — models, equality, and map keys" },
+    { "type": "code", "language": "java", "code": "// File: RecordsDemo.java\n// Run: javac RecordsDemo.java && java RecordsDemo\nimport java.util.*;\n\npublic class RecordsDemo {\n\n  record Point(int x, int y) {}\n\n  record Range(int lo, int hi) {\n    Range {\n      if (lo > hi) throw new IllegalArgumentException(\"lo > hi\");\n    }\n    int size() { return hi - lo + 1; }\n  }\n\n  record Coord(int x, int y) {}\n\n  public static void main(String[] args) {\n    Point p1 = new Point(2, 3);\n    Point p2 = new Point(2, 3);\n    Point p3 = new Point(4, 5);\n\n    // Value equality — different objects but equal by content\n    System.out.println(p1 == p2);         // false\n    System.out.println(p1.equals(p2));    // true\n    System.out.println(p1.equals(p3));    // false\n\n    // Auto toString\n    System.out.println(p1);                // Point[x=2, y=3]\n\n    // Accessors — NOTE: x() not getX()\n    System.out.println(p1.x() + \",\" + p1.y());\n\n    // Compact constructor validation\n    try {\n      new Range(5, 3);\n    } catch (IllegalArgumentException e) {\n      System.out.println(\"caught: \" + e.getMessage());\n    }\n    System.out.println(new Range(1, 5).size());\n\n    // Records shine as map keys — value semantics + immutable\n    Map<Coord, String> grid = new HashMap<>();\n    grid.put(new Coord(0, 0), \"origin\");\n    grid.put(new Coord(1, 0), \"east\");\n    System.out.println(grid.get(new Coord(0, 0)));   // origin\n  }\n}\n\n// Output:\n//   false\n//   true\n//   false\n//   Point[x=2, y=3]\n//   2,3\n//   caught: lo > hi\n//   5\n//   origin" },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Trying to extend a record.** `record` types are implicitly `final`. Inheritance would break value semantics. Records CAN implement interfaces, though." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Records with mutable fields (like `List`).** A record's fields are `final`, but if they *hold* a mutable object, the caller can still mutate it. Fix: return a defensive copy from the accessor." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Calling `getX()` on a record.** Compilation error. Record accessors are `x()` — no `get` prefix. Old frameworks that reflect on `get*` won't see them." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Using records for JPA entities.** Entities have identity (an ID) — two rows with the same fields but different IDs are different. Records use value equality, which breaks JPA. Records are perfect for DTOs — not entities." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Use records for DTOs, value objects, event payloads, and map keys.** Anywhere the shape is fixed and the data doesn't change, use a record." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Add validation in the compact constructor.** Idiomatic place; runs before the fields are assigned." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Combine with `sealed` interfaces for algebraic data types.** `sealed interface Result permits Success, Failure` where both are records — exhaustive switching." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Return defensive copies when the field is a mutable collection.** Or freeze it in the compact constructor with `members = List.copyOf(members);`." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Don't use records for entities.** Use them for the *shape* of data flowing through your system, not for domain entities with identity and lifecycle." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Replace a POJO with a record.** Find a plain data class with equals/hashCode/toString and rewrite it as a record." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Add validation.** Create `record Age(int value)` that rejects negatives and values > 150 via a compact constructor." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — Record as map key.** Build `Map<Coord, Cell>` for a game board. Use record accessor `x()`/`y()` to render the grid." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Expert) — Sealed + record ADT.** Model `sealed interface Result<T> permits Success<T>, Failure` with both cases as records. Write a `map` function on `Result`." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is a record and what does the compiler generate?**\n\n**A:** A record (Java 16+) is a concise, immutable data carrier. `record Point(int x, int y) {}` makes the compiler generate: (1) `private final int x` and `private final int y` fields, (2) a canonical constructor, (3) accessor methods `x()` and `y()` (no `get` prefix), (4) a value-based `equals`, (5) a `hashCode` consistent with `equals`, and (6) a `toString` like `Point[x=1, y=2]`. Records are implicitly `final`. Perfect for DTOs, value objects, event payloads, and map keys." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: Can records be extended or mutated?**\n\n**A:** No to both. Records are implicitly `final` — you cannot `extends` a record. Inheritance would break value semantics (a subclass might have extra fields that `equals` ignores, causing symmetry violations). Records CAN implement interfaces. Record fields are `final`, so the record itself is immutable — though if a field holds a mutable object like a `List`, that inner mutability isn't prevented; return a defensive copy if you need deep immutability." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: Record vs Lombok's `@Data` vs a plain class?**\n\n**A:** **Records** are language-level, no external dependency, produce well-defined immutable types, but require Java 16+. Ideal for immutable data. **Lombok's `@Data`** generates getters, setters, equals, hashCode, toString via annotation processing — works on any Java version, but classes are *mutable* by default and Lombok is an external dependency with IDE quirks. **Plain classes** are verbose but explicit and universally supported. Rule: on Java 16+, use records for immutable data; use classes with Lombok only when you need mutability or older Java." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What is a compact constructor and when do you use it?**\n\n**A:** A compact constructor is a special record constructor with NO parameter list — it's implicitly given the canonical parameters and implicitly assigns them to fields after your code runs. Use it for validation and normalization:\n```java\nrecord Range(int lo, int hi) {\n  Range {  // compact — no parameter list\n    if (lo > hi) throw new IllegalArgumentException(\"lo > hi\");\n  }\n}\n```\nYou can also normalize inputs inside a compact constructor (e.g. `hi = Math.max(hi, lo);`). Compact constructors are the idiomatic place for record validation." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: Why are records ideal as map keys?**\n\n**A:** Because records have **value equality** and are **immutable** — exactly the two properties `HashMap`/`HashSet` need. Value equality means two records with the same fields hash to the same bucket and are equal — so you can look up by constructing a *new* record with matching fields. Immutability means once you put a record into a map, its fields cannot change and thus its hash cannot become inconsistent — a classic bug with mutable keys. Together this makes records natural, safe map keys with zero boilerplate." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: Should you use records for JPA entities?**\n\n**A:** No. JPA entities need **identity semantics** — two rows are the same entity if their primary keys match, not if all fields match. Records use **value equality** — all fields must match — which breaks JPA's identity model. Entities also often need proxying for lazy loading, and records are `final` so they can't be proxied. Records are perfect for **DTOs**, value objects, and query projections — but the entity layer should remain classes. JPA `SELECT NEW com.app.UserSummary(u.id, u.name)` projections into records work great." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: How do records combine with sealed types and pattern matching?**\n\n**A:** Together, records + sealed types + pattern matching give Java **algebraic data types** — a closed set of shapes the compiler exhaustively checks.\n```java\nsealed interface Shape permits Circle, Square {}\nrecord Circle(double r) implements Shape {}\nrecord Square(double s) implements Shape {}\n\ndouble area(Shape sh) {\n  return switch (sh) {\n    case Circle(double r) -> Math.PI * r * r;\n    case Square(double s) -> s * s;\n  };\n}\n```\nNo `default` needed — the compiler proves the switch is exhaustive. Add a new subtype? Every switch must be updated. This eliminates the 'forgot a case' bug and replaces visitor-pattern boilerplate. It's the modern-Java equivalent of Kotlin's sealed classes, Rust's enums, or Scala's case classes." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **API DTOs** — request/response types are naturally immutable data. Records fit perfectly.\n- **Event sourcing / messaging** — event payloads are records; immutable by definition.\n- **Value objects in DDD** — Money, EmailAddress, PhoneNumber.\n- **Query projections** — JPA `SELECT NEW`, Spring Data projections, jOOQ records.\n- **Map/Set keys** — coordinates, cache keys, tuples.\n- **Sealed + record ADTs** — Result, Option, tree nodes, expression evaluators." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Record patterns (Java 21+)** — deconstruct records inside `switch` and `instanceof`: `if (obj instanceof Point(int x, int y)) { ... }`.\n- **Local records** — declare a record *inside* a method for one-off tuples.\n- **Serialization** — records serialize cleanly with Jackson 2.12+.\n- **Reflection API** — `Class.isRecord()`, `Class.getRecordComponents()`.\n- **Not everything** — no inheritance, no built-in builder. For 10+ fields, consider a builder class.\n- **`java.lang.Record`** is the common superclass; use polymorphically if needed." }
   ],
   "flashcards": [
-    { "front": "What does a record generate?", "back": "Constructor, private final fields, accessors, equals, hashCode, and toString." },
-    { "front": "Can a record be mutable or extended?", "back": "No — records are final with final fields; designed for immutable data." },
-    { "front": "What is a compact constructor?", "back": "A record constructor body for validation/normalization without listing parameters." }
+    { "front": "What does `record Point(int x, int y) {}` generate?", "back": "Fields, canonical ctor, accessors x()/y(), equals, hashCode, toString." },
+    { "front": "Can records be extended?", "back": "No — implicitly final. They can implement interfaces." },
+    { "front": "Record vs Lombok @Data?", "back": "Records: language-level, immutable, Java 16+. @Data: dependency, mutable by default." },
+    { "front": "Compact constructor?", "back": "Ctor with no parameter list — validation/normalization; runs before auto field assignment." },
+    { "front": "Where do records shine?", "back": "DTOs, value objects, event payloads, map keys, sealed ADT cases." }
   ],
   "quiz": [
-    { "q": "Records are primarily for…", "options": ["Mutable entities", "Immutable data carriers", "Threading", "Reflection"], "answer": 1, "explain": "Records concisely model immutable data with value semantics." },
-    { "q": "A record automatically provides all EXCEPT…", "options": ["equals/hashCode", "toString", "Setters", "Accessors"], "answer": 2, "explain": "Records are immutable — no setters are generated." },
-    { "q": "Where do you validate a record's inputs?", "options": ["A setter", "The compact constructor", "A static block", "You can't"], "answer": 1, "explain": "The compact constructor runs validation before fields are assigned." }
+    { "q": "Records are…", "options": ["Extendable", "Mutable", "Implicitly final & immutable", "Always Serializable"], "answer": 2, "explain": "Records are final and immutable." },
+    { "q": "Accessor for `record Point(int x, int y)`?", "options": ["getX()", "x()", "x", "point.x()"], "answer": 1, "explain": "Records use short accessors, not JavaBean getters." },
+    { "q": "Compact constructor is for…", "options": ["Extra fields", "Validation / normalization", "Static init", "Overriding equals"], "answer": 1, "explain": "Idiomatic place for validation before field assignment." },
+    { "q": "Records are good for…", "options": ["JPA entities", "DTOs / value objects / map keys", "Singletons with mutable state", "Building UI frameworks"], "answer": 1, "explain": "Value semantics + immutability = perfect data carriers." },
+    { "q": "Sealed + record + switch enables…", "options": ["Reflection", "Algebraic data types with exhaustive matching", "Threading", "Serialization"], "answer": 1, "explain": "Closed set of shapes, checked by the compiler." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Replace a boilerplate DTO class with a record." },
-    { "level": "Medium", "text": "Add validation to a record via a compact constructor." },
-    { "level": "Hard", "text": "Use a record as a HashMap key and verify value-based equality." },
-    { "level": "Expert", "text": "Model an expression tree with sealed interface + record implementations." }
+    { "level": "Easy", "text": "Convert a plain data class with equals/hashCode/toString into a record." },
+    { "level": "Easy", "text": "Write `record Address(String street, String city, String zip)` and print it." },
+    { "level": "Medium", "text": "Add validation with a compact constructor: `record Age(int value)` rejects <0 or >150." },
+    { "level": "Medium", "text": "Use a record as a HashMap key: build a chessboard keyed by `record Square(int rank, int file)`." },
+    { "level": "Hard", "text": "Model `sealed interface Result<T> permits Success<T>, Failure` and write a `map` method." },
+    { "level": "Hard", "text": "Return a defensive copy: `record Team(String name, List<String> members)` — never leak the internal list." },
+    { "level": "Expert", "text": "Model an expression tree with `sealed interface Expr permits Num, Add, Mul` and evaluate with pattern matching." }
   ],
   "interviewQuestions": [
-    "What is a record and what does it generate?",
+    "What is a record and what does the compiler generate?",
     "Can records be extended or mutated?",
-    "Record vs Lombok @Data vs a normal class?",
-    "How do you validate record fields?",
-    "How do records support immutability?"
+    "Record vs Lombok's @Data vs a plain class?",
+    "What is a compact constructor?",
+    "Why are records ideal as map keys?",
+    "Should you use records for JPA entities?",
+    "How do records combine with sealed types and pattern matching?"
   ],
   "references": [
-    { "label": "JEP 395: Records", "url": "https://openjdk.org/jeps/395" }
+    { "label": "JEP 395 — Records", "url": "https://openjdk.org/jeps/395" },
+    { "label": "Records tutorial — Baeldung", "url": "https://www.baeldung.com/java-record-keyword" }
   ]
 }
