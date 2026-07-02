@@ -1,51 +1,102 @@
 {
   "id": "android.kotlin",
   "levelId": 3,
-  "title": "Native Java & Kotlin",
-  "xp": 50,
-  "estimatedMinutes": 30,
+  "title": "Kotlin for Android",
+  "xp": 45,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Explain Kotlin's null safety and key features",
-    "Use data classes, extensions and scope functions",
-    "Understand Kotlin/Java interop"
+    "Understand why Android moved from Java to Kotlin",
+    "Master null-safety, data classes, and extension functions",
+    "Use coroutines for async work (short intro; deep-dive in a later topic)",
+    "Recognize Kotlin idioms in Android codebases",
+    "Answer Kotlin interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Kotlin is the modern, official language for Android — concise, null-safe, and fully interoperable with Java. It compiles to the same JVM bytecode, so Kotlin and Java coexist in one project." },
-    { "type": "code", "language": "kotlin", "code": "val name: String = \"Ada\"      // non-null\nvar nick: String? = null      // nullable\nval len = nick?.length ?: 0   // safe call + Elvis\ndata class User(val id: Int, val name: String) // equals/hashCode/copy free\nfun String.shout() = uppercase() + \"!\"          // extension function" },
-    { "type": "table", "headers": ["Feature", "What it gives"], "rows": [
-      ["Null safety", "String vs String? checked by compiler"],
-      ["data class", "equals/hashCode/toString/copy generated"],
-      ["Extension functions", "Add methods without subclassing"],
-      ["Scope functions", "let/run/apply/also for concise setup"],
-      ["Coroutines", "First-class async"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of moving from an old flip phone to a modern smartphone.**\n\n- The **flip phone (Java for Android)** did the job — you could call, text, take a photo. But every action took multiple button presses. Want to text 'HI'? Press '4' twice, wait, press '4' three times. Everything worked, but the ceremony was painful.\n- The **smartphone (Kotlin)** does the same things — but faster, cleaner, and with far fewer accidents. Autocorrect (null-safety), swipe typing (data classes), voice commands (coroutines). The phone stops you from calling the wrong number. You're not writing less code because the phone is 'less powerful' — you're writing less code because the phone handles the boring parts.\n\n**Android since 2019 is officially Kotlin-first.** Google announced it, then rewrote much of Android's own docs and sample code in Kotlin. If you interview for Android jobs, expect Kotlin. Java code still works — the two interop seamlessly — but new code is Kotlin." },
+    { "type": "callout", "variant": "definition", "markdown": "**Kotlin** is a statically-typed language from JetBrains (2011, official for Android in 2017) that runs on the JVM and compiles to Android's DEX bytecode. It's fully Java-interoperable — you can call Java from Kotlin and Kotlin from Java — but adds null-safety, extension functions, data classes, coroutines, and a lot less ceremony." },
+    { "type": "theory", "markdown": "## The killer features you'll use every day" },
+    { "type": "table", "headers": ["Feature", "Java equivalent", "Kotlin"], "rows": [
+      ["Null safety", "`if (obj != null) obj.foo();`", "`obj?.foo()` — the compiler enforces it"],
+      ["Data class", "40-line POJO w/ equals/hashCode/toString", "`data class User(val id: Int, val name: String)`"],
+      ["Extension function", "Static util method", "`fun String.smartLower() = lowercase()`"],
+      ["Named args + defaults", "Method overloads", "`fun greet(name: String = \"guest\") = ...`"],
+      ["Coroutines", "Threads / callbacks", "`suspend fun` + `launch { … }` — sequential-looking async"],
+      ["Smart casts", "`if (o instanceof X) { X x = (X) o; ... }`", "`if (o is X) { o.xOnlyMethod() }` — auto cast"],
+      ["Property syntax", "`u.getName()` / `u.setName(x)`", "`u.name` / `u.name = x`"],
+      ["Top-level fns", "Requires a class wrapper", "`fun main() { … }` — no class required"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "Kotlin's null safety eliminates most NullPointerExceptions at compile time by separating nullable (String?) from non-nullable (String) types. This is the single biggest reason Google recommends Kotlin." },
-    { "type": "callout", "variant": "mistake", "markdown": "Overusing the !! (not-null assertion) operator — it throws an NPE if the value is null, defeating null safety. Prefer ?., ?:, and proper nullable types." }
+    { "type": "theory", "markdown": "## Null safety — the single most important feature" },
+    { "type": "code", "language": "kotlin", "code": "// Java: this compiles fine, crashes at runtime if user is null\n// user.getName().toLowerCase()\n\n// Kotlin: the TYPE tells you if null is possible\nval user: User? = repo.findById(id)     // ? = nullable\nval nameLen = user?.name?.length         // safe-call — if any step is null, whole thing is null\nval nameLenOrZero = user?.name?.length ?: 0     // Elvis — default when null\n\n// Force it (only when you're 100% sure):\nval def = user!!.name       // !! — throws KotlinNullPointerException if null\n// Rule: !! is a code smell. Use safe-call + Elvis instead.\n\n// Late init when you must (like Android's onCreate):\nlateinit var binding: ActivityMainBinding      // non-null but assigned later" },
+    { "type": "theory", "markdown": "## Data classes — replace 40 lines with 1" },
+    { "type": "code", "language": "kotlin", "code": "// Java: full data class = 40+ lines of getters, setters, equals, hashCode, toString\n// Kotlin: one line\ndata class User(val id: Int, val name: String, val email: String? = null)\n\n// You get for free:\n// - Constructor\n// - Immutable properties (val = read-only) or mutable (var)\n// - equals & hashCode based on ALL fields\n// - toString: User(id=1, name=Ada, email=null)\n// - copy() — create a modified copy: user.copy(email = \"a@b.com\")\n// - Destructuring: val (id, name, _) = user" },
+    { "type": "theory", "markdown": "## Extension functions — add methods to types you don't own" },
+    { "type": "code", "language": "kotlin", "code": "// Extend String — no subclassing, no util classes\nfun String.isValidEmail(): Boolean = matches(Regex(\"[^@]+@[^\\\\.]+\\\\..+\"))\n\n// Extend Android View — hugely common in Android code\nfun View.show() { visibility = View.VISIBLE }\nfun View.hide() { visibility = View.GONE }\n\n// Use it:\n\"user@example.com\".isValidEmail()   // true\nmyButton.hide()                      // way better than myButton.setVisibility(View.GONE)\n\n// Under the hood: compiles to a static function with the receiver as first parameter.\n// So they're not really 'added' to the class — the compiler makes them look like they are." },
+    { "type": "theory", "markdown": "## Coroutines — async without callback hell (deep-dive in a later topic)" },
+    { "type": "code", "language": "kotlin", "code": "// Old: nested callbacks / RxJava\nrepo.getUser(id) { user ->\n  api.getFriends(user.id) { friends ->\n    ui.show(friends)   // 3 levels deep already\n  }\n}\n\n// Kotlin coroutines: sequential-looking, non-blocking\nlifecycleScope.launch {\n  val user    = repo.getUser(id)         // suspends without blocking a thread\n  val friends = api.getFriends(user.id)  // resumes when done\n  ui.show(friends)                       // flat!\n}\n\n// suspend fun = a function that CAN pause without blocking the thread\nsuspend fun getUser(id: Int): User = ...\n\n// We cover coroutines in depth in the Coroutines topic." },
+    { "type": "theory", "markdown": "## A complete sample program — put it all together" },
+    { "type": "code", "language": "kotlin", "code": "// File: UserApp.kt\n// Run: kotlinc UserApp.kt -include-runtime -d UserApp.jar && java -jar UserApp.jar\n\ndata class User(val id: Int, val name: String, val email: String? = null)\n\nfun String.isValidEmail(): Boolean = matches(Regex(\"[^@]+@[^.]+\\\\..+\"))\n\nfun findUser(id: Int, users: List<User>): User? = users.firstOrNull { it.id == id }\n\nfun List<User>.withValidEmails() = filter { it.email?.isValidEmail() == true }\n\nfun main() {\n  val users = listOf(\n    User(1, \"Ada\", \"ada@example.com\"),\n    User(2, \"Ben\"),\n    User(3, \"Cara\", \"invalid-email\"),\n    User(4, \"Dan\", \"dan@example.com\"),\n  )\n\n  val user = findUser(2, users)\n  println(user?.name ?: \"not found\")             // Ben\n\n  val validEmailed = users.withValidEmails()\n  println(validEmailed.map { it.name })          // [Ada, Dan]\n\n  val updated = users[0].copy(email = \"ada@newmail.com\")\n  println(updated)                                // User(id=1, name=Ada, email=ada@newmail.com)\n\n  val (id, name, email) = updated\n  println(\"$id / $name / $email\")\n\n  println(\"Total: ${users.size}, with valid emails: ${validEmailed.size}\")\n}\n\n// Output:\n//   Ben\n//   [Ada, Dan]\n//   User(id=1, name=Ada, email=ada@newmail.com)\n//   1 / Ada / ada@newmail.com\n//   Total: 4, with valid emails: 2" },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Using `!!` everywhere.** `user!!.name` means 'trust me, this is non-null — crash if I'm wrong.' It's a landmine. If you find yourself typing `!!`, ask: 'could this be null?' If yes, use `?.` and `?:`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Writing Java-style Kotlin.** Java thinks `for (User u : users) names.add(u.name)`; Kotlin thinks `users.map { it.name }`. If your Kotlin is 3x longer than idiomatic Kotlin, you're writing Java with different syntax." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Confusing `val` and `var`.** `val` = read-only reference (like Java's `final`). `var` = reassignable. Default to `val`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Not knowing `lateinit` vs `by lazy`.** `lateinit var x: T` — you assign it before first read; crashes if you don't. `val x by lazy { compute() }` — computed the first time it's read, then cached. Use `lazy` for expensive one-shot init; `lateinit` for framework-injected fields." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Default to `val`, immutability, and data classes.** State that doesn't change can't be wrong." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Use safe calls + Elvis instead of `!!`.** `x?.foo() ?: default` beats `x!!.foo()`." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Use extension functions to make domain code read naturally.** `\"a@b.com\".isValidEmail()` beats `EmailUtils.isValid(\"a@b.com\")`." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Coroutines over callbacks or RxJava for new Android code.** Sequential-looking async is a game-changer." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Learn `let`, `run`, `apply`, `also`, `with`.** `apply` to configure, `let` for null-safe transforms, `also` for side effects, `run`/`with` for short-lived scoped work." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Refactor a Java data class.** Take a 40-line POJO and rewrite as a Kotlin `data class`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Easy) — Extension function library.** Add `String.isValidEmail()`, `Int.isEven()`, `List<T>.second()`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Null-safe chain.** Model `User -> Address -> City -> Country` where each level is nullable. Write a one-liner returning the country name or 'unknown'." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Sealed hierarchy + when.** Model `sealed class Result<out T>` with `Success<T>` and `Failure(exception)`. Handle both with a `when` block." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Why did Android move to Kotlin?**\n\n**A:** Google officially adopted Kotlin as a first-class Android language in 2017 (Google I/O) and made it the *preferred* language in 2019. The reasons: (1) null-safety at the type level eliminates NPEs, historically the biggest source of Android crashes; (2) drastically less boilerplate — data classes, extension functions, lambdas, property syntax; (3) coroutines make async code readable; (4) full 100% Java interop — you can migrate incrementally without rewriting anything. Kotlin is developed by JetBrains (who make IntelliJ / Android Studio), so tooling is excellent. Every Android job today expects Kotlin fluency; Java is fine to read but new code is Kotlin." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What's the difference between `val` and `var`?**\n\n**A:** `val` declares a read-only reference (like Java's `final` — you can't reassign the variable, though the object it points to may still be internally mutable). `var` declares a reassignable reference. Default to `val`. Immutable references are safer, thread-friendlier, easier to reason about. Use `var` only when the variable's value genuinely changes over time. In Kotlin data classes, `val` gives you a read-only property; `var` gives you both a getter and setter." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How does Kotlin's null safety work?**\n\n**A:** Nullability is part of the type. `String` is non-nullable; `String?` is nullable. The compiler forbids passing a `String?` where a `String` is expected without null-checking or asserting non-null. Operators: (1) `?.` **safe call** — if left side is null, whole expression is null. (2) `?:` **Elvis** — provides a default. (3) `!!` **force non-null** — throws NPE if null; avoid unless certain. (4) `if (x != null) x.foo()` — the compiler smart-casts `x` to non-null inside. This eliminates the whole class of NPE bugs at *compile time*, not runtime." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What's a data class and what does the compiler generate?**\n\n**A:** A `data class` is a class marked to be a data carrier. `data class User(val id: Int, val name: String)` — the compiler generates: (1) constructor, (2) properties (read-only via `val`), (3) `equals` — value equality based on all primary-constructor properties, (4) `hashCode` consistent with equals, (5) `toString` — `User(id=1, name=Ada)`, (6) `copy()` for immutable updates, (7) `componentN()` functions for destructuring (`val (id, name) = user`). Data classes must have at least one property and cannot be `abstract`, `open`, `sealed`, or `inner`. Roughly Kotlin's answer to Java records — but Kotlin had them since ~2011." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What's an extension function?**\n\n**A:** A function that appears to add a method to an existing type, without modifying that type. `fun String.isValidEmail(): Boolean = ...` lets you write `\"a@b.com\".isValidEmail()`. Under the hood, extensions compile to *static functions* with the receiver (`this`) passed as the first argument — they're not actually added to the class, and you cannot access private members through them. But at the call site, they feel like methods, making domain code far more readable. Android's KTX libraries (`view.isVisible = true`) are built almost entirely on extension functions." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What are scope functions (`let`, `run`, `apply`, `also`, `with`)?**\n\n**A:** Five utility functions that let you 'enter a scope' with a specific object as the receiver.\n- **`apply`** — configure an object, returns `this`. `Person().apply { name = \"Ada\"; age = 30 }`.\n- **`also`** — do a side effect, returns `this`. `.also { log(it) }`.\n- **`let`** — transform an object, returns the lambda's result. `user?.let { render(it) }`.\n- **`run`** — same as `let` but with `this` binding. `user.run { println(\"$name is $age\") }`.\n- **`with`** — like `run` but as a top-level function.\n\nMemorize: apply configures, also side-effects, let transforms, run scopes." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: How does Kotlin interop with Java?**\n\n**A:** Fully bidirectional. Kotlin compiles to standard JVM bytecode. **From Kotlin, call Java:** just call it — Java's null-agnostic types become 'platform types' (marked `T!`) where you decide how to treat them. **From Java, call Kotlin:** properties expose Java-style `getX()`/`setX()`; `@JvmStatic` promotes companion methods to Java statics; `@JvmField` exposes a property as a plain field; `@JvmOverloads` generates overloads from Kotlin default arguments. Interop is one of Kotlin's biggest wins — a team can migrate a Java codebase file-by-file with zero risk to unmigrated code." },
+    { "type": "theory", "markdown": "## Real-world Android usage\n\n- **Android Studio's `viewBinding` in Kotlin** — much more concise than `findViewById`.\n- **KTX libraries** (`androidx.core:core-ktx`, `-fragment-ktx`, `-lifecycle-ktx`) — extension-based idioms wrapping the Android SDK.\n- **Jetpack Compose** — 100% Kotlin. UI itself is now built from `@Composable` functions.\n- **Coroutines + Flow** — the modern replacement for RxJava and callback-based APIs.\n- **Kotlin Multiplatform (KMP)** — sharing business logic between Android, iOS, web, backend.\n- **Ktor / Spring Kotlin** — Kotlin on the backend, same language front-to-back." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Inline functions + reified generics** — enables `context.startActivity<MainActivity>()` without reflection at runtime.\n- **Sealed classes / sealed interfaces** — like Java's, but Kotlin had them years earlier.\n- **Delegation** — `class Repo(imp: Repository) : Repository by imp` delegates every method to `imp`.\n- **Property delegation** — `by lazy`, `by observable`, `by Delegates.notNull()`.\n- **Type aliases** — `typealias UserId = Int` for clarity without a wrapper class.\n- **K2 compiler** (Kotlin 2.0+, 2024) — a major compiler rewrite giving significantly faster builds." }
   ],
   "flashcards": [
-    { "front": "How does Kotlin prevent NPEs?", "back": "The type system distinguishes nullable (T?) from non-null (T); the compiler enforces null checks." },
-    { "front": "What does a data class generate?", "back": "equals, hashCode, toString, copy, and componentN functions." },
-    { "front": "Java/Kotlin interop?", "back": "Both compile to JVM bytecode and call each other freely in the same project." }
+    { "front": "Why Kotlin on Android?", "back": "Null safety, less boilerplate, coroutines, first-class Google support since 2017." },
+    { "front": "`val` vs `var`?", "back": "`val` = read-only reference (default). `var` = reassignable." },
+    { "front": "Safe call?", "back": "`x?.foo()` — evaluates to null if x is null, otherwise calls foo." },
+    { "front": "Data class generates…", "back": "constructor, equals, hashCode, toString, copy(), componentN." },
+    { "front": "Extension function?", "back": "Adds a method-like function to any type. Compiles to a static function." },
+    { "front": "Scope functions?", "back": "apply/also/let/run/with — configure/side-effect/transform/scope." }
   ],
   "quiz": [
-    { "q": "Kotlin's biggest safety win is…", "options": ["Faster GC", "Compile-time null safety", "Smaller APKs", "Native code"], "answer": 1, "explain": "Nullable vs non-null types catch NPEs at compile time." },
-    { "q": "A data class automatically provides…", "options": ["Coroutines", "equals/hashCode/toString/copy", "Network calls", "UI"], "answer": 1, "explain": "Data classes generate value-based methods plus copy()." },
-    { "q": "The !! operator…", "options": ["Is always safe", "Throws NPE if the value is null", "Converts to Int", "Starts a coroutine"], "answer": 1, "explain": "It asserts non-null and throws if wrong — use sparingly." }
+    { "q": "The safest way to handle a nullable in Kotlin is…", "options": ["`!!` force", "`?.` safe call + `?:` Elvis", "try/catch", "if(null)"], "answer": 1, "explain": "Compiler-checked null-safety." },
+    { "q": "What does `data class` NOT generate?", "options": ["equals", "toString", "copy", "public setter for val properties"], "answer": 3, "explain": "`val` properties get getters only." },
+    { "q": "`fun String.smart() = ...` is a…", "options": ["Method on String class", "Extension function (static under the hood)", "Companion function", "Subclass"], "answer": 1, "explain": "Extension — compiles to static." },
+    { "q": "`apply` returns…", "options": ["Unit", "The lambda result", "The receiver (this)", "A boolean"], "answer": 2, "explain": "apply configures and returns the object." },
+    { "q": "Coroutines are…", "options": ["Threads", "Non-blocking async on top of the JVM", "Kotlin's version of RxJava", "Deprecated"], "answer": 1, "explain": "Suspendable computations, scheduled on dispatchers." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Convert a Java POJO to a Kotlin data class." },
-    { "level": "Medium", "text": "Write extension functions and use scope functions (let/apply)." },
-    { "level": "Hard", "text": "Refactor null-heavy Java code to null-safe Kotlin with ?./?:." },
-    { "level": "Expert", "text": "Call Kotlin coroutines/suspend functions from Java interop code." }
+    { "level": "Easy", "text": "Rewrite a Java POJO as a `data class` and check `copy()` in action." },
+    { "level": "Easy", "text": "Add `fun View.show()` and `fun View.hide()` extension functions." },
+    { "level": "Medium", "text": "Given `User -> Address -> City?`, write a one-liner returning the city name or 'unknown'." },
+    { "level": "Medium", "text": "Use `apply` to configure a Retrofit Builder cleanly." },
+    { "level": "Hard", "text": "Model `sealed class Result<out T>` with Success/Failure and handle in a `when`." },
+    { "level": "Hard", "text": "Refactor a callback-based Retrofit call to `suspend fun` + coroutine." },
+    { "level": "Expert", "text": "Take a Java Android module and migrate one class per week to Kotlin using the auto-converter, then clean up." }
   ],
   "interviewQuestions": [
-    "How does Kotlin handle null safety?",
-    "data class vs regular class?",
-    "What are extension functions and scope functions?",
-    "How do Kotlin and Java interoperate?",
-    "val vs var vs const?"
+    "Why did Android move to Kotlin?",
+    "What's the difference between val and var?",
+    "How does Kotlin's null safety work?",
+    "What's a data class and what does it generate?",
+    "What's an extension function?",
+    "What are scope functions (let/run/apply/also/with)?",
+    "How does Kotlin interop with Java?"
   ],
   "references": [
-    { "label": "Kotlin docs", "url": "https://kotlinlang.org/docs/home.html" }
+    { "label": "Kotlin docs — Android", "url": "https://developer.android.com/kotlin" },
+    { "label": "Kotlin language reference", "url": "https://kotlinlang.org/docs/home.html" }
   ]
 }

@@ -1,5 +1,6 @@
 // VOLUME 3 — Android Development
 const L = require("./lib");
+const { loadTopic, topicToChapter } = require("./topic_to_chapter");
 const {
   C, P, H1, H2, bullet, num, callout, code, table, rule, chip,
   makeDoc, pageProps, save, Paragraph, TextRun, PageBreak, AlignmentType,
@@ -91,95 +92,16 @@ body.push(...miniproject(["Scaffold a multi-screen app, declare all components i
 body.push(...advanced(["The Zygote process and app forking; SELinux policies; Scoped Storage."]));
 
 // 2. Activity Lifecycle
-body.push(H1("2. Activity Lifecycle", "ch2"));
-body.push(callout("definition", ["The activity lifecycle is the ordered set of callbacks Android invokes as an Activity is created, shown, hidden and destroyed."]));
-body.push(code([
-  "onCreate -> onStart -> onResume   (visible & interactive)",
-  "onPause -> onStop -> onDestroy    (leaving)",
-  "onRestart -> onStart -> onResume  (returning)",
-], "lifecycle"));
-body.push(callout("mistake", ["Heavy work in onPause blocks the next screen. Keep onPause fast; persist in onStop. A rotation destroys & recreates the activity, losing in-memory state."]));
-body.push(callout("tip", ["Survive config changes with a ViewModel for UI state and onSaveInstanceState for small bundles."]));
-body.push(...summary([
-  "Create→visible: onCreate → onStart → onResume.",
-  "Rotation recreates the activity; save state to survive it.",
-  "Persist important data in onStop; keep onPause fast.",
-  "ViewModel is the modern way to retain UI state.",
-]));
-body.push(...interview([
-  "Walk through the activity lifecycle.",
-  "What happens on a configuration change?",
-  "onSaveInstanceState vs ViewModel?",
-  "Why must onPause be fast?",
-  "How do activity leaks happen?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Log every callback and rotate to see the sequence." },
-  { level: "Medium", text: "Preserve form text across rotation with onSaveInstanceState." },
-  { level: "Hard", text: "Move UI state into a ViewModel to survive config changes." },
-  { level: "Expert", text: "Find and fix an activity leak from a long-lived handler." },
-]));
-body.push(...realworld(["A rotating checkout screen that loses the cart is a real bug; ViewModel + saved state keep it intact through configuration changes."]));
-body.push(...miniproject(["Build a timer screen that keeps running and shows correct state across rotation and process death."]));
-body.push(...advanced(["android:configChanges (and why to avoid it), saved-state ViewModel, process death vs config change."]));
+body.push(...topicToChapter(loadTopic("level_03", "activity_lifecycle"),
+  { chapterNumber: 2, bookmarkId: "ch2" }));
 
 // 3. Fragments
-body.push(H1("3. Fragments", "ch3"));
-body.push(callout("definition", ["A Fragment is a reusable, modular piece of UI hosted inside an Activity (or another Fragment), enabling adaptive layouts and single-activity navigation."]));
-body.push(callout("mistake", ["Observing LiveData with the fragment's lifecycle instead of viewLifecycleOwner causes duplicate observers and crashes when the view is recreated. Always use viewLifecycleOwner in onViewCreated."]));
-body.push(...summary([
-  "Fragments are reusable UI hosted by an activity/fragment.",
-  "A fragment has both an instance lifecycle and a view lifecycle.",
-  "Use viewLifecycleOwner for LiveData/Flow in fragments.",
-  "Single-activity + Navigation component is the modern pattern.",
-]));
-body.push(...interview([
-  "What is a Fragment and why use it?",
-  "Fragment lifecycle vs view lifecycle?",
-  "Why viewLifecycleOwner?",
-  "How do fragments communicate?",
-  "Single-activity vs multi-activity architecture?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Host and swap two fragments with a FragmentTransaction." },
-  { level: "Medium", text: "Share state via an activity-scoped ViewModel." },
-  { level: "Hard", text: "Build an adaptive master-detail layout." },
-  { level: "Expert", text: "Reproduce and fix a fragment view leak." },
-]));
-body.push(...realworld(["Tablet apps show a list and detail side-by-side using two fragments, reusing the same fragments the phone shows on separate screens."]));
-body.push(...miniproject(["Build a single-activity app with the Navigation component, 3 fragments, and a shared ViewModel."]));
-body.push(...advanced(["Fragment Result API, child fragment managers, transition animations."]));
+body.push(...topicToChapter(loadTopic("level_03", "fragments"),
+  { chapterNumber: 3, bookmarkId: "ch3" }));
 
 // 4. Intents
-body.push(H1("4. Intents", "ch4"));
-body.push(callout("definition", ["An Intent is a messaging object that requests an action — start a component, broadcast an event, or ask another app to handle something."]));
-body.push(table(["Type", "Target", "Example"], [
-  ["Explicit", "A named component", "Open DetailActivity"],
-  ["Implicit", "Any capable app", "ACTION_VIEW a URL; share text"],
-], [1800, 3500, 4060]));
-body.push(callout("note", ["Implicit intents match intent filters in other apps' manifests. A PendingIntent lets the system/another app run your intent later (notifications, alarms)."]));
-body.push(...summary([
-  "Explicit intents name a component; implicit declare an action.",
-  "Intent filters declare what implicit intents a component handles.",
-  "PendingIntent wraps an intent for deferred execution.",
-  "Use registerForActivityResult for results (not the old API).",
-]));
-body.push(...interview([
-  "Explicit vs implicit intents?",
-  "What is an intent filter?",
-  "What is a PendingIntent and when needed?",
-  "How do you pass data between components?",
-  "How do you get a result back (modern API)?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Start an activity with an extra and read it." },
-  { level: "Medium", text: "Share text/an image via ACTION_SEND." },
-  { level: "Hard", text: "Return a result with registerForActivityResult." },
-  { level: "Expert", text: "Add an intent filter so your app appears in the share sheet." },
-]));
-body.push(...realworld(["The system share sheet, 'open with' dialogs, and deep links all run on implicit intents + intent filters."]));
-body.push(...miniproject(["Build a share-target app that accepts shared text via an intent filter and saves it."]));
-body.push(...advanced(["App Links verification, deep linking with the Navigation component, intent extras size limits."]));
+body.push(...topicToChapter(loadTopic("level_03", "intents"),
+  { chapterNumber: 4, bookmarkId: "ch4" }));
 
 // 5. Services
 body.push(H1("5. Services", "ch5"));
@@ -423,38 +345,9 @@ body.push(...realworld(["Coroutines replaced callback hell and RxJava in most An
 body.push(...miniproject(["Build a search screen: type → debounce → query API on IO → show results, all with Flow + coroutines."]));
 body.push(...advanced(["SupervisorJob, exception handling (CoroutineExceptionHandler), cold vs hot flows, channels."]));
 
-// 13. Kotlin
-body.push(H1("13. Native Java & Kotlin", "ch13"));
-body.push(callout("definition", ["Kotlin is the official Android language — concise, null-safe, and fully interoperable with Java (both compile to JVM bytecode)."]));
-body.push(code([
-  "var nick: String? = null      // nullable type",
-  "val len = nick?.length ?: 0   // safe call + Elvis",
-  "data class User(val id: Int, val name: String)  // equals/copy free",
-  "fun String.shout() = uppercase() + \"!\"          // extension",
-], "kotlin"));
-body.push(callout("interview", ["Null safety is Kotlin's biggest win: separating String from String? eliminates most NullPointerExceptions at compile time. Avoid !! — it reintroduces NPEs."]));
-body.push(...summary([
-  "Kotlin null safety catches NPEs at compile time.",
-  "data classes generate equals/hashCode/toString/copy.",
-  "Extension & scope functions make code concise.",
-  "Kotlin and Java interoperate freely.",
-]));
-body.push(...interview([
-  "How does Kotlin handle null safety?",
-  "data class vs regular class?",
-  "Extension functions & scope functions?",
-  "How do Kotlin and Java interoperate?",
-  "val vs var vs const?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Convert a Java POJO to a Kotlin data class." },
-  { level: "Medium", text: "Use extension and scope functions." },
-  { level: "Hard", text: "Refactor null-heavy Java to null-safe Kotlin." },
-  { level: "Expert", text: "Call Kotlin suspend functions from Java interop." },
-]));
-body.push(...realworld(["Google recommends Kotlin-first; most new Android code and samples are Kotlin, with Java kept only for legacy modules."]));
-body.push(...miniproject(["Port a small Java feature module to idiomatic Kotlin and measure the line-count reduction."]));
-body.push(...advanced(["Sealed classes & when-exhaustiveness, inline/reified functions, delegated properties, Kotlin Multiplatform."]));
+// 13. Kotlin for Android
+body.push(...topicToChapter(loadTopic("level_03", "kotlin"),
+  { chapterNumber: 13, bookmarkId: "ch13" }));
 
 // 14. Performance
 body.push(H1("14. Performance Optimization", "ch14"));
@@ -506,5 +399,5 @@ const doc = makeDoc([
   { properties: pageProps("Volume 3 — Android"),
     children: [...toc(), ...body] },
 ]);
-const out = require("path").join(__dirname, "Volume-3-Android.docx");
+const out = require("path").join(__dirname, "../../docs/books/Volume-3-Android.docx");
 save(doc, out).then(() => console.log("WROTE", out));

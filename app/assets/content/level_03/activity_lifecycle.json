@@ -2,50 +2,108 @@
   "id": "android.activity_lifecycle",
   "levelId": 3,
   "title": "Activity Lifecycle",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 45,
+  "estimatedMinutes": 35,
   "objectives": [
-    "Order the activity lifecycle callbacks",
-    "Save and restore state across config changes",
-    "Avoid leaks and lost work on rotation"
+    "Understand the activity lifecycle via a real-life analogy",
+    "Memorize the callback sequence for every scenario",
+    "Save and restore state across config changes (rotation, dark mode)",
+    "Avoid the classic leak and lost-work bugs",
+    "Answer lifecycle interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "The activity lifecycle is the ordered set of callbacks Android invokes as an Activity is created, shown, hidden and destroyed, letting you set up and release resources at the right time." },
-    { "type": "code", "language": "text", "code": "onCreate -> onStart -> onResume   (now visible & interactive)\n   ... user leaves ...\nonPause -> onStop -> onDestroy\n   ... return ...\nonRestart -> onStart -> onResume" },
-    { "type": "table", "headers": ["Callback", "Use it to"], "rows": [
-      ["onCreate", "Inflate UI, init once"],
-      ["onStart/onResume", "Start UI updates, acquire resources"],
-      ["onPause", "Pause animations, save lightweight state (fast!)"],
-      ["onStop", "Release heavy resources, persist data"],
-      ["onDestroy", "Final cleanup"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of hosting a guest in your house.**\n\n- **`onCreate`** — you PREPARE the guest room once. Set up the bed, unpack towels, put mints on the pillow. You do this ONCE when the guest is coming.\n- **`onStart`** — you OPEN THE DOOR. The room is visible now, but the guest hasn't walked in yet.\n- **`onResume`** — the guest is INSIDE and INTERACTING. This is the only time the guest can actually use the room.\n- **`onPause`** — someone knocks on the door and pulls the guest into the hallway briefly. The guest is STILL in the house but not USING the room. Keep this short — you're blocking the guest.\n- **`onStop`** — the guest LEAVES the room entirely (goes to the kitchen). Room is no longer visible. You can turn off the lights and save water.\n- **`onDestroy`** — the guest CHECKS OUT. Tear down the bed, take out the trash.\n- **`onRestart`** — the guest RETURNS from the kitchen. Between `onStop` and `onStart` again.\n\n**Key nuance:** `onSaveInstanceState` is like handing the guest a folder of their belongings just before they might leave the house — 'in case you don't come back, here's what was on the desk'. Android hands this folder back in `onCreate`/`onRestoreInstanceState` if the activity gets recreated.\n\n**Why this matters:** every Android developer hits the 'my data disappeared when I rotated the screen' bug once. Understanding lifecycle prevents it." },
+    { "type": "callout", "variant": "definition", "markdown": "**The activity lifecycle** is Android's contract with your Activity: 'I'll call these callbacks (`onCreate`, `onStart`, `onResume`, `onPause`, `onStop`, `onDestroy`, `onRestart`) as your activity is created, shown, paused, hidden, and destroyed. You handle setup and teardown at the right moments.' The lifecycle is the FIRST thing every Android interview asks about." },
+    { "type": "theory", "markdown": "## The full callback sequence" },
+    { "type": "code", "language": "text", "code": "COLD START (first time or after death):\nonCreate → onStart → onResume\n                                  ← now visible, interactive\n\nUSER LEAVES BRIEFLY (dialog, phone call, pull-down notif):\nonPause                            ← partially visible\n                                     may resume here (onResume) if they come right back\n\nUSER LEAVES FULLY (Home, another app):\nonPause → onStop                   ← not visible\n\nUSER RETURNS:\nonRestart → onStart → onResume     ← back to visible + interactive\n\nUSER FINISHES:\nonPause → onStop → onDestroy       ← gone\n\nCONFIG CHANGE (rotation, dark mode, locale):\nonPause → onStop → onSaveInstanceState → onDestroy\n         ...then...\nonCreate(withSavedState) → onStart → onRestoreInstanceState → onResume\n\nSYSTEM KILLS FOR MEMORY (later, user returns):\n(nothing — activity was killed silently) → onCreate(withSavedState) → onStart → ..." },
+    { "type": "theory", "markdown": "## What each callback is for" },
+    { "type": "table", "headers": ["Callback", "Use it for", "Common mistake"], "rows": [
+      ["`onCreate(bundle)`", "Inflate UI (setContentView), init ONE-time deps, restore state from bundle", "Do slow work here — blocks first frame"],
+      ["`onStart()`", "Register receivers tied to visibility (like sensor listeners)", "Rarely used — most work goes in onResume"],
+      ["`onResume()`", "Start UI updates, resume animations, request camera focus, acquire scarce resources", "Do heavy work here — should be fast"],
+      ["`onPause()`", "**Pause things quickly** — camera release, save volatile UI state", "**Save to disk here** — must be fast, blocks next activity"],
+      ["`onStop()`", "Release heavy resources, persist data to disk, unregister receivers", "Assume nothing else will run — Android may kill you next"],
+      ["`onDestroy()`", "Final cleanup — cancel coroutines, disconnect services", "Assume it always runs — it doesn't (system kills)"],
+      ["`onRestart()`", "Rare — refresh cached data before showing again", "Confusing it with onResume"],
+      ["`onSaveInstanceState(bundle)`", "Save small UI state (scroll position, form input) to survive death", "Save large data (use ViewModel instead)"]
     ]},
-    { "type": "callout", "variant": "mistake", "markdown": "Doing heavy work in onPause — it blocks the next activity from showing. Keep onPause fast; persist heavy data in onStop. Also: a rotation destroys and recreates the activity, losing in-memory state." },
-    { "type": "callout", "variant": "tip", "markdown": "Survive config changes with a ViewModel (kept across recreation) for UI state, and onSaveInstanceState for small bundles. ViewModel is the modern answer." }
+    { "type": "callout", "variant": "interview", "markdown": "**The single most common lifecycle bug:** a rotation loses the user's typed input. Cause: no `onSaveInstanceState` (or better — no ViewModel). Modern fix: hold UI state in a `ViewModel` (survives config changes) + persist to `SavedStateHandle` (survives process death)." },
+    { "type": "theory", "markdown": "## Save-and-restore: the three tiers of state" },
+    { "type": "table", "headers": ["Tier", "Where state lives", "Survives config change?", "Survives process death?"], "rows": [
+      ["Instance variables", "Activity object", "❌ (activity recreated)", "❌"],
+      ["`onSaveInstanceState` bundle", "System-managed", "✅", "✅"],
+      ["ViewModel", "Retained across config changes", "✅", "❌"],
+      ["`SavedStateHandle` (inside ViewModel)", "Bundle-backed", "✅", "✅"],
+      ["Disk (Room, DataStore, files)", "Persistent storage", "✅", "✅ + across reinstalls if backed up"]
+    ]},
+    { "type": "theory", "markdown": "## A complete sample program — a proper stateful Activity" },
+    { "type": "code", "language": "kotlin", "code": "// File: MainActivity.kt\n// A minimal Activity that: shows a counter, survives rotation, and persists to bundle.\nimport android.os.Bundle\nimport android.util.Log\nimport android.widget.Button\nimport android.widget.TextView\nimport androidx.activity.viewModels\nimport androidx.appcompat.app.AppCompatActivity\nimport androidx.lifecycle.SavedStateHandle\nimport androidx.lifecycle.ViewModel\nimport androidx.lifecycle.viewmodel.initializer\nimport androidx.lifecycle.viewmodel.viewModelFactory\nimport androidx.lifecycle.createSavedStateHandle\n\n// 1. ViewModel — survives config changes; SavedStateHandle survives process death too\nclass CounterVM(private val handle: SavedStateHandle) : ViewModel() {\n  var count: Int\n    get() = handle[\"count\"] ?: 0\n    set(value) { handle[\"count\"] = value }\n\n  fun increment() { count += 1 }\n\n  companion object {\n    val Factory = viewModelFactory {\n      initializer { CounterVM(createSavedStateHandle()) }\n    }\n  }\n}\n\nclass MainActivity : AppCompatActivity() {\n  private val vm: CounterVM by viewModels { CounterVM.Factory }\n\n  override fun onCreate(savedInstanceState: Bundle?) {\n    super.onCreate(savedInstanceState)\n    Log.d(\"LIFECYCLE\", \"onCreate — was recreated? ${savedInstanceState != null}\")\n\n    val text = TextView(this)\n    val button = Button(this).apply { text = \"+1\" }\n\n    fun render() { text.text = \"count = ${vm.count}\" }\n    render()\n\n    button.setOnClickListener {\n      vm.increment()   // survives rotation because it's in a ViewModel\n      render()\n    }\n\n    // (In a real app you'd inflate a layout instead)\n  }\n\n  override fun onStart()   { super.onStart();   Log.d(\"LIFECYCLE\", \"onStart\") }\n  override fun onResume()  { super.onResume();  Log.d(\"LIFECYCLE\", \"onResume\") }\n  override fun onPause()   { super.onPause();   Log.d(\"LIFECYCLE\", \"onPause\") }\n  override fun onStop()    { super.onStop();    Log.d(\"LIFECYCLE\", \"onStop\") }\n  override fun onDestroy() { super.onDestroy(); Log.d(\"LIFECYCLE\", \"onDestroy\") }\n}\n\n// Try it: rotate the device → counter is preserved.\n// Kill the process (adb shell am kill your.package) → counter STILL preserved\n// because we used SavedStateHandle. Try without SavedStateHandle to see it reset." },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Holding activity references in singletons.** A common leak: `AppSingleton.setCurrentActivity(this)`. Rotate → new activity, old one still held → memory leak. Fix: never hold activities in singletons. If you need context, use `applicationContext`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Doing slow work in `onCreate`.** Network calls, disk I/O, complex layout inflation — all delay the first frame and cause 'app is frozen' reviews. Fix: launch async in a coroutine bound to `lifecycleScope`; show a skeleton immediately." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Saving heavy data in `onSaveInstanceState`.** The bundle has a strict size limit (~500KB — enforced by `TransactionTooLargeException` on newer Android). Save small UI state only; put heavier data in a ViewModel or disk." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Assuming `onDestroy` always runs.** On low memory Android may skip it entirely and just kill the process. Never rely on `onDestroy` for critical cleanup — persist anything important in `onPause` / `onStop`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Slow work in `onPause`.** Android holds up the NEXT activity's `onResume` until your `onPause` returns. Keep it fast — only volatile UI state, no disk writes bigger than a preference." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Use a `ViewModel` for UI state that must survive rotation.** Don't reinvent state-saving with static maps or the bundle for anything non-trivial." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Use `SavedStateHandle` (inside your ViewModel) for state that must ALSO survive process death.** It's a KV store backed by the bundle." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Persist to disk (Room, DataStore) in `onPause` or a background job.** Don't wait for `onDestroy` — it may not fire." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Launch coroutines with `lifecycleScope` (activity/fragment).** They auto-cancel when the owner is destroyed, preventing leaks." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Use `LifecycleObserver` for cross-cutting concerns.** Location listeners, sensors, camera — bind to the lifecycle so they clean up automatically." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Never hold `Activity` references outside the activity itself.** If a helper needs context, ask for `Application` context." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Log the full lifecycle.** Override every callback and log its name. Rotate, background, kill — trace what happens.\n\n**Why:** Nothing beats seeing it in Logcat once." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Counter that survives rotation.** Build the sample program above. Verify count survives rotation but resets on a fresh cold start (without SavedStateHandle) or survives process death (with).\n\n**Why:** Concretely learn ViewModel + SavedStateHandle." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — Camera acquire/release.** Open the camera in `onResume`, release in `onPause`. Test with home button, dialog, rotation.\n\n**Why:** The lifecycle exists BECAUSE of scarce resources like this." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Expert) — Detect config-change vs process death.** Instrument an app to log which recreation cause fired. Use `isFinishing`, `isChangingConfigurations`, `savedInstanceState != null`.\n\n**Why:** Real production apps care because analytics/logging differ." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: List the activity lifecycle callbacks in order.**\n\n**A:** For a cold start: `onCreate → onStart → onResume`. When the user leaves briefly (dialog, notification): `onPause` (and back to `onResume` if they return quickly). When the user fully leaves (Home, another app): `onPause → onStop`. When they return: `onRestart → onStart → onResume`. When the activity finishes: `onPause → onStop → onDestroy`. On config change (rotation): `onPause → onStop → onSaveInstanceState → onDestroy → onCreate(bundle) → onStart → onRestoreInstanceState → onResume`. Understanding this cycle is the foundation for handling every state-related bug on Android." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What's the difference between `onPause` and `onStop`?**\n\n**A:** **`onPause`** — activity is still partially visible but not in the foreground. Triggered when a translucent dialog or partial overlay covers it. Must be **fast** because it blocks the next activity's `onResume`. Use for: pausing animations, releasing camera if another app needs it, saving volatile UI state.\n\n**`onStop`** — activity is fully hidden. User has navigated to another activity or Home. Can do heavier cleanup: unregister broadcast receivers, close cursors, persist to disk. On low memory Android may kill the process after `onStop` without calling `onDestroy`, so anything critical must be handled by `onStop`." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What happens on screen rotation?**\n\n**A:** By default, Android destroys and recreates the activity: `onPause → onStop → onSaveInstanceState → onDestroy → onCreate(with saved bundle) → onStart → onRestoreInstanceState → onResume`. This is intentional — the activity is torn down so resource-appropriate layouts, drawables, and localized strings for the new configuration can be loaded. **How to preserve state:** (1) use a `ViewModel` — retained across config changes automatically. (2) use `onSaveInstanceState` for small UI-only state. (3) use `SavedStateHandle` inside a ViewModel for state that must ALSO survive process death. Never rely on instance variables — they're gone after the recreate." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you preserve state across configuration changes?**\n\n**A:** Modern answer: put your UI state in a **`ViewModel`**. The ViewModel is retained across config changes (it lives longer than the activity), so `ViewModel.count` still holds the value after rotation. For state that must ALSO survive **process death** (system kills your app in the background), wrap the ViewModel with **`SavedStateHandle`** — a KV store that's persisted to and restored from the saved-instance bundle. Legacy alternatives: `onSaveInstanceState`/`onRestoreInstanceState` directly, or declaring `android:configChanges` in the manifest to handle config changes yourself (rarely recommended — you lose the benefit of Android reloading resources for the new config)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What's `onSaveInstanceState` and when is it called?**\n\n**A:** It's a callback where you save small UI state into a `Bundle` before the activity may be destroyed. Android calls it before `onStop` when it thinks the activity might be destroyed and recreated — for rotation, low-memory kill, etc. The saved bundle is passed back to `onCreate` and `onRestoreInstanceState` on recreation. **Rules:** save small state only (a few KB) — the bundle has a strict size limit and throws `TransactionTooLargeException` if exceeded. Keys are strings, values are primitives, Parcelables, or Serializables. It's NOT called when the user finishes the activity intentionally (Back button) — because you don't want that state to come back. Prefer `SavedStateHandle` inside a ViewModel for a cleaner pattern." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What's a memory leak in Android and how do lifecycles cause it?**\n\n**A:** A memory leak happens when an activity object can't be garbage-collected because something outside it still holds a reference. Common causes: (1) A **singleton** holds an activity reference — rotation creates a new activity, the singleton still points to the old one, GC can't reclaim it. (2) A **background thread / RxJava subscription / coroutine** started in the activity references `this` and outlives the activity. (3) A **static field** holds a View or Context. **Fixes:** never store activity references in singletons; use `applicationContext` when possible; bind async work to `lifecycleScope` so it auto-cancels; use `WeakReference` if you must hold onto a Context; test with **LeakCanary** — a library that surfaces leaks in dev builds automatically." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What does `android:configChanges` do?**\n\n**A:** In `AndroidManifest.xml`, `android:configChanges=\"orientation|screenSize|keyboardHidden\"` tells Android: 'DON'T recreate my activity on these configs — I'll handle them.' Instead of the destroy-recreate cycle, Android calls `onConfigurationChanged(newConfig)` and expects you to update the UI manually. **Trade-offs:** you keep instance state trivially (no rotation destroy), BUT you lose Android's auto-loading of orientation-specific resources (portrait vs landscape layouts), locale-specific strings, dark-vs-light drawables. **Recommendation:** rarely needed for orientation — use a ViewModel instead. Occasionally justified for e.g. video-playing screens where recreation would be extremely disruptive." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q8: What is a `Lifecycle`-aware component?**\n\n**A:** An object that observes an activity's or fragment's lifecycle via the `Lifecycle`/`LifecycleObserver` APIs (Android Architecture Components). Instead of your Activity calling `myComponent.onStart()`, `myComponent.onStop()`, etc. manually, the component *observes* the lifecycle and reacts automatically. Example: `LiveData` stops emitting to Fragments in the `STOPPED` state; `lifecycleScope` cancels coroutines when the owner is destroyed. This pattern eliminates whole categories of 'forgot to call cleanup' bugs. Modern replacements: `LifecycleScope`, `repeatOnLifecycle` (Flow collection), `DefaultLifecycleObserver`." },
+    { "type": "theory", "markdown": "## Real-world lifecycle bugs\n\n- **Video app** keeps playing audio in background after Home. Fix: stop MediaPlayer in `onStop`.\n- **Camera app** freezes when a call comes in. Fix: release Camera in `onPause`, reacquire in `onResume`.\n- **Map app** loses zoom after rotation. Fix: save camera position in ViewModel.\n- **Form app** loses typed text after dark-mode toggle. Fix: EditText restores via View state, but if you use custom state, save it in ViewModel + SavedStateHandle.\n- **Notification-triggered activity** starts fresh even when app was already open. Fix: single-instance / clear-top flags in intent; check `savedInstanceState`." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`Lifecycle.State` and `Lifecycle.Event`** — the modern APIs; `INITIALIZED → CREATED → STARTED → RESUMED → DESTROYED`.\n- **`repeatOnLifecycle(STARTED)`** — the idiomatic way to collect a Flow only while the UI is visible.\n- **`Fragment` lifecycle overlays** — Fragment has its own similar lifecycle with `onAttach`, `onCreateView`, `onDestroyView`, `onDetach`, plus separate view-lifecycle for the view hierarchy.\n- **`Activity.finish()`** — triggers `onPause → onStop → onDestroy`. `Activity.recreate()` — triggers a config-change-style rebuild.\n- **`onNewIntent`** — for `singleTop` / `singleTask` activities, called when a new intent arrives without recreating the activity.\n- **`isChangingConfigurations`** — inside `onDestroy` or `onStop`, `true` if the tear-down is due to config change (rotate) rather than a real finish — useful for deciding whether to persist certain analytics.\n- **`androidx.activity.OnBackPressedDispatcher`** — modern way to intercept back-press per fragment/activity." }
   ],
   "flashcards": [
-    { "front": "Order of create-to-visible callbacks?", "back": "onCreate → onStart → onResume." },
-    { "front": "What happens on screen rotation?", "back": "The activity is destroyed and recreated; in-memory state is lost unless saved (ViewModel / onSaveInstanceState)." },
-    { "front": "Why keep onPause fast?", "back": "It runs before the next activity becomes visible, so slow work delays the UI." }
+    { "front": "Callback sequence for cold start?", "back": "onCreate → onStart → onResume." },
+    { "front": "What runs on rotation?", "back": "onPause → onStop → onSaveInstanceState → onDestroy → onCreate(bundle) → onStart → onRestoreInstanceState → onResume." },
+    { "front": "onPause vs onStop?", "back": "onPause = partially visible, must be fast. onStop = fully hidden, heavier cleanup OK." },
+    { "front": "How to survive rotation?", "back": "Store UI state in a ViewModel." },
+    { "front": "How to survive process death?", "back": "Use SavedStateHandle inside your ViewModel." },
+    { "front": "Common lifecycle leak?", "back": "Singleton holding activity ref → rotation creates a new activity, old one can't be GC'd." }
   ],
   "quiz": [
-    { "q": "Which callback makes an activity interactive?", "options": ["onCreate", "onStart", "onResume", "onStop"], "answer": 2, "explain": "onResume is the last step before the user can interact." },
-    { "q": "Rotating the screen by default…", "options": ["Keeps the activity untouched", "Destroys and recreates the activity", "Closes the app", "Pauses forever"], "answer": 1, "explain": "Configuration changes recreate the activity unless handled." },
-    { "q": "Best place to persist important data?", "options": ["onResume", "onStop", "onCreate", "Never"], "answer": 1, "explain": "onStop is a safe point to persist data before the activity is no longer visible." }
+    { "q": "Cold-start callback order?", "options": ["onCreate → onResume → onStart", "onStart → onCreate → onResume", "onCreate → onStart → onResume", "onResume → onStart → onCreate"], "answer": 2, "explain": "Create, start, resume." },
+    { "q": "On rotation, the activity is…", "options": ["Kept alive", "Destroyed & recreated", "Only paused", "Renamed"], "answer": 1, "explain": "Default behavior — resources reload." },
+    { "q": "Best place to save state that survives process death?", "options": ["Instance variable", "onSaveInstanceState / SavedStateHandle", "onDestroy", "onCreate"], "answer": 1, "explain": "Bundle survives; SavedStateHandle wraps it." },
+    { "q": "ViewModel survives…", "options": ["Nothing", "Rotation only", "Process death", "Both rotation and process death"], "answer": 1, "explain": "Rotation only — pair with SavedStateHandle for process death." },
+    { "q": "onDestroy always runs?", "options": ["Yes", "No — system may skip it on kill", "Only on rotation", "Only if you call finish"], "answer": 1, "explain": "Never rely on it for critical cleanup." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Log every lifecycle callback and rotate to observe the sequence." },
-    { "level": "Medium", "text": "Preserve a form's text across rotation using onSaveInstanceState." },
-    { "level": "Hard", "text": "Move UI state into a ViewModel and survive config changes cleanly." },
-    { "level": "Expert", "text": "Diagnose and fix an activity leak caused by a long-lived callback/handler." }
+    { "level": "Easy", "text": "Override every lifecycle callback in a blank Activity and log to Logcat — trace what happens for Back, Home, rotation." },
+    { "level": "Easy", "text": "Predict the callback sequence when: (a) a Toast appears, (b) a full-screen Activity is launched, (c) the phone rotates." },
+    { "level": "Medium", "text": "Build a counter that survives rotation using a ViewModel." },
+    { "level": "Medium", "text": "Make the counter also survive process death using SavedStateHandle." },
+    { "level": "Hard", "text": "Open the Camera in onResume and release in onPause; verify with dialog + rotation + Home." },
+    { "level": "Hard", "text": "Use `android:configChanges` to handle rotation manually; note what breaks (resource reloading)." },
+    { "level": "Expert", "text": "Instrument LeakCanary and intentionally introduce a leak (singleton holding activity). Fix it." }
   ],
   "interviewQuestions": [
-    "Walk through the activity lifecycle.",
-    "What happens on a configuration change / rotation?",
-    "onSaveInstanceState vs ViewModel?",
-    "Why must onPause be fast?",
-    "How do activity leaks happen and how to prevent them?"
+    "List the activity lifecycle callbacks in order.",
+    "What's the difference between onPause and onStop?",
+    "What happens on screen rotation?",
+    "How do you preserve state across configuration changes?",
+    "What's onSaveInstanceState and when is it called?",
+    "What's a memory leak in Android and how do lifecycles cause it?",
+    "What does android:configChanges do?",
+    "What is a Lifecycle-aware component?"
   ],
   "references": [
-    { "label": "Android — Activity lifecycle", "url": "https://developer.android.com/guide/components/activities/activity-lifecycle" }
+    { "label": "Activity lifecycle — Android", "url": "https://developer.android.com/guide/components/activities/activity-lifecycle" },
+    { "label": "ViewModel — Jetpack", "url": "https://developer.android.com/topic/libraries/architecture/viewmodel" }
   ]
 }
