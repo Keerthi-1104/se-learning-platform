@@ -3,48 +3,106 @@
   "levelId": 3,
   "title": "Android Fundamentals",
   "xp": 40,
-  "estimatedMinutes": 25,
+  "estimatedMinutes": 35,
   "objectives": [
-    "Name the four app components",
-    "Explain the role of the manifest and the build system",
-    "Understand the APK/AAB and the Android runtime"
+    "Understand the Android platform via a real-life analogy",
+    "Know the four components + manifest + Gradle/AGP",
+    "Distinguish APK vs AAB and what R8 does",
+    "Understand ART vs Dalvik vs JVM",
+    "Answer Android-fundamentals interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "An Android app is a set of components (Activities, Services, BroadcastReceivers, ContentProviders) declared in a manifest, compiled to an APK/AAB, and run on the ART runtime atop a customized Linux kernel." },
-    { "type": "table", "headers": ["Component", "Purpose"], "rows": [
-      ["Activity", "A single screen / UI entry point"],
-      ["Service", "Background work without UI"],
-      ["BroadcastReceiver", "Responds to system/app events"],
-      ["ContentProvider", "Shares data across apps"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of a city with a strict building code.**\n\n- **Android** is the CITY. It provides roads (the runtime), water (system services), power (the kernel), and enforces rules (permissions, sandboxes).\n- **Your app** is a BUILDING you drop into the city. It has to be constructed per code: standard entry points (the four components), a floor plan the city can inspect (the manifest), and all utility connections labeled (permissions).\n- **The AndroidManifest.xml** is your building permit — a document telling the city 'here's who I am, here are my rooms (Activities, Services, Receivers, Providers), here are the utilities I need (permissions), here are the doors that anyone can knock on (intent filters).' The city refuses to let you open (install) without a valid permit.\n- **ART (Android Runtime)** is the electrical grid you plug into — it runs your app's code. Old grids (Dalvik) were less efficient; the modern one (ART) pre-compiles hot paths for speed.\n- **APK vs AAB** — APK is the whole building, one-size. AAB (App Bundle) is a blueprint the city uses to build a *device-specific* version for each visitor — smaller downloads, faster installs.\n\n**Why this matters:** the sandbox, manifest, and component model are the ideas that make every Android question 'oh THAT makes sense.'" },
+    { "type": "callout", "variant": "definition", "markdown": "**An Android app** is a set of **four components** (Activity, Service, BroadcastReceiver, ContentProvider) declared in `AndroidManifest.xml`, compiled to DEX bytecode, packaged as an APK/AAB, and executed on the **ART runtime** atop a **customized Linux kernel**. Each app runs in its own process and Linux user sandbox — apps cannot see each other's memory or files except through explicit APIs." },
+    { "type": "theory", "markdown": "## The four components" },
+    { "type": "table", "headers": ["Component", "Purpose", "Entry point"], "rows": [
+      ["**Activity**", "One screen with UI", "`onCreate`; declared with an `<activity>` tag"],
+      ["**Service**", "Background work without UI", "`onStartCommand` / `onBind`"],
+      ["**BroadcastReceiver**", "Respond to system/app events", "`onReceive` — brief, main-thread"],
+      ["**ContentProvider**", "Share structured data across apps via `content://`", "`query`/`insert`/`update`/`delete`"]
     ]},
-    { "type": "theory", "markdown": "## The manifest\nAndroidManifest.xml declares components, permissions, the min/target SDK, and the launcher activity. The system reads it to know what your app contains before running any code." },
-    { "type": "callout", "variant": "note", "markdown": "Apps run on **ART** (Android Runtime), which uses AOT + JIT compilation. Each app runs in its own process and sandbox (a unique Linux user ID) for isolation and security." },
-    { "type": "callout", "variant": "tip", "markdown": "Ship an **AAB** (Android App Bundle), not a raw APK — Play generates optimized per-device APKs, shrinking download size." }
+    { "type": "theory", "markdown": "## The manifest — the building permit" },
+    { "type": "code", "language": "xml", "code": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n\n  <!-- Utilities we need -->\n  <uses-permission android:name=\"android.permission.INTERNET\" />\n  <uses-permission android:name=\"android.permission.CAMERA\" />\n\n  <!-- Hardware/software features (Play uses these to filter incompatible devices) -->\n  <uses-feature android:name=\"android.hardware.camera\" android:required=\"false\" />\n\n  <application\n      android:name=\".MyApp\"                    <!-- optional Application subclass -->\n      android:label=\"@string/app_name\"\n      android:icon=\"@mipmap/ic_launcher\"\n      android:theme=\"@style/AppTheme\">\n\n    <!-- Main screen — LAUNCHER category makes it appear in the app drawer -->\n    <activity android:name=\".MainActivity\" android:exported=\"true\">\n      <intent-filter>\n        <action   android:name=\"android.intent.action.MAIN\" />\n        <category android:name=\"android.intent.category.LAUNCHER\" />\n      </intent-filter>\n    </activity>\n\n    <!-- A service (foreground music example) -->\n    <service android:name=\".MusicService\"\n             android:foregroundServiceType=\"mediaPlayback\"\n             android:exported=\"false\" />\n\n    <!-- A boot-completed receiver -->\n    <receiver android:name=\".BootReceiver\" android:exported=\"true\">\n      <intent-filter>\n        <action android:name=\"android.intent.action.BOOT_COMPLETED\" />\n      </intent-filter>\n    </receiver>\n\n  </application>\n</manifest>" },
+    { "type": "theory", "markdown": "## APK vs AAB — the delivery format" },
+    { "type": "table", "headers": ["Format", "What it is", "When"], "rows": [
+      ["**APK**", "The classic ~universal package. One APK = one install file for many devices.", "Sideloading, some enterprise stores"],
+      ["**AAB (App Bundle)**", "A publishing format. Google Play generates *device-specific* APKs from it (per language, ABI, density).", "Play Store (mandatory since Aug 2021)"],
+      ["Dynamic delivery", "Only download resources the device needs — often 50%+ smaller installs.", "Automatic with AAB"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**The one-liner:** an **APK is the ONE-size box**; an **AAB is the blueprint Play uses to make a smaller box for each device**. Since 2021, Play requires AAB for new apps." },
+    { "type": "theory", "markdown": "## The compile + run pipeline" },
+    { "type": "code", "language": "text", "code": "Your Kotlin/Java code\n         │\n         ▼  (Kotlin/javac compile)\nJVM .class bytecode\n         │\n         ▼  (D8: convert to DEX)\n.dex bytecode (Dalvik EXecutable)\n         │\n         ▼  (R8: shrink + obfuscate + optimize + inline)\nOptimized .dex + resources → packaged as APK/AAB\n         │\n         ▼  (Play delivers device-specific APK from AAB)\nDevice installs → ART runtime executes DEX (AOT + JIT + PGO)" },
+    { "type": "theory", "markdown": "## ART vs Dalvik vs JVM" },
+    { "type": "table", "headers": ["Runtime", "Era", "How it runs code"], "rows": [
+      ["**JVM**", "Standard Java (server, desktop)", "Interpreter + JIT; stack-based bytecode"],
+      ["**Dalvik**", "Android 1.0–4.4 (2008–2014)", "Register-based bytecode (`.dex`); pure JIT"],
+      ["**ART (Android Runtime)**", "Android 5.0+ (2014→)", "Register-based `.dex`; AOT-compiled on install (early ART); modern ART does JIT + profile-guided AOT recompile"]
+    ]},
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Forgetting `android:exported` on components (Android 12+).** Every activity/service/receiver with an intent filter must set it explicitly, or the app fails to install." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Assuming all permissions are install-time.** Since Android 6 (2015), dangerous permissions (camera, location, contacts) are runtime — the user grants each one via a dialog. Always check + request." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Uploading a raw APK to Play in 2026.** New apps require AAB since Aug 2021." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Disabling R8 to avoid crashes.** The crash comes from missing keep rules; add them (e.g., for reflection, Gson models) rather than disabling shrinking." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Targeting too-old `targetSdkVersion`.** Play rejects apps targeting SDK levels more than ~2 years old; also many privacy features require modern targets." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Use AAB and enable R8 + resource shrinking.** Cuts app size 30–50% and speeds install." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Target the latest LTS SDK level within Google's timeline.** Better security, better performance, and Play mandates it." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Set `android:exported` explicitly on every component.** Safer defaults; required on API 31+." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Use `applicationContext` for long-lived references.** Activities die; the app lives while the process does." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Handle runtime permissions with the ActivityResult API.** `registerForActivityResult(ActivityResultContracts.RequestPermission())`." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Ship an AAB.** Build a signed release AAB, upload to Play internal testing, install via Play." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Runtime permission.** Request the camera permission via the ActivityResult API, handle grant/deny/never-again." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Enable R8.** Configure `minifyEnabled true` + `shrinkResources true` + a keep rule for a reflection-based library; compare APK sizes." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Product flavors.** Set up `dev` / `staging` / `prod` flavors with different Firebase configs and base URLs." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What are the four app components?**\n\n**A:** **(1) Activity** — a single screen with a UI (`onCreate` → `onResume` etc.). Entry point for user interaction. **(2) Service** — long-running background component without UI (foreground for user-visible work; bound for IPC; background heavily restricted since Android 8). **(3) BroadcastReceiver** — reacts to system/app broadcast Intents (boot, connectivity, custom events). **(4) ContentProvider** — exposes structured data via `content://` URIs so other apps can query it (Contacts, Media, Calendar — all providers). Each component must be declared in `AndroidManifest.xml`; each has a specific lifecycle managed by the system. Together they form the vocabulary the Android framework uses to talk about your app." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What is the AndroidManifest.xml for?**\n\n**A:** The manifest is your app's declaration to the system — everything Android needs to know before running your code. It declares: (1) The **package name** (app identity). (2) Every **component** (Activities, Services, Receivers, Providers). (3) **Permissions** the app requires (`INTERNET`, `CAMERA`, etc.). (4) **Intent filters** — which broadcasts / URLs / share targets each component handles. (5) **Hardware/software features** used (for Play filtering). (6) **Min/target SDK** levels. (7) The **Application subclass** (if any) and app-wide theme/icon/label. The Android build system merges YOUR manifest with library manifests via **Manifest Merger** — a subtle source of bugs when overlapping declarations clash." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: APK vs AAB — what's the difference?**\n\n**A:** **APK (Android Package)** — the classic installable file. One APK works on many devices, so it packs every language / density / ABI. **AAB (Android App Bundle)** — a publishing format introduced in 2018. You upload one AAB to Play; Play generates device-specific APKs on demand (only the language, screen density, and CPU architecture that device needs). Result: **50% smaller downloads on average**, faster installs, less user data. Since August 2021, new apps on Play MUST be AAB. Under the hood, AAB uses the same DEX bytecode — it's a delivery/optimization improvement, not a new binary format." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What is R8?**\n\n**A:** R8 is Android's code shrinker, optimizer, and obfuscator (replaces ProGuard since 2019, on by default in release builds since AGP 3.4). Three jobs: **(1) Shrink** — remove classes and methods never called (dead-code elimination). **(2) Optimize** — inline, constant-fold, simplify code. **(3) Obfuscate** — rename classes/methods to short strings, making reverse-engineering harder and shrinking the DEX. **Resource shrinking** (a separate flag) removes unused drawables/strings/layouts. Together: typical apps drop 30–50% in size. **Keep rules** (`-keep class com.example.Model`) tell R8 not to rename/remove classes accessed via reflection (Gson, Retrofit, etc.) — necessary for those libraries." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How does the Android security sandbox work?**\n\n**A:** Each app runs in its **own Linux process** with a **unique Linux user ID (UID)**. The kernel enforces file permissions per-UID, so **app A cannot read app B's files or memory**. Cross-app communication is only possible through Android's explicit APIs: `Intent`s, `ContentProvider`s, `Service` bindings, permissions the user grants. **Permissions** gate access to protected resources (camera, location, contacts, other apps' data). **SELinux** (Security-Enhanced Linux) adds mandatory access control on top: even root can't bypass certain policies. **The Application Sandbox is the foundation of Android security** — apps are 'zoo animals' each in their own enclosure, communicating only through the zoo's official channels." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: ART vs Dalvik vs JVM?**\n\n**A:** **JVM** — standard Java runtime; stack-based bytecode. Not used on Android. **Dalvik** (Android 1.0 through 4.4) — Google's original Android runtime; register-based `.dex` bytecode designed for constrained mobile hardware; pure JIT. **ART (Android Runtime)** (Android 5.0+) — Dalvik's successor. Also runs `.dex` bytecode but with a much smarter execution strategy: originally AOT-compiled at install time (slow installs, huge apk-size), the modern ART uses a hybrid **JIT + profile-guided AOT**: it JITs at runtime, records which methods are hot, and later AOT-compiles those in the background. **Baseline Profiles** ship a pre-computed profile so hot methods are AOT-compiled from day 1 — significantly reducing first-launch jank." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What is the difference between `minSdkVersion`, `targetSdkVersion`, and `compileSdkVersion`?**\n\n**A:** **`minSdkVersion`** — the lowest Android version your app will INSTALL on. Determines your target device coverage; lower = more devices but fewer modern APIs. **`targetSdkVersion`** — the version you've TESTED and OPTED IN to. Android runs your app in a compatibility mode for behaviors that changed after this version. Play REQUIRES targeting a recent SDK (currently within ~2 years of latest). **`compileSdkVersion`** — the SDK the compiler uses. Should generally match the latest stable; lets you use new APIs even if your `min` is older (guard with `Build.VERSION.SDK_INT >= ...`). **Rule:** `min` for reach; `target` for correctness on modern devices; `compile` for using new APIs safely." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q8: What is Gradle / AGP?**\n\n**A:** **Gradle** — the build system Android uses. Defines the build in `build.gradle(.kts)` files: dependencies, tasks, module structure. **AGP (Android Gradle Plugin)** — the plugin that teaches Gradle how to build Android apps: compile resources, run R8, sign, produce APK/AAB, run tests. Key ideas: **product flavors** (dev/staging/prod variants), **build types** (debug/release), **variants** (flavor × type). AGP versions loosely track Android Studio versions; upgrading needs care because dependency versions and Kotlin/Compose versions must align. AGP 8.x introduced K2 support and non-transitive R class by default. Every serious Android job requires reading and modifying `build.gradle` files fluently." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every Play Store app** ships as an AAB with R8 enabled.\n- **Product flavors** — enterprise apps commonly have dev/staging/prod flavors with different Firebase configs, base URLs, feature flags.\n- **Sandbox + permissions** — the reason 'apps can't see each other's data' just works; also why granting a permission to one app doesn't grant it to another.\n- **`Application` subclass** — a canonical initialization point for DI (Hilt uses `@HiltAndroidApp`), logging, crash reporting.\n- **Manifest merger** — heavy library use means understanding merged manifests via `Merged Manifest` tab in Studio.\n- **Baseline Profiles + Cloud Profiles** — Play generates cloud profiles from real-user telemetry so first-run performance keeps improving." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Zygote** — a single template process the system forks to create every app process (fast startup, shared classes).\n- **SELinux enforce mode** — Android has been SELinux-enforced since Android 4.4; each app's process runs under a specific SELinux domain.\n- **Scoped Storage (Android 10+)** — apps can access their own scoped external storage but need SAF for arbitrary user files.\n- **Play Feature Delivery** — install-time modules, conditional modules, on-demand modules.\n- **APK Signature Scheme v2/v3/v4** — for tamper-proof signing; v3 supports key rotation.\n- **App Bundle Explorer / Bundletool** — CLI to inspect an AAB and generate `.apks` archives.\n- **KSP (Kotlin Symbol Processing)** — faster than KAPT for annotation processing (Room, Hilt, Moshi codegen).\n- **AGP DSL vs Groovy vs Kotlin DSL** — modern projects use `build.gradle.kts` (Kotlin DSL) for type-safe build scripts." }
   ],
   "flashcards": [
-    { "front": "The four Android components?", "back": "Activity, Service, BroadcastReceiver, ContentProvider." },
-    { "front": "What does AndroidManifest.xml do?", "back": "Declares components, permissions, SDK levels and the launcher activity." },
-    { "front": "APK vs AAB?", "back": "APK is the installable package; AAB is uploaded to Play, which generates optimized per-device APKs." }
+    { "front": "Four Android components?", "back": "Activity, Service, BroadcastReceiver, ContentProvider." },
+    { "front": "AndroidManifest for?", "back": "Declares components, permissions, features, filters, SDK targets." },
+    { "front": "APK vs AAB?", "back": "APK = one-size install file; AAB = publishing format Play uses to generate device-specific APKs (smaller downloads)." },
+    { "front": "R8 does?", "back": "Shrink + optimize + obfuscate DEX; typical 30-50% APK reduction with resource shrinking." },
+    { "front": "Sandbox?", "back": "Each app runs in its own Linux process/UID; cannot see other apps' files/memory except via Android APIs." },
+    { "front": "ART vs Dalvik?", "back": "Dalvik = old JIT-only. ART = modern JIT + profile-guided AOT; Baseline Profiles ship precomputed hot-path AOT hints." }
   ],
   "quiz": [
-    { "q": "Which component has no UI?", "options": ["Activity", "Service", "Fragment", "View"], "answer": 1, "explain": "A Service performs background work without a user interface." },
-    { "q": "Where are components and permissions declared?", "options": ["build.gradle", "AndroidManifest.xml", "strings.xml", "MainActivity"], "answer": 1, "explain": "The manifest declares components, permissions and SDK levels." },
-    { "q": "Android apps run on…", "options": ["The JVM directly", "ART (Android Runtime)", "Node.js", "A browser"], "answer": 1, "explain": "ART executes app code with AOT/JIT compilation." }
+    { "q": "Four components?", "options": ["Activity/Service/Fragment/View", "Activity/Service/Receiver/Provider", "Activity/Service/Fragment/Provider", "None"], "answer": 1, "explain": "The classic four." },
+    { "q": "AAB advantage?", "options": ["Bigger files", "Universal for all devices", "Play generates device-specific slices (smaller downloads)", "No Play needed"], "answer": 2, "explain": "Dynamic delivery." },
+    { "q": "R8 replaces…", "options": ["Gradle", "ProGuard", "Kotlin compiler", "ART"], "answer": 1, "explain": "Modern shrinker + obfuscator." },
+    { "q": "Each Android app runs…", "options": ["In the same process as others", "In its own Linux process/UID", "In shared memory", "In JVM"], "answer": 1, "explain": "Sandbox foundation." },
+    { "q": "targetSdkVersion controls…", "options": ["Minimum install target", "The SDK behaviors your app opts in to; Play requires recent one", "Nothing", "Compiler version"], "answer": 1, "explain": "Opt-in to modern behaviors." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Create an app with one Activity and inspect its manifest entry." },
-    { "level": "Medium", "text": "Add a runtime permission request flow for the camera." },
-    { "level": "Hard", "text": "Configure product flavors and build types in Gradle." },
-    { "level": "Expert", "text": "Reduce app size: enable R8 shrinking, resource shrinking, and analyze the AAB." }
+    { "level": "Easy", "text": "Read a real manifest and identify: components, permissions, intent filters, exported flags." },
+    { "level": "Easy", "text": "Build an AAB and inspect it with bundletool." },
+    { "level": "Medium", "text": "Enable R8 + resource shrinking; measure APK before/after." },
+    { "level": "Medium", "text": "Add camera runtime permission via ActivityResult API." },
+    { "level": "Hard", "text": "Set up product flavors (dev/staging/prod) with different applicationId suffixes." },
+    { "level": "Hard", "text": "Add a Baseline Profile and measure startup improvement with Macrobenchmark." },
+    { "level": "Expert", "text": "Fix a real R8-related crash by writing the correct keep rule for a reflection-using library." }
   ],
   "interviewQuestions": [
     "What are the four app components?",
-    "What is the role of the manifest?",
-    "What is ART and how does it differ from the JVM/Dalvik?",
-    "APK vs AAB?",
-    "How does the Android security sandbox work?"
+    "What is the AndroidManifest.xml for?",
+    "APK vs AAB — what's the difference?",
+    "What is R8?",
+    "How does the Android security sandbox work?",
+    "ART vs Dalvik vs JVM?",
+    "What is the difference between minSdkVersion, targetSdkVersion, and compileSdkVersion?",
+    "What is Gradle / AGP?"
   ],
   "references": [
-    { "label": "Android Developers — App fundamentals", "url": "https://developer.android.com/guide/components/fundamentals" }
+    { "label": "Application fundamentals", "url": "https://developer.android.com/guide/components/fundamentals" },
+    { "label": "About app bundles", "url": "https://developer.android.com/guide/app-bundle" }
   ]
 }

@@ -2,44 +2,93 @@
   "id": "android.content_providers",
   "levelId": 3,
   "title": "Content Providers",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "xp": 35,
+  "estimatedMinutes": 25,
   "objectives": [
-    "Explain what a ContentProvider exposes and why",
-    "Read data via a content URI and resolver",
-    "Know when you actually need one"
+    "Understand ContentProviders via a real-life analogy",
+    "Read data from system providers (Contacts, MediaStore)",
+    "Use FileProvider to share files safely",
+    "Know when to write your own provider (rare)",
+    "Answer ContentProvider interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "A ContentProvider exposes structured app data to other apps (or components) through a content:// URI, with a uniform CRUD interface and per-URI permissions." },
-    { "type": "code", "language": "kotlin", "code": "// Read contacts via the system ContentProvider\nval cursor = contentResolver.query(\n  ContactsContract.Contacts.CONTENT_URI,\n  null, null, null, null)" },
-    { "type": "callout", "variant": "interview", "markdown": "You need a ContentProvider mainly when **sharing data across apps** (or to feed system features like search suggestions, widgets, or sync adapters). For purely in-app storage, use Room directly." },
-    { "type": "callout", "variant": "note", "markdown": "FileProvider is a special ContentProvider that grants temporary, secure access to files via content URIs — required to share files with other apps since Android 7 (no more file:// URIs)." },
-    { "type": "callout", "variant": "tip", "markdown": "Don't build a ContentProvider just to abstract your own database — that's over-engineering. Reach for one when cross-app access or a platform integration genuinely requires it." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of a public library's front desk.**\n\n- Behind the desk are all the books (your app's data). Each app has its own private stack — nobody else can walk in.\n- If you want another app to READ or WRITE to your stack, you set up a **front desk (ContentProvider)** with a rulebook: 'you can look up books by ID; you can add a new book only if you have a library card (permission); you cannot see the restricted shelf'.\n- Every request goes through a URL-like address: `content://com.myapp.provider/books/42`. The desk clerk (ContentResolver) delivers the query to the right provider.\n- Android's own system data — **Contacts, Calendar, MediaStore (photos/audio), Downloads, SMS** — is all exposed as ContentProviders. That's why *your* app can 'pick a photo' or 'read a contact' with permission — you're querying the system's front desk.\n\n**In modern apps you rarely WRITE your own ContentProvider anymore** — Room + Retrofit handles internal storage; DI handles cross-module boundaries. But you'll still **READ** from system providers (photos, contacts), and you'll definitely use **`FileProvider`** to share files safely between apps." },
+    { "type": "callout", "variant": "definition", "markdown": "**A ContentProvider** exposes structured app data to other processes via `content://` URIs and a uniform CRUD interface (`query`, `insert`, `update`, `delete`). Consumers interact through a **`ContentResolver`**. Each URI has its own permissions. ContentProviders are also required for certain platform integrations (SAF, sync adapters, widgets that read from providers)." },
+    { "type": "theory", "markdown": "## The anatomy" },
+    { "type": "table", "headers": ["Piece", "What it is"], "rows": [
+      ["**`content://` URI**", "The address: `content://<authority>/<path>/<id>`. Authority is your provider's unique name."],
+      ["**`ContentProvider` class**", "The server side — overrides `query`/`insert`/`update`/`delete`."],
+      ["**`ContentResolver`**", "The client side — `context.contentResolver.query(uri, ...)` to talk to any provider."],
+      ["**Permissions**", "`android:readPermission` / `writePermission` gate access."],
+      ["**Manifest declaration**", "`<provider android:authorities=\"com.myapp.provider\" android:exported=\"true\">`"]
+    ]},
+    { "type": "theory", "markdown": "## Reading system providers — the 99% case" },
+    { "type": "code", "language": "kotlin", "code": "// Query the system contacts provider — list all names\nval names = mutableListOf<String>()\ncontentResolver.query(\n  ContactsContract.Contacts.CONTENT_URI,\n  arrayOf(ContactsContract.Contacts.DISPLAY_NAME),\n  null, null, null,\n)?.use { cursor ->\n  while (cursor.moveToNext()) {\n    names += cursor.getString(0)\n  }\n}\n// Requires <uses-permission android:name=\"android.permission.READ_CONTACTS\" />\n// AND a runtime-permission request on Android 6+\n\n// Query MediaStore for images captured in the last week\nval since = System.currentTimeMillis() / 1000 - 7 * 24 * 3600\ncontentResolver.query(\n  MediaStore.Images.Media.EXTERNAL_CONTENT_URI,\n  arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DISPLAY_NAME),\n  \"${MediaStore.Images.Media.DATE_ADDED} >= ?\",\n  arrayOf(since.toString()),\n  \"${MediaStore.Images.Media.DATE_ADDED} DESC\",\n)?.use { c ->\n  // iterate — result IDs can be composed into content URIs to display or share\n}" },
+    { "type": "theory", "markdown": "## FileProvider — the modern way to share files" },
+    { "type": "code", "language": "xml", "code": "<!-- AndroidManifest.xml — declare the FileProvider -->\n<provider\n  android:name=\"androidx.core.content.FileProvider\"\n  android:authorities=\"${applicationId}.fileprovider\"\n  android:exported=\"false\"\n  android:grantUriPermissions=\"true\">\n  <meta-data\n    android:name=\"android.support.FILE_PROVIDER_PATHS\"\n    android:resource=\"@xml/file_paths\" />\n</provider>\n\n<!-- res/xml/file_paths.xml — which internal directories to expose -->\n<paths>\n  <cache-path name=\"cache\" path=\"shared/\" />\n  <files-path name=\"files\" path=\"exports/\" />\n</paths>" },
+    { "type": "code", "language": "kotlin", "code": "// Share a file with another app (email, chat, docs) — never expose file:// directly since Android 7\nval file = File(cacheDir, \"shared/report.pdf\")\nval uri = FileProvider.getUriForFile(this, \"$packageName.fileprovider\", file)\n\nval share = Intent(Intent.ACTION_SEND).apply {\n  type = \"application/pdf\"\n  putExtra(Intent.EXTRA_STREAM, uri)\n  addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)   // grant temporary access to receiver\n}\nstartActivity(Intent.createChooser(share, \"Share report\"))" },
+    { "type": "theory", "markdown": "## Writing your own provider — the rare case" },
+    { "type": "code", "language": "kotlin", "code": "// Only justified for: cross-app data sharing, SAF integration, sync adapters, some widgets.\n// For in-app storage, Room + DI is simpler and safer.\n\nclass NotesProvider : ContentProvider() {\n  companion object {\n    const val AUTHORITY = \"com.myapp.provider\"\n    val NOTES_URI: Uri = Uri.parse(\"content://$AUTHORITY/notes\")\n  }\n\n  override fun onCreate(): Boolean { /* init DB */ return true }\n\n  override fun query(uri: Uri, projection: Array<String>?, selection: String?,\n                     args: Array<String>?, sort: String?): Cursor? {\n    // Return a Cursor backed by Room, in-memory, or SQLite\n    return db.query(...)\n  }\n\n  override fun insert(uri: Uri, values: ContentValues?): Uri? { /* ... */ return null }\n  override fun update(uri: Uri, values: ContentValues?, selection: String?, args: Array<String>?): Int = 0\n  override fun delete(uri: Uri, selection: String?, args: Array<String>?): Int = 0\n  override fun getType(uri: Uri): String? = \"vnd.android.cursor.dir/vnd.myapp.note\"\n}\n\n// Manifest — declare with permissions and readable/writable paths\n// <provider\n//   android:name=\".NotesProvider\"\n//   android:authorities=\"com.myapp.provider\"\n//   android:exported=\"true\"\n//   android:readPermission=\"com.myapp.READ_NOTES\"\n//   android:writePermission=\"com.myapp.WRITE_NOTES\" />" },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Sharing `file://` URIs.** Since Android 7 (2016), passing a `file://` URI across apps throws `FileUriExposedException`. Use `FileProvider` and `content://` URIs." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Building a ContentProvider for internal storage.** Overkill. Use Room + a Repository. Providers are for cross-app or platform integrations." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Not closing Cursors.** Leaks a `Cursor` (and its DB connection). Fix: use `?.use { cursor -> ... }` (Kotlin's `Closeable.use`)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Missing runtime permission for `READ_CONTACTS` / `READ_MEDIA_IMAGES`.** Provider access to protected data needs BOTH manifest permission AND runtime grant on Android 6+." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Forgetting `FLAG_GRANT_READ_URI_PERMISSION`.** Share intents with a content URI must include this flag so the receiver can actually read the file." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Use `FileProvider` for every file-sharing intent.** Never leak `file://` URIs." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Prefer Room + Repository for internal data.** Skip writing a custom ContentProvider unless you're crossing app boundaries." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Always close Cursors with `use`.** Kotlin's stdlib makes this a one-liner." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Prefer new `MediaStore` APIs and the Photo Picker (Android 13+).** Scoped Storage-friendly, no permission required for the Photo Picker." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Use SAF (`ACTION_OPEN_DOCUMENT`) for arbitrary user files.** Avoids the need for `READ_EXTERNAL_STORAGE` permission." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Read the last 20 contacts** and display their names." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Share a generated PDF** with an implicit intent using FileProvider." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Use the Photo Picker (Android 13+)** with `PickVisualMedia` — no permissions needed." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Query MediaStore for recent photos**, show a grid, tap to open." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Build a small NotesProvider** backed by Room + custom read/write permissions; consume it from a second app." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is a ContentProvider?**\n\n**A:** A ContentProvider is one of Android's four core components — it exposes an app's data via **`content://` URIs** and a uniform CRUD interface (`query`, `insert`, `update`, `delete`). Consumers use a `ContentResolver` on the client side to talk to any provider. The system's own data (Contacts, Calendar, MediaStore for photos, Downloads, SMS) is exposed as providers — that's how third-party apps can 'pick a photo' or 'list contacts.' In modern app development you rarely WRITE your own provider; you READ from system providers and use `FileProvider` to share files. Custom providers are still relevant for cross-app data, SAF integrations, sync adapters, and certain widget/watch scenarios." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How do you query a ContentProvider?**\n\n**A:** Through `ContentResolver`. Example:\n```kotlin\ncontentResolver.query(uri, projection, selection, args, sortOrder)?.use { cursor ->\n  while (cursor.moveToNext()) { ... }\n}\n```\nParameters: **URI** (which provider + path), **projection** (columns to return, like SELECT), **selection + args** (WHERE clause with placeholders), **sortOrder** (ORDER BY). Returns a `Cursor` — you MUST close it (`.use { }`). For protected data (contacts, media), declare the manifest permission AND request it at runtime on Android 6+. The API is nearly identical to raw SQLite, on purpose — it feels familiar." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: When would you write your own ContentProvider?**\n\n**A:** Real justifications: **(1) Cross-app data sharing** — you want another app to read/write your app's data. **(2) Platform integrations** — Storage Access Framework (SAF) documents, Sync Adapters, some Widgets, custom search suggestions. **(3) Regulatory / firewall reasons** — a well-defined content:// interface with per-URI permissions is easier to audit than an ad-hoc socket. **Not justified:** for internal app storage (use Room + Repository), for observable data streams (use Flow), for private cross-module boundaries (use DI). If a colleague suggests wrapping every table in a ContentProvider 'because Google did in 2013,' push back — modern architecture uses layered repositories, not providers." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What is FileProvider and why is it required?**\n\n**A:** `FileProvider` is a subclass of `ContentProvider` (in AndroidX) that serves your app's internal files as `content://` URIs — safely, with temporary permission grants. **Why required:** since Android 7 (Nougat, 2016), sending a `file://` URI across apps throws `FileUriExposedException`. The fix: use `FileProvider.getUriForFile(context, authority, file)`, then attach the resulting `content://` URI to your intent with `FLAG_GRANT_READ_URI_PERMISSION`. The receiving app gets a temporary, permission-scoped view of just that file, not your whole filesystem. Configure allowed paths in `res/xml/file_paths.xml`. This is one of the most commonly-needed patterns in production apps." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How does the Photo Picker (Android 13+) change things?**\n\n**A:** Android 13 introduced a system Photo Picker (`ActivityResultContracts.PickVisualMedia()`) that lets users pick photos/videos WITHOUT your app needing `READ_EXTERNAL_STORAGE` or `READ_MEDIA_IMAGES` permission. The system UI runs in a separate process, shows the user's library, returns the picked URI to your app with a temporary read grant. **Why huge:** users often deny broad media permissions but happily pick a single photo. Play now recommends using the Photo Picker over broad permissions. For older devices, Google backports it via Google Play Services. This is a **privacy-first replacement** for the old 'request permission → query MediaStore' flow, and it's the modern default for photo-picking use cases." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Photo pickers** — every image-sharing app uses the Photo Picker or MediaStore.\n- **Contact pickers** — dialers, chat apps, invitation flows.\n- **File attachment / share intents** — email, cloud storage, note-taking apps.\n- **FileProvider ubiquity** — anywhere your app hands a file to another app.\n- **Storage Access Framework (SAF)** — 'open a document from anywhere' using `ACTION_OPEN_DOCUMENT`.\n- **Sync Adapters** — legacy pattern for periodic sync; used inside contacts/calendar/photos historically.\n- **Widgets that show data** from an app's provider (some launchers)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`ContentObserver`** — listen for changes to a URI; used internally by RoomLiveData / Flow adapters.\n- **UriMatcher** — helper for parsing incoming URIs (`/notes` vs `/notes/*` etc).\n- **`ContentProviderClient`** — reuse a client for many calls without re-resolving the authority.\n- **Batch operations** — `applyBatch(operations)` to run multiple CRUD ops atomically.\n- **Sync Adapters** — deprecated for most use cases; WorkManager is the modern replacement.\n- **`DocumentsProvider`** — a special ContentProvider for SAF file-picker integration.\n- **Cross-process permissions** — declare custom `<permission>` in your manifest; grant selectively per URI with `grantUriPermission`.\n- **Cursor limitations** — `Bundle`-based results (Room) beat Cursor in modern reactive apps; providers exposing Cursor still needed for legacy consumers." }
   ],
   "flashcards": [
-    { "front": "What does a ContentProvider expose?", "back": "Structured data to other apps/components via content:// URIs with CRUD + permissions." },
-    { "front": "When do you actually need one?", "back": "Mainly to share data across apps or integrate with platform features (search, widgets, sync)." },
-    { "front": "What is FileProvider?", "back": "A ContentProvider that grants temporary secure access to files via content URIs (replaces file:// since Android 7)." }
+    { "front": "What is a ContentProvider?", "back": "Exposes app data across process boundaries via content:// URIs + CRUD." },
+    { "front": "Consumer side?", "back": "ContentResolver — `context.contentResolver.query(uri, ...)`." },
+    { "front": "Since Android 7, share files with…", "back": "FileProvider + content:// URI + FLAG_GRANT_READ_URI_PERMISSION." },
+    { "front": "When to write your own?", "back": "Cross-app sharing / SAF / Sync Adapters. Rarely for internal storage — use Room." },
+    { "front": "Photo Picker (Android 13+)?", "back": "PickVisualMedia — no media permission required; privacy-first UX." },
+    { "front": "Cursors and…", "back": "Close them! Use Kotlin's `?.use { }` idiom." }
   ],
   "quiz": [
-    { "q": "A ContentProvider is accessed via…", "options": ["A direct file path", "A content:// URI and the ContentResolver", "An Intent only", "Gradle"], "answer": 1, "explain": "Clients query content URIs through the ContentResolver." },
-    { "q": "You most need a ContentProvider when…", "options": ["Storing data only in your app", "Sharing data with other apps", "Drawing UI", "Running coroutines"], "answer": 1, "explain": "Cross-app data sharing is its primary purpose." },
-    { "q": "To share a file with another app since Android 7, use…", "options": ["file:// URI", "FileProvider (content URI)", "A broadcast", "SharedPreferences"], "answer": 1, "explain": "file:// URIs are blocked; FileProvider issues secure content URIs." }
+    { "q": "Client-side for accessing a provider?", "options": ["ContentProvider", "ContentResolver", "ContentValues", "Cursor"], "answer": 1, "explain": "context.contentResolver." },
+    { "q": "Since Android 7, sharing file:// URIs throws…", "options": ["Nothing", "FileUriExposedException", "IOException", "SecurityException"], "answer": 1, "explain": "Use FileProvider." },
+    { "q": "For internal DB use…", "options": ["ContentProvider", "Room + Repository", "SharedPreferences", "SQLite direct"], "answer": 1, "explain": "Simpler and safer." },
+    { "q": "Photo Picker on Android 13+ needs…", "options": ["READ_MEDIA_IMAGES", "No media permission required", "READ_EXTERNAL_STORAGE", "MANAGE_EXTERNAL_STORAGE"], "answer": 1, "explain": "Privacy-first." },
+    { "q": "Close a Cursor with…", "options": ["null", "?.use { }", "close()", "GC"], "answer": 1, "explain": "Kotlin closeable idiom." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Query the contacts ContentProvider and list names." },
-    { "level": "Medium", "text": "Share an image with another app using FileProvider." },
-    { "level": "Hard", "text": "Implement a simple ContentProvider backed by Room." },
-    { "level": "Expert", "text": "Add per-URI permissions and a sync adapter feeding the provider." }
+    { "level": "Easy", "text": "Query the Contacts provider and list display names." },
+    { "level": "Easy", "text": "Query MediaStore for recent photos and show them in a grid." },
+    { "level": "Medium", "text": "Use FileProvider to share a generated PDF." },
+    { "level": "Medium", "text": "Use the Android 13 Photo Picker (PickVisualMedia contract)." },
+    { "level": "Hard", "text": "Build a NotesProvider backed by Room; consume from a second app." },
+    { "level": "Hard", "text": "Register a ContentObserver on MediaStore and react to new photos." },
+    { "level": "Expert", "text": "Implement a DocumentsProvider for SAF file-picker integration." }
   ],
   "interviewQuestions": [
-    "What is a ContentProvider and why use it?",
-    "How do you query one?",
-    "When is a ContentProvider necessary vs over-engineering?",
+    "What is a ContentProvider?",
+    "How do you query a ContentProvider?",
+    "When would you write your own ContentProvider?",
     "What is FileProvider and why is it required?",
-    "How are provider permissions enforced?"
+    "How does the Photo Picker (Android 13+) change things?"
   ],
   "references": [
-    { "label": "Android — Content providers", "url": "https://developer.android.com/guide/topics/providers/content-providers" }
+    { "label": "Content providers — Android", "url": "https://developer.android.com/guide/topics/providers/content-providers" },
+    { "label": "FileProvider", "url": "https://developer.android.com/reference/androidx/core/content/FileProvider" }
   ]
 }

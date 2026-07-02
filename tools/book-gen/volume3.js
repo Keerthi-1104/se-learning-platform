@@ -59,37 +59,8 @@ body.push(callout("note", [["Each topic ends with: ", { t: "✅ Summary · 🎯 
 body.push(callout("interview", ["The most-asked Android interview themes: the activity lifecycle, why background work is restricted, ViewModel surviving rotation, Coroutines/structured concurrency, and memory leaks. This volume drills all of them."]));
 
 // 1. Fundamentals
-body.push(H1("1. Android Fundamentals", "ch1"));
-body.push(callout("definition", ["An Android app is a set of components (Activities, Services, BroadcastReceivers, ContentProviders) declared in a manifest, compiled to an APK/AAB, and run on the ART runtime atop a customized Linux kernel."]));
-body.push(table(["Component", "Purpose"], [
-  ["Activity", "A single screen / UI entry point"],
-  ["Service", "Background work without UI"],
-  ["BroadcastReceiver", "Responds to system/app events"],
-  ["ContentProvider", "Shares data across apps"],
-], [3200, 6160]));
-body.push(callout("note", ["Apps run on ART (AOT + JIT), each in its own process and Linux-user sandbox. Ship an AAB so Play generates optimized per-device APKs."]));
-body.push(...summary([
-  "Four components: Activity, Service, BroadcastReceiver, ContentProvider.",
-  "The manifest declares components, permissions and SDK levels.",
-  "ART runs app code; each app is sandboxed in its own process.",
-  "Prefer AAB over a raw APK for smaller downloads.",
-]));
-body.push(...interview([
-  "What are the four app components?",
-  "What is the role of the manifest?",
-  "What is ART vs the JVM/Dalvik?",
-  "APK vs AAB?",
-  "How does the Android security sandbox work?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Create an app with one Activity and inspect its manifest entry." },
-  { level: "Medium", text: "Add a runtime permission flow for the camera." },
-  { level: "Hard", text: "Configure product flavors and build types in Gradle." },
-  { level: "Expert", text: "Cut app size with R8 + resource shrinking; analyze the AAB." },
-]));
-body.push(...realworld(["Every Play Store app is an AAB; Play's dynamic delivery ships only the resources each device needs, often halving install size."]));
-body.push(...miniproject(["Scaffold a multi-screen app, declare all components in the manifest, and add a permission request flow."]));
-body.push(...advanced(["The Zygote process and app forking; SELinux policies; Scoped Storage."]));
+body.push(...topicToChapter(loadTopic("level_03", "fundamentals"),
+  { chapterNumber: 1, bookmarkId: "ch1" }));
 
 // 2. Activity Lifecycle
 body.push(...topicToChapter(loadTopic("level_03", "activity_lifecycle"),
@@ -112,31 +83,8 @@ body.push(...topicToChapter(loadTopic("level_03", "broadcast_receivers"),
   { chapterNumber: 6, bookmarkId: "ch6" }));
 
 // 7. Content Providers
-body.push(H1("7. Content Providers", "ch7"));
-body.push(callout("definition", ["A ContentProvider exposes structured app data to other apps via content:// URIs with a uniform CRUD interface and per-URI permissions."]));
-body.push(callout("interview", ["You mainly need a ContentProvider to share data across apps or feed platform features (search, widgets, sync). For in-app storage, use Room directly. FileProvider shares files securely via content URIs."]));
-body.push(...summary([
-  "Providers expose data across apps via content URIs.",
-  "Accessed through the ContentResolver.",
-  "Needed for cross-app sharing / platform integration, not in-app DBs.",
-  "FileProvider replaces file:// for sharing files since Android 7.",
-]));
-body.push(...interview([
-  "What is a ContentProvider and why use it?",
-  "How do you query one?",
-  "When is it necessary vs over-engineering?",
-  "What is FileProvider and why required?",
-  "How are provider permissions enforced?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Query the contacts provider and list names." },
-  { level: "Medium", text: "Share an image via FileProvider." },
-  { level: "Hard", text: "Implement a simple provider backed by Room." },
-  { level: "Expert", text: "Add per-URI permissions and a sync adapter." },
-]));
-body.push(...realworld(["The system contacts, media and calendar are all ContentProviders that any app can query (with permission)."]));
-body.push(...miniproject(["Build a small notes provider that another app can read with permission."]));
-body.push(...advanced(["Sync adapters, ContentObserver, document providers (SAF)."]));
+body.push(...topicToChapter(loadTopic("level_03", "content_providers"),
+  { chapterNumber: 7, bookmarkId: "ch7" }));
 
 // 8. WorkManager
 body.push(...topicToChapter(loadTopic("level_03", "workmanager"),
