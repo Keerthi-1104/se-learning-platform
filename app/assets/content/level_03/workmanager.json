@@ -3,48 +3,88 @@
   "levelId": 3,
   "title": "WorkManager",
   "xp": 40,
-  "estimatedMinutes": 20,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Schedule guaranteed deferrable background work",
-    "Apply constraints, retries and chaining",
-    "Know when WorkManager is and isn't the right tool"
+    "Understand WorkManager via a real-life analogy",
+    "Schedule one-off and periodic work with constraints",
+    "Chain work with dependencies and pass data",
+    "Handle retries, backoff, and results",
+    "Answer WorkManager interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "WorkManager is the recommended API for persistent, deferrable background work that must run even across app restarts and device reboots — it chooses the best underlying scheduler for the OS version." },
-    { "type": "code", "language": "kotlin", "code": "val work = OneTimeWorkRequestBuilder<UploadWorker>()\n  .setConstraints(Constraints.Builder()\n      .setRequiredNetworkType(NetworkType.CONNECTED).build())\n  .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)\n  .build()\nWorkManager.getInstance(ctx).enqueue(work)" },
-    { "type": "table", "headers": ["Feature", "What it gives"], "rows": [
-      ["Constraints", "Run only on network/charging/idle"],
-      ["Retries + backoff", "Automatic, configurable"],
-      ["Chaining", "Sequence/parallel work with then()"],
-      ["Persistence", "Survives reboots and app death"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of a smart postal service.**\n\n- You drop off a package with a **delivery slip**: 'Deliver this to Ada — but ONLY if she has Wi-Fi AND is home AND it's before 6pm'. The post office holds the package. When ALL constraints match, it delivers.\n- If Ada isn't home the first time, the post office **RETRIES** later — with backoff (an hour, then two, then four).\n- If the truck breaks down (the phone reboots), the post office **remembers** the pending delivery — it's not lost.\n- Multiple packages? You can **chain** them: 'compress the video, THEN upload it'. The chain runs in order; if step 1 fails, step 2 never runs.\n\n**WorkManager is that smart postal service for Android background work.** You describe WHAT should happen and WHEN (constraints: network, charging, storage, idle). The system decides HOW — batching your job with other apps' jobs, respecting Doze, surviving reboots, retrying on failure. The old alternatives (JobScheduler, AlarmManager, GcmNetworkManager, background Services) each solved one slice; WorkManager unifies them under one, opinionated API." },
+    { "type": "callout", "variant": "definition", "markdown": "**WorkManager** is the Jetpack library for **deferrable, guaranteed background work**. You define a `Worker` (a class that does the work), then schedule it as a `OneTimeWorkRequest` or `PeriodicWorkRequest` with constraints. The system runs it when constraints are met — surviving app kills and reboots — and retries with backoff on failure. It's the recommended replacement for background Services, AlarmManager for non-exact scheduling, and JobScheduler." },
+    { "type": "theory", "markdown": "## The three moving parts" },
+    { "type": "table", "headers": ["Piece", "What it is"], "rows": [
+      ["**`Worker` / `CoroutineWorker`**", "The class that does the work. Override `doWork()` returning `Result.success()`/`failure()`/`retry()`."],
+      ["**`WorkRequest`**", "Describes WHEN to run: constraints, initial delay, backoff. `OneTimeWorkRequest` or `PeriodicWorkRequest`."],
+      ["**`WorkManager`**", "The scheduler. `getInstance(context).enqueue(request)` — you just tell it what to do."]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "Use WorkManager for **guaranteed, deferrable** work (upload logs, sync, backups). Do NOT use it for immediate, exact-time, or in-process tasks — use coroutines for those, AlarmManager for exact alarms, and foreground services for ongoing user-visible work." },
-    { "type": "callout", "variant": "mistake", "markdown": "Expecting WorkManager to run at an exact instant. It's deferrable — the system batches work for battery efficiency. For exact timing use AlarmManager (sparingly)." }
+    { "type": "theory", "markdown": "## Sample program — periodic log upload with constraints, chaining, and Hilt injection" },
+    { "type": "code", "language": "kotlin", "code": "// File: UploadLogsWorker.kt\nimport android.content.Context\nimport androidx.hilt.work.HiltWorker\nimport androidx.work.*\nimport dagger.assisted.Assisted\nimport dagger.assisted.AssistedInject\n\n// 1. The Worker itself — CoroutineWorker for suspend fn work\n@HiltWorker\nclass UploadLogsWorker @AssistedInject constructor(\n  @Assisted appContext: Context,\n  @Assisted params: WorkerParameters,\n  private val logRepo: LogRepository,          // Hilt injects\n) : CoroutineWorker(appContext, params) {\n\n  override suspend fun doWork(): Result = try {\n    logRepo.uploadPendingLogs()\n    Result.success(workDataOf(\"count\" to logRepo.uploadedCount))\n  } catch (e: java.io.IOException) {\n    if (runAttemptCount < 3) Result.retry() else Result.failure()\n  } catch (e: Exception) {\n    Result.failure(workDataOf(\"error\" to e.message))\n  }\n}\n\n// 2. Scheduling — from your Application.onCreate() or first login\nfun scheduleLogUpload(context: Context) {\n  val constraints = Constraints.Builder()\n    .setRequiredNetworkType(NetworkType.UNMETERED)   // Wi-Fi only — respects user data\n    .setRequiresBatteryNotLow(true)\n    .build()\n\n  val request = PeriodicWorkRequestBuilder<UploadLogsWorker>(\n      repeatInterval = 6, java.util.concurrent.TimeUnit.HOURS)\n    .setConstraints(constraints)\n    .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, java.util.concurrent.TimeUnit.SECONDS)\n    .build()\n\n  // ENQUEUE_UNIQUE ensures we don't schedule duplicates on every launch\n  WorkManager.getInstance(context).enqueueUniquePeriodicWork(\n    \"log_upload\",\n    ExistingPeriodicWorkPolicy.KEEP,\n    request,\n  )\n}\n\n// 3. Chained work — compress THEN upload\nfun compressAndUpload(context: Context) {\n  val compress = OneTimeWorkRequestBuilder<CompressWorker>()\n    .setInputData(workDataOf(\"path\" to \"/sdcard/big.mov\"))\n    .build()\n\n  val upload = OneTimeWorkRequestBuilder<UploadWorker>()\n    // upload receives compress's output data as its input automatically\n    .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.UNMETERED).build())\n    .build()\n\n  WorkManager.getInstance(context)\n    .beginWith(compress)      // step 1\n    .then(upload)             // step 2 — runs only if compress succeeded\n    .enqueue()\n}\n\n// 4. Observing status from a ViewModel\n// val statusFlow = WorkManager.getInstance(app)\n//   .getWorkInfoByIdFlow(request.id)     // Flow of WorkInfo (state, output data)\n\n// 5. Foreground work — for user-visible tasks that need to run even when idle\n//    Override getForegroundInfo() and setForeground(...) inside doWork()." },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Expecting exact-time scheduling.** WorkManager is **deferrable** — the system may delay your job by minutes or hours to batch with others. For exact alarms (a real 8am alarm clock), use `AlarmManager`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Enqueuing without a unique name.** Every launch adds a new copy of the periodic work → the same job scheduled 10 times. Fix: `enqueueUniquePeriodicWork(name, KEEP, request)`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Passing large data via `workDataOf`.** Input/output data is Bundle-backed — small key/value only. Fix: pass an ID; fetch the actual data inside the Worker from Room/disk." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: `Result.retry()` with no exit condition.** Retries retry forever until the system gives up. Check `runAttemptCount` and eventually `Result.failure()`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Assuming a PeriodicWorkRequest runs less than 15 minutes.** Minimum interval is 15 minutes. Anything shorter is silently upgraded." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Always attach relevant Constraints.** `NetworkType.UNMETERED`, `RequiresCharging`, `RequiresBatteryNotLow` — respect user battery/data." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Use `CoroutineWorker` for anything modern.** Skip old `Worker` unless you have Java-only code." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Enqueue with unique names.** `enqueueUniqueWork` / `enqueueUniquePeriodicWork` + `KEEP` or `REPLACE` policy." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Inject dependencies with `@HiltWorker` + `@AssistedInject`.** Standard pattern for Room/Retrofit access inside a Worker." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Prefer OUTPUT-data ID references to inline data.** Pass a Room row ID and re-read inside the Worker." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Observe with Flow (`getWorkInfoByIdFlow`)** and expose progress via a StateFlow to the UI." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — One-off log upload.** `CoroutineWorker` that POSTs a log line; enqueue on button click.\n\n**Why:** End-to-end workflow." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Constraints + backoff.** Add Unmetered + BatteryNotLow constraints and EXPONENTIAL backoff." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — Chained work.** Compress → Upload chain; observe status via `getWorkInfoByIdFlow` from a ViewModel.\n\n**Why:** Real production pipeline." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Expert) — Testing.** Use `WorkManagerTestInitHelper` to synchronously drive a Worker in an instrumented test.\n\n**Why:** WorkManager is testable — take advantage." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is WorkManager and when do you use it?**\n\n**A:** WorkManager is Jetpack's library for **deferrable, guaranteed background work** — jobs that must complete but don't need to run at a specific instant. You define a `Worker` (class with `doWork()`) and a `WorkRequest` (constraints, backoff), then hand it to WorkManager. The system runs it when constraints are met (network available, device charging, etc.), retries on failure with backoff, survives app kills and device reboots, and batches with other apps' jobs for battery efficiency. **When:** log uploads, nightly sync, image processing, cache cleanup, exporting user data. **When NOT:** exact-time alarms (use `AlarmManager`); UI-tied work (use coroutines); user-visible ongoing work (use a foreground service)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How does WorkManager differ from AlarmManager / JobScheduler / Service?**\n\n**A:** **AlarmManager** — fires at an *exact* time (or approximate for inexact alarms); doesn't guarantee network or charging. Best for real alarm clocks / calendar reminders. **JobScheduler** — Android 5.0+ system scheduler with constraints. WorkManager uses it under the hood. Requires API 21+ and doesn't survive process death cleanly on its own. **Background Service** — deprecated for background work in Android 8+. **WorkManager** — unifies all of them: constraint-aware like JobScheduler, guaranteed like a Service, backwards-compatible to API 14 (using AlarmManager fallback), and survives reboots. WorkManager is the *recommended replacement* for most historical background patterns." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What are Constraints in WorkManager?**\n\n**A:** Conditions the system waits for before running your Worker. Common ones: `setRequiredNetworkType(UNMETERED)` (Wi-Fi only), `setRequiresCharging(true)`, `setRequiresBatteryNotLow(true)`, `setRequiresStorageNotLow(true)`, `setRequiresDeviceIdle(true)` (only when the device is idle — great for heavy background work). Multiple constraints combine with AND. The system may batch your job with other pending jobs when constraints line up, saving power. If constraints never become true (e.g., you demand Wi-Fi and the user is always on cellular), your Worker never runs — so pick constraints carefully." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How does chaining work?**\n\n**A:** `WorkManager.beginWith(a).then(b).then(c).enqueue()` runs A → B → C in order. B receives A's output data as its input. If A returns `Result.failure()`, B and C never run. `beginWith(listOf(a1, a2)).then(b)` — a1 and a2 run in parallel; b runs only when BOTH succeed. `beginWith(a)` on multiple chains + `combine(chain1, chain2)` merges them. This lets you model complex pipelines declaratively: 'compress → upload → notify server → cleanup local'. WorkManager persists the chain across reboots, so a multi-step job actually completes even if the phone is powered off mid-way." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you observe Worker status from the UI?**\n\n**A:** `WorkManager.getInstance(context).getWorkInfoByIdFlow(request.id)` returns a `Flow<WorkInfo>` with state (`ENQUEUED`, `RUNNING`, `SUCCEEDED`, `FAILED`, `BLOCKED`, `CANCELLED`) and output data. Collect in a ViewModel, expose as `StateFlow`, render in the UI. For a whole tagged group: `getWorkInfosByTagFlow(\"upload\")`. For progress DURING work: call `setProgress(workDataOf(...))` inside `doWork()`; `WorkInfo.progress` gives you a live progress KV bundle. Combined with Compose's `collectAsStateWithLifecycle()`, you get automatic UI updates as the Worker progresses." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: Result.success vs failure vs retry — what does each mean?**\n\n**A:** **`success()`** — work completed. Chain proceeds. **`failure()`** — work failed permanently; chain aborts. **`retry()`** — work should be retried later per the backoff policy. `runAttemptCount` starts at 0 and increments each retry. Combine with `setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, SECONDS)` to control retry timing. **Best practice:** in the worker, retry on transient failures (network timeout, `IOException`) up to N attempts, then `failure()`. Don't retry non-recoverable errors (auth denied, bad input) — they'll fail forever. Always include an exit condition based on `runAttemptCount`." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What is a `CoroutineWorker` and why prefer it?**\n\n**A:** `CoroutineWorker` is the modern base class where `doWork()` is a `suspend fun` returning `Result`. Runs on `Dispatchers.Default` by default (override `coroutineContext` for something else). Cancellation is automatic when the Worker is cancelled — no manual polling of `isStopped`. Works cleanly with Room DAOs, Retrofit `suspend fun`s, and other coroutine-native APIs. **Prefer to plain `Worker`** which requires manual threading (`ListenableWorker` under the hood) and has no built-in cancellation. Any new WorkManager code should use `CoroutineWorker`." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **WhatsApp/Signal — media backup to cloud** — WorkManager job, Wi-Fi + charging constraints.\n- **Reddit / Twitter — periodic notification sync** — periodic worker checks for new content.\n- **Camera app — auto-upload photos** — one-off worker per new photo, chained compression + upload.\n- **Cache cleanup** — nightly periodic job with idle constraint.\n- **Analytics batching** — periodic worker uploads collected events when Wi-Fi is available.\n- **Log/crash upload** — one-off worker after a crash, retries with backoff until server accepts." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Foreground work** — override `getForegroundInfo()` + call `setForeground(...)` in `doWork()` to run a long user-visible worker.\n- **Expedited work** (Android 12+) — `setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)` prioritizes the job over normal work; subject to system quota.\n- **`WorkManagerTestInitHelper`** — synchronous driver for tests; `TestListenableWorkerBuilder` for unit tests.\n- **`RxWorker`** — for RxJava-based workers.\n- **Multi-module DI** — `@HiltWorker` + `WorkerFactory` handled by Hilt's `@AndroidEntryPoint(WorkerFactory::class)` if custom.\n- **Battery/Doze interactions** — Doze mode delays even WorkManager jobs; use expedited work or foreground work if timing matters.\n- **`ExistingWorkPolicy`** — `REPLACE`, `KEEP`, `APPEND`, `APPEND_OR_REPLACE` — choose based on whether new work should override or extend the existing chain." }
   ],
   "flashcards": [
-    { "front": "When use WorkManager?", "back": "Guaranteed, deferrable background work that must survive app restarts/reboots (sync, upload, backup)." },
-    { "front": "What can constraints require?", "back": "Network connectivity, charging, device idle, sufficient battery/storage." },
-    { "front": "WorkManager vs AlarmManager?", "back": "WorkManager = deferrable guaranteed work; AlarmManager = exact-time alarms (use sparingly)." }
+    { "front": "What is WorkManager?", "back": "Jetpack library for deferrable, guaranteed background work with constraints." },
+    { "front": "Not for?", "back": "Exact-time alarms (use AlarmManager); UI-tied work (coroutines); user-visible ongoing (foreground service)." },
+    { "front": "Constraints examples?", "back": "NetworkType.UNMETERED, RequiresCharging, RequiresBatteryNotLow, RequiresDeviceIdle." },
+    { "front": "Result values?", "back": "success (chain proceeds), failure (chain aborts), retry (with backoff)." },
+    { "front": "Chaining?", "back": "beginWith(a).then(b).enqueue() — B receives A's output; runs only if A succeeded." },
+    { "front": "PeriodicWorkRequest min interval?", "back": "15 minutes." }
   ],
   "quiz": [
-    { "q": "WorkManager is best for…", "options": ["Exact-time alarms", "Guaranteed deferrable background work", "Drawing UI", "Immediate in-process tasks"], "answer": 1, "explain": "It guarantees deferrable work runs, even after reboot." },
-    { "q": "Which is a WorkManager feature?", "options": ["Exact scheduling", "Constraints + retries + chaining", "UI rendering", "Direct DB access only"], "answer": 1, "explain": "Constraints, backoff retries and work chaining are core features." },
-    { "q": "For an immediate one-off task while the app is open, prefer…", "options": ["WorkManager", "A coroutine", "AlarmManager", "A BroadcastReceiver"], "answer": 1, "explain": "Coroutines handle immediate in-process async work; WorkManager is for deferrable/guaranteed work." }
+    { "q": "WorkManager is for…", "options": ["Exact alarms", "Deferrable guaranteed background work", "UI updates", "Threading"], "answer": 1, "explain": "Deferrable + constraint-aware." },
+    { "q": "Minimum periodic interval?", "options": ["1 min", "5 min", "15 min", "1 hour"], "answer": 2, "explain": "Enforced by the system." },
+    { "q": "Best base class today?", "options": ["Worker", "IntentService", "CoroutineWorker", "AsyncTask"], "answer": 2, "explain": "Suspend + auto-cancel." },
+    { "q": "Prevent duplicate periodic scheduling?", "options": ["enqueue", "enqueueUniquePeriodicWork with KEEP", "cancel first", "Nothing"], "answer": 1, "explain": "Keeps the existing entry." },
+    { "q": "Observe Worker state with…", "options": ["Callback", "getWorkInfoByIdFlow", "onActivityResult", "BroadcastReceiver only"], "answer": 1, "explain": "Flow of WorkInfo." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Create a Worker that logs and run it once with enqueue()." },
-    { "level": "Medium", "text": "Add a network constraint and exponential backoff to an upload worker." },
-    { "level": "Hard", "text": "Chain compress → upload → notify workers and pass data between them." },
-    { "level": "Expert", "text": "Implement periodic sync with unique work and observe state via WorkInfo LiveData." }
+    { "level": "Easy", "text": "CoroutineWorker that logs 'hello' and returns Result.success." },
+    { "level": "Medium", "text": "Add constraints: Unmetered + BatteryNotLow." },
+    { "level": "Medium", "text": "Retry with EXPONENTIAL backoff; stop retrying after 3 attempts." },
+    { "level": "Hard", "text": "Chain compress → upload; upload receives compress output." },
+    { "level": "Hard", "text": "Observe WorkInfo Flow from a ViewModel; expose as StateFlow." },
+    { "level": "Expert", "text": "Test a Worker synchronously with WorkManagerTestInitHelper + Room in-memory DB." }
   ],
   "interviewQuestions": [
-    "What problem does WorkManager solve?",
-    "When use WorkManager vs coroutine vs AlarmManager vs foreground service?",
-    "How do constraints and backoff work?",
-    "How do you chain and pass data between workers?",
-    "Does WorkManager guarantee exact timing?"
+    "What is WorkManager and when do you use it?",
+    "How does WorkManager differ from AlarmManager / JobScheduler / Service?",
+    "What are Constraints in WorkManager?",
+    "How does chaining work?",
+    "How do you observe Worker status from the UI?",
+    "Result.success vs failure vs retry — what does each mean?",
+    "What is a CoroutineWorker and why prefer it?"
   ],
   "references": [
-    { "label": "Android — WorkManager", "url": "https://developer.android.com/topic/libraries/architecture/workmanager" }
+    { "label": "WorkManager — Android", "url": "https://developer.android.com/topic/libraries/architecture/workmanager" },
+    { "label": "Background work choices", "url": "https://developer.android.com/develop/background-work/background-tasks" }
   ]
 }

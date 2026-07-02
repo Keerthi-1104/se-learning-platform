@@ -104,64 +104,12 @@ body.push(...topicToChapter(loadTopic("level_03", "intents"),
   { chapterNumber: 4, bookmarkId: "ch4" }));
 
 // 5. Services
-body.push(H1("5. Services", "ch5"));
-body.push(callout("definition", ["A Service performs work without a UI. It does NOT create its own thread — heavy work must be offloaded or it blocks the main thread (ANR)."]));
-body.push(table(["Type", "Use", "Notes"], [
-  ["Foreground", "User-visible ongoing work", "Needs a persistent notification"],
-  ["Background", "Short work, no UI", "Restricted since Android 8"],
-  ["Bound", "Client-server", "Lives while clients are bound"],
-], [1800, 3500, 4060]));
-body.push(callout("interview", ["Since Android 8, background services are restricted to save battery. For deferrable guaranteed work use WorkManager; for ongoing user-visible work use a foreground service."]));
-body.push(...summary([
-  "Services run on the main thread by default — offload heavy work.",
-  "Foreground services need a persistent notification.",
-  "Background services are restricted since Android 8.",
-  "Prefer WorkManager/coroutines unless work is truly ongoing.",
-]));
-body.push(...interview([
-  "Types of services and when use each?",
-  "Does a Service run on its own thread?",
-  "Why were background services restricted in Android 8?",
-  "Service vs WorkManager vs coroutine?",
-  "How does a bound service work?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Create a foreground service with a notification." },
-  { level: "Medium", text: "Implement a bound service exposing a method." },
-  { level: "Hard", text: "Offload service work onto a coroutine to avoid ANR." },
-  { level: "Expert", text: "Build a location-tracking foreground service handling process death." },
-]));
-body.push(...realworld(["Music players and navigation apps use foreground services with a notification so the system keeps them alive while in use."]));
-body.push(...miniproject(["Build a step-counter foreground service that survives the app being backgrounded."]));
-body.push(...advanced(["Foreground service types (Android 14), startForeground timing limits, JobScheduler under the hood."]));
+body.push(...topicToChapter(loadTopic("level_03", "services"),
+  { chapterNumber: 5, bookmarkId: "ch5" }));
 
 // 6. Broadcast Receivers
-body.push(H1("6. Broadcast Receivers", "ch6"));
-body.push(callout("definition", ["A BroadcastReceiver responds to system or app events (connectivity, boot, battery) using a publish-subscribe model."]));
-body.push(callout("interview", ["Since Android 8 most implicit broadcasts can't be declared in the manifest (battery). Register them at runtime, or use WorkManager/observers instead."]));
-body.push(callout("mistake", ["onReceive runs on the main thread and the receiver is killed soon after returning — hand long work to WorkManager/coroutine."]));
-body.push(...summary([
-  "Receivers are a pub-sub mechanism for events.",
-  "Manifest receivers persist; context receivers live while registered.",
-  "Android 8 restricted manifest-declared implicit broadcasts.",
-  "Keep onReceive fast; defer real work.",
-]));
-body.push(...interview([
-  "What is a BroadcastReceiver?",
-  "Manifest vs context-registered receivers?",
-  "What changed for broadcasts in Android 8?",
-  "Why must onReceive be fast?",
-  "Alternatives for in-app events?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Register a connectivity-change receiver and log changes." },
-  { level: "Medium", text: "Tie a context-registered receiver to an activity lifecycle." },
-  { level: "Hard", text: "Trigger work from BOOT_COMPLETED via WorkManager." },
-  { level: "Expert", text: "Replace a LocalBroadcastManager flow with a shared Flow." },
-]));
-body.push(...realworld(["Apps that resume sync after reboot register a BOOT_COMPLETED receiver that enqueues WorkManager jobs."]));
-body.push(...miniproject(["Build a 'charging logger' that records when the device is plugged/unplugged."]));
-body.push(...advanced(["Ordered broadcasts, protected broadcasts, the exported flag and security."]));
+body.push(...topicToChapter(loadTopic("level_03", "broadcast_receivers"),
+  { chapterNumber: 6, bookmarkId: "ch6" }));
 
 // 7. Content Providers
 body.push(H1("7. Content Providers", "ch7"));
@@ -191,31 +139,8 @@ body.push(...miniproject(["Build a small notes provider that another app can rea
 body.push(...advanced(["Sync adapters, ContentObserver, document providers (SAF)."]));
 
 // 8. WorkManager
-body.push(H1("8. WorkManager", "ch8"));
-body.push(callout("definition", ["WorkManager is the recommended API for persistent, deferrable background work that must run even across restarts and reboots, picking the best underlying scheduler per OS."]));
-body.push(callout("interview", ["Use WorkManager for guaranteed deferrable work (upload, sync, backup). Don't use it for exact-time or immediate in-process tasks — use AlarmManager (exact) or coroutines (immediate)."]));
-body.push(...summary([
-  "WorkManager guarantees deferrable work survives reboots.",
-  "Supports constraints, backoff retries, and chaining.",
-  "Not for exact timing — it batches for battery.",
-  "Coroutines for immediate work; AlarmManager for exact alarms.",
-]));
-body.push(...interview([
-  "What problem does WorkManager solve?",
-  "WorkManager vs coroutine vs AlarmManager vs foreground service?",
-  "How do constraints and backoff work?",
-  "How do you chain workers and pass data?",
-  "Does it guarantee exact timing?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Create a Worker and enqueue it once." },
-  { level: "Medium", text: "Add a network constraint + exponential backoff." },
-  { level: "Hard", text: "Chain compress → upload → notify with data passing." },
-  { level: "Expert", text: "Periodic unique sync; observe via WorkInfo LiveData." },
-]));
-body.push(...realworld(["Photo-backup apps enqueue uploads constrained to Wi-Fi + charging; WorkManager resumes them after reboots automatically."]));
-body.push(...miniproject(["Build an offline outbox: queue messages and sync them with WorkManager when network returns."]));
-body.push(...advanced(["Expedited work, foreground-service workers, custom WorkerFactory + Hilt injection."]));
+body.push(...topicToChapter(loadTopic("level_03", "workmanager"),
+  { chapterNumber: 8, bookmarkId: "ch8" }));
 
 // 9. Jetpack
 body.push(...topicToChapter(loadTopic("level_03", "jetpack"),
@@ -238,37 +163,8 @@ body.push(...topicToChapter(loadTopic("level_03", "kotlin"),
   { chapterNumber: 13, bookmarkId: "ch13" }));
 
 // 14. Performance
-body.push(H1("14. Performance Optimization", "ch14"));
-body.push(callout("definition", ["Android performance means rendering each frame within ~16ms (60fps), using memory efficiently, and starting fast. Jank usually means too much work on the main thread."]));
-body.push(table(["Problem", "Cause", "Fix"], [
-  ["Jank", "Work on main thread", "Move to coroutine/background"],
-  ["Memory leak", "Long-lived Context/View refs", "App context, clear refs"],
-  ["Overdraw", "Stacked backgrounds", "Flatten layout"],
-  ["Slow startup", "Heavy onCreate", "Defer, lazy init"],
-], [2200, 3200, 3960]));
-body.push(callout("interview", ["The classic leak: an Activity Context held in a static field or singleton can't be GC'd after the activity is destroyed. Use application Context for long-lived needs; detect with LeakCanary."]));
-body.push(...summary([
-  "Keep the main thread free to hit the 16ms frame budget.",
-  "Leaks come from long-lived Context/View references.",
-  "Downsample images; use Glide/Coil to avoid OOM.",
-  "Measure with the Profiler before optimizing.",
-]));
-body.push(...interview([
-  "What causes jank and how to fix it?",
-  "How do Android memory leaks happen?",
-  "How do you handle large images?",
-  "What profiling tools do you use?",
-  "How do you improve startup time?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Profile a janky screen and move work off the main thread." },
-  { level: "Medium", text: "Add LeakCanary, reproduce and fix a leak." },
-  { level: "Hard", text: "Reduce overdraw with the Layout Inspector." },
-  { level: "Expert", text: "Cut startup time with Macrobenchmark + lazy init." },
-]));
-body.push(...realworld(["Apps obsess over cold-start time and scroll smoothness because both directly affect retention; teams gate releases on Macrobenchmark metrics."]));
-body.push(...miniproject(["Take a deliberately janky list screen and optimize it to a stable 60fps; document each fix with profiler numbers."]));
-body.push(...advanced(["Baseline Profiles, R8 full mode, StrictMode, systrace/Perfetto, ANR triage."]));
+body.push(...topicToChapter(loadTopic("level_03", "performance"),
+  { chapterNumber: 14, bookmarkId: "ch14" }));
 
 // Revision
 body.push(H1("Volume 3 Revision Cheat Sheet", "cheat"));

@@ -3,47 +3,79 @@
   "levelId": 3,
   "title": "Services",
   "xp": 40,
-  "estimatedMinutes": 20,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Differentiate foreground, background and bound services",
-    "Know modern background-work restrictions",
-    "Choose the right tool for long-running work"
+    "Understand Services via a real-life analogy",
+    "Distinguish foreground, background, and bound services",
+    "Know the Android 8+ background restrictions",
+    "Pick between Service, WorkManager, and coroutines",
+    "Answer service interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "A Service is an app component for work without a UI. It does NOT create its own thread — long work must run on a background thread or it blocks the main thread." },
-    { "type": "table", "headers": ["Type", "Use", "Notes"], "rows": [
-      ["Foreground", "User-visible ongoing work", "Requires a persistent notification"],
-      ["Background", "Short work, no UI", "Heavily restricted since Android 8"],
-      ["Bound", "Client-server within/between apps", "Lives while clients are bound"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of house staff.**\n\n- **Foreground Service** = a **security guard standing at the front door** — you SEE them, they wear a uniform (a persistent notification), and everyone knows they're on the job. Music playback, GPS tracking, an in-progress upload — the user sees it running.\n- **Background Service** = a **butler doing chores in another room** — invisible, silent. Great in theory, but Android since 8.0 (Oreo, 2017) heavily restricts these — batteries were dying because too many apps kept butlers running silently. Now background services get killed within minutes.\n- **Bound Service** = a **phone extension to a specialist** — clients (Activities/Fragments) 'bind' to the service, make calls to methods, unbind when done. The service lives only while at least one client is bound.\n\n**The modern reality:** for MOST work that used to be a background Service, use **WorkManager** (deferred work with constraints) or a **coroutine on `viewModelScope`** (UI-tied). Reach for a foreground Service only when the work is user-visible and ongoing (music, navigation, fitness tracking, an active upload)." },
+    { "type": "callout", "variant": "definition", "markdown": "**A Service** is an Android component that runs without a UI. Critically, a Service does NOT create its own thread — heavy work must be offloaded to a coroutine or Executor or you'll ANR the main thread. Since Android 8, **background** Services are heavily restricted; **foreground** Services (with a persistent notification) and **bound** Services remain common." },
+    { "type": "theory", "markdown": "## The three types" },
+    { "type": "table", "headers": ["Type", "Purpose", "Notification?", "Android 8+ restrictions"], "rows": [
+      ["**Foreground**", "User-visible ongoing work (music, GPS, upload)", "REQUIRED, persistent", "None — always allowed if properly declared"],
+      ["**Background**", "Non-UI work, no notification", "Not required", "**Heavily restricted** — killed shortly after app goes background"],
+      ["**Bound**", "Client-server IPC / method calls", "No", "Lives while at least one client is bound"]
     ]},
-    { "type": "callout", "variant": "mistake", "markdown": "Assuming a Service runs on a background thread. It runs on the main thread by default — do heavy work on a worker thread/coroutine, or you'll get ANRs." },
-    { "type": "callout", "variant": "interview", "markdown": "Since Android 8 (Oreo), background services are restricted to save battery. For deferrable/guaranteed work use **WorkManager**; for ongoing user-visible work use a **foreground service** with a notification." },
-    { "type": "callout", "variant": "tip", "markdown": "Don't reach for a Service by default. For most background tasks, WorkManager or coroutines are the right answer; reserve services for truly ongoing work (music, navigation, location)." }
+    { "type": "theory", "markdown": "## Sample program — a proper foreground music-player service" },
+    { "type": "code", "language": "kotlin", "code": "// File: MusicService.kt\nimport android.app.*\nimport android.content.Intent\nimport android.os.IBinder\nimport androidx.core.app.NotificationCompat\n\nclass MusicService : Service() {\n  companion object {\n    const val CHANNEL_ID = \"music_channel\"\n    const val NOTIF_ID = 1\n  }\n\n  override fun onBind(intent: Intent?): IBinder? = null   // not bound\n\n  override fun onCreate() {\n    super.onCreate()\n    createNotificationChannel()\n  }\n\n  override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {\n    // MUST call startForeground within a few seconds of onStartCommand or the system kills us\n    startForeground(NOTIF_ID, buildNotification(\"Playing…\"))\n    // Kick off actual playback (on a background dispatcher — Service itself is on main thread)\n    // playbackScope.launch { player.play(track) }\n    return START_STICKY   // restart if system kills us later\n  }\n\n  private fun buildNotification(text: String): Notification =\n    NotificationCompat.Builder(this, CHANNEL_ID)\n      .setContentTitle(\"MyMusic\")\n      .setContentText(text)\n      .setSmallIcon(android.R.drawable.ic_media_play)\n      .setOngoing(true)\n      .build()\n\n  private fun createNotificationChannel() {\n    val channel = NotificationChannel(CHANNEL_ID, \"Music\", NotificationManager.IMPORTANCE_LOW)\n    getSystemService(NotificationManager::class.java).createNotificationChannel(channel)\n  }\n}\n\n// AndroidManifest.xml\n// <service android:name=\".MusicService\"\n//          android:foregroundServiceType=\"mediaPlayback\"\n//          android:exported=\"false\" />\n// <uses-permission android:name=\"android.permission.FOREGROUND_SERVICE\" />\n// <uses-permission android:name=\"android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK\" />   <!-- Android 14+ -->\n\n// Start from an Activity:\n// startForegroundService(Intent(this, MusicService::class.java))\n// The service MUST call startForeground within ~5 seconds or the system throws ForegroundServiceDidNotStartInTimeException." },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Doing heavy work directly in the Service.** A Service runs on the main thread — network / DB there = ANR. Fix: launch a coroutine or use an Executor." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Not calling `startForeground` within 5 seconds.** System crashes your app with `ForegroundServiceDidNotStartInTimeException`. Call it FIRST in `onStartCommand`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Using a background Service for anything.** On Android 8+, background services are killed within minutes when the app goes to background. Fix: use **WorkManager** for deferrable work." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Missing `foregroundServiceType` (Android 10+) or the granular permission (Android 14+).** Newer Androids require you to declare *why* your foreground service exists: `mediaPlayback`, `location`, `dataSync`, `remoteMessaging`, etc." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Use WorkManager for deferrable background work.** Constraint-aware, survives reboots, retry logic — everything a background Service used to do, done right." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Reserve foreground Services for genuinely user-visible ongoing work.** Music, navigation, fitness tracking, active upload/download." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Always offload work in a Service to a background dispatcher.** Service is not a thread — it's a *lifecycle*." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Declare `foregroundServiceType`** in the manifest and request the matching granular permission for Android 14+." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Prefer `LifecycleService` when observing coroutines/LiveData/Flow** — same lifecycle-awareness benefits as fragments." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Foreground timer service.** Show 'Elapsed: Ns' in a persistent notification updated every second.\n\n**Why:** Feel the foreground-service lifecycle end-to-end." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Bound counter service.** Activity binds to a service that exposes an increment method; UI reflects the current count via callbacks or Flow.\n\n**Why:** Understand bound-service IPC." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — Foreground upload.** Upload a file with progress; show progress in the notification; handle cancellation.\n\n**Why:** Real-world user-visible background work." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is a Service and does it run on its own thread?**\n\n**A:** A Service is an Android component that runs without a UI — used for background work, IPC, or user-visible ongoing operations. **Crucially: a Service does NOT create its own thread.** All Service callbacks (`onCreate`, `onStartCommand`, `onBind`) run on the MAIN thread. If you do network/DB work directly, you'll block the UI thread and ANR. Solution: launch a coroutine (`serviceScope`), use `IntentService` (deprecated, ran on a worker thread by default), or `JobIntentService`. Since Android 8 background services are heavily restricted; today, WorkManager handles most background needs and Services are used mainly for user-visible foreground work." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: Foreground vs background vs bound Service — differences?**\n\n**A:** **Foreground** — must show a persistent notification; user is aware; no lifecycle restrictions. Use for music, navigation, fitness, active uploads. **Background** — no notification; since Android 8 killed within minutes when the app leaves foreground. Almost always the wrong choice today. **Bound** — clients (Activities) bind to the service, invoke methods across the IPC boundary; service lives only while at least one client is bound. Use for client-server-style access to a component. A single service can be started (`startService`) AND bound (`bindService`) simultaneously." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What restrictions changed in Android 8 (Oreo)?**\n\n**A:** **Background execution limits.** Prior to Android 8, apps could run background services indefinitely, draining battery. Android 8 said: if your app isn't in the foreground, we'll kill your background services in a few minutes. Push notifications and foreground services still work. The recommended replacement for most background work: **WorkManager**, which uses JobScheduler under the hood — the system batches jobs across apps to save power. Additional restrictions layered on since: Android 10 added `foregroundServiceType`; Android 12 introduced restricted background start of foreground services; Android 14 requires granular permissions per foreground type (`FOREGROUND_SERVICE_MEDIA_PLAYBACK`, `_LOCATION`, etc.)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: When would you choose WorkManager, a foreground Service, or a coroutine?**\n\n**A:** **Coroutine (`viewModelScope`/`lifecycleScope`)** — short work tied to a UI: fetch, DB query, compute. Cancels with the UI. **WorkManager** — deferrable, guaranteed background work with constraints (network required, only on charging): log upload, nightly sync, image processing. Survives reboots, retries with backoff. **Foreground Service** — user-visible ongoing work: music playback, navigation, fitness tracking, active upload with progress. Must show a notification. **Rule:** default to coroutines. Reach for WorkManager when work must survive process death or has constraints. Only use a foreground Service when the user needs to SEE the work happening." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What is the return value of `onStartCommand`?**\n\n**A:** One of the `START_*` flags telling the system what to do if it kills your service. **`START_STICKY`** — after kill, recreate the service with a null intent (system will call `onStartCommand` again). Good for a background music/tracking service that should self-restart. **`START_NOT_STICKY`** — don't recreate. Good for services triggered by a specific intent that don't need to persist. **`START_REDELIVER_INTENT`** — recreate the service and redeliver the last intent. Good for services processing a specific piece of work that shouldn't be lost. **`START_STICKY_COMPATIBILITY`** — legacy pre-2.0 behavior; avoid. Choice depends on whether your service is 'always running' or 'processing a task'." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Spotify, YouTube Music** — foreground media playback service with playback controls in the notification.\n- **Google Maps, Uber** — foreground location service while navigating or on a ride.\n- **Strava, Fitbit** — foreground activity-tracking service.\n- **File-transfer / backup apps** — foreground upload/download with progress bar.\n- **Cloud sync (Dropbox, Drive)** — background sync moved to WorkManager, foreground uploads for user-triggered transfers.\n- **Chat apps** — push messages via FCM → optional short foreground service for message delivery notifications." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`LifecycleService`** — a `Service` subclass that implements `LifecycleOwner`; use it to observe LiveData/Flow.\n- **`IntentService` (deprecated)** — historic single-worker queue; replaced by WorkManager / coroutines.\n- **`Messenger`-based bound service** — cross-process IPC; simpler than AIDL.\n- **AIDL** — full IPC contract for cross-process bound services (used by system services and remote APIs).\n- **`foregroundServiceType`** — Android 10+ manifest attribute; Android 14+ requires granular permission per type.\n- **`ForegroundServiceStartNotAllowedException`** (Android 12+) — can't start a foreground service from the background except in specific exempt cases (e.g., after a high-priority FCM push).\n- **Battery saver / Doze mode** — even foreground services can be affected in extreme low-power states.\n- **`ExoPlayer`'s `MediaSessionService`** — the modern pattern for media playback services." }
   ],
   "flashcards": [
-    { "front": "Does a Service run on a background thread?", "back": "No — it runs on the main thread by default; you must offload heavy work yourself." },
-    { "front": "Foreground vs background service?", "back": "Foreground shows a persistent notification for user-visible work; background is short and restricted since Android 8." },
-    { "front": "Modern choice for guaranteed deferrable work?", "back": "WorkManager." }
+    { "front": "Does a Service run on its own thread?", "back": "No — runs on the main thread. Offload work to a coroutine/Executor." },
+    { "front": "Foreground vs background vs bound?", "back": "Foreground = user-visible + notification; Background = restricted since Android 8; Bound = client-server, lives while bound." },
+    { "front": "Replacement for background service?", "back": "WorkManager for deferrable work; foreground service for user-visible ongoing work." },
+    { "front": "Must call startForeground within?", "back": "~5 seconds of onStartCommand or system throws ForegroundServiceDidNotStartInTimeException." },
+    { "front": "onStartCommand return values?", "back": "START_STICKY (recreate), START_NOT_STICKY (don't), START_REDELIVER_INTENT (recreate + redeliver)." }
   ],
   "quiz": [
-    { "q": "A Service by default runs on…", "options": ["A new background thread", "The main thread", "A coroutine", "The GPU"], "answer": 1, "explain": "Services share the main thread; offload heavy work explicitly." },
-    { "q": "A foreground service requires…", "options": ["Nothing special", "A persistent notification", "Root access", "A WebView"], "answer": 1, "explain": "Foreground services must show an ongoing notification." },
-    { "q": "For guaranteed deferrable background work, use…", "options": ["A background Service", "WorkManager", "A BroadcastReceiver", "onResume"], "answer": 1, "explain": "WorkManager handles constraints, retries and survives reboots." }
+    { "q": "A Service runs on…", "options": ["A worker thread", "The main thread", "Its own new thread", "IO dispatcher"], "answer": 1, "explain": "Same as Activity — main thread." },
+    { "q": "Background services since Android 8…", "options": ["Unaffected", "Killed within minutes when app is backgrounded", "Faster", "Deprecated"], "answer": 1, "explain": "Battery optimization." },
+    { "q": "Best fit for deferrable background work?", "options": ["Service", "WorkManager", "AlarmManager", "Timer"], "answer": 1, "explain": "Constraint-aware, guaranteed." },
+    { "q": "Foreground service MUST…", "options": ["Return START_STICKY", "Show a persistent notification", "Be bound", "Use AIDL"], "answer": 1, "explain": "Requirement for the foreground type." },
+    { "q": "Bound service lives…", "options": ["Forever", "Until app dies", "While at least one client is bound", "Only 30s"], "answer": 2, "explain": "Bound lifetime is tied to clients." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Create a foreground service that shows a notification while running." },
-    { "level": "Medium", "text": "Implement a bound service exposing a method to an activity." },
-    { "level": "Hard", "text": "Move heavy work in a service onto a coroutine/worker thread to avoid ANR." },
-    { "level": "Expert", "text": "Build a location-tracking foreground service that handles process death gracefully." }
+    { "level": "Easy", "text": "Build a foreground timer service that updates a notification every second." },
+    { "level": "Easy", "text": "Return the correct START_ flag for a self-restarting music service." },
+    { "level": "Medium", "text": "Create a bound service with a callback interface; an Activity increments a counter via it." },
+    { "level": "Hard", "text": "Upload a file with progress in a foreground service; handle cancel from the notification." },
+    { "level": "Expert", "text": "Migrate a legacy IntentService to WorkManager equivalents, preserving semantics." }
   ],
   "interviewQuestions": [
-    "Types of services and when use each?",
-    "Does a Service run on its own thread?",
-    "Why were background services restricted in Android 8?",
-    "Service vs WorkManager vs coroutine?",
-    "How does a bound service work?"
+    "What is a Service and does it run on its own thread?",
+    "Foreground vs background vs bound Service — differences?",
+    "What restrictions changed in Android 8 (Oreo)?",
+    "When would you choose WorkManager, a foreground Service, or a coroutine?",
+    "What is the return value of onStartCommand?"
   ],
   "references": [
-    { "label": "Android — Services overview", "url": "https://developer.android.com/guide/components/services" }
+    { "label": "Services overview — Android", "url": "https://developer.android.com/guide/components/services" },
+    { "label": "Foreground services (Android 14)", "url": "https://developer.android.com/about/versions/14/changes/fgs-types-required" }
   ]
 }

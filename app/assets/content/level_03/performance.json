@@ -2,49 +2,118 @@
   "id": "android.performance",
   "levelId": 3,
   "title": "Performance Optimization",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 50,
+  "estimatedMinutes": 45,
   "objectives": [
-    "Avoid jank by keeping the main thread free",
-    "Diagnose memory leaks and overdraw",
-    "Use the right profiling tools"
+    "Understand Android performance via a real-life analogy",
+    "Hit the 16 ms frame budget (60fps) reliably",
+    "Diagnose jank, ANRs, and memory leaks",
+    "Reduce app startup time",
+    "Answer performance interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Android performance is about rendering each frame within ~16ms (60fps), using memory efficiently, and starting fast. Dropped frames ('jank') usually mean the main thread is doing too much." },
-    { "type": "table", "headers": ["Problem", "Cause", "Fix"], "rows": [
-      ["Jank / dropped frames", "Work on main thread", "Move to coroutine/background"],
-      ["Memory leak", "Long-lived refs to Context/View", "Use App context, clear refs"],
-      ["Overdraw", "Stacked opaque backgrounds", "Flatten layout, remove bg"],
-      ["Slow startup", "Heavy work in onCreate/App", "Defer, lazy-init, App Startup"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of a train's tight timetable.**\n\n- The Android display refreshes 60 times per second (some devices 90/120 Hz). That gives your app exactly **16.67 ms per frame** to prepare the next screen. Miss the deadline and the same frame shows twice → the user sees **jank** (a stutter, hitch).\n- **The main thread is the ONE train on the ONE track** delivering frames to the display. Anything you put on that track — network calls, big JSONs, huge image decodes, sync file I/O — makes the train late. Late trains cause pile-ups (frame drops).\n- **Off-main-thread work is a parallel goods track**: coroutines / WorkManager / IO dispatcher. Anything longer than a few ms should ride the goods track.\n- **Memory leaks** are like train cars that never get uncoupled — they pile up in the yard until the whole system runs out of siding space (OutOfMemory). Every held-onto Activity is one such stuck car.\n- **App startup** is the initial 'get the train out of the depot' — every millisecond you spend in `Application.onCreate` and `Activity.onCreate` before the first frame delays the whole ride.\n\n**Performance is timetable discipline.** Measure with the Profiler, cut what's late." },
+    { "type": "callout", "variant": "definition", "markdown": "**Android performance** is the combined discipline of hitting the display frame budget (16 ms at 60fps), starting fast, using memory efficiently, and shipping a small binary. The main levers: **thread hygiene** (nothing slow on the UI thread), **memory hygiene** (no leaks, right-sized bitmaps), **rendering hygiene** (avoid overdraw, keep view hierarchies flat), and **startup hygiene** (defer everything you can)." },
+    { "type": "theory", "markdown": "## The four pillars of Android performance" },
+    { "type": "table", "headers": ["Pillar", "Problem", "Cause", "Fix"], "rows": [
+      ["**Rendering (jank)**", "Frame drops, stutter", "Work on main thread; deep view hierarchies; overdraw", "Move to coroutine; flatten layouts; profile with GPU Rendering; use Compose stability keys"],
+      ["**Memory**", "OOM crashes, sluggishness after use", "Leaked Activities/Views; over-sized bitmaps; unbounded caches", "LeakCanary; Glide/Coil; LruCache; use `applicationContext` for long-lived deps"],
+      ["**Startup**", "Slow launch, users leave", "Heavy `Application.onCreate`; content providers; sync init", "App Startup library; Baseline Profiles; lazy init; Macrobenchmark measurement"],
+      ["**Battery / Network**", "Battery drain, high data use", "Frequent wakeups; unnecessary polling; large payloads", "WorkManager batching; Firebase Cloud Messaging push; gzip; efficient formats (Protobuf)"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "The classic Android leak: holding an Activity Context in a static field or a long-lived singleton. The Activity can't be GC'd after it's destroyed. Use the application Context for long-lived needs and detect leaks with LeakCanary." },
-    { "type": "callout", "variant": "mistake", "markdown": "Loading full-resolution bitmaps into small ImageViews — a leading cause of OOM. Downsample (inSampleSize) or use an image library (Glide/Coil) that handles sizing and caching." },
-    { "type": "callout", "variant": "tip", "markdown": "Measure before optimizing. Use Android Studio Profiler (CPU/Memory/Network), Layout Inspector for overdraw, Macrobenchmark for startup, and LeakCanary for leaks." }
+    { "type": "theory", "markdown": "## The essential toolset" },
+    { "type": "table", "headers": ["Tool", "What it finds"], "rows": [
+      ["**Android Studio Profiler**", "CPU, memory, network, energy — live view of your app"],
+      ["**Layout Inspector**", "View hierarchy, overdraw, stability"],
+      ["**LeakCanary**", "Memory leaks with the full retain chain — a must-have in dev builds"],
+      ["**Macrobenchmark**", "Startup + jank + frame-timing measured on a real device, scriptable"],
+      ["**Baseline Profiles**", "AOT-compile hot code paths for faster startup + smoother scrolling"],
+      ["**`adb shell dumpsys gfxinfo <pkg>`**", "Rendering histogram — how many frames dropped"],
+      ["**Perfetto / systrace**", "System-level trace including binder, GC, and kernel scheduling"],
+      ["**StrictMode**", "Fails builds on main-thread disk/network access"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**The interview one-liner:** 'measure before you optimize.' Junior devs guess (\"maybe HashMap is slow?\") and rewrite the wrong thing. Senior devs profile the app first, find the actual bottleneck (usually main-thread I/O or bitmap decoding), and fix that single thing." },
+    { "type": "theory", "markdown": "## Sample program — fixing jank, a leak, and startup" },
+    { "type": "code", "language": "kotlin", "code": "// FILE: The three most common Android perf fixes, in one place\n\n// 1. JANK FIX — network on main thread was blocking frames\n// BAD:\nfun onCreate(...) {\n  val json = URL(url).readText()   // 500 ms — 30 frames dropped\n  render(json)\n}\n// GOOD:\nfun onCreate(...) {\n  lifecycleScope.launch {\n    val json = withContext(Dispatchers.IO) { URL(url).readText() }\n    render(json)\n  }\n}\n\n// 2. LEAK FIX — Activity Context held in a singleton\n// BAD:\nobject AppSingleton { lateinit var ctx: Context }   // if you pass an Activity, you leak it\n// GOOD:\nclass App : Application() {\n  override fun onCreate() { super.onCreate(); AppSingleton.ctx = applicationContext }\n}\n// Even better: don't store contexts in singletons; inject with Hilt.\n\n// 3. STARTUP FIX — heavy Application.onCreate\n// BAD:\nclass App : Application() {\n  override fun onCreate() {\n    super.onCreate()\n    Analytics.init(this)              // 200 ms\n    CrashReporter.init(this)          // 100 ms\n    ImageLoader.warmCache(this)       // 300 ms — user's screen is still blank!\n  }\n}\n// GOOD — defer non-critical:\nclass App : Application() {\n  override fun onCreate() {\n    super.onCreate()\n    CrashReporter.init(this)          // critical\n    // Defer the rest:\n    Handler(Looper.getMainLooper()).post {\n      Analytics.init(this)\n      ImageLoader.warmCache(this)\n    }\n  }\n}\n// EVEN BETTER — use the App Startup library to declare initializers with priorities,\n// generate Baseline Profiles to AOT-compile hot paths." },
+    { "type": "theory", "markdown": "## Rendering — how to hit 60 fps" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Keep the main thread free.** Every ms counts against your 16 ms budget. Network, DB, disk, JSON parsing → off main." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Flatten view hierarchies.** Deep nesting slows measure/layout passes. Use `ConstraintLayout` instead of nested `LinearLayout`s. In Compose, avoid unnecessary `Box`/`Column` wrappers." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Fix overdraw.** Each pixel drawn multiple times = wasted GPU. Enable **Show Overdraw** in Developer Options; aim for mostly clear/blue (1-2x)." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Use RecyclerView correctly.** `ListAdapter` with `DiffUtil`; `setHasFixedSize(true)`; `setItemViewCacheSize` for smooth scrolling; view types for heterogeneous lists." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Compose stability + keys.** Use stable data classes; add `key(id)` in `items(...)`; mark unstable types `@Immutable`/`@Stable`; use `derivedStateOf` for computed state." },
+    { "type": "theory", "markdown": "## Memory — the leak-and-image dance" },
+    { "type": "callout", "variant": "best", "markdown": "**1. LeakCanary in dev builds.** Automatic leak detection with the retain chain. Fix leaks as they surface." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Use `applicationContext` for long-lived references.** Never store an Activity Context in a singleton." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Bounded caches.** Use `LruCache` / `DiskLruCache`. Never let a Map grow forever." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Downsample images.** Use `Glide`/`Coil` — they resize on the fly to the target ImageView size. Never load a 4000×3000 photo into a 200×200 thumbnail." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Null ViewBinding in `onDestroyView`.** Standard fragment idiom." },
+    { "type": "theory", "markdown": "## Startup — the first-impression battle" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Measure with Macrobenchmark.** Cold-start / warm-start / hot-start timing on a real device. Set a budget (say, < 1 s cold on mid-tier)." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Cut work from `Application.onCreate`.** Non-critical init → post to Handler or a background dispatcher." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Adopt Baseline Profiles.** Ship pre-computed AOT-compile hints; measurable improvement in startup and scroll (20–40%)." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Use the App Startup library.** Central place to declare initializers with priorities and dependencies." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Show a fast splash / first paint.** Android 12+ splash-screen API renders a system splash immediately; make sure your first frame doesn't fetch anything sync." },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Optimizing without profiling.** 'HashMap must be slow' → 3 days rewriting map code → real bottleneck was 400 ms of JSON parsing on the main thread." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Ignoring the `<application>` `largeHeap=\"true\"` shortcut.** It doesn't fix leaks; it delays OOM by minutes. Fix the leaks." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: `parallelStream()` / creating threads directly.** Threads are expensive; use coroutines with proper dispatchers." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: R8 disabled in release builds.** Ships un-minified bytecode; apps 30–50% larger, slower on-device parse, less confidential." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Debug builds when benchmarking.** Always benchmark release builds — R8, no Compose Live Edit, no logs." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Enable Show Overdraw** on Developer Options and hunt for red areas in your app; flatten one layout to reduce overdraw." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Integrate LeakCanary** and intentionally leak an Activity (Activity ref in a singleton). Fix it." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Move a slow onCreate call off main.** Wrap with `lifecycleScope.launch { withContext(Dispatchers.IO) { … } }`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Macrobenchmark cold-start** and try to cut 20% by deferring init in `Application.onCreate`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Generate + apply Baseline Profile** and remeasure. Document the delta." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What causes jank on Android and how do you fix it?**\n\n**A:** **Jank** is when a frame takes longer than 16 ms to prepare, so the display shows the previous frame again — the user sees a stutter. Causes: (1) **Main-thread work** — network, DB, big JSON parsing, image decoding on the UI thread. (2) **Deep view hierarchies** — measure/layout costs balloon with nested containers. (3) **Overdraw** — the GPU redrawing pixels multiple times per frame. (4) **Bad RecyclerView usage** — no DiffUtil, no view recycling, layout thrash. **Fix:** move work off main (coroutine + `Dispatchers.IO`/`Default`), flatten to `ConstraintLayout`, enable Show Overdraw and remove unnecessary backgrounds, use `ListAdapter + DiffUtil`. **Measure with:** Systrace/Perfetto, GPU Rendering profiler, Macrobenchmark's frame-timing metrics." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How do memory leaks happen on Android?**\n\n**A:** A leak = an object cannot be garbage-collected because something outside it holds a reference. Classic causes: **(1) Activity/Context in a singleton** — the singleton outlives the Activity, so GC can't reclaim the Activity's ~1 MB. Rotation multiplies the leak. **(2) Long-lived callback / listener / handler** referencing `this` outer Activity. **(3) A coroutine launched in `GlobalScope`** referencing UI. **(4) Static field holding a View**. **(5) Anonymous inner classes / lambdas** holding implicit `this`. **Fixes:** never store Activity/Context in singletons — use `applicationContext` or DI; scope coroutines to `viewModelScope`/`lifecycleScope`; use `WeakReference` if you must hold a Context. **Detect with LeakCanary** — it surfaces the exact retain chain automatically." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do you handle large images to avoid OOM?**\n\n**A:** Never load a full-size image into memory. Use a proper image library — **Glide** or **Coil** (Kotlin-first, coroutine-native). They: (1) decode to the target `ImageView` size — a 4000×3000 photo becomes 200×200. (2) Use `RGB_565` or `HARDWARE` `Bitmap.Config` when appropriate. (3) Cache to memory (LruCache) and disk automatically. (4) Cancel in-flight requests when the view is recycled. (5) Handle lifecycle so requests cancel on Activity destroy. For **very large images** (whole-screen photo viewers), consider `SubsamplingScaleImageView` (tile-based) or Android's `BitmapRegionDecoder`. **Rule:** never do raw `BitmapFactory.decodeStream(...)` in production." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What tools do you use for Android profiling?**\n\n**A:** **Android Studio Profiler** (CPU/memory/network/energy — the daily driver). **Systrace / Perfetto** for system-level traces including binder and GC. **LeakCanary** for memory leaks with retain chains. **Macrobenchmark** for scripted startup + frame-timing measurements on a real device. **Baseline Profiles** to AOT-compile hot paths for the release build. **`adb shell dumpsys gfxinfo <pkg> framestats`** for a rendering histogram. **StrictMode** to fail builds when main-thread I/O sneaks in. Any experienced Android dev uses at least the Profiler + LeakCanary + Macrobenchmark regularly." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you improve app startup time?**\n\n**A:** Three levers. **(1) Cut `Application.onCreate` work.** Everything you do here runs before the first frame. Move non-critical init (analytics warm-up, image cache warm-up) to a `Handler.post`, a coroutine, or WorkManager. **(2) Adopt the App Startup library** — declares initializers with priorities and dependencies; one entry point instead of Content Providers scattered by third-party SDKs. **(3) Ship a Baseline Profile.** Pre-compiled hot paths cut cold-start by ~30% on typical apps. **Measure with Macrobenchmark cold/warm/hot** — you can't improve what you don't measure. **Also:** use the Android 12+ splash-screen API so the user sees something instant, even while your first frame is loading." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What is Baseline Profile?**\n\n**A:** A pre-defined list of method signatures that the Android Runtime AOT-compiles ahead of first use. Normally ART compiles methods JIT — hot methods get compiled after N executions, causing early-launch jank while things warm up. A Baseline Profile ships the 'critical path' ahead of time so key methods are already fast on first launch. Google ships one for `androidx.compose.*` automatically. You can generate one for YOUR app by running Macrobenchmark's baseline-profile generator with your critical user journey. Typical improvement: 20–40% cold-start, noticeably smoother first scroll." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What is StrictMode?**\n\n**A:** A developer-mode monitor that logs (and can crash the app) whenever your code performs disk or network I/O on the main thread, or leaks Activities/SQLite cursors. Enable in `Application.onCreate` for debug builds:\n```kotlin\nStrictMode.setThreadPolicy(StrictMode.ThreadPolicy.Builder().detectAll().penaltyLog().build())\nStrictMode.setVmPolicy(StrictMode.VmPolicy.Builder().detectAll().penaltyLog().build())\n```\nBig teams enable `penaltyDeath()` so violations crash in dev — impossible to accidentally merge main-thread I/O. Doesn't run in release, so no user impact. It's one of the cheapest wins for Android performance discipline." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q8: How do you reduce app size (APK/AAB)?**\n\n**A:** **(1) Ship an AAB (Android App Bundle), not APK.** Play delivers device-specific slices — often halving install size. **(2) Enable R8** (default in release). Removes unused code + resources, minifies. **(3) Enable resource shrinking.** Removes unused drawables, strings, layouts. **(4) Use vector drawables** for icons, not PNG variants. **(5) Compress PNGs / prefer WebP** for photos. **(6) Split assets with Play Feature Delivery** — only download on-demand. **(7) Remove unused libraries** — check with the APK Analyzer in Studio. Big wins are usually 20–50% size reduction with these alone." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **All FAANG Android apps** — heavy investment in performance: Baseline Profiles, R8, Macrobenchmark, custom traces.\n- **Uber/Lyft** — startup obsessive; every ms of first-map-frame matters for conversion.\n- **Instagram/Snapchat** — memory obsessive; camera + image processing is the biggest OOM risk.\n- **Netflix** — jank obsessive; a stuttering video-player list would tank engagement.\n- **Media apps (Spotify, Podcasts)** — foreground-service correctness, low idle battery.\n- **Enterprise apps** — cold-start battle to keep users; teams routinely target < 1.5 s cold on mid-tier phones." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`Choreographer.postFrameCallback`** — measure frame timing yourself.\n- **`ANR-Watchdog` library** — detects main-thread hangs in production.\n- **Firebase Perf Monitoring** — production traces + custom metrics.\n- **JankStats** (Jetpack) — measure jank in the wild.\n- **`android.view.Choreographer.FrameCallback`** — hook into the vsync loop.\n- **`InProcessTest`** and **`androidx.tracing`** — annotate custom trace sections.\n- **Compose stability inference** — `@Immutable`, `@Stable`, KSP-generated stability info in newer versions.\n- **App size and startup are tracked in Play Console vitals** — Google downranks apps with poor vitals in Play Search." }
   ],
   "flashcards": [
-    { "front": "Frame budget for 60fps?", "back": "~16ms per frame; exceeding it drops frames (jank)." },
-    { "front": "Most common Android memory leak?", "back": "Holding an Activity Context/View in a static or long-lived object." },
-    { "front": "Why downsample bitmaps?", "back": "Full-res images in small views waste memory and cause OOM; downsample or use Glide/Coil." }
+    { "front": "Frame budget?", "back": "16.67 ms at 60fps; 8.33 ms at 120fps." },
+    { "front": "Rule 1?", "back": "Keep main thread free — move network/DB/parsing off." },
+    { "front": "Common leak?", "back": "Activity/Context stored in a singleton — GC can't reclaim it." },
+    { "front": "Image loader?", "back": "Glide or Coil — downsample to view size automatically." },
+    { "front": "Detect leaks?", "back": "LeakCanary in debug builds — surfaces the retain chain." },
+    { "front": "Cut startup?", "back": "Defer non-critical init; use App Startup library; ship a Baseline Profile." },
+    { "front": "Measure startup with?", "back": "Macrobenchmark cold/warm/hot on a real device." }
   ],
   "quiz": [
-    { "q": "Jank is usually caused by…", "options": ["Too much RAM", "Heavy work on the main thread", "Fast networking", "Dark mode"], "answer": 1, "explain": "Blocking the UI thread misses the frame deadline." },
-    { "q": "A common leak source is…", "options": ["Application context", "Static reference to an Activity/View", "Local variables", "Coroutines in viewModelScope"], "answer": 1, "explain": "Static Activity refs prevent garbage collection." },
-    { "q": "Best first step to optimize?", "options": ["Guess and rewrite", "Measure with the Profiler", "Add more threads", "Disable GC"], "answer": 1, "explain": "Profile to find the real bottleneck before changing code." }
+    { "q": "60fps frame budget?", "options": ["10 ms", "16 ms", "33 ms", "60 ms"], "answer": 1, "explain": "1000/60 ≈ 16.67 ms." },
+    { "q": "Classic memory-leak cause?", "options": ["Kotlin", "Activity Context held in a singleton", "R8", "Coroutines"], "answer": 1, "explain": "Old Activity can't be GC'd." },
+    { "q": "Detect leaks with…", "options": ["LeakCanary", "R8", "Perfetto only", "Nothing"], "answer": 0, "explain": "Purpose-built." },
+    { "q": "Reduce app size?", "options": ["Bigger APK", "AAB + R8 + resource shrinking", "Disable Proguard", "Use PNGs"], "answer": 1, "explain": "Standard trio." },
+    { "q": "Improve cold start with…", "options": ["Baseline Profile + defer init", "Bigger heap", "Debug flags", "More threads"], "answer": 0, "explain": "AOT + trimmed onCreate." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Find a janky screen with the Profiler and move work off the main thread." },
-    { "level": "Medium", "text": "Add LeakCanary, reproduce a leak, and fix it." },
-    { "level": "Hard", "text": "Reduce overdraw on a screen using the Layout Inspector." },
-    { "level": "Expert", "text": "Measure and cut app startup time with Macrobenchmark and lazy init." }
+    { "level": "Easy", "text": "Enable StrictMode in debug; fix any main-thread I/O it reveals." },
+    { "level": "Easy", "text": "Add LeakCanary; intentionally leak an Activity; fix it." },
+    { "level": "Medium", "text": "Flatten a nested LinearLayout into ConstraintLayout; measure the perf delta." },
+    { "level": "Medium", "text": "Replace manual Bitmap decoding with Glide/Coil." },
+    { "level": "Hard", "text": "Run Macrobenchmark cold-start; cut 20% by deferring init." },
+    { "level": "Hard", "text": "Generate a Baseline Profile for your critical journey; ship it; remeasure." },
+    { "level": "Expert", "text": "Full audit: Overdraw, LayoutInspector, LeakCanary, Macrobenchmark, dumpsys gfxinfo; publish before/after metrics." }
   ],
   "interviewQuestions": [
-    "What causes jank and how do you fix it?",
-    "How do Android memory leaks happen?",
-    "How do you handle large images efficiently?",
-    "What tools do you use to profile an app?",
-    "How do you improve app startup time?"
+    "What causes jank on Android and how do you fix it?",
+    "How do memory leaks happen on Android?",
+    "How do you handle large images to avoid OOM?",
+    "What tools do you use for Android profiling?",
+    "How do you improve app startup time?",
+    "What is Baseline Profile?",
+    "What is StrictMode?",
+    "How do you reduce app size (APK/AAB)?"
   ],
   "references": [
-    { "label": "Android — App performance", "url": "https://developer.android.com/topic/performance" }
+    { "label": "App performance overview", "url": "https://developer.android.com/topic/performance" },
+    { "label": "Baseline Profiles", "url": "https://developer.android.com/topic/performance/baselineprofiles/overview" }
   ]
 }

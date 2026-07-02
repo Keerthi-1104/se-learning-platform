@@ -2,47 +2,83 @@
   "id": "android.broadcast_receivers",
   "levelId": 3,
   "title": "Broadcast Receivers",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "xp": 35,
+  "estimatedMinutes": 25,
   "objectives": [
-    "Explain broadcasts and receivers",
-    "Choose manifest vs context-registered receivers",
-    "Know the modern restrictions on implicit broadcasts"
+    "Understand BroadcastReceivers via a real-life analogy",
+    "Distinguish system, custom, and local broadcasts",
+    "Register statically (manifest) vs dynamically (runtime)",
+    "Know the Android 8+ manifest-declared broadcast restrictions",
+    "Answer BroadcastReceiver interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "A BroadcastReceiver responds to system-wide or app events (connectivity changes, boot completed, battery low). It's a publish-subscribe mechanism between components and apps." },
-    { "type": "table", "headers": ["Registration", "Lifetime", "Use"], "rows": [
-      ["Manifest-declared", "Always (even app not running)", "A few allowed system events"],
-      ["Context-registered", "While registered (e.g., activity visible)", "Most runtime events"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of a radio station.**\n\n- The system (or your app) is the **radio station** broadcasting on specific frequencies (actions like `ACTION_BOOT_COMPLETED`, `ACTION_BATTERY_LOW`, or your own custom `\"com.myapp.SYNC_DONE\"`).\n- A **BroadcastReceiver** is a **radio tuned to a specific frequency** — declared in the manifest or registered at runtime, waiting to catch messages. When a matching broadcast plays, the receiver's `onReceive` fires.\n- Old Android was 'broadcast everywhere' — every app could hear everything. That was a battery-and-privacy nightmare: dozens of apps waking up on every `CONNECTIVITY_CHANGED` broadcast. Since Android 8, most **implicit** system broadcasts can no longer be declared in the manifest — they need runtime registration, which ties them to your app's lifecycle.\n\n**Why they still matter:** system events (SMS received, boot, headphones plugged, package installed) still fire as broadcasts. Custom in-app messaging between components is still common. But the mental model has shifted from 'always-on radios' to 'radios that are on only when the app is alive.'" },
+    { "type": "callout", "variant": "definition", "markdown": "**A BroadcastReceiver** is an Android component that listens for **Intents broadcast across the system or app**. `onReceive(context, intent)` runs briefly on the main thread (< ~10 s or ANR). Two flavors: **manifest-declared** (system launches your app when the broadcast fires — heavily restricted since Android 8) and **context-registered / dynamic** (registered/unregistered at runtime, tied to a component's lifecycle)." },
+    { "type": "theory", "markdown": "## The two ways to register" },
+    { "type": "table", "headers": ["Registration", "How", "Use for"], "rows": [
+      ["**Manifest-declared (static)**", "`<receiver>` in AndroidManifest with `<intent-filter>`", "Rare system broadcasts still allowed (BOOT_COMPLETED, PACKAGE_ADDED for your own package); explicit intents"],
+      ["**Context-registered (dynamic)**", "`context.registerReceiver(...)` / `unregisterReceiver(...)`", "Anything tied to a component's lifetime — connectivity, screen on/off, custom in-app events"],
+      ["**LocalBroadcastManager (deprecated)**", "Was: intra-app broadcast", "Use Flow / SharedFlow / EventBus alternative instead"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "Since Android 8, most **implicit** broadcasts can no longer be declared in the manifest (battery drain). Register them at runtime, or use explicit broadcasts/WorkManager/observers instead." },
-    { "type": "callout", "variant": "mistake", "markdown": "Doing long work in onReceive — it runs on the main thread and the receiver is killed shortly after returning. Hand off to WorkManager or a coroutine; don't block." },
-    { "type": "callout", "variant": "tip", "markdown": "For in-app events, prefer a LiveData/Flow/observer pattern over LocalBroadcastManager (deprecated). Use system broadcasts only for genuine system events." }
+    { "type": "callout", "variant": "interview", "markdown": "**The Android 8+ rule:** manifest-declared receivers for **most implicit system broadcasts** stopped working. Reason: too many apps had zombie receivers waking on every connectivity change. Exceptions: **explicit** broadcasts (someone sends to your specific receiver), plus a short whitelist including `BOOT_COMPLETED`, `LOCALE_CHANGED`, `TIMEZONE_CHANGED`, `MY_PACKAGE_REPLACED`, alarm actions, etc." },
+    { "type": "theory", "markdown": "## Sample program — headphone plug listener + custom broadcast" },
+    { "type": "code", "language": "kotlin", "code": "// File: HeadsetReceiver.kt — receives system broadcast\nimport android.content.*\n\nclass HeadsetReceiver : BroadcastReceiver() {\n  override fun onReceive(context: Context, intent: Intent) {\n    if (intent.action == Intent.ACTION_HEADSET_PLUG) {\n      val plugged = intent.getIntExtra(\"state\", 0) == 1\n      android.util.Log.d(\"HS\", if (plugged) \"headphones plugged in\" else \"unplugged\")\n    }\n  }\n}\n\n// Register/unregister dynamically in an Activity — tied to Activity lifecycle\nclass MainActivity : AppCompatActivity() {\n  private val receiver = HeadsetReceiver()\n\n  override fun onStart() {\n    super.onStart()\n    val filter = IntentFilter(Intent.ACTION_HEADSET_PLUG)\n    registerReceiver(receiver, filter)\n  }\n\n  override fun onStop() {\n    super.onStop()\n    unregisterReceiver(receiver)   // MUST unregister or leak\n  }\n\n  // Fire a custom broadcast to notify other components (or apps)\n  private fun notifySyncDone() {\n    // Since Android 14 (API 34), you must specify RECEIVER_EXPORTED or RECEIVER_NOT_EXPORTED\n    val intent = Intent(\"com.myapp.SYNC_DONE\")\n      .setPackage(packageName)   // limit to our own app for privacy\n      .putExtra(\"count\", 42)\n    sendBroadcast(intent)\n  }\n}\n\n// AndroidManifest.xml — manifest-declared receiver for BOOT_COMPLETED (still allowed)\n// <receiver android:name=\".BootReceiver\" android:exported=\"true\">\n//   <intent-filter>\n//     <action android:name=\"android.intent.action.BOOT_COMPLETED\" />\n//   </intent-filter>\n// </receiver>\n// <uses-permission android:name=\"android.permission.RECEIVE_BOOT_COMPLETED\" />" },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Doing heavy work in `onReceive`.** It runs on the main thread with a strict ~10 s window. Do minimal work; delegate to WorkManager for anything longer." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Forgetting `unregisterReceiver`.** Leaks the receiver, keeps the Activity in memory. Pair register in `onStart` / unregister in `onStop` (or `onResume` / `onPause`)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Manifest-declaring implicit broadcasts on Android 8+.** Won't fire. Register dynamically instead." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Missing `RECEIVER_EXPORTED` / `RECEIVER_NOT_EXPORTED` on Android 14+.** `registerReceiver` throws `SecurityException` without one. Use `NOT_EXPORTED` unless another app must reach you." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Using `LocalBroadcastManager` in new code.** Deprecated. Use a `SharedFlow`, `EventBus`, or DI-injected mediator instead." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Prefer dynamic registration.** Ties receivers to the correct component's lifecycle; auto-freed on process death." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Keep `onReceive` fast — under a second ideally.** Kick off longer work via WorkManager or a coroutine." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Use `setPackage(packageName)` on internal broadcasts.** Limits delivery to your app — much safer." },
+    { "type": "callout", "variant": "best", "markdown": "**4. On Android 14+, specify `RECEIVER_NOT_EXPORTED` by default.** Only export when another app truly needs to send to you." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Replace intra-app broadcasts with SharedFlow.** Type-safe, lifecycle-aware, coroutine-native." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Headphone plug listener.** Register/unregister with lifecycle; toast on plug/unplug." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Boot receiver + WorkManager.** On BOOT_COMPLETED, enqueue a one-off sync worker." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Hard) — Custom broadcast between two of your Activities.** Send a `\"com.myapp.EVENT\"` with `setPackage(packageName)`; receive in another Activity." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is a BroadcastReceiver?**\n\n**A:** A BroadcastReceiver is one of the four Android app components. It listens for `Intent` broadcasts sent by the system or by apps. `onReceive(context, intent)` runs briefly (< ~10 s) on the main thread — do minimal work and delegate longer tasks to WorkManager. Two registration styles: **manifest** (declared in `AndroidManifest.xml`; system launches your app to deliver even if the app was dead — heavily restricted since Android 8) and **context-registered** (registered dynamically at runtime; tied to a component's lifecycle). Common uses: reacting to system events (boot, connectivity, headphone, SMS), and intra-app / inter-app messaging." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What changed in Android 8 for BroadcastReceivers?**\n\n**A:** Most **implicit** system broadcasts (broadcasts not targeted at a specific app) can no longer be declared in the manifest. Before Android 8, dozens of apps could each have a manifest receiver for `CONNECTIVITY_CHANGED`, and every network event would wake them all up — battery and performance disaster. Now, if you want to listen for such events, you must register at runtime — which naturally ties the receiver to your app being alive. **Exceptions:** explicit broadcasts (someone sending to your specific `ComponentName`), plus a whitelist including `BOOT_COMPLETED`, `LOCALE_CHANGED`, `TIMEZONE_CHANGED`, `MY_PACKAGE_REPLACED`, `NEW_OUTGOING_CALL`, and alarm-triggered actions." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: When should you use a BroadcastReceiver vs a SharedFlow vs LiveData?**\n\n**A:** **BroadcastReceiver** — cross-app or cross-process events, and system-fired events (SMS, boot, connectivity). Only choice when the sender is another process. **SharedFlow** — intra-app events between components (VM → UI, service → observer) — type-safe, coroutine-native, no manifest ceremony. Modern replacement for `LocalBroadcastManager`. **LiveData / StateFlow** — for state (something with a current value observers care about). **Rule:** if the event crosses process boundaries → BroadcastReceiver. Otherwise → SharedFlow. Avoid BroadcastReceiver for intra-app messaging; it's heavier and less type-safe than the alternatives." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: Why must `onReceive` be fast?**\n\n**A:** `onReceive` runs on the main thread and has a strict window (~10 seconds by default) before the system considers the receiver unresponsive and may kill the process with an ANR-style event. Additionally, if the receiver was launched by a broadcast to a manifest-declared receiver, the OS holds a wake lock while `onReceive` runs; long-running work drains battery and blocks other broadcasts. **Solution:** do minimal decision logic in `onReceive`, then delegate to WorkManager (`OneTimeWorkRequestBuilder<...>()`) or a foreground service for anything substantial. For quick coroutine work, `goAsync()` extends the window a bit and lets you finish an async task before returning." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: Explicit vs implicit broadcast, and why does it matter?**\n\n**A:** **Explicit** — the broadcast Intent names a specific `ComponentName` or target package (`setPackage(...)` / explicit `ComponentName`). Only that receiver gets it. Safer and less impactful on system performance. **Implicit** — the broadcast has an `action` string and no target; ANY receiver with a matching intent filter can receive it. That's why the system restricts implicit broadcasts starting Android 8. **Best practice:** for intra-app broadcasts, always call `intent.setPackage(packageName)` — makes an otherwise-implicit broadcast explicit, avoiding leakage to other apps and speeding up delivery." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **System integrations** — SMS received, boot completed, package installed, battery low, headphone plug.\n- **Push notifications** — FCM ultimately fires an Intent that a receiver handles.\n- **Widgets** — RemoteViews click firing a broadcast the widget's receiver handles.\n- **Media button events** — a receiver handles play/pause from Bluetooth headsets.\n- **Alarm callbacks** — `AlarmManager` fires broadcasts at scheduled times.\n- **Custom in-app broadcasts** — becoming rare; replaced by SharedFlow in modern apps." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`goAsync()`** — extends the receiver's window; call `PendingResult.finish()` when done.\n- **Ordered broadcasts** — receivers can `abortBroadcast()` to prevent lower-priority receivers from receiving; use `<intent-filter android:priority=\"...\">`.\n- **Sticky broadcasts** — deprecated; used to keep the last broadcast for later receivers.\n- **Runtime-registered receivers with a specific `Context`** — receivers registered with `applicationContext` outlive Activity destruction (leak risk); prefer Activity/Fragment context.\n- **`RECEIVER_EXPORTED`/`RECEIVER_NOT_EXPORTED`** (Android 14+) — mandatory flag for dynamic registration.\n- **Manifest-declared receiver + `<permission>`** — restrict who can broadcast to you.\n- **`LocalBroadcastManager`** — deprecated, moved to unbundled `androidx.localbroadcastmanager` for legacy code only." }
   ],
   "flashcards": [
-    { "front": "Manifest vs context-registered receiver?", "back": "Manifest receivers persist even when the app isn't running (limited events); context-registered ones live only while registered." },
-    { "front": "What changed for broadcasts in Android 8?", "back": "Most implicit broadcasts can't be registered in the manifest, to reduce wakeups/battery drain." },
-    { "front": "Why keep onReceive short?", "back": "It runs on the main thread and the receiver is killed soon after returning — offload work." }
+    { "front": "onReceive runs on…", "back": "Main thread; must finish in <~10 s or ANR." },
+    { "front": "Two registration styles?", "back": "Manifest (static) vs Context.registerReceiver (dynamic)." },
+    { "front": "Android 8 change?", "back": "Most implicit system broadcasts can no longer be manifest-declared." },
+    { "front": "Modern replacement for LocalBroadcastManager?", "back": "SharedFlow / EventBus / DI-injected mediator." },
+    { "front": "Explicit vs implicit broadcast?", "back": "Explicit names a target (setPackage/ComponentName); implicit is any matching filter." },
+    { "front": "Android 14+ dynamic register flag?", "back": "RECEIVER_EXPORTED or RECEIVER_NOT_EXPORTED (default NOT_EXPORTED)." }
   ],
   "quiz": [
-    { "q": "A BroadcastReceiver implements a…", "options": ["Singleton pattern", "Publish-subscribe pattern", "Factory pattern", "Builder pattern"], "answer": 1, "explain": "Broadcasts are a pub-sub mechanism for events." },
-    { "q": "Since Android 8, most implicit broadcasts…", "options": ["Run faster", "Can't be declared in the manifest", "Are encrypted", "Require root"], "answer": 1, "explain": "They must be registered at runtime to limit background wakeups." },
-    { "q": "Long work in onReceive should be…", "options": ["Done inline", "Handed off to WorkManager/coroutine", "Run on the UI thread forever", "Ignored"], "answer": 1, "explain": "onReceive must return quickly; defer real work." }
+    { "q": "onReceive runs on…", "options": ["A worker thread", "The main thread", "IO", "Any thread"], "answer": 1, "explain": "Same as Activity callbacks." },
+    { "q": "Android 8 removed manifest support for…", "options": ["All broadcasts", "Most implicit system broadcasts", "BOOT_COMPLETED", "Explicit ones"], "answer": 1, "explain": "BOOT_COMPLETED still allowed." },
+    { "q": "For intra-app messaging today prefer…", "options": ["LocalBroadcastManager", "SharedFlow", "AIDL", "AlarmManager"], "answer": 1, "explain": "Type-safe + coroutine-native." },
+    { "q": "Register dynamically requires (API 34+)…", "options": ["Nothing new", "RECEIVER_EXPORTED / NOT_EXPORTED", "Permission", "MainActivity"], "answer": 1, "explain": "Mandatory flag." },
+    { "q": "Long work in a receiver should…", "options": ["Sleep in onReceive", "Enqueue WorkManager or start a foreground service", "Never", "Use runBlocking"], "answer": 1, "explain": "Delegate longer work." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Register a receiver for connectivity changes and log them." },
-    { "level": "Medium", "text": "Use a context-registered receiver tied to an activity's lifecycle." },
-    { "level": "Hard", "text": "Trigger work from a BOOT_COMPLETED receiver via WorkManager." },
-    { "level": "Expert", "text": "Replace a LocalBroadcastManager flow with a shared Flow/observer." }
+    { "level": "Easy", "text": "Register a headphone-plug receiver in onStart, unregister in onStop." },
+    { "level": "Medium", "text": "Manifest-declare BOOT_COMPLETED and enqueue a sync WorkManager job." },
+    { "level": "Medium", "text": "Send an internal custom broadcast with setPackage(packageName)." },
+    { "level": "Hard", "text": "Replace an old LocalBroadcastManager pattern with a SharedFlow." },
+    { "level": "Hard", "text": "Use goAsync() to complete a small coroutine before returning from onReceive." }
   ],
   "interviewQuestions": [
     "What is a BroadcastReceiver?",
-    "Manifest vs context-registered receivers?",
-    "What changed for broadcasts in Android 8?",
+    "What changed in Android 8 for BroadcastReceivers?",
+    "When should you use a BroadcastReceiver vs a SharedFlow vs LiveData?",
     "Why must onReceive be fast?",
-    "Alternatives to broadcasts for in-app events?"
+    "Explicit vs implicit broadcast, and why does it matter?"
   ],
   "references": [
-    { "label": "Android — Broadcasts", "url": "https://developer.android.com/guide/components/broadcasts" }
+    { "label": "Broadcasts — Android", "url": "https://developer.android.com/develop/background-work/background-tasks/broadcasts" },
+    { "label": "Android 8 implicit-broadcast exceptions", "url": "https://developer.android.com/guide/components/broadcast-exceptions" }
   ]
 }
