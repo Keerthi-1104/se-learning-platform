@@ -1,11 +1,21 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/content/content_repository.dart';
+import '../core/content/content_service.dart';
 import '../core/ai/ai_service.dart';
 import '../models/models.dart';
 import 'progress_repository.dart';
 
 /// Global singletons, injected via Riverpod (our DI container).
-final contentRepoProvider = Provider<ContentRepository>((ref) => ContentRepository());
+
+/// The CDN-backed content service. Overridden in main() after Hive init.
+final contentServiceProvider = Provider<ContentService>((ref) {
+  throw UnimplementedError('Overridden in main() after Hive init');
+});
+
+/// Reads content through the service (cache -> network -> starter pack -> stub).
+final contentRepoProvider = Provider<ContentRepository>(
+  (ref) => ContentRepository(ref.watch(contentServiceProvider)),
+);
 
 final progressRepoProvider = Provider<ProgressRepository>((ref) {
   throw UnimplementedError('Overridden in main() after Hive init');

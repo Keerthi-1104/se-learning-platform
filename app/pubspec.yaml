@@ -14,23 +14,16 @@ dependencies:
   go_router: ^14.6.2
   hive: ^2.2.3
   hive_flutter: ^1.1.0
+  http: ^1.2.2
 
 dev_dependencies:
   flutter_lints: ^5.0.0
 
+# Bundled assets = the STARTER PACK only: roadmap + Level 1.
+# Everything else streams from the CDN and caches to Hive on demand.
+# See ContentService for the fetch/cache/fallback flow.
 flutter:
   uses-material-design: true
   assets:
-    - assets/content/
+    - assets/content/roadmap.json
     - assets/content/level_01/
-    - assets/content/level_02/
-    - assets/content/level_03/
-    - assets/content/level_04/
-    - assets/content/level_05/
-    - assets/content/level_06/
-    - assets/content/level_07/
-    - assets/content/level_08/
-    - assets/content/level_09/
-    - assets/content/level_10/
-    - assets/content/level_11/
-    - assets/content/level_12/
