@@ -104,96 +104,21 @@ body.push(...topicToChapter(loadTopic("level_04", "render_tree"),
 body.push(...topicToChapter(loadTopic("level_04", "rendering_pipeline"),
   { chapterNumber: 8, bookmarkId: "ch8" }));
 
-// 7 Navigation
-body.push(...chapter({
-  id: "ch9", title: "9. Navigation",
-  def: "Navigation moves between screens (routes) — imperatively with Navigator (a route stack) or declaratively with a router (go_router) mapping URLs/state to screens.",
-  blocks: [
-    code(["final r = await Navigator.push(context, MaterialPageRoute(builder: ...));",
-      "context.go('/product/42');   // declarative (go_router)"], "dart"),
-    callout("interview", ["Navigator 2.0 made routing declarative so the back stack can be derived from app state — essential for web URLs and deep links. go_router is the recommended wrapper over its complexity."]),
-    callout("tip", ["Pass IDs through routes and refetch, not whole objects — so deep links and state restoration work."]),
-  ],
-  summary: ["Navigator = imperative stack; routers = declarative URL/state.", "Navigator 2.0 enables web URLs + deep links.", "push returns a Future completed by pop(result).", "Prefer typed named routes; pass IDs not objects."],
-  interview: ["Imperative vs declarative navigation?", "Pass and return data between routes?", "Why Navigator 2.0?", "How do deep links work?", "How guard routes (auth)?"],
-  coding: [
-    { level: "Easy", text: "Push a detail screen with an argument." },
-    { level: "Medium", text: "Return a selected value from a picker." },
-    { level: "Hard", text: "go_router with nested routes + path params." },
-    { level: "Expert", text: "Deep links + auth redirect guards with go_router." }],
-  realworld: ["E-commerce apps map URLs like /product/42 to screens so links shared on social media open the right page — only possible with declarative routing."],
-  miniproject: ["Build a 3-tab app with go_router, nested routes, deep links and an auth guard."],
-  advanced: ["Router/RouteInformationParser internals, shell routes, restorable state."],
-}));
+// 9. Navigation
+body.push(...topicToChapter(loadTopic("level_04", "navigation"),
+  { chapterNumber: 9, bookmarkId: "ch9" }));
 
-// 8 Forms
-body.push(...chapter({
-  id: "ch10", title: "10. Forms & Validation",
-  def: "Flutter forms group inputs under a Form widget with a GlobalKey<FormState>, enabling collective validation, saving and reset.",
-  blocks: [
-    code(["final _key = GlobalKey<FormState>();",
-      "TextFormField(validator: (v) => v!.isEmpty ? 'Required' : null);",
-      "if (_key.currentState!.validate()) { /* submit */ }"], "dart"),
-    callout("mistake", ["Not disposing TextEditingControllers/FocusNodes (leak). And: client validation is UX only — always validate on the server too."]),
-  ],
-  summary: ["Validate via GlobalKey<FormState>.validate().", "Dispose controllers and focus nodes.", "Use autovalidateMode onUserInteraction.", "Always revalidate server-side."],
-  interview: ["How does Form/FormState validation work?", "Managing controllers and focus?", "When use autovalidateMode?", "Why isn't client validation enough?", "Async/server validation?"],
-  coding: [
-    { level: "Easy", text: "Login form with required + email validation." },
-    { level: "Medium", text: "Focus traversal + submit on done." },
-    { level: "Hard", text: "Cross-field validation (password == confirm)." },
-    { level: "Expert", text: "Reactive form with async server validation." }],
-  realworld: ["Signup flows combine client validation for instant feedback with server validation for security and uniqueness checks."],
-  miniproject: ["Build a multi-step signup wizard with per-step validation and a review screen."],
-  advanced: ["reactive_forms / form_builder, debounced async validators, accessibility for errors."],
-}));
+// 10. Forms
+body.push(...topicToChapter(loadTopic("level_04", "forms"),
+  { chapterNumber: 10, bookmarkId: "ch10" }));
 
-// 9 State Management
-body.push(...chapter({
-  id: "ch11", title: "11. State Management",
-  def: "State management is how you store, update and share UI-affecting data: ephemeral (local) state via setState, and app/shared state via Provider/Riverpod/BLoC.",
-  blocks: [
-    table(["Approach", "Best for"], [
-      ["setState", "Single-widget state"],
-      ["Provider", "Simple shared state"],
-      ["Riverpod", "Most apps; testable DI"],
-      ["BLoC/Cubit", "Event-driven, complex flows"]], [3200, 6160]),
-    callout("interview", ["No single 'best' — it's about fit. setState for local UI; Provider/Riverpod for most shared state; BLoC for explicit, testable event→state flows. Volume 5 compares them all in depth."]),
-    callout("mistake", ["One giant global store rebuilding the whole screen. Scope state to where it's used; rebuild granularly with Consumer/Selector/select."]),
-  ],
-  summary: ["Ephemeral (setState) vs app state (Provider/Riverpod/BLoC).", "Choose by fit, not hype.", "Keep business logic out of widgets.", "Rebuild granularly to avoid waste."],
-  interview: ["Ephemeral vs app state?", "Compare setState/Provider/Riverpod/BLoC.", "Avoid unnecessary rebuilds?", "Where should logic live?", "How test state logic?"],
-  coding: [
-    { level: "Easy", text: "Counter with setState, then Provider." },
-    { level: "Medium", text: "Share auth state with Riverpod." },
-    { level: "Hard", text: "Search feature as a Cubit with loading/error/data." },
-    { level: "Expert", text: "Refactor to rebuild only changed parts; measure rebuilds." }],
-  realworld: ["Large apps mix approaches: local setState for tiny UI bits and Riverpod/BLoC for shared domain state — covered fully in Volume 5."],
-  miniproject: ["Build the same todo app twice (Provider and BLoC) and compare boilerplate, testability and rebuilds."],
-  advanced: ["Riverpod codegen & AsyncNotifier, BLoC hydration, selector granularity."],
-}));
+// 11. State Management
+body.push(...topicToChapter(loadTopic("level_04", "state"),
+  { chapterNumber: 11, bookmarkId: "ch11" }));
 
-// 10 Animations
-body.push(...chapter({
-  id: "ch12", title: "12. Animations",
-  def: "Animations interpolate values over time. Implicit animations (AnimatedFoo) handle simple cases; explicit animations (AnimationController + Tween) give full control.",
-  blocks: [
-    code(["final c = AnimationController(vsync: this, duration: 1.s)..forward();",
-      "final fade = CurvedAnimation(parent: c, curve: Curves.easeIn);",
-      "@override void dispose(){ c.dispose(); super.dispose(); }"], "dart"),
-    callout("mistake", ["Missing the vsync mixin or not disposing the controller (leaks). Animating layout for many widgets janks — prefer transform/opacity."]),
-  ],
-  summary: ["Implicit = set a target; explicit = drive a controller.", "Controllers need a vsync and must be disposed.", "Animate transform/opacity (cheap), not layout for many widgets.", "Use AnimatedBuilder + RepaintBoundary to isolate work."],
-  interview: ["Implicit vs explicit animations?", "Why does the controller need vsync + dispose?", "Tween vs Curve?", "Keep animations at 60fps?", "AnimatedBuilder vs full rebuild?"],
-  coding: [
-    { level: "Easy", text: "Animate size/color with AnimatedContainer." },
-    { level: "Medium", text: "Fade+slide intro with controller + Tween." },
-    { level: "Hard", text: "Staggered animations with Intervals." },
-    { level: "Expert", text: "Custom Hero-like transition at 60fps." }],
-  realworld: ["Polished apps use coordinated motion (shared element transitions, micro-interactions) built on explicit controllers, isolated with RepaintBoundary."],
-  miniproject: ["Build an onboarding flow with staggered, choreographed animations across 3 pages."],
-  advanced: ["Implicit animation internals, physics simulations, rive/lottie, AnimatedSwitcher."],
-}));
+// 12. Animations
+body.push(...topicToChapter(loadTopic("level_04", "animations"),
+  { chapterNumber: 12, bookmarkId: "ch12" }));
 
 // 11 Slivers
 body.push(...chapter({

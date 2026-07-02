@@ -3,49 +3,109 @@
   "levelId": 4,
   "title": "State Management",
   "xp": 50,
-  "estimatedMinutes": 30,
+  "estimatedMinutes": 45,
   "objectives": [
-    "Distinguish ephemeral from app state",
-    "Know the main approaches and trade-offs",
-    "Pick the right tool for a screen"
+    "Understand state management via a real-life analogy",
+    "Distinguish ephemeral, app, and server state",
+    "Compare setState, Provider, Riverpod, Bloc, GetX",
+    "Pick the right tool for the size of the problem",
+    "Answer state-management interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "State management is how you store, update and share data that affects the UI. The key split: ephemeral (local widget) state via setState, and app/shared state via a state-management solution." },
-    { "type": "table", "headers": ["Approach", "Style", "Best for"], "rows": [
-      ["setState", "Built-in, local", "Single-widget state"],
-      ["Provider", "InheritedWidget wrapper", "Simple shared state"],
-      ["Riverpod", "Compile-safe providers", "Most apps; testable DI"],
-      ["BLoC/Cubit", "Events → states (streams)", "Complex, event-driven flows"],
-      ["GetX", "All-in-one", "Rapid prototyping"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of state as MONEY spread across three drawers in your house.**\n\n- **Wallet drawer (Ephemeral / UI state)** — the tenner in your pocket. Where the FAB button is right now, whether a checkbox is ticked, what's typed in a field. Lives with ONE screen. Tool: **`setState`** — no ceremony, no library.\n- **Safe drawer (App / shared state)** — the money the whole household shares: user profile, cart contents, theme choice. Multiple rooms (screens) need it, and if it changes, everyone should notice. Tool: **`Riverpod` / `Bloc` / `Provider`** — a shared store the tree can watch.\n- **Bank statement (Server / remote state)** — money that's not in your house at all; someone else holds the truth. The server is authoritative; you cache locally to feel fast. Tool: **repository + Riverpod's `AsyncNotifier` / `Bloc` / TanStack-style `dio_cache_interceptor`** — always fetch, cache, invalidate.\n\n**The senior mistake is mixing these up.** Put ephemeral state in a global store → your rebuilds explode. Put server state in `setState` → you re-fetch every time you rebuild. Put app state in a random singleton → tests break.\n\n**The interview mistake** is picking your favorite library on day 1 instead of knowing WHY each exists. This topic teaches the map." },
+    { "type": "callout", "variant": "definition", "markdown": "**State management** is the discipline of storing data your UI depends on, notifying widgets when it changes, and keeping the storage layer decoupled from the UI. Flutter's built-in `setState` is enough for local widget state; for state shared across many widgets (or the whole app), you use a state-management library — the popular options are **Riverpod**, **Bloc**, **Provider**, and **GetX**. Each solves the same fundamental problem: 'when this data changes, rebuild exactly the widgets that depend on it, and nothing more.'" },
+    { "type": "theory", "markdown": "## The 3 kinds of state — pick the right tool" },
+    { "type": "table", "headers": ["Kind", "Scope", "Recommended tool"], "rows": [
+      ["**Ephemeral (UI)**", "One widget: form field, expanded flag, animation", "`setState` in a StatefulWidget"],
+      ["**App (shared)**", "Multiple widgets: user profile, cart, theme", "Riverpod / Bloc / Provider (in that order today)"],
+      ["**Server (remote)**", "Comes from network/DB; cached locally", "Riverpod `AsyncNotifier` + repository, or Bloc with a repository"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "There's no single 'best' — the question is fit. setState for local UI; Provider/Riverpod for most shared state; BLoC when you want explicit, testable event→state flows and clear separation. Volume 5 compares them in depth." },
-    { "type": "callout", "variant": "mistake", "markdown": "Lifting all state to one giant global store, or rebuilding the whole screen on every change. Scope state to where it's used and rebuild granularly (Consumer/Selector/select)." },
-    { "type": "callout", "variant": "tip", "markdown": "Keep business logic out of widgets. Whatever tool you choose, separate UI from logic (ViewModel/Notifier/BLoC) so it's testable and the UI stays dumb." }
+    { "type": "theory", "markdown": "## The library landscape — pick one and go" },
+    { "type": "table", "headers": ["Library", "Style", "When to pick"], "rows": [
+      ["**`setState`**", "Built-in, imperative", "Widget-local state ONLY"],
+      ["**Provider**", "InheritedWidget-based, imperative-ish", "Simple apps; being replaced by Riverpod in most new code"],
+      ["**Riverpod**", "Provider's spiritual successor; compile-safe DI + state + async", "Modern default; testable; loved by community"],
+      ["**Bloc / Cubit**", "Event-driven, unidirectional data flow (à la Redux)", "Large teams that want strict conventions; heavy but predictable"],
+      ["**GetX**", "All-in-one (state + nav + DI); very concise", "Fast prototyping; opinionated; controversial in the community"],
+      ["**MobX**", "Observable-based reactive state", "OOP-heavy teams from Java/Kotlin/TS backgrounds"],
+      ["**Redux**", "Store + actions + reducers", "Only if you had it in JS and want the same pattern"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**The interview take:** 'I default to **Riverpod** for new apps because it's testable, compile-safe, and pairs cleanly with `AsyncNotifier` for server state. I use **`setState`** for pure widget-local state. I've worked with Bloc/Cubit on projects where the team preferred its stricter conventions.' — Nothing controversial. Nothing zealous. Pragmatism wins interviews." },
+    { "type": "theory", "markdown": "## Sample program — the same counter, in setState, Provider, and Riverpod" },
+    { "type": "code", "language": "dart", "code": "// ================= 1. setState — for widget-local state =================\nclass Counter1 extends StatefulWidget {\n  const Counter1({super.key});\n  @override State<Counter1> createState() => _Counter1State();\n}\nclass _Counter1State extends State<Counter1> {\n  int _count = 0;\n  @override\n  Widget build(BuildContext context) => Column(children: [\n    Text('$_count'),\n    FilledButton(onPressed: () => setState(() => _count++), child: const Text('+1')),\n  ]);\n}\n\n// ================= 2. Provider — legacy but still common ================\n// pubspec: provider: ^6.1\nimport 'package:provider/provider.dart' as p;\n\nclass CounterModel extends ChangeNotifier {\n  int count = 0;\n  void increment() { count++; notifyListeners(); }\n}\n\nvoid main2() => runApp(p.ChangeNotifierProvider(\n  create: (_) => CounterModel(),\n  child: const MaterialApp(home: _Counter2Screen()),\n));\n\nclass _Counter2Screen extends StatelessWidget {\n  const _Counter2Screen();\n  @override\n  Widget build(BuildContext c) {\n    final model = c.watch<CounterModel>();\n    return Column(children: [\n      Text('${model.count}'),\n      FilledButton(onPressed: c.read<CounterModel>().increment, child: const Text('+1')),\n    ]);\n  }\n}\n\n// ================= 3. Riverpod — modern default ==========================\n// pubspec: flutter_riverpod: ^2.5\nimport 'package:flutter_riverpod/flutter_riverpod.dart';\n\nfinal counterProvider = NotifierProvider<CounterNotifier, int>(CounterNotifier.new);\n\nclass CounterNotifier extends Notifier<int> {\n  @override int build() => 0;\n  void increment() => state++;\n}\n\nvoid main3() => runApp(const ProviderScope(child: MaterialApp(home: _Counter3Screen())));\n\nclass _Counter3Screen extends ConsumerWidget {\n  const _Counter3Screen();\n  @override\n  Widget build(BuildContext context, WidgetRef ref) {\n    final count = ref.watch(counterProvider);\n    return Column(children: [\n      Text('$count'),\n      FilledButton(\n        onPressed: () => ref.read(counterProvider.notifier).increment(),\n        child: const Text('+1'),\n      ),\n    ]);\n  }\n}\n\n// Notice how Riverpod's counterProvider is a TOP-LEVEL final — no BuildContext\n// needed to access it, easy to test, and the widget only rebuilds when `state`\n// changes. That's the shape of modern Flutter state." },
+    { "type": "theory", "markdown": "## Riverpod deep-dive — the four provider families" },
+    { "type": "table", "headers": ["Provider", "Returns", "Use case"], "rows": [
+      ["`Provider<T>`", "A value; never changes", "DI: repositories, config, services"],
+      ["`NotifierProvider<N, T>`", "State backed by a `Notifier<T>` you write", "Synchronous mutable state"],
+      ["`AsyncNotifierProvider<N, T>`", "Wraps `AsyncValue<T>` around a `Notifier`", "Server state — async build + mutations"],
+      ["`FutureProvider<T>` / `StreamProvider<T>`", "AsyncValue from a Future/Stream", "Simple async reads"]
+    ]},
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Putting ephemeral state in Riverpod/Bloc.** A checkbox toggle doesn't need a global store. Use `setState`. Save the shared store for state that's ACTUALLY shared." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Rebuilding the whole widget when only a field changes.** Riverpod: use `ref.watch(provider.select((s) => s.field))` to narrow the rebuild scope. Bloc: use `BlocSelector`. Provider: use `Consumer` / `Selector`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Storing server data as raw state without a repository.** Repository = single source of truth for a data type. Combines API + local cache + reactive streams. State layer just observes." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Not disposing async subscriptions.** In Bloc, `close()` the bloc; in Riverpod, use `.autoDispose` on the provider. In plain code, cancel StreamSubscriptions in `dispose`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Zealous library evangelism.** A team's chosen state-management library is not a religion — pick one, learn it deeply, ship. Rewrites are almost never worth it." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Default to Riverpod for new apps.** Testable, compile-safe, coroutine-friendly." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Keep `setState` for local UI state.** Toggles, animations, form fields — no ceremony needed." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Isolate server state via a Repository.** The state layer observes; the Repository owns fetching + caching." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Use `.select` / `Selector` / `BlocSelector`** to narrow rebuilds to the field a widget actually cares about." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Model server responses with `AsyncValue<T>` / `Stream<Result<T>>`.** First-class loading + error states without ad-hoc `bool _loading`, `String? _error` flags." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Write tests against the state layer.** Riverpod's `ProviderContainer`, Bloc's `blocTest` — both make it easy to prove state transitions independently of widgets." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Counter in all three.** Build the sample program; compare code + rebuild counts." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Cart across screens.** Product list + cart tab — updating cart in one place reflects in the other via Riverpod." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — AsyncNotifier for user profile.** Fetch on `build()`, show `AsyncValue` states, expose `refresh()` and `update(profile => …)`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Optimistic mutation.** 'Like' a post; UI flips immediately; if server fails, revert." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Testing.** Write unit tests for a `CounterNotifier` using `ProviderContainer`; verify state transitions without pumping widgets." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is state management and why does Flutter need it?**\n\n**A:** State management is the discipline of storing data your UI depends on, notifying widgets when it changes, and rebuilding **only** what needs to be rebuilt. Flutter's `setState` is enough for state inside ONE widget, but breaks down when many widgets share the same state (user profile, cart, theme). Without a proper solution, teams either (a) pass callbacks 10 levels deep ('prop drilling') or (b) use global singletons that break testability. A state-management library provides a shared, observable store the widget tree can subscribe to selectively." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What are the three kinds of state?**\n\n**A:** **(1) Ephemeral / UI state** — belongs to ONE widget: a form field's text, whether a card is expanded, an animation's progress. Use `setState`. **(2) App / shared state** — multiple widgets need it: user profile, cart, theme, feature flags. Use Riverpod / Bloc / Provider. **(3) Server / remote state** — comes from network or DB; the server holds the truth. Cache it locally to be fast; refetch/invalidate as needed. Use Riverpod's `AsyncNotifier` + a repository, or Bloc with a repository. **Getting these right is more important than which library you pick.** Putting server state in `setState` re-fetches on every rebuild; putting ephemeral state in a global store creates ugly coupling." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: Riverpod vs Bloc — which do you use and why?**\n\n**A:** Both work. **Riverpod** — simpler ergonomics, compile-safe DI, no `BuildContext` needed to read state, ships with `AsyncNotifier` for server state, easy to test. **My default for new apps.** **Bloc** — stricter (events → bloc → state), more boilerplate but very predictable, great for large teams. Explicit event names give clear audit trails ('why did state change here? Because AddToCartEvent fired'). Both scale. **My rule:** Riverpod for greenfield; keep Bloc if it's in place. **Anti-pattern:** picking a library based on Twitter arguments. Both are proven, both scale, pick one, learn it deeply, ship." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What is `AsyncValue<T>` and why is it useful?**\n\n**A:** `AsyncValue<T>` (Riverpod) is a sealed value that's always in one of three states: **`loading`**, **`data(T)`**, or **`error(Object, StackTrace)`**. Instead of managing `bool _loading; String? _error; T? _data;` flags manually (and constantly forgetting an edge case), you write `state = AsyncValue.loading();`, then `state = AsyncValue.data(user);` or `state = AsyncValue.error(e, s);`. UIs consume it with `state.when(loading: ..., data: ..., error: ...)` — the compiler forces you to handle every case. Bloc has a similar pattern via sealed `State` classes. This is the **modern way to model server state**." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you avoid unnecessary rebuilds in a state-management setup?**\n\n**A:** **Narrow the subscription.** Instead of `ref.watch(userProvider)` (rebuilds on any user field change), use `ref.watch(userProvider.select((u) => u.name))` — rebuilds only when `name` changes. **In Bloc:** `BlocSelector<UserBloc, UserState, String>(selector: (state) => state.name, builder: ...)`. **In Provider:** `Selector<Model, String>(selector: (_, m) => m.name, builder: ...)`. **Also:** extract subtrees into small widgets so unaffected areas don't rebuild; add `const` where possible; wrap animated subtrees in `RepaintBoundary`. Use DevTools' 'Highlight Rebuilds' overlay to see what's actually rebuilding." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What is a Repository and why is it separate from state management?**\n\n**A:** A **Repository** owns the single source of truth for a data type (User, Order, Product). It combines multiple data sources — a Retrofit/Dio API, a local Room/Isar cache, an in-memory cache — and exposes ONE clean API to the state layer: `Stream<User> watchUser(id)`, `Future<void> refresh()`, `Future<void> update(user)`. The state layer OBSERVES the repository and translates its data into UI state. **Why separate:** (1) testable — swap the real repo with a fake in tests without touching the state layer. (2) reusable — multiple state layers can share one repository. (3) clean separation of concerns — state is transient UI logic; data storage is domain logic. Google's official architecture guide uses this pattern; Bloc's docs codify it." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: When would you choose GetX or MobX?**\n\n**A:** **GetX** — very concise, all-in-one (state + nav + DI + snackbars). Great for **fast prototypes**. Trade-off: it's opinionated to the point of framework-lock-in; also relies on global state that some teams find hard to reason about at scale. **MobX** — observable + reactions, very ergonomic if you come from Angular/Vue/OOP. Trade-off: code generation setup + smaller Flutter community. **My take:** if you have a team background matching either, and it's making them productive, keep going. For a NEW app in 2026, I default to Riverpod because it hits the sweet spot: modern, testable, community-standard, no zealotry. But I'd never rewrite a working GetX or MobX codebase 'just because'." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Smart Consumer app** — Riverpod is a strong fit for its authentication, product-details, and offline-cache patterns.\n- **Reddit, Google, BMW's Flutter apps** — mostly Bloc + Repository pattern.\n- **Alibaba, Tencent apps** — GetX + custom patterns; big teams often layer conventions.\n- **Firebase apps** — natural pairing with Riverpod's `StreamProvider`.\n- **Testing** — Riverpod's `ProviderContainer`, Bloc's `bloc_test` — both make widget-free state tests trivial." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`riverpod_generator`** — code-gen for cleaner Riverpod syntax (`@riverpod`).\n- **`Provider.autoDispose`** — provider is disposed when no widget watches it (auto-cleanup).\n- **`Provider.family`** — parameterize a provider (e.g., `userProvider(id)`).\n- **`Ref.listen`** — subscribe to state changes with a callback (for side effects: toasts, navigation).\n- **`Bloc.close()`** — always call on dispose; leaks otherwise.\n- **`Freezed` + sealed state classes** — declare `SuccessState` / `LoadingState` / `ErrorState` as a sealed union with generated equality and copyWith.\n- **`InheritedNotifier` / `InheritedModel`** — lightweight state without a library (useful for design-system tokens).\n- **`ValueNotifier<T>` + `ValueListenableBuilder`** — Flutter's built-in mini state store; great for one-off state.\n- **Selector patterns beat rebuild counts** — never optimize before profiling with 'Highlight Rebuilds'." }
   ],
   "flashcards": [
-    { "front": "Ephemeral vs app state?", "back": "Ephemeral = local to one widget (setState); app state = shared across the app (Provider/Riverpod/BLoC)." },
-    { "front": "Why prefer granular rebuilds?", "back": "Rebuilding only what changed (Consumer/Selector) avoids wasteful whole-screen rebuilds." },
-    { "front": "Where should business logic live?", "back": "Outside widgets — in a Notifier/BLoC/ViewModel — for testability." }
+    { "front": "Three kinds of state?", "back": "Ephemeral (setState), App (Riverpod/Bloc/Provider), Server (repository + AsyncNotifier/Bloc)." },
+    { "front": "Modern default library?", "back": "Riverpod — testable, compile-safe, ships AsyncNotifier for server state." },
+    { "front": "AsyncValue<T>?", "back": "Sealed: loading | data | error. Consume with .when(...). Kills bool _loading pattern." },
+    { "front": "Repository role?", "back": "Single source of truth for a data type; owns fetch + cache + streams. State layer observes it." },
+    { "front": "Narrow rebuild scope?", "back": "ref.watch(p.select(field)) / BlocSelector / Provider Selector." },
+    { "front": "Test state without widgets?", "back": "Riverpod's ProviderContainer or Bloc's bloc_test." }
   ],
   "quiz": [
-    { "q": "setState is best for…", "options": ["App-wide state", "Local single-widget state", "Networking", "Routing"], "answer": 1, "explain": "Ephemeral UI state local to one widget." },
-    { "q": "BLoC models UI as…", "options": ["Events transformed into states", "A single global variable", "Direct DB writes", "Pixels"], "answer": 0, "explain": "BLoC maps input events to output states via streams." },
-    { "q": "A common anti-pattern is…", "options": ["Scoping state locally", "Rebuilding the whole screen on every change", "Using Selector", "Separating logic from UI"], "answer": 1, "explain": "Rebuild granularly; don't rebuild everything." }
+    { "q": "Best for widget-local toggle?", "options": ["Riverpod", "Bloc", "setState", "Redux"], "answer": 2, "explain": "No ceremony needed." },
+    { "q": "Server state should live in…", "options": ["setState", "Global var", "Repository + state-management layer", "SharedPreferences"], "answer": 2, "explain": "Repository owns fetching + cache." },
+    { "q": "AsyncValue<T> is…", "options": ["A future", "Sealed loading|data|error", "Deprecated", "Dart 3 only"], "answer": 1, "explain": "Model server state without ad-hoc flags." },
+    { "q": "Narrow Riverpod rebuild?", "options": ["No way", "ref.watch(p.select((s) => s.field))", "AsyncValue", "Nothing needed"], "answer": 1, "explain": ".select narrows subscription." },
+    { "q": "Modern default new app?", "options": ["GetX", "Riverpod", "Redux", "MobX"], "answer": 1, "explain": "Testable + community-standard." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Build a counter with setState, then with Provider." },
-    { "level": "Medium", "text": "Share auth state across screens with Riverpod." },
-    { "level": "Hard", "text": "Implement a search feature as a Cubit/BLoC with loading/error/data states." },
-    { "level": "Expert", "text": "Refactor a screen to rebuild only changed parts using Selector/select and measure rebuilds." }
+    { "level": "Easy", "text": "Rewrite a setState counter in Provider AND Riverpod; compare code." },
+    { "level": "Easy", "text": "Add ref.watch(counterProvider.select((c) => c.isEven)); observe fewer rebuilds." },
+    { "level": "Medium", "text": "Cart across Home + Cart screens via Riverpod; adding on Home reflects on Cart." },
+    { "level": "Medium", "text": "AsyncNotifier for user profile: build() fetches; UI uses .when(loading/data/error)." },
+    { "level": "Hard", "text": "Optimistic update: like a post; on server failure, revert with error toast." },
+    { "level": "Hard", "text": "Repository owns User: DAO (Isar/Hive) + API; state watches repo.watchUser()." },
+    { "level": "Expert", "text": "Write ProviderContainer tests for a Notifier; verify all state transitions without widgets." }
   ],
   "interviewQuestions": [
-    "Ephemeral vs app state?",
-    "Compare setState, Provider, Riverpod, BLoC.",
-    "How do you avoid unnecessary rebuilds?",
-    "Where should business logic live?",
-    "How do you test state logic?"
+    "What is state management and why does Flutter need it?",
+    "What are the three kinds of state?",
+    "Riverpod vs Bloc — which do you use and why?",
+    "What is AsyncValue<T> and why is it useful?",
+    "How do you avoid unnecessary rebuilds in a state-management setup?",
+    "What is a Repository and why is it separate from state management?",
+    "When would you choose GetX or MobX?"
   ],
   "references": [
-    { "label": "Flutter — State management", "url": "https://docs.flutter.dev/data-and-backend/state-mgmt/intro" }
+    { "label": "Riverpod", "url": "https://riverpod.dev" },
+    { "label": "Bloc", "url": "https://bloclibrary.dev" },
+    { "label": "State management overview — Flutter", "url": "https://docs.flutter.dev/data-and-backend/state-mgmt" }
   ]
 }

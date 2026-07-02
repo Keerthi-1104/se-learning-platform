@@ -2,48 +2,102 @@
   "id": "flutter.animations",
   "levelId": 4,
   "title": "Animations",
-  "xp": 50,
-  "estimatedMinutes": 30,
+  "xp": 45,
+  "estimatedMinutes": 35,
   "objectives": [
-    "Use implicit vs explicit animations",
-    "Drive animations with controllers, tweens and curves",
-    "Keep animations at 60fps"
+    "Understand animations via a real-life analogy",
+    "Distinguish implicit (AnimatedX) vs explicit (AnimationController) animations",
+    "Use Curves, Tweens, and stagger patterns",
+    "Choose Hero vs shared-axis vs SharedAxisTransition",
+    "Answer animations interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Animations interpolate values over time to create motion. Flutter offers implicit animations (AnimatedFoo widgets) for simple cases and explicit animations (AnimationController) for full control." },
-    { "type": "table", "headers": ["", "Implicit", "Explicit"], "rows": [
-      ["Widgets", "AnimatedContainer, AnimatedOpacity", "AnimationController + Tween"],
-      ["Control", "Set a target; Flutter animates", "You drive forward/reverse/repeat"],
-      ["Use", "Simple state→state transitions", "Custom, looping, coordinated motion"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of a movie scene director.**\n\n- The director tells the camera 'zoom in on the actor's face over 3 seconds, starting slow, accelerating fast'. That's exactly what an animation is: a value moving from A to B, over a duration, along a curve.\n- **The `AnimationController`** is the DIRECTOR'S TICKING CLOCK — it emits a value from 0.0 to 1.0 over its duration. Every tick fires a callback; you rebuild something using that value.\n- **A `Tween`** is the RANGE the director cares about: 'when the clock says 0.0, be at position (0, 0); when it says 1.0, be at (100, 200); interpolate in between.'\n- **A `Curve`** is HOW to move: linear, easeInOut, elasticIn, decelerate. Same 0→1 range, different feel.\n- **Implicit animations (`AnimatedContainer`, `AnimatedOpacity`)** are like a stage manager who animates itself: you change a property, they smoothly interpolate. Zero controller code.\n- **Explicit animations (`AnimatedBuilder` + `AnimationController`)** are for scenes the director must orchestrate: stagger multiple movements, reverse, loop, react to input.\n\n**Why this matters:** the difference between an app that feels *cheap* and one that feels *polished* is the animation layer. Snappy transitions, well-timed micro-interactions, thoughtful hero transitions — this is the entire secret." },
+    { "type": "callout", "variant": "definition", "markdown": "**Animations in Flutter** are widget rebuilds driven by a value moving over time (typically 0.0 → 1.0). Two flavors: **implicit** — `AnimatedX` widgets interpolate automatically when their properties change; **explicit** — you own an `AnimationController` and rebuild with `AnimatedBuilder` / `AnimatedWidget`. Both ultimately drive the same render pipeline at ~60fps." },
+    { "type": "theory", "markdown": "## Implicit — the easy path (AnimatedX widgets)" },
+    { "type": "code", "language": "dart", "code": "// AnimatedContainer smoothly interpolates any changed property.\nclass BreathBox extends StatefulWidget {\n  const BreathBox({super.key});\n  @override State<BreathBox> createState() => _BreathBoxState();\n}\nclass _BreathBoxState extends State<BreathBox> {\n  bool _big = false;\n\n  @override\n  Widget build(BuildContext context) => GestureDetector(\n    onTap: () => setState(() => _big = !_big),\n    child: AnimatedContainer(\n      duration: const Duration(milliseconds: 400),\n      curve: Curves.easeInOut,\n      width: _big ? 200 : 100,\n      height: _big ? 200 : 100,\n      decoration: BoxDecoration(\n        color: _big ? Colors.deepPurple : Colors.blueGrey,\n        borderRadius: BorderRadius.circular(_big ? 100 : 12),\n      ),\n    ),\n  );\n}\n\n// Other members of the AnimatedX family:\n//   AnimatedOpacity, AnimatedPositioned, AnimatedAlign,\n//   AnimatedPadding, AnimatedDefaultTextStyle, AnimatedSize,\n//   AnimatedSwitcher (crossfade child changes),\n//   TweenAnimationBuilder<T> (arbitrary type)." },
+    { "type": "theory", "markdown": "## Explicit — the full control path" },
+    { "type": "code", "language": "dart", "code": "// A pulse animation controlled by an AnimationController + Tween.\nclass Pulse extends StatefulWidget {\n  const Pulse({super.key});\n  @override State<Pulse> createState() => _PulseState();\n}\nclass _PulseState extends State<Pulse> with SingleTickerProviderStateMixin {\n  late final AnimationController _ctrl = AnimationController(\n    vsync: this,\n    duration: const Duration(milliseconds: 900),\n  )..repeat(reverse: true);\n\n  late final Animation<double> _scale = Tween<double>(begin: 1.0, end: 1.4)\n    .chain(CurveTween(curve: Curves.easeInOut))\n    .animate(_ctrl);\n\n  @override\n  void dispose() {\n    _ctrl.dispose();     // MUST dispose the controller\n    super.dispose();\n  }\n\n  @override\n  Widget build(BuildContext context) => AnimatedBuilder(\n    animation: _scale,\n    // The `child` is built ONCE and passed into `builder` — Flutter optimizes\n    // by NOT rebuilding the child on every animation frame.\n    child: const Icon(Icons.favorite, color: Colors.red, size: 48),\n    builder: (context, child) => Transform.scale(scale: _scale.value, child: child),\n  );\n}\n\n// Key points:\n//   * SingleTickerProviderStateMixin gives us `vsync: this` — the ticker\n//     source. Without vsync, the controller has no clock.\n//   * The controller lives in State; disposed in dispose().\n//   * AnimatedBuilder rebuilds every frame; passing a static `child:` avoids\n//     rebuilding the expensive part." },
+    { "type": "theory", "markdown": "## Curves — the *feel* of an animation" },
+    { "type": "table", "headers": ["Curve", "Feel", "Common use"], "rows": [
+      ["`linear`", "Constant speed", "Loops, rotations"],
+      ["`easeInOut`", "Slow start, fast middle, slow end", "Default for most UI"],
+      ["`easeOut`", "Fast start, slow finish", "Snap-into-place transitions"],
+      ["`easeIn`", "Slow start, fast finish", "Departures"],
+      ["`elasticOut`", "Overshoots then settles", "Bouncy button press"],
+      ["`bounceOut`", "Bounces at the end", "Playful attention-grabber"],
+      ["`decelerate`", "Fast start, slow end", "Snap-back scrolls"]
     ]},
-    { "type": "code", "language": "dart", "code": "late final c = AnimationController(\n  vsync: this, duration: Duration(seconds: 1))..forward();\nfinal fade = CurvedAnimation(parent: c, curve: Curves.easeIn);\n// ... FadeTransition(opacity: fade, child: ...)\n@override void dispose() { c.dispose(); super.dispose(); }" },
-    { "type": "callout", "variant": "mistake", "markdown": "Forgetting `with SingleTickerProviderStateMixin` (the vsync) or not disposing the controller — leaks and errors. Also, animating layout-affecting properties on many widgets can cause jank." },
-    { "type": "callout", "variant": "tip", "markdown": "Prefer transform/opacity animations (cheap, GPU-friendly) over animating layout. Wrap animated subtrees in RepaintBoundary, and use AnimatedBuilder to rebuild only the animating part." }
+    { "type": "theory", "markdown": "## Hero transitions — shared elements across routes" },
+    { "type": "code", "language": "dart", "code": "// On the LIST page:\nHero(\n  tag: 'product_${product.id}',\n  child: Image.network(product.imageUrl),\n)\n\n// On the DETAIL page (same tag!):\nHero(\n  tag: 'product_${product.id}',\n  child: Image.network(product.imageUrl),\n)\n\n// When you Navigator.push from list to detail, Flutter finds both Heroes\n// with the same tag, animates the source into the destination position\n// automatically. No AnimationController needed.\n\n// Advanced: HeroController + flightShuttleBuilder for custom transitions." },
+    { "type": "theory", "markdown": "## Sample program — a mini animation gallery" },
+    { "type": "code", "language": "dart", "code": "import 'package:flutter/material.dart';\n\nvoid main() => runApp(const MaterialApp(home: Gallery()));\n\nclass Gallery extends StatelessWidget {\n  const Gallery({super.key});\n  @override\n  Widget build(BuildContext context) => Scaffold(\n    appBar: AppBar(title: const Text('Animation gallery')),\n    body: const Padding(\n      padding: EdgeInsets.all(16),\n      child: Column(\n        mainAxisAlignment: MainAxisAlignment.spaceEvenly,\n        children: [\n          Text('Tap the boxes'),\n          BreathBox(),                   // implicit — AnimatedContainer\n          Pulse(),                       // explicit — AnimationController + Tween\n          _FadeIn(child: Text('Faded in via TweenAnimationBuilder')),\n        ],\n      ),\n    ),\n  );\n}\n\nclass _FadeIn extends StatelessWidget {\n  const _FadeIn({required this.child});\n  final Widget child;\n\n  // TweenAnimationBuilder — a one-shot implicit animation driven by a Tween.\n  // Great for entrance animations.\n  @override\n  Widget build(BuildContext context) => TweenAnimationBuilder<double>(\n    tween: Tween(begin: 0, end: 1),\n    duration: const Duration(milliseconds: 800),\n    curve: Curves.easeOut,\n    builder: (context, opacity, child) => Opacity(opacity: opacity, child: child),\n    child: child,\n  );\n}\n\n// (BreathBox and Pulse as defined above.)\n\n// This combines: implicit (AnimatedContainer), explicit (Pulse), and a\n// one-shot tween (TweenAnimationBuilder) — the three patterns you'll use 90%\n// of the time." },
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Forgetting to dispose the AnimationController.** Leaks the ticker; the animation keeps ticking against a dead widget. Every controller needs `dispose()`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Missing `vsync`.** `AnimationController(vsync: this, ...)` requires a `TickerProvider` — usually `SingleTickerProviderStateMixin` on State. Without it, no clock, no animation." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Rebuilding the whole widget in `AnimatedBuilder`.** Pass a static `child:` argument; access it as `child` in the builder. Flutter builds it ONCE and reuses it every frame." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Over-animating.** Every screen-transition, every state-change, every hover — quickly becomes exhausting. Reserve animation for meaningful events." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Not wrapping animated subtrees in `RepaintBoundary`.** Without one, the animation forces its ancestor to re-record layers every frame. Wrap the animated part." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Prefer implicit animations (`AnimatedX`) for state-driven transitions.** They're cheaper to write and easier to maintain." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Use explicit animations for orchestrated timing** — stagger, loop, reverse based on user gesture." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Wrap animated subtrees in `RepaintBoundary`.** Isolates repaints; measurable perf win." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Pass the static child into `AnimatedBuilder`** to avoid rebuilding it every frame." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Choose curves intentionally.** `easeInOut` is a fine default; `decelerate` for release-and-settle; `elasticOut` for playful moments." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Consider `flutter_animate` (package) for common patterns.** One-line 'fade in on show' style animations, reducing boilerplate." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — AnimatedContainer.** Tap-to-toggle box that changes color, size, and radius smoothly." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Pulse via AnimationController.** Build the sample; try elasticOut vs easeInOut curves." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Fade-in entrance.** TweenAnimationBuilder on route push; opacity 0 → 1." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Hero image.** From list to detail; hero tag matches; verify no jank at 60 fps." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard) — Staggered list.** N items enter with staggered delays (each 60 ms after the previous) via `AnimationController` + `Interval`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert) — Physics-based drag.** Draggable card that snaps back with `SpringSimulation`." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Implicit vs explicit animations — differences and when to use each?**\n\n**A:** **Implicit** — an `AnimatedX` widget (`AnimatedContainer`, `AnimatedOpacity`, `AnimatedPositioned`) interpolates automatically when its properties change. You set a new value; Flutter animates. **Zero controller code.** Best for state-driven transitions like 'expand card on tap'. **Explicit** — you own an `AnimationController` (with `vsync:` and a `TickerProvider`) and drive an `AnimatedBuilder` / `AnimatedWidget` with its value. Full control over duration, curve, direction (forward/reverse/loop). Best for orchestrated timings: staggered lists, physics-based motion, gesture-driven animations. **Rule:** implicit for state-driven, explicit for orchestration." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What is a Tween and how does it relate to an Animation?**\n\n**A:** An `AnimationController` produces a `double` value from 0.0 to 1.0 over time. A **`Tween<T>`** maps that 0→1 range onto ANY type: `Tween<double>(begin: 100, end: 200)`, `Tween<Color>(begin: Colors.red, end: Colors.blue)`, `Tween<Offset>(begin: Offset.zero, end: Offset(0, -50))`. Call `tween.animate(controller)` to get an `Animation<T>` whose `.value` interpolates. Add a curve: `Tween(...).chain(CurveTween(curve: Curves.easeOut)).animate(controller)`. The tween separates the WHAT (which values) from the CURVE (how) from the CONTROLLER (when)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What is a `TickerProvider` and why is `vsync` required?**\n\n**A:** An `AnimationController` needs a **clock**. That clock is a `Ticker` — an object that calls a callback on every frame (~16 ms). A `TickerProvider` creates tickers; you pass one to the controller via `vsync: this`. The most common is `SingleTickerProviderStateMixin` (one controller) or `TickerProviderStateMixin` (many). Why is it required? Because idle controllers should PAUSE — if you background the app, tickers auto-mute so animations don't waste battery. Without `vsync`, no muting, no proper lifecycle. It's a small API that gives you correct behavior for free." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What is `AnimatedBuilder` and why is `child:` important?**\n\n**A:** `AnimatedBuilder(animation: myAnim, builder: (context, child) => …)` rebuilds ITS BUILDER on every animation frame — you use the animation's `.value` to compute the animated widget tree. If that tree has an EXPENSIVE static part (a big image, a complex widget subtree), rebuilding it every frame kills perf. Solution: pass the expensive part as the `child:` argument. Flutter builds `child` ONCE, and passes it into your builder as the second argument — you weave it into the animated wrapper. Example: `AnimatedBuilder(animation: a, child: expensiveImage, builder: (c, child) => Transform.scale(scale: a.value, child: child))`. Big perf win — the image renders once." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do Hero animations work?**\n\n**A:** You wrap the same widget (usually an image) on TWO routes with a `Hero(tag: 'shared-key', child: …)`. When you `Navigator.push` from one route to the other, Flutter's `HeroController` finds both Heroes with matching tags, measures their positions, and animates the source widget flying to the destination position + size — with automatic entry/exit. **Under the hood:** Flutter records the source's rect at push time, records the destination's rect, and drives a shared animation. **Advanced:** `flightShuttleBuilder:` lets you customize what widget is displayed DURING flight (e.g., a rounded thumbnail becomes a full-bleed image mid-flight). Hero animations are a killer feature — one line each side, gorgeous transitions." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How do you stagger animations?**\n\n**A:** Use ONE `AnimationController` with duration = total, and give each animated element its own `CurvedAnimation` with a different `Interval`. Example: 5 list items, controller runs 500 ms, each item's fade uses `Interval(index * 0.1, 1.0)` — item 0 starts immediately, item 4 starts at 40% of the total duration. Alternative: multiple controllers with `.chain` or `.forward().then()` for sequential. Or: `flutter_animate` package's `.animate().fadeIn(delay: 60.ms * index)` for a one-liner. **Rule:** staggered UIs (like an entering list) LOOK far more polished than everything moving at once — small effort, big UX win." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: When would you NOT animate?**\n\n**A:** Animations should have INTENT. **Don't animate:** every list scroll (it's already smooth), every state change (visual noise), server-driven data updates (they should just appear). **Do animate:** significant navigation (Hero), user gestures (spring-back), state that would otherwise pop-in jarringly (fade-in loading), attention-grabbing errors (shake). If in doubt, DON'T. An app that animates thoughtfully once every 30 seconds feels polished. An app that animates every 3 seconds feels distracting. Also: honor `MediaQuery.of(context).disableAnimations` for accessibility (users can turn animations off system-wide)." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Hero transitions** — every polished shopping app (image → detail).\n- **Bottom sheet expand / collapse** — implicit AnimatedContainer or `DraggableScrollableSheet`.\n- **FAB icon crossfade** — `AnimatedSwitcher`.\n- **Skeleton shimmer loading** — a looped controller across a shimmer overlay.\n- **Page transitions** — `PageRouteBuilder` custom transitions or the `animations` package's SharedAxisTransition.\n- **Micro-interactions** (button press, checkbox tick, chip select) — implicit AnimatedContainer.\n- **Onboarding illustrations** — Rive/Lottie animated assets driven by an `AnimationController`." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`Ticker.muted`** — the auto-mute you get from vsync when off-screen.\n- **`SimulationController` / `SpringSimulation`** — physics-based motion.\n- **`AnimationStatus`** — listen for completion (`animation.addStatusListener(...)`).\n- **`AnimatedList` + `SliverAnimatedList`** — insert/remove items with animation.\n- **`FadeTransition`, `ScaleTransition`, `SlideTransition`** — pre-built wrappers around common tweens.\n- **`flutter_animate`** package — extremely concise chained animations.\n- **`Rive`, `Lottie`** — designer-created animations (After Effects / Rive) shipped as JSON, driven by state.\n- **`ImplicitlyAnimatedWidget`** — the base you can extend for your own custom implicit widget.\n- **`ValueListenableBuilder`** — combines with `ValueNotifier<T>` for lightweight state-driven animation.\n- **Chaining animations** — `.forward()` returns a `TickerFuture`; use `.then()` for sequential steps." }
   ],
   "flashcards": [
-    { "front": "Implicit vs explicit animations?", "back": "Implicit: set a target on an AnimatedFoo widget. Explicit: drive an AnimationController yourself for full control." },
-    { "front": "What does an AnimationController need?", "back": "A vsync (TickerProvider, e.g. SingleTickerProviderStateMixin) and must be disposed." },
-    { "front": "Cheap things to animate?", "back": "Transform and opacity (GPU-friendly); avoid animating layout for many widgets." }
+    { "front": "Implicit vs explicit?", "back": "Implicit (AnimatedX) interpolates on property change. Explicit uses AnimationController for full orchestration." },
+    { "front": "AnimationController needs?", "back": "vsync: (a TickerProvider like SingleTickerProviderStateMixin) + duration." },
+    { "front": "Tween's role?", "back": "Maps controller's 0→1 range onto any type (double, Color, Offset, ...)." },
+    { "front": "AnimatedBuilder child: trick?", "back": "Static expensive subtree passed once; not rebuilt each frame." },
+    { "front": "Hero tags?", "back": "Match the tag on source + destination Hero; Flutter animates the shared element automatically." },
+    { "front": "Never forget in dispose?", "back": "controller.dispose(); (leaks + ticker keeps running otherwise)." }
   ],
   "quiz": [
-    { "q": "AnimatedContainer is an example of…", "options": ["Explicit animation", "Implicit animation", "A controller", "A tween"], "answer": 1, "explain": "You set a target and Flutter animates implicitly." },
-    { "q": "An AnimationController requires a…", "options": ["Database", "vsync (TickerProvider)", "Navigator", "Stream"], "answer": 1, "explain": "vsync ties the controller to the frame signal." },
-    { "q": "For smooth animations, prefer animating…", "options": ["Layout of many widgets", "Transform/opacity", "The whole screen", "Network calls"], "answer": 1, "explain": "Transform/opacity are GPU-cheap; layout animations can jank." }
+    { "q": "Implicit widget interpolates on…", "options": ["Timer", "Property change", "Controller start", "Every frame regardless"], "answer": 1, "explain": "AnimatedX watches its props." },
+    { "q": "vsync: this requires…", "options": ["A GlobalKey", "TickerProvider mixin on State", "Async fn", "Nothing"], "answer": 1, "explain": "Single or plain TickerProviderStateMixin." },
+    { "q": "Tween combines with Controller via…", "options": ["compose", "animate(controller)", "attach", "watch"], "answer": 1, "explain": "Returns an Animation<T>." },
+    { "q": "AnimatedBuilder child: is…", "options": ["Deprecated", "The static subtree reused every frame — perf win", "Optional widget id", "A key"], "answer": 1, "explain": "Built once, reused." },
+    { "q": "Hero requires…", "options": ["Same widget", "Matching tag on source + destination Hero", "GlobalKey", "AnimatedBuilder"], "answer": 1, "explain": "Tag-based matching." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Animate size/color with AnimatedContainer." },
-    { "level": "Medium", "text": "Build a fade+slide intro with AnimationController + Tween." },
-    { "level": "Hard", "text": "Coordinate staggered animations with Intervals." },
-    { "level": "Expert", "text": "Implement a custom Hero-like transition and keep it at 60fps." }
+    { "level": "Easy", "text": "AnimatedContainer that changes color/size/radius on tap." },
+    { "level": "Easy", "text": "AnimatedOpacity fade-in of a text on button press." },
+    { "level": "Medium", "text": "Pulse animation using AnimationController + Tween + AnimatedBuilder." },
+    { "level": "Medium", "text": "TweenAnimationBuilder entrance fade on route push." },
+    { "level": "Hard", "text": "Hero image transition from a list to a detail page." },
+    { "level": "Hard", "text": "Staggered list-item entrance via a single AnimationController + Intervals." },
+    { "level": "Expert", "text": "Physics-based draggable card with SpringSimulation snap-back." }
   ],
   "interviewQuestions": [
-    "Implicit vs explicit animations?",
-    "What does AnimationController need and why dispose it?",
-    "Tween vs Curve?",
-    "How do you keep animations at 60fps?",
-    "AnimatedBuilder vs rebuilding the whole widget?"
+    "Implicit vs explicit animations — differences and when to use each?",
+    "What is a Tween and how does it relate to an Animation?",
+    "What is a TickerProvider and why is vsync required?",
+    "What is AnimatedBuilder and why is `child:` important?",
+    "How do Hero animations work?",
+    "How do you stagger animations?",
+    "When would you NOT animate?"
   ],
   "references": [
-    { "label": "Flutter — Animations", "url": "https://docs.flutter.dev/ui/animations" }
+    { "label": "Animations — Flutter docs", "url": "https://docs.flutter.dev/ui/animations" },
+    { "label": "flutter_animate", "url": "https://pub.dev/packages/flutter_animate" }
   ]
 }

@@ -2,43 +2,97 @@
   "id": "flutter.forms",
   "levelId": 4,
   "title": "Forms & Validation",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "xp": 40,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Build forms with Form + TextFormField",
-    "Validate input and show errors",
-    "Manage controllers and focus correctly"
+    "Understand forms via a real-life analogy",
+    "Use `Form` + `TextFormField` + `GlobalKey<FormState>` idiomatically",
+    "Validate on submit, on change, and reactively",
+    "Manage focus, controllers, and dispose properly",
+    "Answer form-input interview questions confidently"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Flutter forms group input fields under a Form widget with a GlobalKey<FormState>, enabling collective validation, saving, and reset." },
-    { "type": "code", "language": "dart", "code": "final _key = GlobalKey<FormState>();\nForm(key: _key, child: TextFormField(\n  validator: (v) => (v==null||v.isEmpty) ? 'Required' : null,\n));\nif (_key.currentState!.validate()) { /* submit */ }" },
-    { "type": "callout", "variant": "mistake", "markdown": "Forgetting to dispose() TextEditingControllers and FocusNodes — a common leak. Create them in initState (or use a state manager) and dispose them in dispose()." },
-    { "type": "callout", "variant": "tip", "markdown": "Use autovalidateMode wisely (onUserInteraction, not always), give fields keyboardType/textInputAction for good UX, and validate on the server too — client validation is convenience, not security." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of a job application at a government office.**\n\n- Each **field on the paper form** (`TextFormField`) has its own validation rule: 'name required', 'phone must be 10 digits'.\n- The whole **form** is bound together with a `GlobalKey<FormState>` — imagine a paper clip holding all fields together. When you hit Submit, the clerk (`FormState.validate()`) runs every field's rule at once and reports 'all good' or 'field X is wrong'.\n- **Controllers** are like carbon copies — one for each field, holding the current text. You can read, clear, or set them programmatically ('populate address from ZIP').\n- **Focus nodes** decide where the cursor blinks. Advance to the next field when the user presses TAB or the keyboard's 'next' button.\n- When you leave the office (widget disposed), you throw away your carbon copies and pens — otherwise they pile up (memory leak). **You MUST `.dispose()` every controller and focus node** you created.\n\n**Why this matters:** Smart Consumer has an OTP screen, address forms, product-details editors — every one of them lives on this API. Get the pattern right once, and forms stop being painful." },
+    { "type": "callout", "variant": "definition", "markdown": "**Flutter forms** wrap a group of input widgets under a `Form` widget. Each input is typically a `TextFormField` with an optional `validator: (v) => …`. A `GlobalKey<FormState>` gives you programmatic access: `key.currentState!.validate()` runs every field's validator, `key.currentState!.save()` fires each field's `onSaved`. Text state can be tracked either through the field's `initialValue`/`onChanged` OR through a `TextEditingController` — same for focus via `FocusNode`." },
+    { "type": "theory", "markdown": "## The canonical form pattern" },
+    { "type": "code", "language": "dart", "code": "import 'package:flutter/material.dart';\n\nclass LoginForm extends StatefulWidget {\n  const LoginForm({super.key});\n  @override State<LoginForm> createState() => _LoginFormState();\n}\n\nclass _LoginFormState extends State<LoginForm> {\n  final _formKey = GlobalKey<FormState>();\n\n  // Controllers = mutable source of truth for text.\n  final _email = TextEditingController();\n  final _password = TextEditingController();\n\n  // Focus nodes = programmatic focus (next-button flow).\n  final _emailFocus = FocusNode();\n  final _pwFocus = FocusNode();\n\n  bool _obscure = true;\n\n  @override\n  void dispose() {\n    _email.dispose();\n    _password.dispose();\n    _emailFocus.dispose();\n    _pwFocus.dispose();\n    super.dispose();\n  }\n\n  void _submit() {\n    if (!_formKey.currentState!.validate()) return;\n    debugPrint('valid! email=${_email.text}');\n    // ... call your API\n  }\n\n  @override\n  Widget build(BuildContext context) => Form(\n    key: _formKey,\n    // Reactive validation — errors appear as the user types (after first submit)\n    autovalidateMode: AutovalidateMode.onUserInteraction,\n    child: Column(\n      children: [\n        TextFormField(\n          controller: _email,\n          focusNode: _emailFocus,\n          keyboardType: TextInputType.emailAddress,\n          textInputAction: TextInputAction.next,\n          decoration: const InputDecoration(labelText: 'Email'),\n          validator: (v) {\n            if (v == null || v.isEmpty) return 'Required';\n            if (!v.contains('@')) return 'Must be a valid email';\n            return null;\n          },\n          onFieldSubmitted: (_) => _pwFocus.requestFocus(),\n        ),\n        TextFormField(\n          controller: _password,\n          focusNode: _pwFocus,\n          obscureText: _obscure,\n          textInputAction: TextInputAction.done,\n          decoration: InputDecoration(\n            labelText: 'Password',\n            suffixIcon: IconButton(\n              icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),\n              onPressed: () => setState(() => _obscure = !_obscure),\n            ),\n          ),\n          validator: (v) => v == null || v.length < 6 ? 'Min 6 characters' : null,\n          onFieldSubmitted: (_) => _submit(),\n        ),\n        const SizedBox(height: 16),\n        FilledButton(onPressed: _submit, child: const Text('Sign in')),\n      ],\n    ),\n  );\n}\n\n// Notice: EVERY controller and focus node created in initState (via `final`\n// field init) is DISPOSED in dispose(). Miss any of them = leak." },
+    { "type": "theory", "markdown": "## The three ways to hold input state" },
+    { "type": "table", "headers": ["Approach", "When", "Pros / Cons"], "rows": [
+      ["**`TextEditingController`**", "Most cases — you need to read/set text programmatically", "Full control; you MUST `.dispose()`"],
+      ["**`initialValue: … + onChanged`**", "Simple, one-shot forms where you don't need programmatic access", "No controller to dispose; less flexible"],
+      ["**Bloc / Riverpod state**", "Complex forms with cross-field logic, async validation, submission state", "Testable, decoupled; more setup"]
+    ]},
+    { "type": "theory", "markdown": "## Validation timing — 3 modes" },
+    { "type": "table", "headers": ["`autovalidateMode`", "Behavior"], "rows": [
+      ["`disabled` (default)", "Validate only when you call `formState.validate()` — the classic 'validate on submit'"],
+      ["`onUserInteraction`", "Errors appear after the user first types, then live-update as they edit — best UX for most forms"],
+      ["`always`", "Errors show immediately, even on empty pristine fields — pushy; use sparingly"]
+    ]},
+    { "type": "theory", "markdown": "## Common beginner mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Forgetting to `.dispose()` controllers and focus nodes.** Every `final _foo = TextEditingController();` must be disposed. Same for `FocusNode`. This is the #1 form-related memory leak." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Reading `controller.text` before calling `validate()`.** `TextFormField.onSaved` doesn't fire until you call `formState.save()`. If you only care about the current text, controllers work directly — but call `.validate()` first to know it's valid." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Recreating a controller on every rebuild.** `TextEditingController()` in `build()` = fresh controller every rebuild = text state resets. Create it as an `initState`-time field on `State` or with `flutter_hooks`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Not using `autovalidateMode.onUserInteraction`.** Default `disabled` means the user submits and only THEN sees errors. Modern UX shows errors live once they start typing." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Blocking the UI thread inside a validator.** Validators must be fast + synchronous. Do async validation (like 'email already registered') separately in your submit handler." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. `autovalidateMode: AutovalidateMode.onUserInteraction`** on every serious form." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Dispose every controller and focus node** in `dispose()`. Read your dispose and initState side by side." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Use `TextInputType` for the right keyboard.** `.emailAddress`, `.number`, `.phone` — better UX and validation." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Wire `textInputAction: TextInputAction.next` + `onFieldSubmitted`** to jump focus with the keyboard's return button." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Consider `form_builder`, `flutter_form_builder`, or reactive_forms** for complex forms with many fields and shared validators." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Show async validation separately from field validators.** 'Checking availability…' → 'email taken' — this is a submission-flow concern, not a per-keystroke validator." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Login form.** Build the sample; verify all controllers are disposed (use `flutter_lints`)." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — OTP form.** 6 individual `TextField`s that advance focus on each keystroke; treat backspace to move back." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Address form with autofill.** Zip code → API lookup → auto-fill city/state fields." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Cross-field validation.** Password + confirm-password; error on the confirm field if they don't match." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Async validation.** On email blur, call an API to check availability; show 'available' or 'taken' inline; disable submit while checking." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: How do you build a form in Flutter?**\n\n**A:** Wrap fields in a `Form` widget with a `GlobalKey<FormState>`. Each field is typically a `TextFormField` with a `validator: (v) => …` that returns an error string or null. To submit: `if (_formKey.currentState!.validate()) { /* proceed */ }` runs every field's validator. For each field's persisted value, use `onSaved` + `_formKey.currentState!.save()`, or manage text via `TextEditingController`. The core primitives are `Form`, `TextFormField`, `GlobalKey<FormState>`, and either controllers or `initialValue`/`onChanged` for reading state." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: `TextEditingController` vs `initialValue`/`onChanged` — when to use which?**\n\n**A:** **`TextEditingController`** — you need to read the field's text at any time (`controller.text`), programmatically set text (`controller.text = ...`), or listen for changes outside the widget. Common case: search fields, form submission, prefilling from an API. **Must be disposed.** **`initialValue`/`onChanged`** — simpler; hand a starting value and receive change callbacks. No controller lifecycle. Common case: quick one-shot forms with just a submit callback. **Rule:** default to `TextEditingController` for anything non-trivial — the extra ceremony is worth the flexibility." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do you validate on submit vs live?**\n\n**A:** **`autovalidateMode` on `Form`** controls this. **`AutovalidateMode.disabled` (default)** — validators only run when you call `_formKey.currentState!.validate()`. Classic submit-time validation. **`AutovalidateMode.onUserInteraction`** — after the user first types in a field, that field's validator runs on every keystroke, showing errors live. Best UX for most forms — friendly but not pushy. **`AutovalidateMode.always`** — validators run immediately, even on empty pristine fields. Pushy; only for opinionated flows like signup wizards where you want early feedback. **Modern best practice:** `onUserInteraction`." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you manage focus between fields?**\n\n**A:** Two pieces. **(1) `FocusNode`** — create one per field (as `final _fieldFocus = FocusNode()` in `State`), pass it to the field's `focusNode:`, dispose it in `dispose()`. Call `_fieldFocus.requestFocus()` to focus programmatically. **(2) `textInputAction:` + `onFieldSubmitted:`** — set `TextInputAction.next` on a field to make the keyboard show a 'next' button; in `onFieldSubmitted`, call `_nextFocus.requestFocus()`. For the last field use `.done`. This gives the user a smooth keyboard-only form flow. Also: `FocusScope.of(context).unfocus()` dismisses the keyboard entirely; useful for 'tap outside to dismiss' UX." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you do async validation (e.g., 'is this email taken?')?**\n\n**A:** **DON'T do it in the field's `validator:`** — validators must return synchronously. Instead: **(1) Debounce** the user's typing (300–500 ms) using a `Timer` or a `Stream.debounce` (via Rx/Provider). **(2) Kick off** the async check when they pause; store its result in State: `String? _emailAvailability;`. **(3) Combine** results in the sync validator: `if (_emailAvailability == 'taken') return 'Email already registered';` **(4) Disable submit** while checking is in flight (`String? _pendingCheck; …`). Show a 'Checking…' spinner in the field's suffixIcon. `AsyncValidator` packages exist but rolling it yourself is straightforward and testable." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What are common form-related memory leaks?**\n\n**A:** **(1) `TextEditingController` not disposed** — holds a listener chain to any listener attached; retains until GC. **(2) `FocusNode` not disposed** — same. **(3) `ScrollController` in a form with scrolling** — same. **(4) A Stream subscription** (typing debounce) not cancelled. **Fix:** every controller/node/subscription created in `initState` (including via field init) must be released in `dispose`. Read your dispose and your initState side by side — they should mirror each other. LeakCanary-equivalent (Flutter memory profiler in DevTools) surfaces leaks in dev builds." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: When would you use `flutter_form_builder` or `reactive_forms`?**\n\n**A:** When you have many fields, shared validation rules, complex cross-field logic, or need to serialize form state. **`flutter_form_builder`** provides pre-built field widgets (dropdowns, chip fields, dates) with unified validation. **`reactive_forms`** is inspired by Angular's Reactive Forms — you define a `FormGroup` in state, subscribe to changes, and bind widgets. Both eliminate per-field ceremony for large forms. **Trade-off:** you're accepting a third-party API surface. For a login screen with 2 fields, plain Flutter is simpler. For a 20-field survey with cross-field rules, a form library pays off immediately." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Login / signup / OTP screens** — every app.\n- **Address, payment, checkout forms** — Smart Consumer, Amazon, every marketplace.\n- **Search bars** — `TextField` + debounced `onChanged`.\n- **Chat message input** — `TextField` with dynamic height + send-on-enter.\n- **Editable rows in a data table** — many controllers, one per row.\n- **Multistep wizards** — a form per step, or one form spread across `PageView`s with state hoisted to a controller." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`InputFormatters`** — restrict/format input while typing (`FilteringTextInputFormatter.digitsOnly`, credit-card mask).\n- **`SelectionArea`** — allow text selection over a subtree (useful for read-only forms).\n- **`RestorationMixin` + `RestorableTextEditingController`** — preserves form text across process death.\n- **`Autofill`** — hint the OS with `AutofillHints.email`, `.password`, `.oneTimeCode`.\n- **`AutofillGroup`** — group fields for combined autofill (address, phone).\n- **`onEditingComplete` vs `onFieldSubmitted`** — subtly different callback timings.\n- **`Focus` widget** — advanced focus traversal via `FocusTraversalGroup`, `FocusTraversalPolicy`.\n- **Form + reactive UI** — combine `TextEditingController.text` with a `ValueListenableBuilder` for lightweight reactive updates without setState." }
   ],
   "flashcards": [
-    { "front": "How do you validate a whole form?", "back": "Hold a GlobalKey<FormState> and call _key.currentState!.validate()." },
-    { "front": "What must you dispose in forms?", "back": "TextEditingControllers and FocusNodes." },
-    { "front": "Is client validation enough?", "back": "No — always validate on the server too; client validation is for UX." }
+    { "front": "How to build a form?", "back": "Form + GlobalKey<FormState> + TextFormField + validator; call key.currentState!.validate()." },
+    { "front": "Dispose rule?", "back": "Every TextEditingController and FocusNode created in initState/field init must be disposed." },
+    { "front": "autovalidateMode default vs modern?", "back": "Default = disabled (validate on submit). Modern = onUserInteraction (live after first type)." },
+    { "front": "Focus flow?", "back": "textInputAction: TextInputAction.next + onFieldSubmitted: (_) => nextFocus.requestFocus()." },
+    { "front": "Async validation approach?", "back": "Debounce typing → API call → store result in State → check in synchronous validator." },
+    { "front": "Complex forms library?", "back": "flutter_form_builder or reactive_forms." }
   ],
   "quiz": [
-    { "q": "A Form's collective validation uses…", "options": ["A Provider", "A GlobalKey<FormState>", "setState only", "A Stream"], "answer": 1, "explain": "The FormState (via the key) validates and saves all fields." },
-    { "q": "TextEditingControllers must be…", "options": ["Ignored", "Disposed in dispose()", "Static", "Global"], "answer": 1, "explain": "Dispose them to avoid leaks." },
-    { "q": "Client-side validation is…", "options": ["A security boundary", "A UX convenience; still validate server-side", "Unnecessary", "Slower than server"], "answer": 1, "explain": "Never trust the client; revalidate on the server." }
+    { "q": "Best autovalidateMode for UX?", "options": ["disabled", "onUserInteraction", "always", "None"], "answer": 1, "explain": "Errors appear after first interaction." },
+    { "q": "Controllers must be…", "options": ["Ignored", "Disposed in dispose()", "Made static", "Global"], "answer": 1, "explain": "Leak otherwise." },
+    { "q": "Validator return type?", "options": ["bool", "String? — null = valid, string = error", "void", "int"], "answer": 1, "explain": "Return the error message or null." },
+    { "q": "Async check (email taken)?", "options": ["In validator", "Debounce + async task + sync validator reads result", "In build()", "In dispose"], "answer": 1, "explain": "Validators must be sync." },
+    { "q": "Focus programmatically?", "options": ["setState", "FocusNode.requestFocus()", "context.focus", "GlobalKey"], "answer": 1, "explain": "Standard API." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Build a login form with required + email validation." },
-    { "level": "Medium", "text": "Add focus traversal and submit-on-done across fields." },
-    { "level": "Hard", "text": "Cross-field validation (password == confirm) with good error UX." },
-    { "level": "Expert", "text": "Build a reactive form bound to a state manager with async (server) validation." }
+    { "level": "Easy", "text": "Login form with email + password validators; validate on submit." },
+    { "level": "Easy", "text": "Add autovalidateMode.onUserInteraction; observe live errors." },
+    { "level": "Medium", "text": "OTP field: 6 single-digit fields advancing focus on each keystroke." },
+    { "level": "Medium", "text": "Password + confirm-password with cross-field validation." },
+    { "level": "Hard", "text": "Async 'is email available' check on blur; disable submit while pending." },
+    { "level": "Hard", "text": "Multistep wizard with a Form per PageView; state hoisted to a controller." },
+    { "level": "Expert", "text": "Restorable form using RestorableTextEditingController + RestorationMixin; survive process death." }
   ],
   "interviewQuestions": [
-    "How does Form/FormState validation work?",
-    "How do you manage controllers and focus?",
-    "When use autovalidateMode?",
-    "Why isn't client validation enough?",
-    "How do you handle async/server validation?"
+    "How do you build a form in Flutter?",
+    "TextEditingController vs initialValue/onChanged — when to use which?",
+    "How do you validate on submit vs live?",
+    "How do you manage focus between fields?",
+    "How do you do async validation (e.g., 'is this email taken?')?",
+    "What are common form-related memory leaks?",
+    "When would you use flutter_form_builder or reactive_forms?"
   ],
   "references": [
-    { "label": "Flutter — Build a form with validation", "url": "https://docs.flutter.dev/cookbook/forms/validation" }
+    { "label": "Forms — Flutter docs", "url": "https://docs.flutter.dev/cookbook/forms/validation" },
+    { "label": "TextFormField API", "url": "https://api.flutter.dev/flutter/material/TextFormField-class.html" }
   ]
 }
