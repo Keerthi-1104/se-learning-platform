@@ -3,48 +3,109 @@
   "levelId": 8,
   "title": "SQLite",
   "xp": 40,
-  "estimatedMinutes": 20,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Explain SQLite's in-process, single-file model",
-    "Enable WAL mode for concurrency",
-    "Handle migrations and constraints correctly"
+    "Understand SQLite via a real-life analogy",
+    "See why SQLite is the world's most-deployed database",
+    "Use it correctly on mobile (Flutter/iOS/Android)",
+    "Distinguish WAL mode from rollback journal",
+    "Answer SQLite interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "SQLite is a serverless, embedded, single-file SQL database — the most-deployed database on Earth (every phone, browser, and OS). ACID, small, fast, no separate process." },
-    { "type": "code", "language": "sql", "code": "PRAGMA journal_mode = WAL;      -- writer + concurrent readers\nPRAGMA synchronous = NORMAL;    -- balance safety vs speed\nPRAGMA foreign_keys = ON;       -- off by default!\n\nCREATE TABLE users(id INTEGER PRIMARY KEY, name TEXT NOT NULL);\nCREATE INDEX idx_users_name ON users(name);" },
-    { "type": "table", "headers": ["Journal mode", "Meaning"], "rows": [
-      ["DELETE (default)", "Traditional rollback journal — writer blocks readers"],
-      ["WAL", "Writers append to a WAL; readers see snapshots concurrently"],
-      ["MEMORY", "In-memory journal — fastest, least safe"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of SQLite as a spiral-bound notebook you carry in your pocket.**\n\n- **MySQL / PostgreSQL** are giant filing cabinets in a rented office. You go THERE to look things up — the server exists as a separate process (or on a separate machine). Reliable but requires infrastructure — install it, configure it, ports, connections, users, backups.\n- **SQLite** is a notebook you carry in your JACKET POCKET. It's not somewhere else — it's a single file on the SAME device as your app. Your app opens the file, writes to it, closes it. Zero-configuration. Zero-server. Zero-network. Read the file yourself with any SQLite tool.\n\n**Concretely:** SQLite is a self-contained, serverless, zero-config, single-file relational database. The 'database' is one `.sqlite` file on disk. Your app links the SQLite LIBRARY (a C library) into its process. Queries execute IN-PROCESS. No socket, no daemon, no network.\n\n**Where you already have SQLite (whether you knew or not):**\n- Every **iPhone** and **iPad** — Photos, Messages, iCloud sync all use SQLite.\n- Every **Android phone** — WhatsApp messages, browser bookmarks, contacts.\n- Every **modern browser** (Chrome, Firefox, Safari) for internal storage.\n- **Every Flutter app that uses drift/sqflite/floor**.\n- **Airplanes, cars, TVs, IoT devices** — SQLite is on ~4 billion devices.\n\n**SQLite is arguably the most-deployed piece of software in the history of computing.** More than any other database — because it's inside every mobile app.\n\n**Trade-offs:** single-writer at a time (multiple readers OK); not a network database (one process at a time practically); not for high-concurrency server workloads. But for **mobile apps, embedded systems, test suites, single-user desktop apps, small websites** — it's often the CORRECT choice. Don't reach for Postgres for a mobile app's local database. Don't spin up MySQL for a CI test." },
+    { "type": "callout", "variant": "definition", "markdown": "**SQLite** is an embedded relational database library implemented as a C library that runs IN-PROCESS with the application. The database is a SINGLE FILE on disk. No server, no configuration, no daemon. Public domain since 2000 (created by D. Richard Hipp). ACID-compliant, supports most of SQL-92, and is used in iOS, Android, Chrome, Firefox, Airbus A350 avionics, and every Flutter app with a local DB. Client wrappers: `sqflite` (Flutter — thin wrapper), `drift` (typed SQL for Dart), `Room` (Android), `GRDB` (iOS)." },
+    { "type": "theory", "markdown": "## Why SQLite is so widely used" },
+    { "type": "table", "headers": ["Property", "Consequence"], "rows": [
+      ["**Zero configuration**", "No install, no daemon, no user accounts. Just link the library."],
+      ["**Single file**", "The whole DB is `app.sqlite`. Copy = backup. Delete = uninstall."],
+      ["**In-process**", "No network. No sockets. Same address space as your app. Fast."],
+      ["**Public domain**", "Free forever; no license to worry about. Used commercially freely."],
+      ["**Small**", "~600KB library. Fits on the tiniest device."],
+      ["**Cross-platform**", "Same file works on iOS, Android, Windows, Linux, macOS."],
+      ["**ACID**", "Real transactions; crash-safe."],
+      ["**Battle-tested**", "Tested to aviation-grade reliability."]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "WAL mode is a huge win: concurrent readers don't block writers, and a single writer streams changes to a WAL file. On mobile, enabling WAL alone often doubles read throughput on hot screens." },
-    { "type": "callout", "variant": "mistake", "markdown": "Forgetting `PRAGMA foreign_keys = ON` — SQLite has FKs but they're OFF by default. Also: relying on strict column types — SQLite uses **type affinity**, storing values loosely unless STRICT tables are used (3.37+)." },
-    { "type": "callout", "variant": "tip", "markdown": "Wrap batches of writes in a single transaction — commit-per-row is 100× slower. Use `PRAGMA optimize` before close. On Android/iOS use versioned migrations (Room/Drift handle it)." }
+    { "type": "theory", "markdown": "## Sample program — SQLite in a Flutter app (drift)" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml:\n//   dependencies:\n//     drift: ^2.20.0\n//     sqlite3_flutter_libs: ^0.5.0\n//     path_provider: ^2.1.4\n//     path: ^1.9.0\n//   dev_dependencies:\n//     drift_dev: ^2.20.0\n//     build_runner: ^2.4.13\n\n// lib/database.dart — TYPED Dart tables map to SQLite\nimport 'package:drift/drift.dart';\nimport 'package:drift/native.dart';\nimport 'package:path_provider/path_provider.dart';\nimport 'package:path/path.dart' as p;\nimport 'dart:io';\n\npart 'database.g.dart';\n\nclass Users extends Table {\n  IntColumn    get id        => integer().autoIncrement()();\n  TextColumn   get email     => text().withLength(min: 3, max: 255).unique()();\n  TextColumn   get name      => text().withLength(min: 1, max: 100)();\n  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();\n}\n\nclass Orders extends Table {\n  IntColumn    get id        => integer().autoIncrement()();\n  IntColumn    get userId    => integer().references(Users, #id)();\n  IntColumn    get totalCents => integer()();\n  TextColumn   get status    => text().withDefault(const Constant('pending'))();\n  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();\n}\n\n@DriftDatabase(tables: [Users, Orders])\nclass AppDatabase extends _$AppDatabase {\n  AppDatabase() : super(_openConnection());\n\n  @override int get schemaVersion => 1;\n\n  static QueryExecutor _openConnection() {\n    return LazyDatabase(() async {\n      final dbFolder = await getApplicationDocumentsDirectory();\n      final file = File(p.join(dbFolder.path, 'app.sqlite'));\n      return NativeDatabase.createInBackground(file);\n    });\n  }\n\n  // Type-safe queries — the compiler catches column typos\n  Future<List<User>> allUsers() => select(users).get();\n\n  // Reactive stream — auto-emits whenever any user row changes\n  Stream<List<User>> watchAllUsers() => select(users).watch();\n\n  // JOIN with fluent syntax\n  Future<List<TypedResult>> userSpending() {\n    return (select(users).join([\n      leftOuterJoin(orders, orders.userId.equalsExp(users.id)),\n    ])..groupBy([users.id])).get();\n  }\n\n  // Insert\n  Future<int> addUser(String email, String name) =>\n      into(users).insert(UsersCompanion.insert(email: email, name: name));\n\n  // Update\n  Future<int> setUserName(int id, String name) =>\n      (update(users)..where((u) => u.id.equals(id))).write(UsersCompanion(name: Value(name)));\n\n  // Transaction — atomic across multiple statements\n  Future<int> placeOrder(int userId, int totalCents) {\n    return transaction(() async {\n      final orderId = await into(orders).insert(\n        OrdersCompanion.insert(userId: userId, totalCents: totalCents),\n      );\n      // ... update inventory, insert audit log, etc.\n      return orderId;\n    });\n  }\n}\n\n// Run: dart run build_runner build --delete-conflicting-outputs\n// generates the .g.dart file with typed queries.\n\n// Consuming from a widget — reactive by default via .watch()\nStreamBuilder<List<User>>(\n  stream: db.watchAllUsers(),\n  builder: (ctx, snap) => ListView(\n    children: snap.data?.map((u) => ListTile(title: Text(u.name))).toList() ?? [],\n  ),\n);" },
+    { "type": "theory", "markdown": "## Journal modes — WAL is the modern choice" },
+    { "type": "table", "headers": ["Journal mode", "How it works", "When"], "rows": [
+      ["**DELETE (rollback journal)**", "Old default. Copy affected pages to a journal; commit deletes the journal. Writers BLOCK readers.", "Legacy compatibility"],
+      ["**WAL (Write-Ahead Log)**", "Writes go to a `.wal` file; readers see the pre-write state; occasional checkpoints merge WAL into DB.", "**Modern default.** Readers don't block writers; writers don't block readers."],
+      ["**MEMORY**", "Journal in RAM. Fast, unsafe on crash.", "Test DBs only"],
+      ["**OFF**", "No journal. Corrupts on crash.", "Only if you truly don't care"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**Enable WAL from day one:** `PRAGMA journal_mode=WAL;`. Massive concurrency improvement for any app with even one reader + one writer simultaneously. Drift, Room, Core Data all use WAL by default." },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Using SQLite as a network database.** Serverless means SAME PROCESS. Sharing an SQLite file across processes over NFS = corruption + deadlocks." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Not using transactions.** Writing 1000 rows one at a time → 1000 fsyncs → slow. Wrap in a transaction → one fsync → 100x faster." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: DELETE journal mode in a concurrent app.** Readers block writers. Enable WAL." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Storing large blobs (>1MB) inside SQLite.** Works but slows queries. Store filesystem path + file separately." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Ignoring `PRAGMA foreign_keys = ON;`.** Foreign key constraints are OFF by default in raw SQLite. Enable per connection or via your ORM." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Not indexing.** Same rules as any SQL DB — index WHERE / JOIN / ORDER BY columns." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Assuming type strictness.** SQLite uses **type affinity** — a TEXT column can technically hold an INTEGER. Modern versions have `STRICT` tables for real type enforcement." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. WAL mode from day one.** `PRAGMA journal_mode=WAL;`." },
+    { "type": "callout", "variant": "best", "markdown": "**2. `PRAGMA foreign_keys = ON;`.** Enforce FKs." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Transactions for bulk work.** 100x speedup on multi-row inserts." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Prepared statements.** Every wrapper (drift, sqflite, Room) uses them — no manual SQL string concatenation." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Migrations via your ORM.** Drift, Room, Core Data all handle version bumps." },
+    { "type": "callout", "variant": "best", "markdown": "**6. `EXPLAIN QUERY PLAN` for optimization.** Same principles as MySQL/Postgres." },
+    { "type": "callout", "variant": "best", "markdown": "**7. `VACUUM` occasionally.** Reclaims disk space from deleted rows (opt-in — SQLite doesn't autovacuum by default)." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Backup with `VACUUM INTO`.** Atomic copy to a new file — safer than a naive file copy." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — CLI tour.** `sqlite3 test.db`; `CREATE TABLE`, `INSERT`, `SELECT`. Zero-config." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — drift in Flutter.** Build the sample; add reactive `.watch()` stream in a widget." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Migration.** Bump schemaVersion; add a column; write a migration; verify old data preserved." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Bulk insert benchmark.** 10k rows one-at-a-time vs one transaction vs prepared statement loop. Measure difference." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard) — EXPLAIN QUERY PLAN.** Optimize a slow query with a composite index; verify plan change." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert) — Cross-platform sync.** Same schema on iOS + Android + macOS; write to one, read from another via file share (careful about journal file)." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is SQLite and how is it different from server databases?**\n\n**A:** SQLite is an EMBEDDED relational database — a C library linked into your app's process. The database is a SINGLE FILE on disk. No server, no daemon, no configuration. Contrast with MySQL/PostgreSQL: those are SERVER-BASED — a separate process (or machine) that your app connects to over TCP. **Best for:** mobile apps, embedded systems, test suites, single-user desktop apps, small websites, CI environments. **Worst for:** high-concurrency server workloads with hundreds of writers, multi-machine access, hosted SaaS backends. **The world's most-deployed database** — every iOS + Android device has SQLite, every browser, every Flutter/React Native app. When you don't need a server, don't run one." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: Why is WAL mode important?**\n\n**A:** SQLite's default journal mode (DELETE — 'rollback journal') has a fundamental limitation: **writers BLOCK readers** and vice versa. Only one connection accesses the DB at a time. **WAL (Write-Ahead Log)** fixes this: writes go to a `.wal` sidecar file; readers see the pre-write state via the main DB; writers append to the WAL without disturbing readers. Result: **readers don't block writers; writers don't block readers.** For any app with even ONE reader + ONE writer simultaneously, WAL is a night-and-day improvement. Enable with `PRAGMA journal_mode=WAL;` — permanent for that DB file. Every modern SQLite ORM (drift, Room, Core Data) uses WAL by default. Interview answer: **enable WAL from day one.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What are common Flutter SQLite libraries?**\n\n**A:** **`sqflite`** — thin wrapper over native iOS/Android SQLite. Raw SQL strings. Battle-tested; low-level. **`drift`** (formerly Moor) — modern, TYPED SQL for Dart. Define tables as Dart classes; queries auto-generated with type safety; supports reactive streams (`.watch()`). Compile-time SQL verification. **The recommended choice for new Flutter apps.** **`floor`** — Room-like annotation-based ORM. Less active than drift. **`Isar` / `ObjectBox`** — NoSQL alternatives (see their own topics). **`hive`** — key-value NoSQL; not SQLite. **Rule:** for a modern Flutter app that wants SQL + reactive queries + type safety → drift. For a lightweight quick prototype → sqflite. Both are backed by the platform's native SQLite library." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you migrate an SQLite schema?**\n\n**A:** SQLite supports basic `ALTER TABLE` (ADD COLUMN — cheap; RENAME COLUMN in 3.25+). NOT supported: `DROP COLUMN` (pre-3.35), `ALTER COLUMN` type change. **The manual pattern:** (1) `CREATE TABLE new_table WITH new schema`. (2) `INSERT INTO new_table SELECT ... FROM old_table` (data + transformation). (3) `DROP TABLE old_table`. (4) `ALTER TABLE new_table RENAME TO old_table`. All in one transaction. **In practice — use your ORM:** drift's migration system takes `schemaVersion` bumps and diff-based migrations; Room has `@Migration` classes; sqflite has an `onUpgrade` callback with version numbers. **Rule:** never blindly `DROP TABLE` in migration — write reversible migrations; test on realistic data; back up the file before migration in production. On mobile, migrations run during `openDatabase` — slow migrations = slow app startup." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do transactions work in SQLite?**\n\n**A:** Full ACID (Atomicity, Consistency, Isolation, Durability). `BEGIN TRANSACTION;` → statements → `COMMIT;` (or `ROLLBACK;`). **Isolation:** SQLite's default is essentially SERIALIZABLE — the strongest. **Durability:** on commit, SQLite `fsync`s the WAL/journal → survives crash. **Performance:** every commit does an fsync → ~10-100ms on mobile flash. INSERTing 1000 rows one-at-a-time = 1000 fsyncs = 10-100 seconds. Wrap in ONE transaction → ONE fsync → milliseconds. **The single biggest perf lever** for bulk SQLite work. Every ORM's bulk-insert helper wraps everything in a transaction under the hood. **Rule:** transactions on writes; short-lived; commit before leaving critical sections." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What are SQLite's limitations?**\n\n**A:** **(1) One writer at a time (per DB file).** Multiple readers OK; multiple writers serialize. Not a server workload. **(2) No network access.** Same process (or same machine with file locking) only. **(3) Type affinity, not strict types** — a `TEXT` column can hold an integer (fixed with `STRICT` tables in 3.37+). **(4) Limited concurrent write throughput** — can't handle server-scale write workloads. **(5) Limited backup story vs server DBs** — no built-in replication, no point-in-time recovery. **(6) 281TB max file size (theoretical); ~1TB practical.** **When SQLite is enough:** mobile local DB, desktop app, small website, test/CI DB, embedded systems. **When it isn't:** anything served over the network to many users. **Not a bug — a feature.** SQLite deliberately doesn't try to be a server DB. Pick the right tool." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: How does SQLite compare to Hive/Isar/ObjectBox for a Flutter local DB?**\n\n**A:** All viable for local storage. **SQLite (via drift/sqflite/floor)** — real SQL, familiar syntax, standard tooling, WAL, transactions, JOINs, migrations. **Hive** — key-value NoSQL; zero-config; fast for simple lookups; no queries beyond by-key. **Isar** — modern NoSQL with query DSL, indexes, reactive streams. Fast. **ObjectBox** — object DB with reactive queries. Very fast. **Rule for 2026:** for typical Flutter apps with relational data — drift on SQLite is the safe default (SQL is familiar, universal). For simple key-value cache — Hive. For very high-performance object storage without needing SQL — Isar or ObjectBox. Each has its niche; don't pick based on hype. **See the individual topics for each.**" },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every iOS app** — Core Data ultimately uses SQLite.\n- **Every Android app** — Room = SQLite.\n- **Every Flutter app with a local DB** — drift, sqflite, floor.\n- **Firefox, Chrome, Safari** — internal storage.\n- **Airbus A350 avionics** — because SQLite is tested to aviation-grade reliability.\n- **Skype, iMessage, WhatsApp** — message storage.\n- **Version control (Fossil SCM)** — SQLite for state.\n- **Analytics on a laptop** — SQLite handles GBs of CSV data faster than Python for many workloads.\n- **NOT for** — server-side web apps at scale, multi-tenant SaaS, real-time collaboration." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`STRICT` tables (3.37+)** — real type enforcement instead of type affinity.\n- **Full-text search (FTS5)** — built-in module; fast; used by iMessage, Notes.\n- **JSON1 extension** — SQL functions over JSON columns.\n- **Window functions (3.25+)** — SQL:2003 windows.\n- **CTEs (3.8.3+)** — recursive queries.\n- **`sqlite3.wasm`** — SQLite compiled to WebAssembly for browser use.\n- **`sqlite3_column_bytes64`** — 64-bit blob operations.\n- **`sqlite-utils`** (Python) — CLI + library for ergonomic SQLite manipulation.\n- **Litestream** — continuous SQLite replication to S3/etc — makes SQLite viable for small production servers.\n- **`journal_size_limit`** — cap WAL file growth.\n- **`sqlite3_analyzer`** — inspect DB file usage.\n- **`.dump` / `.import`** — sqlite3 shell commands for backup/migration.\n- **`sqlite3_backup_step`** — programmatic backup API.\n- **`PRAGMA integrity_check;`** — verify DB consistency.\n- **In-memory DB** — `:memory:` connection string; perfect for tests." }
   ],
   "flashcards": [
-    { "front": "What makes SQLite unusual?", "back": "It's embedded and serverless — the whole DB is one file inside your app process." },
-    { "front": "Default journal mode vs WAL?", "back": "DELETE journal blocks readers on writes; WAL allows concurrent readers with a writer." },
-    { "front": "Default state of foreign keys?", "back": "OFF — you must `PRAGMA foreign_keys = ON;` per connection." }
+    { "front": "SQLite in one line?", "back": "Embedded C library; single-file DB; zero-config; in-process; ACID." },
+    { "front": "WAL mode?", "back": "PRAGMA journal_mode=WAL — readers don't block writers, writers don't block readers." },
+    { "front": "Bulk insert speed?", "back": "Wrap in ONE transaction — 100x faster than statement-per-row." },
+    { "front": "FKs off by default?", "back": "Yes — enable with PRAGMA foreign_keys = ON per connection." },
+    { "front": "Flutter ORM of choice?", "back": "drift — typed SQL, reactive .watch() streams, compile-time verification." },
+    { "front": "Type strictness?", "back": "Default is 'type affinity' (loose). Use STRICT tables for real enforcement (3.37+)." },
+    { "front": "Where you already have it?", "back": "Every iPhone, Android, Chrome, Firefox, Airbus A350. Most-deployed database ever." }
   ],
   "quiz": [
-    { "q": "SQLite is best described as…", "options": ["A client-server database", "A serverless embedded database (single file)", "A key-value store", "A graph DB"], "answer": 1, "explain": "It runs inside your process; the DB is a file." },
-    { "q": "Which PRAGMA improves read concurrency?", "options": ["synchronous=OFF", "journal_mode=WAL", "foreign_keys=ON", "cache_size=0"], "answer": 1, "explain": "WAL allows concurrent readers with a writer." },
-    { "q": "Batching many inserts?", "options": ["One insert per statement is fine", "Wrap in a single transaction (much faster)", "Use temp files", "Disable WAL"], "answer": 1, "explain": "One commit per insert is orders of magnitude slower." }
+    { "q": "SQLite is…", "options": ["Server DB", "Embedded library; single file; in-process", "Cloud only", "Deprecated"], "answer": 1, "explain": "No server." },
+    { "q": "Modern journal mode?", "options": ["DELETE", "WAL", "MEMORY", "OFF"], "answer": 1, "explain": "Concurrent reads + writes." },
+    { "q": "1000 inserts fastest?", "options": ["One at a time", "All in one transaction", "In a loop", "With prints"], "answer": 1, "explain": "Reduce fsyncs from 1000 to 1." },
+    { "q": "Foreign keys default?", "options": ["ON", "OFF — enable with PRAGMA", "Auto", "N/A"], "answer": 1, "explain": "Historical decision." },
+    { "q": "Flutter typed SQL ORM?", "options": ["Hive", "drift", "SharedPreferences", "Firebase"], "answer": 1, "explain": "Compile-time verified queries." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Create tables + indexes; enable FKs and WAL." },
-    { "level": "Medium", "text": "Benchmark commit-per-row vs batched transaction." },
-    { "level": "Hard", "text": "Write a schema migration adding a column with default + backfill." },
-    { "level": "Expert", "text": "Detect corruption via `PRAGMA integrity_check` and recover from a backup." }
+    { "level": "Easy", "text": "`sqlite3 test.db`; CREATE TABLE + INSERT + SELECT." },
+    { "level": "Easy", "text": "PRAGMA journal_mode=WAL + verify with PRAGMA journal_mode." },
+    { "level": "Medium", "text": "Flutter drift: schema + reactive .watch() stream in a widget." },
+    { "level": "Medium", "text": "Bulk insert benchmark: statement-per-row vs one transaction. Measure." },
+    { "level": "Hard", "text": "Migration bump: add column; verify old data preserved." },
+    { "level": "Hard", "text": "EXPLAIN QUERY PLAN; add composite index; verify plan change." },
+    { "level": "Expert", "text": "Litestream: continuous replication of an SQLite DB to S3." }
   ],
   "interviewQuestions": [
-    "Why is SQLite so widely deployed?",
-    "What is WAL mode and its benefits?",
-    "Why are FKs off by default?",
-    "How do you migrate schema safely?",
-    "How to batch writes fast?"
+    "What is SQLite and how is it different from server databases?",
+    "Why is WAL mode important?",
+    "What are common Flutter SQLite libraries?",
+    "How do you migrate an SQLite schema?",
+    "How do transactions work in SQLite?",
+    "What are SQLite's limitations?",
+    "How does SQLite compare to Hive/Isar/ObjectBox for a Flutter local DB?"
   ],
   "references": [
-    { "label": "SQLite documentation", "url": "https://www.sqlite.org/docs.html" }
+    { "label": "SQLite docs", "url": "https://www.sqlite.org/docs.html" },
+    { "label": "drift for Flutter", "url": "https://drift.simonbinder.eu" }
   ]
 }

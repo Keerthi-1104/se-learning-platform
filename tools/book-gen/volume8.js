@@ -1,5 +1,6 @@
 // VOLUME 8 — Databases
 const L = require("./lib");
+const { loadTopic, topicToChapter } = require("./topic_to_chapter");
 const {
   C, P, H1, H2, bullet, num, callout, code, table, rule, chip,
   makeDoc, pageProps, save, Paragraph, TextRun, PageBreak, AlignmentType,
@@ -58,145 +59,18 @@ body.push(callout("note", [["Each topic ends with ", { t: "✅ Summary · 🎯 I
 body.push(callout("interview", ["Backend interviews test 3 database themes hard: (a) how the DB is structured (clustered index, MVCC), (b) how to read an execution plan, (c) ACID and isolation. This volume drills all three across engines."]));
 
 // 1. MySQL
-body.push(H1("1. MySQL", "ch1"));
-body.push(callout("definition", ["World's most-deployed open-source RDBMS. InnoDB engine gives ACID transactions, row-level locking, foreign keys, and a clustered index — rows physically stored in PK order."]));
-body.push(table(["Isolation", "Reads", "Note"], [
-  ["READ UNCOMMITTED", "Dirty reads", "Rarely used"],
-  ["READ COMMITTED", "No dirty reads", "Non-repeatable possible"],
-  ["REPEATABLE READ", "Snapshot per tx (default)", "MVCC prevents non-repeatable"],
-  ["SERIALIZABLE", "Full serial order", "Highest lock contention"],
-], [2200, 3700, 3460]));
-body.push(callout("interview", ["Clustered index = pick your PK carefully. Random UUIDs cause random inserts + page splits + bloat. Prefer AUTO_INCREMENT or time-ordered UUIDs (UUIDv7/ULID) on hot tables."]));
-body.push(...summary([
-  "InnoDB is the default; ACID + row locks + FKs.",
-  "Clustered index = rows in PK order.",
-  "Default isolation: REPEATABLE READ via MVCC.",
-  "UTF8MB4, covering indexes, connection pool, read replicas.",
-]));
-body.push(...interview([
-  "What is InnoDB's clustered index?",
-  "MySQL isolation levels and default?",
-  "Why avoid random UUID PKs?",
-  "MyISAM vs InnoDB?",
-  "How does replication work?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Users table + covering index; EXPLAIN it." },
-  { level: "Medium", text: "Show REPEATABLE READ preventing non-repeatable reads." },
-  { level: "Hard", text: "Reproduce a deadlock; fix with lock ordering." },
-  { level: "Expert", text: "Primary + read replica via ProxySQL/Vitess." },
-]));
-body.push(...realworld(["WordPress, Wikipedia, Slack, Uber (Vitess), Airbnb — much of the web runs on MySQL/MariaDB. Vitess turns MySQL into a horizontally sharded system used at YouTube scale."]));
-body.push(...miniproject(["Build a small MySQL-backed API; prove index effectiveness with EXPLAIN before/after."]));
-body.push(...advanced(["Vitess sharding, Group Replication, GTIDs, binlog CDC (Debezium)."]));
+body.push(...topicToChapter(loadTopic("level_08", "mysql"),
+  { chapterNumber: 1, bookmarkId: "ch1" }));
 
-// 2. PostgreSQL
-body.push(H1("2. PostgreSQL", "ch2"));
-body.push(callout("definition", ["Standards-compliant, ACID, feature-rich RDBMS with JSONB, window functions, CTEs, arrays, and a rich extension ecosystem (PostGIS, pg_trgm, TimescaleDB)."]));
-body.push(table(["Index type", "Best for"], [
-  ["B-tree (default)", "Equality + range on scalars"],
-  ["GIN", "JSONB, arrays, full-text"],
-  ["GiST", "PostGIS geometry, fuzzy"],
-  ["BRIN", "Huge naturally-ordered tables"],
-], [1800, 7560]));
-body.push(callout("interview", ["MVCC + VACUUM: writers create new row versions, readers see snapshots. Dead versions accumulate → VACUUM reclaims them. Long transactions block vacuum and cause bloat — classic performance trap."]));
-body.push(callout("note", ["JSONB `->>` for text, `->` for JSONB. Index specific paths (expression index) or GIN for arbitrary keys. Don't stuff everything into JSONB — schema still wins for common access patterns."]));
-body.push(...summary([
-  "ACID + MVCC + rich features (JSONB, CTE, windows).",
-  "Pick the right index type per workload.",
-  "EXPLAIN (ANALYZE, BUFFERS) is your friend.",
-  "Watch long transactions → bloat.",
-]));
-body.push(...interview([
-  "How does MVCC work in Postgres?",
-  "What is VACUUM/autovacuum?",
-  "Index types and when use each?",
-  "JSONB `->>` vs `->`?",
-  "How do you find slow queries?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Query JSONB with `->>` and an expression index." },
-  { level: "Medium", text: "Window function for per-user running total." },
-  { level: "Hard", text: "Diagnose + fix a slow query with EXPLAIN ANALYZE." },
-  { level: "Expert", text: "Detect + fix table bloat (VACUUM FULL / pg_repack)." },
-]));
-body.push(...realworld(["Postgres is the go-to for startups and enterprises: Instagram, Reddit, Robinhood, most fintech. TimescaleDB and Citus extend it to time-series and horizontal scale."]));
-body.push(...miniproject(["Build an analytics query workload using window functions + JSONB payloads; optimize with the right indexes."]));
-body.push(...advanced(["Logical replication + Debezium, WAL streaming, foreign data wrappers, pgvector for embeddings."]));
+body.push(...topicToChapter(loadTopic("level_08", "postgresql"),
+  { chapterNumber: 2, bookmarkId: "ch2" }));
 
-// 3. MongoDB
-body.push(H1("3. MongoDB", "ch3"));
-body.push(callout("definition", ["Document DB: JSON-like BSON documents in collections, flexible schema, secondary indexes, aggregation pipelines, sharding. Multi-doc ACID on replica sets since 4.0."]));
-body.push(code([
-  "// Aggregation pipeline",
-  "db.orders.aggregate([",
-  "  { $match: { status: 'paid' } },",
-  "  { $group: { _id: '$userId', total: { $sum: '$amount' } } },",
-  "  { $sort:  { total: -1 } },",
-  "  { $limit: 10 }",
-  "]);",
-], "mongo"));
-body.push(callout("interview", ["Schema is driven by read patterns, not normalization. Embed for data read together and bounded; reference for independent or unbounded. Follow the ESR rule (Equality → Sort → Range) when designing compound indexes."]));
-body.push(...summary([
-  "Documents (BSON), flexible schema, aggregations.",
-  "Design schema for how you query.",
-  "ESR rule for compound indexes.",
-  "Replica sets for HA, shards for scale.",
-]));
-body.push(...interview([
-  "Embed vs reference — how decide?",
-  "What is the ESR rule?",
-  "How do Mongo transactions work?",
-  "Replica set vs sharded cluster?",
-  "How to find a slow query?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Insert/find/update; add single-field index." },
-  { level: "Medium", text: "Top-10 users by spend via aggregation." },
-  { level: "Hard", text: "Compound indexes following ESR." },
-  { level: "Expert", text: "Shard a collection; pick key; verify balance." },
-]));
-body.push(...realworld(["Content platforms (Forbes), IoT ingest, and countless SaaS backends. Mongo Atlas has become a default managed offering; consider it before rolling your own."]));
-body.push(...miniproject(["Model a small blog CMS with mixed embed/reference; build an aggregation-based top-authors query."]));
-body.push(...advanced(["Change streams for CDC, Atlas Search (Lucene), time-series collections, Atlas Vector Search."]));
+body.push(...topicToChapter(loadTopic("level_08", "mongodb"),
+  { chapterNumber: 3, bookmarkId: "ch3" }));
 
-// 4. SQLite
-body.push(H1("4. SQLite", "ch4"));
-body.push(callout("definition", ["Serverless, embedded, single-file SQL database — the most-deployed database on Earth. ACID, small, fast, no separate process."]));
-body.push(code([
-  "PRAGMA journal_mode = WAL;",
-  "PRAGMA synchronous  = NORMAL;",
-  "PRAGMA foreign_keys = ON;   -- off by default!",
-  "",
-  "CREATE TABLE users(id INTEGER PRIMARY KEY, name TEXT NOT NULL);",
-  "CREATE INDEX idx_users_name ON users(name);",
-], "sqlite pragmas"));
-body.push(callout("interview", ["WAL mode = huge mobile win: concurrent readers don't block a single writer. Often doubles hot-screen read throughput vs the default DELETE journal."]));
-body.push(callout("mistake", ["Forgetting `PRAGMA foreign_keys = ON` — FKs are OFF by default. And relying on strict column types — SQLite uses type affinity unless you use STRICT tables (3.37+)."]));
-body.push(...summary([
-  "Embedded serverless SQL; ACID; the DB is a file.",
-  "Enable WAL for concurrency; FKs are OFF by default.",
-  "Batch writes in a single transaction.",
-  "STRICT tables (3.37+) for real column typing.",
-]));
-body.push(...interview([
-  "Why is SQLite so widely deployed?",
-  "What is WAL mode?",
-  "Why are FKs off by default?",
-  "How do you migrate schemas safely?",
-  "How to batch writes fast?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Create tables + indexes; enable FKs and WAL." },
-  { level: "Medium", text: "Benchmark commit-per-row vs batched transaction." },
-  { level: "Hard", text: "Migration adding a column with default + backfill." },
-  { level: "Expert", text: "Corruption detection via integrity_check + recovery from backup." },
-]));
-body.push(...realworld(["Inside every browser (IndexedDB via SQLite), every phone (system data), and inside apps like Signal, WhatsApp, and Firefox. SQLite is the invisible workhorse of consumer software."]));
-body.push(...miniproject(["Ship a small offline mobile app on plain SQLite: WAL, indexes, batched transactions, and manual migrations."]));
-body.push(...advanced(["LiteFS/Litestream for replication, sqlite-vss for vector search, SQLite as an application-file format."]));
+body.push(...topicToChapter(loadTopic("level_08", "sqlite"),
+  { chapterNumber: 4, bookmarkId: "ch4" }));
 
-// 5. Hive
 body.push(H1("5. Hive", "ch5"));
 body.push(callout("definition", ["Pure-Dart lightweight NoSQL key-value store: data in boxes (like Maps), no native code, no query engine — just fast get/put."]));
 body.push(code([
