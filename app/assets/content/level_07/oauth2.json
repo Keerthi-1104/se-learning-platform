@@ -1,56 +1,120 @@
 {
   "id": "be.oauth2",
   "levelId": 7,
-  "title": "OAuth2 (Backend)",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "title": "OAuth 2.0 & OIDC",
+  "xp": 50,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Distinguish OAuth2 roles and grant types",
-    "Choose the right flow for a client type",
-    "Add OpenID Connect for identity"
+    "Understand OAuth 2.0 via a real-life analogy",
+    "Know the four roles + four common grant flows",
+    "Distinguish OAuth 2 (authorization) from OIDC (authentication)",
+    "Implement Authorization Code + PKCE for a Flutter app",
+    "Answer OAuth 2.0 interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "OAuth 2.0 is an authorization delegation framework. The user grants a third-party client scoped access to their resources without sharing their password. **OpenID Connect (OIDC)** layers identity on top with an ID token." },
-    { "type": "table", "headers": ["Role", "Meaning"], "rows": [
-      ["Resource Owner", "The user"],
-      ["Client", "The app requesting access"],
-      ["Authorization Server", "Issues tokens (Google, Auth0, Keycloak)"],
-      ["Resource Server", "Your API, validates tokens"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of OAuth 2.0 as a valet key at a fancy hotel.**\n\n- You (the RESOURCE OWNER) drive to the hotel. You give your MASTER key to a valet you don't know? Absolutely not — with the master key they could steal the car.\n- Instead you get a **VALET KEY** — a limited key that starts the engine and locks the doors, but CAN'T open the trunk or the glove compartment where your documents are. You give the valet key to the valet (the CLIENT), who parks the car for you.\n- Behind the scenes: the hotel's front desk (the AUTHORIZATION SERVER) verified your identity, issued the valet key with specific POWERS ('start engine, lock doors — nothing else'), and told the parking garage (the RESOURCE SERVER) that this key is legit and what it can do.\n- The valet never sees your master key (password). The parking garage never talks to you directly — it just checks the valet key. You can REVOKE the valet key any time without changing your master key.\n\n**In OAuth 2 terms:** you never give a third-party app (Spotify, mobile app, extension) your PASSWORD. Instead, an **authorization server** (Google, GitHub, Auth0) authenticates you and issues an **access token** (the valet key) with limited **scopes** ('read email; not send email; not manage calendar'). The third-party app uses that token to call **resource servers** (Gmail API, Google Drive API) — which check the token's scopes and serve accordingly.\n\n**Why OAuth 2 exists:** before it, apps asked for your password (like a valet asking for your master key). Users pasted their Gmail password into random apps. When the app got hacked, so did every user. OAuth 2 makes this obsolete: apps get limited, revocable, scoped tokens — never your password.\n\n**Fair warning:** OAuth 2 is CONFUSING because it's a *framework*, not a single protocol. There are 4+ grant flows and 6+ role names. Learn the two flows that matter for 95% of apps: **Authorization Code + PKCE** (for mobile / SPA) and **Client Credentials** (for server-to-server). Skip the rest until you need them." },
+    { "type": "callout", "variant": "definition", "markdown": "**OAuth 2.0** (RFC 6749) is an authorization framework — it lets a THIRD-PARTY APP get LIMITED access to a user's resources on another service WITHOUT the user sharing their password. Four roles: **Resource Owner** (the user), **Client** (the third-party app), **Authorization Server** (issues tokens after authenticating the owner), **Resource Server** (holds the protected data). Multiple **grant flows** for different app types. **OIDC (OpenID Connect)** is a thin identity layer on top of OAuth 2 that adds an **ID token** proving WHO the user is (OAuth 2 alone answers 'what can they do', not 'who are they')." },
+    { "type": "theory", "markdown": "## The four roles" },
+    { "type": "table", "headers": ["Role", "Real-world equivalent", "In code"], "rows": [
+      ["**Resource Owner**", "You, the user", "The person clicking 'Sign in with Google'"],
+      ["**Client**", "The third-party app", "Your Flutter app, or a mobile game asking for Google profile"],
+      ["**Authorization Server**", "The identity provider", "Google, GitHub, Auth0, Keycloak, your own Spring Authorization Server"],
+      ["**Resource Server**", "The API holding the data", "Gmail API, Google Drive API, YOUR OWN backend"]
     ]},
-    { "type": "table", "headers": ["Flow", "Use for"], "rows": [
-      ["Authorization Code + PKCE", "Web apps, mobile, SPAs (default)"],
-      ["Client Credentials", "Service-to-service (no user)"],
-      ["Device Code", "TVs, CLIs, IoT with limited input"],
-      ["Refresh Token", "Renew access tokens silently"]
+    { "type": "theory", "markdown": "## The grant flows — pick the right one" },
+    { "type": "table", "headers": ["Flow", "Best for", "Notes"], "rows": [
+      ["**Authorization Code + PKCE**", "Mobile apps, SPAs, native clients — anything without a secure client secret", "**The modern default.** PKCE prevents code interception."],
+      ["**Client Credentials**", "Server-to-server, no user involved", "Your backend calls another service's API on its own behalf"],
+      ["**Resource Owner Password**", "First-party trusted app knowing user's password (deprecated for most cases)", "Only for legacy migrations; avoid in new designs"],
+      ["**Implicit**", "SPA pattern from 2012", "**Deprecated**. Use Authorization Code + PKCE instead."],
+      ["**Device Code**", "TVs, IoT devices with no browser", "User authorizes on a phone; TV polls for the token"],
+      ["**Refresh Token**", "Used INSIDE other flows to renew access tokens", "Not a standalone flow"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "The Implicit and Password grants are **deprecated**. Modern answer: 'Authorization Code + PKCE for user-facing apps, Client Credentials for machine-to-machine.' PKCE prevents authorization-code interception on public clients." },
-    { "type": "callout", "variant": "mistake", "markdown": "Storing client_secret in a mobile/SPA (public client) — attackers can extract it. Public clients use PKCE with no secret; only confidential (server) clients hold secrets." },
-    { "type": "callout", "variant": "best", "markdown": "Use a mature identity provider (Auth0, Okta, Keycloak, Cognito). Validate ID tokens with JWKS. Request minimal scopes. Rotate refresh tokens and detect reuse (evidence of theft)." }
+    { "type": "callout", "variant": "interview", "markdown": "**The 90% rule:** Authorization Code + PKCE for user-facing apps; Client Credentials for machine-to-machine. Every other flow is legacy or niche. When you say 'OAuth 2' in a design interview, assume Authorization Code + PKCE unless context says otherwise." },
+    { "type": "theory", "markdown": "## Authorization Code + PKCE — step by step" },
+    { "type": "code", "language": "text", "code": "The most-important-to-know flow. Used by every modern mobile app + SPA.\n\nSTEP 1 — Client generates PKCE pair BEFORE any redirect:\n  code_verifier   = random 43-128 byte URL-safe string\n  code_challenge  = base64url(SHA-256(code_verifier))\n\nSTEP 2 — Client redirects user to Authorization Server's /authorize:\n  GET https://accounts.example.com/authorize?\n     response_type=code\n    &client_id=my-flutter-app\n    &redirect_uri=myapp://callback\n    &scope=openid profile email read:orders\n    &state=xyz789                                 # CSRF protection\n    &code_challenge=<challenge>\n    &code_challenge_method=S256\n\nSTEP 3 — User signs in on the Auth Server (in their browser).\n         Auth Server verifies credentials + shows consent screen.\n         User approves.\n\nSTEP 4 — Auth Server redirects back to the client:\n  myapp://callback?code=<one-time-code>&state=xyz789\n\nSTEP 5 — Client EXCHANGES the code for tokens (POST /token):\n  POST https://accounts.example.com/token\n    grant_type=authorization_code\n   &code=<one-time-code>\n   &redirect_uri=myapp://callback\n   &client_id=my-flutter-app\n   &code_verifier=<original-verifier>              # PROVE we're the same client\n\nSTEP 6 — Auth Server responds with tokens:\n  {\n    \"access_token\":  \"eyJhbGci...\",   # short-lived (10-15 min)\n    \"refresh_token\": \"def456...\",     # longer-lived (7-30 days)\n    \"id_token\":      \"eyJhbGci...\",   # OIDC — proves user identity to client\n    \"token_type\":    \"Bearer\",\n    \"expires_in\":    900\n  }\n\nSTEP 7 — Client sends the access token to the Resource Server:\n  GET /api/orders\n  Authorization: Bearer <access_token>\n\nSTEP 8 — Resource Server verifies the JWT signature + scopes + expiry.\n         Returns the user's orders.\n\nWhy PKCE? A malicious app could intercept the redirect (STEP 4) and steal\nthe code. But it doesn't have the code_verifier — STEP 5 fails for the\nattacker. PKCE binds the code to the original client without needing a\nclient secret (which mobile / SPA can't store safely)." },
+    { "type": "theory", "markdown": "## Client Credentials — server-to-server" },
+    { "type": "code", "language": "text", "code": "Used when there's NO user in the loop. Your backend calls another service.\n\nSTEP 1 — Your backend POSTs to /token with a shared client secret:\n  POST https://accounts.example.com/token\n    grant_type=client_credentials\n   &client_id=my-backend-service\n   &client_secret=<stored-secret>\n   &scope=orders:read\n\nSTEP 2 — Auth Server responds:\n  { \"access_token\": \"eyJ...\", \"token_type\": \"Bearer\", \"expires_in\": 3600 }\n\nSTEP 3 — Backend calls the other service:\n  GET /api/orders\n  Authorization: Bearer <access_token>\n\nNo user, no refresh token (just call again when expired). Simplest flow.\nUse for scheduled jobs, cross-service calls, webhook processing." },
+    { "type": "theory", "markdown": "## OAuth 2 vs OIDC — a common source of confusion" },
+    { "type": "table", "headers": ["", "OAuth 2.0", "OIDC (OpenID Connect)"], "rows": [
+      ["**Purpose**", "Authorization — 'what can this client do?'", "Authentication — 'who is this user?' (on top of OAuth 2)"],
+      ["**Token you get**", "`access_token`", "`access_token` + `id_token` (JWT proving user identity)"],
+      ["**Standard claims**", "`scope`, `client_id`", "OIDC adds `sub`, `email`, `name`, `picture`, `iat`, `iss`, `aud`"],
+      ["**Discovery**", "None built-in", "`/.well-known/openid-configuration` — all endpoints listed"],
+      ["**Best for**", "API access delegation", "'Sign in with Google/GitHub' + API access"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**The line to remember:** OAuth 2 answers 'is this client allowed to CALL this API?'. OIDC answers 'and BY THE WAY, here's WHO the user is' via an id_token. If you want 'sign in with', use OIDC. If it's pure API-to-API, plain OAuth 2 suffices." },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Using Implicit flow.** Deprecated since 2019. Use Authorization Code + PKCE." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Missing PKCE for mobile.** Mobile apps CAN'T store a client secret safely. PKCE is REQUIRED, not optional." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Missing `state` parameter.** No `state` = CSRF vulnerability on the callback. Always generate a random `state` and verify it matches." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Storing client secret in mobile app.** Any user can decompile and extract it. Only server-side apps can hold secrets." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Not verifying `iss` and `aud` on tokens.** Same as JWT — the token might be legitimately signed but issued by someone else, or for another service." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Password grant for a first-party app.** Deprecated. Even for your own app, use Authorization Code + PKCE — the extra browser step is negligible for a modern flow." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Ignoring token expiry.** Access token expires → API returns 401 → app should silently refresh. If your app shows an error instead, it's not implementing refresh properly." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Authorization Code + PKCE for mobile / SPA.** Always." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Client Credentials for server-to-server.**" },
+    { "type": "callout", "variant": "best", "markdown": "**3. Include `state` parameter for CSRF protection.**" },
+    { "type": "callout", "variant": "best", "markdown": "**4. Rotate refresh tokens on each use.** Detect reuse → invalidate session." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Fine-grained scopes.** `read:orders`, `write:orders`, `read:profile`. Not `admin`." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Use `openid` scope + OIDC for identity.** Don't invent your own user-info endpoint." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Delegate to an identity provider.** Auth0, Keycloak, AWS Cognito, Firebase Auth — don't build your own IDP unless you have a team dedicated to it." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — 'Sign in with GitHub'.** Register an OAuth app on GitHub; run Authorization Code flow manually with curl." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Client Credentials with Keycloak.** Docker-compose Keycloak; register a client; POST to /token; call your own backend with the access token." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Add PKCE to a Flutter app.** Use `flutter_appauth` package; complete Authorization Code + PKCE with Auth0 or Keycloak." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Refresh token rotation.** Backend detects a refresh token used twice → invalidates session → forces re-login." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard) — Scoped API.** Backend endpoints require different scopes; `read:orders` scope allows GET; `write:orders` allows POST." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert) — Full multi-tenant OIDC.** Users can sign in with Google OR your local IDP; both provide id_token; unified user profile on your side." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is OAuth 2.0?**\n\n**A:** OAuth 2.0 is an **authorization framework** (RFC 6749) that lets a THIRD-PARTY APP get LIMITED, REVOCABLE access to a user's resources on another service — without the user sharing their password. Four roles: **Resource Owner** (the user), **Client** (the app), **Authorization Server** (issues tokens after authenticating), **Resource Server** (holds protected data). The client gets an **access token** with specific **scopes** (`read:email`, `write:orders`) and uses it as a Bearer credential. The user can revoke access anytime without changing their password. This solved the old anti-pattern of pasting your password into random apps. Standard for 'Sign in with Google', API integrations, mobile apps." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: OAuth 2 vs OIDC?**\n\n**A:** **OAuth 2** is about AUTHORIZATION — 'what can this client do?'. It gives you an `access_token` for API calls. It does NOT prove WHO the user is. **OIDC (OpenID Connect)** is a THIN AUTHENTICATION LAYER on top of OAuth 2. It adds an `id_token` (a JWT with standard claims like `sub`, `email`, `name`, `iat`) that proves the user's identity to the client. **Rule:** if you're building 'Sign in with Google/GitHub/Microsoft', use OIDC — you need to know WHO logged in. If you're only calling a partner API on behalf of a user, plain OAuth 2 is enough. In practice, most 'OAuth 2' implementations are actually OIDC — the `openid` scope requests it." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What is Authorization Code + PKCE and why do mobile apps need it?**\n\n**A:** Authorization Code is the standard OAuth 2 flow — the app redirects the user to the Auth Server, user authenticates, Auth Server redirects back with a `code`, the app exchanges the `code` at `/token` for tokens. **PKCE (Proof Key for Code Exchange, RFC 7636)** adds cryptographic protection: the client generates a random `code_verifier`; sends `SHA-256(code_verifier)` as `code_challenge` on the authorize request; sends the raw `code_verifier` on the token exchange. **Why mobile needs it:** mobile apps can't store a client secret safely (anyone can decompile the app). Without PKCE, if a malicious app registers the same URL scheme, it can intercept the `code` and exchange it. PKCE binds the code to the requesting client without needing a secret. **PKCE is mandatory** in the OAuth 2.1 draft — the modern default for all public clients (mobile + SPA)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What are OAuth 2 scopes?**\n\n**A:** Scopes are named permissions requested in the authorization step and encoded in the access token. Common patterns: **fine-grained scopes** — `read:orders`, `write:orders`, `read:profile`. **Standard OIDC scopes** — `openid` (requests OIDC + id_token), `profile` (user's name/picture), `email` (email address), `offline_access` (issue a refresh token). **How they work:** the client requests scopes at `/authorize`; the user sees a consent screen listing them; if approved, the access token carries them in a `scope` claim. Resource servers CHECK the scopes and permit or deny. **Rule:** ship fine-grained scopes; users see what the app is asking for; principle of least privilege. Anti-pattern: one giant `admin` scope that grants everything." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: When would you use Client Credentials vs Authorization Code?**\n\n**A:** **Client Credentials** — server-to-server, no user involved. Your backend calls another service's API on its OWN behalf. Simple flow: POST /token with `grant_type=client_credentials` + client_id + client_secret → get access token. Use for cross-service calls, scheduled jobs, webhook processing. **Authorization Code (+ PKCE)** — a user is in the loop. Your app is acting ON BEHALF of the user. Redirects the user through the Auth Server, gets a code, exchanges for tokens. Use for 'Sign in with Google', mobile/SPA apps, any user-authenticated flow. **Rule:** if there's a user, use Authorization Code + PKCE. If it's automated / no user, Client Credentials. Almost all other flows are legacy." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What is the `state` parameter and why is it critical?**\n\n**A:** The `state` parameter is a client-generated random string sent to `/authorize` and echoed back in the redirect. Its purpose: **CSRF protection**. Without `state`, an attacker could send a victim a link like `https://myapp.com/callback?code=<attacker-code>`, tricking the victim's browser into completing an OAuth flow with the ATTACKER's authorization — linking the attacker's account to the victim's session. **With `state`**, the client generates a random value BEFORE the redirect, stores it (session, encrypted cookie), and verifies the returned `state` matches. Attacker can't guess the random value; forged callbacks are rejected. **Rule:** always generate `state`, always verify it. Most OAuth libraries do this automatically; roll your own → you WILL forget it." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What's a refresh token and how does it fit in OAuth 2?**\n\n**A:** A refresh token is a long-lived credential (7-30 days typical) returned alongside the access token when the `offline_access` scope was requested. Its ONLY purpose: exchange for a new access token at `/token` (grant_type=refresh_token) without the user re-authenticating. **Why:** access tokens are short-lived (10-15 min) to bound leak impact; users would hate re-logging-in every 15 minutes. **Best practice: rotation** — each refresh returns a NEW refresh token; the old one is invalidated. If the old is REUSED (attacker has it), the server detects theft and invalidates the whole session. Store refresh tokens carefully: Secure Storage on mobile; HttpOnly cookie on web. Rotation + short access tokens is the OAuth 2 sweet spot." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q8: Why not use Password grant for your own app?**\n\n**A:** The Resource Owner Password Credentials grant is DEPRECATED for most use cases — even for your own first-party app. **Problems:** **(1)** Your app holds the user's password briefly, defeating half of OAuth 2's point (never share passwords). **(2)** No easy MFA integration — password grant is one round-trip; MFA needs a challenge step. **(3)** No consent screen — users can't see or revoke access. **(4)** Doesn't work with social login / SSO. **(5)** The OAuth 2.1 draft REMOVES it entirely. **Alternative:** Authorization Code + PKCE with a browser step is barely slower and unlocks MFA, social login, and Auth Server-side hardening. **Rule:** don't use password grant even 'just for our app'. Migrate legacy usages when possible; use Authorization Code + PKCE for new apps." },
+    { "type": "theory", "branded": true, "markdown": "## Real-world usage\n\n- **'Sign in with Google/GitHub/Microsoft/Apple'** — OIDC on Authorization Code + PKCE.\n- **Auth0, Okta, Keycloak, AWS Cognito, Firebase Auth** — all speak OAuth 2 + OIDC.\n- **Slack, GitHub, Stripe APIs** — accept OAuth 2 tokens.\n- **Mobile apps** — `flutter_appauth`, `AppAuth-iOS/Android` handle the flow.\n- **Enterprise SSO** — SAML in older places; OIDC dominant in new deployments.\n- **Public API integrations** — 'connect your Google Calendar' — OAuth 2 with consented scopes." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **OAuth 2.1 draft** — cleans up the spec: mandatory PKCE, removes Implicit + Password grants.\n- **DPoP (Demonstrating Proof-of-Possession)** — bind tokens to a client keypair; makes stolen tokens useless.\n- **`mTLS`-bound tokens** — RFC 8705; tokens usable only via a specific client cert.\n- **`.well-known/openid-configuration`** — OIDC discovery document listing all endpoints + JWKS URI.\n- **`token_type_hint`** — help Auth Server route token operations.\n- **Token introspection** — RFC 7662; ask the auth server 'is this token active?' for real-time revocation.\n- **Token exchange** — RFC 8693; a service can trade one token for another with different scopes.\n- **Backchannel logout** — auth server notifies clients of user logout via a webhook.\n- **PAR (Pushed Authorization Requests)** — client pushes auth params to the server BEFORE the redirect (protects params).\n- **JAR (JWT-secured Authorization Requests)** — auth request is signed.\n- **`redirect_uri` allowlisting** — critical for security; wildcards are dangerous.\n- **Consent screen UX** — never hide scope details from users." }
   ],
   "flashcards": [
-    { "front": "OAuth2 roles?", "back": "Resource Owner (user), Client (app), Authorization Server (issues tokens), Resource Server (your API)." },
-    { "front": "Default flow for mobile/SPA?", "back": "Authorization Code with PKCE." },
-    { "front": "OpenID Connect vs OAuth2?", "back": "OIDC adds identity: an ID token that says who the user is." }
+    { "front": "OAuth 2 core purpose?", "back": "Delegated authorization — third-party gets limited, revocable access to user's resources WITHOUT knowing the password." },
+    { "front": "Four roles?", "back": "Resource Owner (user), Client (app), Authorization Server (issues tokens), Resource Server (holds data)." },
+    { "front": "Modern default flow?", "back": "Authorization Code + PKCE. For mobile, SPA, native — everything without a secure client secret." },
+    { "front": "Server-to-server?", "back": "Client Credentials — POST /token with client_id + client_secret. No user." },
+    { "front": "OAuth 2 vs OIDC?", "back": "OAuth 2 = authorization ('what can you do?'). OIDC = OAuth 2 + identity ('who are you?' via id_token)." },
+    { "front": "PKCE why?", "back": "Binds authorization code to the requesting client without a client secret — mobile apps can't store secrets safely." }
   ],
   "quiz": [
-    { "q": "The recommended flow for a mobile app is…", "options": ["Password grant", "Implicit", "Authorization Code + PKCE", "Device code"], "answer": 2, "explain": "PKCE protects the code exchange on public clients." },
-    { "q": "For pure service-to-service auth use…", "options": ["Password grant", "Client Credentials", "Authorization Code", "Implicit"], "answer": 1, "explain": "No user is involved — the client acts on its own behalf." },
-    { "q": "OIDC adds…", "options": ["A DB layer", "An ID token identifying the user", "Rate limiting", "CORS"], "answer": 1, "explain": "OIDC layers identity on OAuth2 via a signed ID token." }
+    { "q": "Modern flow for mobile?", "options": ["Implicit", "Authorization Code + PKCE", "Password grant", "Resource Owner"], "answer": 1, "explain": "PKCE mandatory for public clients." },
+    { "q": "OAuth 2 answers…", "options": ["Who are you", "What can you do (authorization)", "Both", "Neither"], "answer": 1, "explain": "OIDC layers identity on top." },
+    { "q": "Server-to-server?", "options": ["Auth code", "Client Credentials", "Password grant", "Implicit"], "answer": 1, "explain": "No user in loop." },
+    { "q": "Missing `state` param?", "options": ["Fine", "CSRF vulnerability on callback", "Ignored by server", "Only for logging"], "answer": 1, "explain": "Client-generated random verifier." },
+    { "q": "Client secret in mobile app?", "options": ["Fine", "Bad — decompilable; use PKCE instead", "Encrypted safely", "Only Android"], "answer": 1, "explain": "Public client can't store secrets." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Configure a Resource Server that accepts JWTs from your IdP." },
-    { "level": "Medium", "text": "Add 'Sign in with Google' using Authorization Code + PKCE." },
-    { "level": "Hard", "text": "Build a service-to-service call using Client Credentials + audience-scoped tokens." },
-    { "level": "Expert", "text": "Implement refresh-token rotation with reuse detection." }
+    { "level": "Easy", "text": "Register an OAuth app on GitHub; run Authorization Code flow with curl." },
+    { "level": "Easy", "text": "Client Credentials against Keycloak; call your Spring Boot API with the access token." },
+    { "level": "Medium", "text": "Add PKCE flow to a Flutter app via flutter_appauth." },
+    { "level": "Medium", "text": "OIDC — request `openid profile email`, verify id_token, extract sub/email/name." },
+    { "level": "Hard", "text": "Refresh-token rotation with reuse detection." },
+    { "level": "Hard", "text": "Scoped endpoints: read:orders + write:orders enforced on Spring Security." },
+    { "level": "Expert", "text": "Multi-provider OIDC: Google + local IDP; unified user profile on your backend." }
   ],
   "interviewQuestions": [
-    "Name the OAuth2 roles.",
-    "Which grant is default for mobile/SPA and why?",
-    "What does PKCE prevent?",
-    "OAuth2 vs OpenID Connect?",
-    "How do you detect stolen refresh tokens?"
+    "What is OAuth 2.0?",
+    "OAuth 2 vs OIDC?",
+    "What is Authorization Code + PKCE and why do mobile apps need it?",
+    "What are OAuth 2 scopes?",
+    "When would you use Client Credentials vs Authorization Code?",
+    "What is the `state` parameter and why is it critical?",
+    "What's a refresh token and how does it fit in OAuth 2?",
+    "Why not use Password grant for your own app?"
   ],
   "references": [
-    { "label": "OAuth 2.0 Simplified", "url": "https://www.oauth.com" }
+    { "label": "OAuth 2.1 draft", "url": "https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1" },
+    { "label": "OIDC — openid.net", "url": "https://openid.net/connect/" }
   ]
 }

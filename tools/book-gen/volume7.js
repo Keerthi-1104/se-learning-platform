@@ -75,110 +75,16 @@ body.push(...topicToChapter(loadTopic("level_07", "spring_boot"),
   { chapterNumber: 4, bookmarkId: "ch4" }));
 
 // 5. Spring Security
-body.push(H1("5. Spring Security", "ch5"));
-body.push(callout("definition", ["Plug-in security as a chain of servlet filters: authentication, authorization, session/CSRF/CORS, common attack defense out of the box."]));
-body.push(code([
-  "@Bean SecurityFilterChain chain(HttpSecurity http) throws Exception {",
-  "  return http",
-  "    .csrf(c -> c.disable())",
-  "    .authorizeHttpRequests(a -> a",
-  "       .requestMatchers(\"/public/**\").permitAll()",
-  "       .requestMatchers(\"/admin/**\").hasRole(\"ADMIN\")",
-  "       .anyRequest().authenticated())",
-  "    .oauth2ResourceServer(o -> o.jwt(Customizer.withDefaults()))",
-  "    .build();",
-  "}",
-], "security filter chain"));
-body.push(callout("interview", ["For stateless JWT APIs: wire OAuth2 Resource Server + JWT decoder. Use @PreAuthorize for method-level rules. WebSecurityConfigurerAdapter is deprecated — use the lambda DSL."]));
-body.push(callout("mistake", ["Disabling CSRF for a session-based browser app. Only disable CSRF for stateless API clients that don't use cookies for auth."]));
-body.push(...summary([
-  "Filter chain intercepts every request.",
-  "For JWT APIs: oauth2ResourceServer().jwt().",
-  "@PreAuthorize for method-level rules.",
-  "BCrypt passwords, HSTS, minimal headers, no logged tokens.",
-]));
-body.push(...interview([
-  "How does the filter chain work?",
-  "How do you protect a REST API with JWTs?",
-  "@PreAuthorize vs URL rules?",
-  "When to disable CSRF?",
-  "How do you hash passwords?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Secure /admin/** for role ADMIN; leave /public open." },
-  { level: "Medium", text: "Validate JWTs via Resource Server; map scopes → roles." },
-  { level: "Hard", text: "BCrypt + UserDetailsService with a JPA-backed user repo." },
-  { level: "Expert", text: "Per-method rules via @PreAuthorize + SpEL touching request attributes." },
-]));
-body.push(...realworld(["Every Spring Boot API in production has Spring Security in front of it — from banking to CRUD internal tools."]));
-body.push(...miniproject(["Secure the Orders API: JWT resource server, roles, method-level rules, BCrypt, security headers, no cleartext logs."]));
-body.push(...advanced(["OAuth2 Client + Login server side, OIDC userinfo, custom AuthenticationEntryPoint, saved requests."]));
+body.push(...topicToChapter(loadTopic("level_07", "spring_security"),
+  { chapterNumber: 5, bookmarkId: "ch5" }));
 
 // 6. JWT
-body.push(H1("6. JWT (Backend)", "ch6"));
-body.push(callout("definition", ["Self-contained signed tokens issued at login, validated on every request. Stateless — no session store — but revocation is harder."]));
-body.push(code([
-  "Login:  verify creds -> access token (15 min) + refresh token (7 days)",
-  "Request:  parse Authorization: Bearer <token>",
-  "          verify signature + exp/iss/aud; extract sub + scopes",
-  "Refresh: validate + rotate refresh; issue new access",
-], "JWT flow"));
-body.push(callout("interview", ["For multi-service systems, RS256/ES256 + JWKS wins: services verify with a public key — no shared secret. Always pin the expected alg; reject alg:none and algorithm-confusion attempts."]));
-body.push(...summary([
-  "HS256 for single-service; RS256/ES256 + JWKS for many services.",
-  "Short access tokens; refresh tokens with rotation.",
-  "Include iss/aud/exp/nbf/jti; blocklist jti in Redis for revocation.",
-  "Pin the algorithm server-side.",
-]));
-body.push(...interview([
-  "HS256 vs RS256?",
-  "How to revoke JWTs?",
-  "What is JWKS?",
-  "Algorithm confusion attack?",
-  "Access vs refresh vs ID token?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Issue + verify HS256 JWT with exp/sub." },
-  { level: "Medium", text: "Switch to RS256 + JWKS; validate in a resource server." },
-  { level: "Hard", text: "Refresh rotation + Redis jti blocklist." },
-  { level: "Expert", text: "Key rotation with 2 keys published in JWKS." },
-]));
-body.push(...realworld(["Auth0, Okta, AWS Cognito all serve JWTs signed via RS256 with rotating keys published in JWKS — the reference pattern."]));
-body.push(...miniproject(["Add JWT auth to the Orders API: RS256 signing, JWKS endpoint, refresh rotation, revocation, integration tests."]));
-body.push(...advanced(["Sender-constrained tokens (DPoP/mTLS-bound), PASETO/branca as JWT alternatives, encrypted JWTs (JWE) trade-offs."]));
+body.push(...topicToChapter(loadTopic("level_07", "jwt"),
+  { chapterNumber: 6, bookmarkId: "ch6" }));
 
 // 7. OAuth2
-body.push(H1("7. OAuth2 (Backend)", "ch7"));
-body.push(callout("definition", ["OAuth 2.0 delegates scoped access without sharing passwords. OpenID Connect layers identity via an ID token."]));
-body.push(table(["Flow", "Use for"], [
-  ["Authorization Code + PKCE", "Web/mobile/SPA (default)"],
-  ["Client Credentials", "Service-to-service"],
-  ["Device Code", "TVs / CLIs / IoT"],
-  ["Refresh Token", "Silent renewal"],
-], [3400, 5960]));
-body.push(callout("interview", ["Modern answer: 'Authorization Code + PKCE for user-facing apps, Client Credentials for machine-to-machine.' Implicit and Password grants are deprecated. PKCE prevents auth-code interception on public clients."]));
-body.push(...summary([
-  "Roles: Resource Owner, Client, Auth Server, Resource Server.",
-  "Use PKCE for public clients; secrets only for confidential clients.",
-  "OIDC adds an ID token identifying the user.",
-  "Use a mature IdP (Auth0/Okta/Keycloak/Cognito).",
-]));
-body.push(...interview([
-  "OAuth2 roles?",
-  "Flow for mobile/SPA and why?",
-  "What does PKCE prevent?",
-  "OAuth2 vs OIDC?",
-  "How to detect stolen refresh tokens?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Configure a Resource Server accepting your IdP's JWTs." },
-  { level: "Medium", text: "'Sign in with Google' via Authorization Code + PKCE." },
-  { level: "Hard", text: "Service-to-service via Client Credentials + audience-scoped tokens." },
-  { level: "Expert", text: "Refresh rotation with reuse detection." },
-]));
-body.push(...realworld(["'Sign in with Google/Apple/GitHub' is OAuth+OIDC in action. Any app you 'connect' to Slack/Notion/Zoom uses it too."]));
-body.push(...miniproject(["Add Google login to the Orders API via OIDC; use scopes for per-tenant access; add a fake IdP for CI tests."]));
-body.push(...advanced(["OAuth 2.1 consolidation, PAR (pushed auth requests), FAPI profiles, DPoP, token exchange."]));
+body.push(...topicToChapter(loadTopic("level_07", "oauth2"),
+  { chapterNumber: 7, bookmarkId: "ch7" }));
 
 // 8. Microservices
 body.push(H1("8. Microservices", "ch8"));
@@ -411,40 +317,8 @@ body.push(...miniproject(["Add caching + rate limiting to the Orders API with Re
 body.push(...advanced(["Redis Cluster sharding + resharding, keyspace notifications, RedisJSON/Search modules, RedisTimeSeries, Redis Streams as light Kafka."]));
 
 // 14. API Security
-body.push(H1("14. API Security", "ch14"));
-body.push(callout("definition", ["A stack: HTTPS everywhere, strong authN (JWT/OAuth/mTLS), granular authZ per endpoint, input validation, rate limiting, and monitoring for abuse."]));
-body.push(table(["Risk (OWASP API Top 10)", "Cause", "Fix"], [
-  ["BOLA / IDOR", "Trusting client IDs", "Server-side ownership checks"],
-  ["Broken authentication", "Weak tokens / passwords", "OAuth/OIDC + bcrypt"],
-  ["Excessive data exposure", "Returning whole objects", "Response DTOs / allowlists"],
-  ["No rate limiting", "Unbounded requests", "Token bucket / sliding window"],
-  ["Mass assignment", "Binding raw input", "Input DTOs + allowlists"],
-  ["Improper asset mgmt", "Old versions alive", "Retire endpoints; inventory"],
-], [2200, 3200, 3960]));
-body.push(callout("interview", ["The #1 API bug is BOLA/IDOR: `GET /orders/42` returns any order because the server trusts the URL id. Always check that the requester owns/can-access the resource — not just that they're logged in."]));
-body.push(callout("mistake", ["Client-only validation. Attackers bypass your app entirely; the server must revalidate every input. Never put tokens or secrets in URLs — they leak via logs and Referer."]));
-body.push(...summary([
-  "HTTPS + HSTS everywhere; short-lived JWTs; rotate refresh tokens.",
-  "Per-endpoint authZ checks with ownership enforced server-side.",
-  "Rate limits keyed per user/IP; strict CORS allowlist.",
-  "Secret scanning in CI; audit logging with request IDs.",
-]));
-body.push(...interview([
-  "Name the OWASP API Top 10.",
-  "What is BOLA/IDOR?",
-  "How do you rate-limit an API?",
-  "How do you store secrets?",
-  "How do you monitor API security?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Add HTTPS + HSTS." },
-  { level: "Medium", text: "Per-user token-bucket rate limiter with 429 + Retry-After." },
-  { level: "Hard", text: "Fix BOLA: enforce ownership on GET /orders/:id." },
-  { level: "Expert", text: "Short-lived JWTs + refresh rotation + revocation list." },
-]));
-body.push(...realworld(["Every API leak in the news is one of the OWASP Top 10. Studying it isn't optional if you build APIs professionally."]));
-body.push(...miniproject(["Run OWASP ZAP against the Orders API, list findings, fix each and add regression tests."]));
-body.push(...advanced(["mTLS between services, sender-constrained tokens (DPoP), API-firewall/WAF rules, hCaptcha/Turnstile for bots."]));
+body.push(...topicToChapter(loadTopic("level_07", "api_security"),
+  { chapterNumber: 14, bookmarkId: "ch14" }));
 
 // Revision
 body.push(H1("Volume 7 Revision Cheat Sheet", "cheat"));

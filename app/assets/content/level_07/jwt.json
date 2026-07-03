@@ -1,49 +1,115 @@
 {
   "id": "be.jwt",
   "levelId": 7,
-  "title": "JWT (Backend)",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "title": "JWT (JSON Web Tokens)",
+  "xp": 45,
+  "estimatedMinutes": 35,
   "objectives": [
-    "Issue and validate JWTs on the server",
-    "Choose HMAC vs asymmetric signing",
-    "Handle expiry, rotation and revocation"
+    "Understand JWT via a real-life analogy",
+    "See the three parts: Header, Payload, Signature",
+    "Distinguish signing algorithms (HS256 symmetric vs RS256 asymmetric)",
+    "Handle expiry, refresh tokens, and revocation properly",
+    "Answer JWT interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "On the backend, JWTs are self-contained, signed tokens the server issues on login and validates on every request. Because they're stateless, you don't need a session store — but revocation is harder." },
-    { "type": "table", "headers": ["Algorithm", "Signs with", "Best for"], "rows": [
-      ["HS256", "Shared secret (HMAC)", "Single-service apps"],
-      ["RS256/ES256", "Private key, verify with public key", "Multi-service; JWKS endpoint"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of a JWT as a tamper-proof concert wristband.**\n\n- When you buy a ticket at the box office (log in), the venue gives you a WRISTBAND. The wristband HAS your name, section, seat number written on it in plain sight (the PAYLOAD). It also has a HOLOGRAM that only the venue can produce (the SIGNATURE).\n- Every time you approach a checkpoint (an API endpoint), you flash your wristband. The checkpoint sees your name + section AND checks the hologram — 'yes, this was issued by us, and nobody has tampered with it'. **The checkpoint doesn't need to phone the box office** to verify. All the info + proof-of-authenticity is on the wristband itself.\n- If someone forges the payload (changes 'section G' to 'section VIP'), the hologram no longer matches — instantly rejected.\n- Wristbands **expire** at midnight (`exp` claim). After that, the checkpoint refuses even a valid-signed wristband. If you want to stay longer, you need a NEW wristband (refresh token).\n\n**In code:** a JWT is a compact, URL-safe string carrying user identity + claims, cryptographically signed so nobody can forge or tamper with it. **Stateless auth's superpower:** the server doesn't need to look anything up. Verify the signature → trust the payload → you're done. This scales to millions of requests without hitting the auth database.\n\n**Trade-offs:** revoking a JWT before it expires is HARD (you'd need a blacklist, which defeats statelessness). Sensitive data in the payload is only signed, NOT encrypted — anyone can decode it. Short expiry + refresh tokens is the standard workaround." },
+    { "type": "callout", "variant": "definition", "markdown": "**A JWT (JSON Web Token)** is a compact, URL-safe way to represent CLAIMS between two parties (RFC 7519). Format: **`header.payload.signature`** — three base64url-encoded parts joined by dots. The header names the signing algorithm; the payload holds the claims (subject, issuer, expiry, custom fields); the signature is a HMAC or asymmetric signature over `header.payload` using a secret or private key. The server issuing the token signs; anyone with the public key (or shared secret) can VERIFY. Statelessness comes from carrying identity IN the token — no database lookup per request." },
+    { "type": "theory", "markdown": "## The three parts — decoded" },
+    { "type": "code", "language": "text", "code": "A real JWT looks like this (single line, no spaces):\n\n  eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0MiIsIm5hbWUiOiJBZGEiLCJleHAiOjE3MDAwMDAwMDB9.\n  hZaBBnO7iJx6yAsc3-uLxrK3zXWzX8SB7YvHVwCEuBM\n\nJoin with '.', split into three parts, base64url-decode each:\n\n1. HEADER (JSON — algorithm + type):\n   { \"alg\": \"HS256\", \"typ\": \"JWT\" }\n\n2. PAYLOAD (JSON — the CLAIMS):\n   { \"sub\": \"42\", \"name\": \"Ada\", \"exp\": 1700000000, \"iat\": 1699996400,\n     \"iss\": \"https://auth.example.com\", \"aud\": \"api.example.com\",\n     \"scope\": \"read write\" }\n\n3. SIGNATURE (binary — HMAC or RSA output):\n   HMAC_SHA256(base64(header) + '.' + base64(payload), SECRET)\n\nThe payload is READABLE by anyone. It's just SIGNED, not ENCRYPTED.\nSensitive data (SSN, cards) does NOT belong in a JWT payload." },
+    { "type": "theory", "markdown": "## Standard claims (RFC 7519)" },
+    { "type": "table", "headers": ["Claim", "Meaning", "Example"], "rows": [
+      ["**`iss`** (issuer)", "Who issued the token?", "`https://auth.example.com`"],
+      ["**`sub`** (subject)", "Whose identity does it represent?", "`user_42`"],
+      ["**`aud`** (audience)", "Who is the token intended for?", "`api.example.com`"],
+      ["**`exp`** (expiration)", "Unix timestamp when the token expires", "`1700000000`"],
+      ["**`nbf`** (not before)", "Not valid until this time", "`1699996400`"],
+      ["**`iat`** (issued at)", "When was it issued", "`1699996400`"],
+      ["**`jti`** (JWT ID)", "Unique token identifier for revocation lists", "`abc-123-xyz`"]
     ]},
-    { "type": "code", "language": "text", "code": "Login:\n  verify credentials -> issue access token (15 min) + refresh token (7 days)\nOn each request:\n  parse Authorization: Bearer <token>\n  verify signature + exp/iss/aud\n  extract sub (userId) and scopes/roles\nOn refresh:\n  validate refresh token -> rotate it -> issue new access token" },
-    { "type": "callout", "variant": "interview", "markdown": "For multi-service architectures, RS256 wins: services validate with the public key from a JWKS endpoint — no shared secret to leak. Include `iss`, `aud`, `exp`, `nbf`, and a token id (`jti`) so you can revoke individual tokens." },
-    { "type": "callout", "variant": "mistake", "markdown": "Trusting the `alg` field from the token header — attackers can set `alg: none` or downgrade RS256 to HS256 and forge tokens. Pin the algorithm server-side and reject anything else." },
-    { "type": "callout", "variant": "best", "markdown": "Keep access tokens short (5–15 min), refresh tokens longer with rotation, and use a small `jti` blocklist in Redis for revocation. Sign with RS256/ES256 in production; publish keys via JWKS with rotation." }
+    { "type": "callout", "variant": "interview", "markdown": "**The interview one-liner:** always verify `iss`, `aud`, `exp` on EVERY request. Missing any check = tokens issued by other services / for other services / that expired get accepted. This is the #1 real-world JWT bug." },
+    { "type": "theory", "markdown": "## Signing algorithms — HS256 vs RS256 (the big choice)" },
+    { "type": "table", "headers": ["Aspect", "HS256 (symmetric)", "RS256 (asymmetric)"], "rows": [
+      ["**Key type**", "One shared SECRET", "Private key (sign) + public key (verify)"],
+      ["**Who can sign**", "Anyone with the secret", "Only the private-key holder"],
+      ["**Who can verify**", "Anyone with the secret", "Anyone with the public key"],
+      ["**Best for**", "Single service issues + verifies", "Auth server issues; many services verify"],
+      ["**Key distribution**", "Manual, secure channel", "JWKS endpoint publishes public keys automatically"],
+      ["**Rotation**", "Harder (all consumers need new secret)", "Easy — publish new key in JWKS, old ones expire"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**The rule:** use **RS256** when the token is verified by SERVICES OTHER than the one that issued it (microservices, third-party SDKs, mobile). Use **HS256** ONLY when the same service does both. Getting this wrong lets any resource server impersonate the auth server (HS256 attack)." },
+    { "type": "theory", "markdown": "## Sample program — issue + verify a JWT in Java" },
+    { "type": "code", "language": "java", "code": "// build.gradle: implementation 'com.auth0:java-jwt:4.4.0'\n\nimport com.auth0.jwt.JWT;\nimport com.auth0.jwt.algorithms.Algorithm;\nimport com.auth0.jwt.interfaces.DecodedJWT;\n\npublic class TokenService {\n  private final Algorithm algorithm;\n  private final String issuer = \"https://auth.example.com\";\n  private final String audience = \"api.example.com\";\n\n  public TokenService(String secret) {\n    // For HS256. For RS256, use Algorithm.RSA256(publicKey, privateKey).\n    this.algorithm = Algorithm.HMAC256(secret);\n  }\n\n  // ============ ISSUE ============\n  public String issueAccessToken(long userId, Set<String> scopes) {\n    return JWT.create()\n        .withIssuer(issuer)\n        .withAudience(audience)\n        .withSubject(String.valueOf(userId))\n        .withClaim(\"scope\", String.join(\" \", scopes))\n        .withIssuedAt(Instant.now())\n        .withExpiresAt(Instant.now().plus(15, ChronoUnit.MINUTES))   // short-lived!\n        .withJWTId(UUID.randomUUID().toString())\n        .sign(algorithm);\n  }\n\n  // ============ VERIFY ============\n  public DecodedJWT verify(String token) {\n    var verifier = JWT.require(algorithm)\n        .withIssuer(issuer)\n        .withAudience(audience)   // reject tokens meant for another API\n        .acceptLeeway(30)         // 30-second clock skew tolerance\n        .build();\n    return verifier.verify(token);   // throws if signature/expiry/issuer/audience fails\n  }\n}\n\n// Usage in a filter or Resource Server\nvar decoded = tokenService.verify(bearerToken);\nvar userId = Long.parseLong(decoded.getSubject());\nvar scopes = Set.of(decoded.getClaim(\"scope\").asString().split(\" \"));\n\n// With Spring Security's OAuth2 Resource Server, you don't write this code —\n// it's all handled from your `spring.security.oauth2.resourceserver.jwt.issuer-uri`\n// config, including JWKS caching and rotation. This code is just to understand\n// what's happening under the hood." },
+    { "type": "theory", "markdown": "## Access token + refresh token — the standard pattern" },
+    { "type": "code", "language": "text", "code": "Two tokens per session:\n\n  ACCESS TOKEN — short-lived (10-15 min), sent on every API request.\n     If it leaks, damage is bounded to the expiry window.\n     Stored in memory ideally; sometimes in HttpOnly cookie or Secure storage.\n\n  REFRESH TOKEN — long-lived (7-30 days), sent ONLY to /auth/refresh.\n     Trades in for a new access token. Stored in Secure storage / HttpOnly cookie.\n     Rotated on each use (each refresh returns a NEW refresh token, invalidates the old one).\n     Bound to a device/session for detection of theft.\n\nFlow:\n\n  1. User logs in (POST /auth/login with credentials).\n  2. Server returns { accessToken, refreshToken, expiresIn }.\n  3. Client uses accessToken for API calls.\n  4. accessToken expires (401 from API).\n  5. Client sends refreshToken to POST /auth/refresh.\n  6. Server verifies refreshToken, issues new access + refresh tokens.\n  7. If refresh token is REUSED (already invalidated), server suspects theft →\n     invalidates ALL sessions for that user → forces relogin. This is 'refresh\n     token rotation' — Auth0/Okta/Keycloak all do this." },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Not verifying `aud` and `iss`.** Someone else's valid JWT is accepted. Always check both." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Long-lived access tokens (24h+).** If it leaks, attacker has a day of access. Fix: 10-15 min access + refresh tokens for renewal." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Putting secrets in the payload.** JWT payload is base64-encoded, NOT encrypted. Anyone with the token can decode. Sensitive data → server DB, referenced by `sub`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: `alg: none` acceptance.** Some libraries used to accept unsigned tokens if header said `alg: none`. Always REJECT `none`. Use libraries with allowlists of accepted algorithms." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: HS256 with a weak secret.** Under 32 bytes → brute-forceable. Use 256+ bit random secret. Better: RS256 with proper key management." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: HS256 across services.** Every service needs the secret → any service that holds the secret can FORGE tokens. Use RS256 for multi-service." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Trying to revoke a JWT.** By design you can't easily. Use short expiry + refresh-token rotation instead; or accept a small delay before revocation takes effect." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Short-lived access tokens (10-15 min).** Long-lived refresh tokens (7-30 days) that ROTATE on each use." },
+    { "type": "callout", "variant": "best", "markdown": "**2. RS256 (asymmetric)** for multi-service; HS256 only within one service." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Always verify `iss`, `aud`, `exp`, `nbf`, signature — all of them.** Use a mature library; don't roll your own." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Store on client:** access token in memory (or HttpOnly cookie); refresh token in Secure Storage / HttpOnly SameSite=Strict cookie. NEVER in localStorage (XSS steals it)." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Refresh-token rotation with reuse detection.** Detect stolen tokens by 'this token was already exchanged; someone else has it'." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Include only necessary claims.** Keep tokens small — they go on every request." },
+    { "type": "callout", "variant": "best", "markdown": "**7. JWKS endpoint** for public-key distribution when using RS256. Cache with proper TTL." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Decode a token.** Paste one into jwt.io; identify header, payload, signature. Change a payload field; see the signature mismatch." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Issue + verify HS256.** Java or Node — one script that issues + one that verifies. Cover the failure paths: wrong secret, expired, wrong audience." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — RS256 with keypair.** Generate RSA keypair; sign with private; verify with public. Publish public via a static endpoint." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Access + refresh flow.** POST /auth/login returns both. POST /auth/refresh trades old for new. Detect refresh-token reuse and revoke session." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard) — JWKS + Spring Resource Server.** Publish JWKS; consume in a second Spring Boot service." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert) — Attack simulations.** Try `alg: none`; try modifying a claim; try using an expired token 3 seconds after expiry (leeway); assert your server rejects each." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is a JWT and what does it look like?**\n\n**A:** A JWT (JSON Web Token, RFC 7519) is a compact, URL-safe token carrying CLAIMS (user identity + metadata) signed cryptographically so it can't be forged or tampered with. Format: three base64url-encoded parts joined by dots — `header.payload.signature`. The **header** names the algorithm (`HS256`, `RS256`). The **payload** holds claims — standard ones like `sub` (subject/user), `iss` (issuer), `exp` (expiry), plus custom fields like `scope`. The **signature** is a HMAC or RSA signature over `header.payload`. Anyone can decode the payload; only the signing key holder can produce a valid signature. Enables stateless auth — servers verify without a database lookup." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: HS256 vs RS256 — when to use which?**\n\n**A:** **HS256** — HMAC with SHA-256. **Symmetric** — same secret signs and verifies. Fast, small. Best when the ISSUER and VERIFIER are the same service (single monolith). **RS256** — RSA with SHA-256. **Asymmetric** — private key signs; public key verifies. Slower, larger tokens. Best when the issuer is separate from many verifiers (microservices, mobile apps, third-party integrations). **The rule:** if any service other than the issuer needs to verify, use RS256. Otherwise any verifier could sign fake tokens with the shared secret. RS256's public key can be published via **JWKS** (a JSON endpoint listing keys with IDs) — consumers cache and refresh." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do you revoke a JWT?**\n\n**A:** You mostly can't — that's the trade-off of statelessness. Since verification doesn't hit a database, adding 'is this token revoked?' would defeat the whole point. **Two approaches:** **(1) Short-lived access tokens + long-lived refresh tokens.** Access tokens live 10-15 min; revocation waits for expiry. Refresh tokens live longer but are single-use (rotate on each refresh); server can invalidate the refresh chain server-side. This is the STANDARD pattern (Auth0, Okta, Keycloak). **(2) Blacklist by `jti`** — server keeps a list of revoked JWT IDs (typically in Redis with TTL matching token expiry). Small state, but adds a lookup per request — pragmatic middle-ground. **Rule:** use approach 1 by default; approach 2 only when immediate revocation matters (fraud incident, admin lockout)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What is a refresh token and why do you need one?**\n\n**A:** A refresh token is a LONG-LIVED (7-30 days) credential used SOLELY to obtain new access tokens from `/auth/refresh`. Never sent to regular API endpoints. **Why:** access tokens should be short-lived (10-15 min) so leaks are bounded, but constantly asking the user to re-log-in is bad UX. The refresh token bridges the gap: the client silently exchanges the refresh for a new access + refresh pair. **Best practice: refresh-token rotation** — each refresh returns a NEW refresh token, invalidating the old. If the old one is reused (attacker has it), the server can DETECT theft and force re-login. Store refresh tokens carefully: HttpOnly SameSite=Strict cookie or Secure Storage; NEVER localStorage (XSS)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What claims MUST you verify on every request?**\n\n**A:** **Signature** — the whole point; if it's wrong, the token was forged. **`exp` (expiry)** — reject expired tokens with small leeway (30-60 seconds for clock skew). **`iss` (issuer)** — must match your expected auth server. Prevents accepting tokens from other issuers. **`aud` (audience)** — must include your service's ID. Prevents tokens issued for another service being replayed against yours. **`nbf` (not before)** — reject if issued in the future (unlikely but possible). **Optional but recommended:** verify the `alg` header is on your allowlist (`HS256` or `RS256`, NOT `none`). Missing any of these checks is a real vulnerability. Every mature library does this for you — just configure it correctly." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: Where should the client store a JWT?**\n\n**A:** **Never in localStorage** — any XSS on your site can read localStorage and exfiltrate the token. Instant hijack. **Options in order of security:** **(1) HttpOnly cookie with SameSite=Strict, Secure flag** — browser auto-attaches to same-origin requests; JS can't read it. Needs CSRF protection because cookies auto-send. Best for browser web apps. **(2) In-memory only** — token lives in a JS variable; lost on reload. Silent refresh handles reload. Immune to XSS reading (but not to XSS injecting requests). **(3) Native Secure Storage** — Android Keystore / iOS Keychain / Flutter `flutter_secure_storage`. For mobile apps. **(4) Session storage** — slightly better than localStorage (per-tab, cleared on close), but still readable by XSS. **Rule for mobile:** always Secure Storage. **Rule for web:** HttpOnly cookie + CSRF token, or in-memory + silent refresh." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What's the `alg: none` attack?**\n\n**A:** A historical vulnerability: JWTs have an `alg` field in the header. Some early libraries would ACCEPT tokens with `alg: none` (no signature). An attacker could take any legit-looking JWT, change the payload, set `alg: none`, drop the signature → server accepted it. **Fix:** libraries now require an EXPLICIT allowlist of accepted algorithms. **Modern rule:** always specify the expected algorithm; NEVER trust `header.alg` alone. `JWT.require(Algorithm.HMAC256(secret))` — only HS256 with THIS secret is accepted. Any other algorithm or unsigned token → rejected. **Related attack:** algorithm confusion — issue a token signed with HS256 using the PUBLIC key of an RS256 keypair as the HMAC secret. If the server uses the public key as the HS256 secret, it verifies! Fix: always specify the expected algorithm explicitly." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every OAuth2 access token / OIDC id-token** is a JWT (usually RS256).\n- **Auth0, Okta, Keycloak, AWS Cognito** — all issue JWTs.\n- **Firebase Auth** — id-tokens are JWTs.\n- **Spring Security's OAuth2 Resource Server** — full JWT verification out of the box.\n- **AWS API Gateway JWT authorizers** — JWT verification at the edge.\n- **Kubernetes ServiceAccount tokens** — JWTs signed by the cluster.\n- **Never:** JWTs for session cookies on a monolith — regular sessions are simpler and revocable." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **JWE (encrypted JWT)** — encrypts the payload. For truly-sensitive claims. Rare; usually you just don't put sensitive data in tokens.\n- **JWKS refresh** — libraries cache the JWKS response with a TTL; refresh when a `kid` (key ID) isn't found.\n- **Key rotation** — publish new key with new `kid` in JWKS; issue new tokens with new kid; old kid still verifies old tokens until they expire.\n- **`kid` (key ID) header claim** — tells verifiers which JWKS key to use.\n- **`nbf` (not before)** — for tokens that shouldn't be valid until a specific time.\n- **Custom claims** — namespace your claims (`https://myapp.com/roles`) to avoid conflicts with standards.\n- **Introspection endpoint** — OAuth2 servers can be asked 'is this token active?'; enables server-side revocation at cost of a round trip.\n- **DPoP (Demonstrating Proof-of-Possession)** — bind a token to a specific client key; makes stolen tokens useless.\n- **PASETO** — an alternative to JWT with fewer footguns; consider for new designs.\n- **`Bearer` token spec (RFC 6750)** — `Authorization: Bearer <token>`.\n- **OIDC id_token vs OAuth2 access_token** — id_token proves identity to the client; access_token authorizes API calls." }
   ],
   "flashcards": [
-    { "front": "HS256 vs RS256?", "back": "HS256 uses a shared HMAC secret; RS256 uses a private key to sign + public key (JWKS) to verify — better for multi-service." },
-    { "front": "How do you revoke a JWT?", "back": "Short expiry + refresh rotation + optional jti blocklist in Redis." },
-    { "front": "Common JWT forgery attack?", "back": "alg:'none' or algorithm confusion; pin the expected algorithm server-side." }
+    { "front": "JWT structure?", "back": "header.payload.signature — three base64url parts joined by dots." },
+    { "front": "Payload encrypted?", "back": "NO — only base64 encoded. Anyone can read. Only signed for integrity." },
+    { "front": "HS256 vs RS256?", "back": "HS256 shared secret (single service). RS256 private/public keypair (multi-service). Prefer RS256 for microservices." },
+    { "front": "MUST verify?", "back": "Signature + exp + iss + aud + nbf. Missing any = vulnerability." },
+    { "front": "Revocation?", "back": "Hard by design. Use short access tokens (10-15 min) + rotating refresh tokens (7-30 days). Blacklist by jti if needed." },
+    { "front": "Storage on client?", "back": "Mobile: Secure Storage. Web: HttpOnly cookie or in-memory. NEVER localStorage." }
   ],
   "quiz": [
-    { "q": "For multi-service verification you prefer…", "options": ["HS256 with a shared secret", "RS256 with a public key / JWKS", "No signing", "Base64 only"], "answer": 1, "explain": "Public-key verification avoids shared secrets across services." },
-    { "q": "Access tokens should typically be…", "options": ["Long-lived (30 days+)", "Short-lived with refresh tokens", "Never expire", "Stored in URLs"], "answer": 1, "explain": "Short lifetimes limit blast radius; refresh tokens renew." },
-    { "q": "The 'alg: none' attack is fixed by…", "options": ["Bigger keys", "Pinning the expected algorithm server-side", "Longer expiry", "Skipping signatures"], "answer": 1, "explain": "Never trust the token's alg header; enforce it explicitly." }
+    { "q": "JWT payload is…", "options": ["Encrypted", "Base64-encoded plaintext (only signed for integrity)", "Compressed", "Hashed"], "answer": 1, "explain": "Readable by anyone with the token." },
+    { "q": "Multi-service verification?", "options": ["HS256", "RS256 (asymmetric)", "SHA-256", "MD5"], "answer": 1, "explain": "Public key verifies without leaking signing capability." },
+    { "q": "Revoke instantly?", "options": ["Easy", "Hard — use short expiry + refresh rotation, or jti blacklist", "Impossible", "Automatic"], "answer": 1, "explain": "Trade-off of statelessness." },
+    { "q": "`alg: none` should be…", "options": ["Accepted", "REJECTED — allowlist explicit algorithms only", "Ignored", "Special"], "answer": 1, "explain": "Historical attack vector." },
+    { "q": "Store JWT on web where?", "options": ["localStorage", "HttpOnly cookie or in-memory (NEVER localStorage due to XSS)", "URL", "Cache"], "answer": 1, "explain": "XSS-resistant." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Issue and verify an HS256 JWT with exp/sub claims." },
-    { "level": "Medium", "text": "Switch to RS256 + JWKS endpoint; validate in a resource server." },
-    { "level": "Hard", "text": "Implement refresh-token rotation with a Redis-backed jti blocklist." },
-    { "level": "Expert", "text": "Add key rotation: publish 2 keys in JWKS, roll signing key without downtime." }
+    { "level": "Easy", "text": "Paste a JWT into jwt.io; identify sub, exp, iss, aud." },
+    { "level": "Easy", "text": "Change one character in the payload; see the signature no longer match." },
+    { "level": "Medium", "text": "Issue + verify HS256 token in Java or Node; cover expired + wrong-audience failures." },
+    { "level": "Medium", "text": "Generate RSA keypair; sign with private; verify with public." },
+    { "level": "Hard", "text": "Access + refresh flow with rotation; detect reused refresh token." },
+    { "level": "Hard", "text": "Publish a JWKS endpoint; consume in Spring Boot Resource Server." },
+    { "level": "Expert", "text": "Simulate attacks: alg: none, modified payload, expired token; assert all rejected." }
   ],
   "interviewQuestions": [
-    "HS256 vs RS256/ES256?",
-    "How do you revoke JWTs?",
-    "What is JWKS and why use it?",
-    "How does the algorithm confusion attack work?",
-    "Access token vs refresh token vs ID token?"
+    "What is a JWT and what does it look like?",
+    "HS256 vs RS256 — when to use which?",
+    "How do you revoke a JWT?",
+    "What is a refresh token and why do you need one?",
+    "What claims MUST you verify on every request?",
+    "Where should the client store a JWT?",
+    "What's the `alg: none` attack?"
   ],
   "references": [
-    { "label": "RFC 7519 — JSON Web Token", "url": "https://datatracker.ietf.org/doc/html/rfc7519" }
+    { "label": "JWT — jwt.io", "url": "https://jwt.io" },
+    { "label": "RFC 7519 — JWT spec", "url": "https://datatracker.ietf.org/doc/html/rfc7519" }
   ]
 }
