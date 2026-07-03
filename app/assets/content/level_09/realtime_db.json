@@ -2,51 +2,106 @@
   "id": "fb.realtime_db",
   "levelId": 9,
   "title": "Realtime Database",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 50,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Explain the single-JSON-tree model",
-    "Structure data for shallow reads",
-    "Choose RTDB vs Firestore for the task"
+    "Understand Realtime Database via a real-life analogy",
+    "Structure data as a shallow JSON tree",
+    "Implement presence + low-latency sync via onDisconnect()",
+    "Choose RTDB vs Firestore correctly",
+    "Answer RTDB interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Realtime Database is Firebase's original database — a single, JSON-tree store synchronized in real time via WebSocket. Reads/writes stream to clients within milliseconds; presence and low-latency updates are its superpower." },
-    { "type": "code", "language": "dart", "code": "final ref = FirebaseDatabase.instance.ref('rooms/xyz/messages');\nref.push().set({'text':'hi', 'ts': ServerValue.timestamp});\nref.orderByChild('ts').limitToLast(50).onValue.listen((e) { ... });" },
-    { "type": "table", "headers": ["", "Realtime DB", "Firestore"], "rows": [
-      ["Model", "One big JSON tree", "Collections of documents"],
-      ["Reads", "Whole subtree by default", "Per-document, indexed queries"],
-      ["Query power", "Limited (single orderBy)", "Multi-field composite queries"],
-      ["Scaling", "One shard until you shard manually", "Global multi-region"],
-      ["Best for", "Chat, presence, low-latency", "General app data"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Realtime Database as a shared Google Doc that's also a JSON tree.**\n\nEveryone who opens the doc sees the SAME live text. If Alice types 'hello' — Bob sees 'hello' appear letter-by-letter in real time. No refresh, no polling — a persistent WebSocket streams changes.\n\nRTDB is that, but for structured data. **The entire database is ONE giant JSON object**, rooted at `/`. Every path (`/rooms/xyz/messages`) is a node in the tree. You can:\n- **Read** the value at any path.\n- **Listen** to a path — get pushed every change, forever, in ~10ms.\n- **Write** at any path — all connected listeners see the update instantly.\n- **`onDisconnect()`** — schedule writes to happen when a client's WebSocket drops (network dies, phone locked, app killed). Perfect for **presence**: 'set `/users/me/status = offline` when I disconnect.'\n\n**This is Firebase's ORIGINAL database (2012).** Rock-solid; the runtime engine behind chats, live games, presence, collaborative whiteboards for years.\n\n**But — the model has costs:**\n- **Single JSON tree** = no complex queries. `orderByChild` is the closest thing to indexing. No composite queries. No joins.\n- **Read charges by DATA VOLUME**, not doc count. Reading a large subtree = paying for all of it.\n- **Deep nesting is dangerous** — reading a parent reads everything below it, unless you `shallow()` (limited).\n- **Single-shard scaling** — one RTDB instance handles ~200K concurrent users before needing manual sharding.\n\n**Firestore** (2017) fixed these — collections + documents, composite queries, per-doc reads, multi-region. **For most new apps, Firestore is the default.** RTDB is best when you specifically need: **ultra-low-latency (< 20ms) presence + sync**, existing RTDB codebases, or genuinely simple KV-tree data.\n\n**Interview take:** Know when to reach for RTDB (chat presence, live games, whiteboards) vs Firestore (everything else). This is a classic 'senior engineer' architecture question." },
+    { "type": "callout", "variant": "definition", "markdown": "**Realtime Database (RTDB)** is Firebase's original database — a JSON tree store synchronized in real time via a persistent WebSocket. Reads/writes stream to all listeners within milliseconds. **Storage model:** one giant JSON object at `/`; every path is a node. **Cost model:** by data VOLUME (GB downloaded, GB stored), not doc count. **Superpowers:** presence via `onDisconnect()`, ultra-low-latency sync, simple KV/tree API. **Weaknesses:** limited queries (single `orderByChild`), single-shard scaling, download costs on deep reads. **Prefer Firestore for new apps** unless you specifically need RTDB's presence or ultra-low latency." },
+    { "type": "theory", "markdown": "## The JSON tree model" },
+    { "type": "code", "language": "text", "code": "/                                    ← root\n├── users/\n│   ├── u_abc/  { name, status, ... }\n│   └── u_def/  { ... }\n├── rooms/\n│   └── r_xyz/\n│       ├── name: 'General'\n│       ├── participants/\n│       │   ├── u_abc: true\n│       │   └── u_def: true\n│       └── messages/\n│           ├── -Mabc123/  { text, from, ts }\n│           └── -Mdef456/  { text, from, ts }\n└── presence/\n    ├── u_abc: 'online'\n    └── u_def: 'offline'\n\n// KEY RULES OF THE MODEL:\n// - Reading a node reads EVERYTHING below it. Depth is dangerous.\n// - No JOINs, no cross-node queries.\n// - Path segments are keys; values are JSON primitives or maps.\n// - .push() generates monotonically-increasing IDs (like '-MabcXYZ').\n// - Denormalize aggressively — flat data > nested data." },
+    { "type": "theory", "markdown": "## Full CRUD + real-time" },
+    { "type": "code", "language": "dart", "code": "import 'package:firebase_database/firebase_database.dart';\n\nfinal db = FirebaseDatabase.instance;\n\n// Enable offline persistence — game-changer for mobile.\ndb.setPersistenceEnabled(true);\n\n// ────── WRITE ──────\nawait db.ref('users/$uid').set({\n  'name': 'Ada',\n  'joinedAt': ServerValue.timestamp,\n});\n\n// Partial update:\nawait db.ref('users/$uid').update({'status': 'active'});\n\n// Push (auto-generated key):\nfinal ref = db.ref('rooms/$roomId/messages').push();\nawait ref.set({'text': 'Hello!', 'from': uid, 'ts': ServerValue.timestamp});\nprint('Message key: ${ref.key}');  // '-MabcXYZ'\n\n// ────── DELETE ──────\nawait db.ref('users/$uid/tempField').remove();\n\n// ────── READ (one-shot) ──────\nfinal snap = await db.ref('users/$uid').get();\nif (snap.exists) print(snap.value);\n\n// ────── LISTEN (real-time) ──────\nfinal sub = db.ref('rooms/$roomId/messages')\n    .orderByChild('ts')\n    .limitToLast(50)\n    .onValue\n    .listen((event) {\n      final data = event.snapshot.value as Map<dynamic, dynamic>?;\n      if (data == null) return;\n      final messages = data.entries.map((e) => Message.fromMap(e.value)).toList();\n      messages.sort((a, b) => a.ts.compareTo(b.ts));\n      // Render messages\n    });\n\n// Also: onChildAdded, onChildChanged, onChildRemoved for granular events.\n\n// Dispose:\nawait sub.cancel();\n\n// ────── PAGINATION ──────\n// RTDB pagination is fiddly. Common pattern:\nfinal first = await db.ref('rooms/$roomId/messages')\n    .orderByChild('ts').limitToLast(50).get();\n// Get the earliest timestamp:\nfinal firstMap = first.value as Map;\nfinal earliestTs = firstMap.values\n    .map((v) => v['ts'] as int)\n    .reduce((a, b) => a < b ? a : b);\n// Next page — messages OLDER than earliestTs:\nfinal older = await db.ref('rooms/$roomId/messages')\n    .orderByChild('ts')\n    .endBefore(earliestTs)\n    .limitToLast(50)\n    .get();\n\n// ────── TRANSACTION (optimistic) ──────\nawait db.ref('counters/likes').runTransaction((current) {\n  final n = (current as int?) ?? 0;\n  return Transaction.success(n + 1);\n});\n// If concurrent writers changed the value, tx retries automatically.\n\n// ────── PRESENCE via onDisconnect ──────\nfinal myPresence = db.ref('presence/$uid');\nawait myPresence.onDisconnect().set('offline');  // scheduled server-side\nawait myPresence.set('online');\n// When the WebSocket drops (network dies, phone locks), the server runs the\n// scheduled set('offline'). No client action needed. This is RTDB's superpower." },
+    { "type": "theory", "markdown": "## Security Rules — different from Firestore" },
+    { "type": "code", "language": "json", "code": "// realtime.rules.json — deployed via firebase deploy --only database\n{\n  \"rules\": {\n    \"users\": {\n      \"$uid\": {\n        \".read\": \"auth.uid == $uid\",\n        \".write\": \"auth.uid == $uid\",\n        \".validate\": \"newData.hasChildren(['name', 'joinedAt']) && newData.child('name').isString()\"\n      }\n    },\n    \"rooms\": {\n      \"$roomId\": {\n        \".read\": \"data.child('participants').child(auth.uid).val() == true\",\n        \"messages\": {\n          \"$msgId\": {\n            \".write\": \"root.child('rooms').child($roomId).child('participants').child(auth.uid).val() == true\"\n          }\n        }\n      }\n    },\n    \"presence\": {\n      \"$uid\": {\n        \".read\": \"auth != null\",\n        \".write\": \"auth.uid == $uid\"\n      }\n    }\n  }\n}\n\n// KEY DIFFERENCES from Firestore rules:\n// - JSON-based (not JS-based syntax).\n// - CASCADING: if a parent grants read, ALL children are readable (no way to un-grant).\n// - .read, .write, .validate at each node.\n// - $var wildcards for path segments.\n// - root, data, newData, auth as built-ins.\n// - Default is deny." },
+    { "type": "theory", "markdown": "## RTDB vs Firestore — the decision matrix" },
+    { "type": "table", "headers": ["Feature", "Realtime Database", "Cloud Firestore"], "rows": [
+      ["**Model**", "One giant JSON tree", "Collections of documents"],
+      ["**Query**", "Single `orderByChild` + filter", "Multi-field composite queries, cursors"],
+      ["**Cost**", "GB stored + GB downloaded", "Per read/write/delete op"],
+      ["**Real-time**", "Native (WebSocket)", "Also native (snapshot streams)"],
+      ["**Presence**", "★ `onDisconnect()`", "Not built-in (workarounds via functions)"],
+      ["**Latency**", "10-50ms (ultra-low)", "50-200ms"],
+      ["**Scaling**", "~200K concurrent per instance, then shard", "Automatic multi-region"],
+      ["**Offline support**", "Yes, per-node", "Yes, per-collection"],
+      ["**Best for**", "Chat, presence, whiteboards, games", "Everything else"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "Firestore is the default choice for new apps. Reach for RTDB only when you need ultra-low-latency presence/chat, or you're maintaining an existing RTDB codebase. RTDB's read charges by data volume, not doc count — very different cost model." },
-    { "type": "callout", "variant": "mistake", "markdown": "Nesting deeply and reading the whole tree — you pay for and download the entire subtree. **Flatten** data (denormalize) and use shallow references to keep reads small." },
-    { "type": "callout", "variant": "tip", "markdown": "Turn on offline persistence for smoother UX. Security Rules use `.read/.write/.validate` expressions — different syntax from Firestore. Use `onDisconnect()` handlers to manage presence." }
+    { "type": "theory", "markdown": "**Rule of thumb:** New app → Firestore. Existing RTDB codebase → stay unless you have a reason to migrate. Chat + presence-heavy → RTDB is still competitive." },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Deep nesting.** Reading a top-level node reads GB of data. Flatten to shallow structure." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Loading whole subtree for a list view.** Query with `limitToLast(N)`; don't fetch all messages ever." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Cascading rules.** If parent has `.read: true`, ALL children are readable — even if a child rule says false. Rules are additive downward." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: No presence disconnect handler.** User closes app → shows online forever. Always `onDisconnect().set('offline')`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Client-generated timestamps.** Devices lie. Use `ServerValue.timestamp`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Not using `orderByChild` indexes.** Query without an index rule → full-tree scan. Add `.indexOn` in rules." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Single-instance overload.** RTDB scales to ~200K concurrent per instance. Beyond that, shard manually." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Flatten the tree.** `users/`, `rooms/`, `messages/` at top level, not deeply nested." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Always `limit()` queries.** Never fetch unbounded lists." },
+    { "type": "callout", "variant": "best", "markdown": "**3. `onDisconnect()` for presence.** Non-negotiable for online status." },
+    { "type": "callout", "variant": "best", "markdown": "**4. `ServerValue.timestamp` for all times.** Immune to device clock drift." },
+    { "type": "callout", "variant": "best", "markdown": "**5. `.indexOn` for query paths.** Rules with `.indexOn: ['ts', 'from']` enable server-side indexes." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Offline persistence on.** `setPersistenceEnabled(true)` at init." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Design for the worst reader.** If a rule grants read at level N, everything below is exposed. Structure paths intentionally." },
+    { "type": "callout", "variant": "best", "markdown": "**8. For big apps, plan sharding early.** Multiple RTDB instances if traffic > 200K concurrent." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Chat room.** `rooms/{id}/messages` — push + limit to last 50 — real-time list." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Presence.** `onDisconnect().set('offline')` + `set('online')`. Test by killing app; verify status updates." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Rules with indexOn.** Query `messages` by `ts`; add `.indexOn` rule; verify no warning." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Flatten a nested tree.** Take `users/{uid}/friends/{fid}/messages/...` (5 levels) → flatten to `messages/{msgId}` with denormalized fields; measure read savings." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard) — Optimistic transaction.** Multi-user counter increment via `runTransaction`; observe automatic retries." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert) — Shard across instances.** Route `us-users` to instance A, `eu-users` to B; unified rules." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: RTDB vs Firestore — when to use each?**\n\n**A:** **RTDB (Realtime Database)** — single JSON tree, ultra-low-latency (~10-50ms) sync via WebSocket, **presence via `onDisconnect()`**, simple queries only. Cost per GB stored + downloaded. Superpowers: chat, presence, live games, whiteboards. Scaling limit: ~200K concurrent per instance. **Firestore** — collections of documents, composite queries, multi-region auto-scaling, per-doc read cost. Better for: everything else — CRUD apps, complex queries, multi-tenant. **My rule for new apps:** default to Firestore. Reach for RTDB when you specifically need **presence** or **ultra-low latency**. Some apps use BOTH — Firestore for main data, RTDB for presence + typing indicators. Real-world: WhatsApp-like chat pairs RTDB (typing/presence) with Firestore (message store). **This is THE classic Firebase-architect interview question.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How does presence work with `onDisconnect()`?**\n\n**A:** The client SCHEDULES a write to happen when its WebSocket connection dies — the server, not the client, executes it. **Flow:** (1) Client connects, sends `ref.onDisconnect().set('offline')` — server records the intent. (2) Client sends `ref.set('online')` — status is now online. (3) Client's WebSocket closes (app killed, network drops, phone locks) — server detects within seconds and executes the scheduled offline write. **Why this matters:** naive presence based on client-sent 'goodbye' messages FAILS on network drops. `onDisconnect` runs on the server, so it's reliable. **Combined pattern:** last-seen timestamp — `onDisconnect().update({status: 'offline', lastSeen: ServerValue.timestamp})`. **Firestore doesn't have this** — it's RTDB's killer feature. Every chat/social app that shows online status uses this. **Interview take:** 'This is why presence at scale is easier in RTDB than Firestore.'" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do RTDB Security Rules differ from Firestore's?**\n\n**A:** **Format:** RTDB rules are JSON with `.read`, `.write`, `.validate`, `.indexOn` at each node. Firestore rules are a JS-like DSL with `match /path { allow read: if ... }`. **Semantics — the key difference:** RTDB rules **cascade downward**. Grant `.read: true` at `/users` → EVERY child under `/users` is readable, no way to un-grant. Firestore rules are per-path, non-cascading. **Consequence:** RTDB path design is critical — put private data at separate top-level paths from public. **Built-ins:** RTDB has `auth`, `data`, `newData`, `root`, `$wildcard`. Firestore has `request.auth`, `resource`, `request.resource`. **Validation:** RTDB has a dedicated `.validate` per node. Firestore mixes it into `allow write`. **Default:** both deny. **Interview take:** cascading rules trip up newcomers — 'why can they read this? I set the child rule to false.' The answer: the parent granted it." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you avoid huge reads in RTDB?**\n\n**A:** Two levers: **(1) Flatten the tree.** Instead of `users/{uid}/rooms/{rid}/messages/{msgId}` (5 levels; reading a user pulls ALL their message history), separate: `users/{uid}`, `rooms/{rid}`, `messages/{msgId}` at top level with foreign-key references. **(2) Query with limits.** Always `limitToLast(50)` or `limitToFirst(20)` — never fetch unbounded lists. **(3) `orderByChild + startAt/endAt`** for pagination. **(4) `shallow` reads (REST API only)** — get just direct children, not deep tree. **(5) Split hot subtrees** — `messages/{msgId}` (metadata) vs `messages/{msgId}/attachments/` (heavy). **Detection:** Firebase console → RTDB usage → bandwidth chart. Spikes = someone loaded a big subtree. **Add `.indexOn` on `orderByChild` fields** — otherwise queries scan the whole subtree, which is a performance AND cost disaster. Every scaled RTDB app fights this fight." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What's RTDB's scaling model?**\n\n**A:** Each RTDB **instance** is a single Firebase Realtime Database URL (e.g., `my-app.firebaseio.com`). **One instance handles ~200,000 concurrent connections and ~1000 write ops/sec** — Google-provided soft limits. Beyond that: **manual sharding**. Provision additional RTDB instances (e.g., `my-app-shard-2.firebaseio.com`) and route traffic based on region, tenant, or user hash. Different instances can't cross-query — sharding pushes complexity to your app layer. **Storage limit:** 1 GB free, up to 1 TB per instance. **Compare Firestore:** automatic multi-region scaling; no manual sharding needed; single global project handles millions of concurrent. **This is a common answer to 'why did team X migrate off RTDB' — hit the shard wall.** For most apps, one instance suffices. Interview take: 'Plan sharding early only if you're building the next WhatsApp; for typical apps, one instance is enough.'" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What are common RTDB cost drivers and fixes?**\n\n**A:** RTDB bills for **GB stored + GB downloaded** — not per-op like Firestore. **Big cost drivers:** (1) **Deep-tree reads** — one careless `ref('/users').once()` downloads ALL users. Fix: shallow reads or narrow paths. (2) **Real-time listener bandwidth** — a listener that fires 1000×/day per user × 1M users = petabytes. Cache with `keepSynced(true)` for hot paths; SDK avoids redundant fetches. (3) **No client-side offline persistence** — every read hits network. `setPersistenceEnabled(true)` is free perf + cost win. (4) **Unlimited pagination** — `limitToLast(50)` religiously. (5) **Zombie listeners** — a Widget that leaks its `onValue` subscription keeps consuming bandwidth. Dispose. (6) **Big documents** — RTDB doesn't page fields; if a message has a 500KB image blob, every fetch of the message pulls it. Store blob in Cloud Storage; put URL in RTDB. **Monitor:** Firebase console → RTDB → Bandwidth chart. Look for anomalous spikes." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Chat + collaborative apps** — presence is RTDB's killer feature.\n- **Live games** — leaderboards, multiplayer state.\n- **Whiteboards / collaborative docs** — tiny writes broadcast to peers instantly.\n- **IoT + telemetry** — high-frequency small writes.\n- **NOT for** — complex queries, deep multi-tenant hierarchies, analytics." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Multi-database projects** — 1 project can host multiple RTDB instances; specify URL when initializing.\n- **`.indexOn`** rule — must add for `orderByChild` paths to avoid full-tree scans.\n- **`keepSynced(true)`** — pre-cache a path; keeps it up-to-date offline.\n- **REST API** — for backend without full SDK; supports `shallow=true` for lightweight reads.\n- **Cloud Functions triggers** — `onWrite`, `onCreate`, `onUpdate`, `onDelete` on any path.\n- **BigQuery streaming import** — no built-in; must wire manually via Cloud Function.\n- **Emulator** — `firebase emulators:start --only database`.\n- **Data model migration** — RTDB → Firestore is common; scripts + `admin.database().ref().once()` to export.\n- **Backup** — manual export via REST API or `gcloud firebase database` CLI.\n- **Compaction** — automatic; you don't manage GC.\n- **onDisconnect chained** — set multiple paths + cancel operations.\n- **Priority + orderByPriority** — legacy; prefer `orderByChild`.\n- **Encryption** — encrypted at rest; TLS in transit.\n- **Compliance** — HIPAA / GDPR require BAA + config; talk to Google Cloud sales." }
   ],
   "flashcards": [
-    { "front": "RTDB's storage shape?", "back": "One giant JSON tree; every path can be read or listened to." },
-    { "front": "RTDB vs Firestore for new apps?", "back": "Prefer Firestore unless you need ultra-low-latency chat/presence or have RTDB legacy." },
-    { "front": "How do you avoid huge reads?", "back": "Flatten (denormalize) data; read narrow subtrees; use shallow references." }
+    { "front": "RTDB storage shape?", "back": "One giant JSON tree; every path can be read/listened/written." },
+    { "front": "RTDB vs Firestore for new apps?", "back": "Firestore is default; RTDB for presence + ultra-low-latency sync." },
+    { "front": "Presence via?", "back": "onDisconnect().set('offline') — server executes when WebSocket dies." },
+    { "front": "Cost model?", "back": "GB stored + GB downloaded (not per-op like Firestore)." },
+    { "front": "Rules cascade?", "back": "YES — parent grant reads all children. Firestore rules don't cascade." },
+    { "front": "Scaling limit?", "back": "~200K concurrent per instance; shard manually beyond." },
+    { "front": "Avoid huge reads?", "back": "Flatten tree, limit() every query, .indexOn rules, cache + persist." }
   ],
   "quiz": [
-    { "q": "RTDB stores data as…", "options": ["Tables", "Documents in collections", "One big JSON tree", "Files"], "answer": 2, "explain": "Single JSON tree, synchronized in real time." },
-    { "q": "RTDB is best for…", "options": ["General app data", "Ultra-low-latency chat/presence", "Analytics", "Payments"], "answer": 1, "explain": "Sub-ms sync + presence via onDisconnect." },
-    { "q": "The best fix for deep-tree reads is…", "options": ["Add more indexes", "Flatten/denormalize", "Use offline mode", "Disable rules"], "answer": 1, "explain": "Flat data lets you read only what you need." }
+    { "q": "RTDB stores data as?", "options": ["Tables", "Docs in collections", "One JSON tree", "Files"], "answer": 2, "explain": "Single JSON tree synced in real-time." },
+    { "q": "RTDB best for?", "options": ["Complex analytics", "Presence + ultra-low-latency sync", "Payments", "Full-text search"], "answer": 1, "explain": "onDisconnect + sub-50ms sync." },
+    { "q": "Rules cascade?", "options": ["No", "Yes — parent grant reads all children", "Only for writes", "Configurable"], "answer": 1, "explain": "Parent .read/write applies down the tree." },
+    { "q": "Fix deep-tree reads?", "options": ["More indexes", "Flatten / denormalize + limit queries", "Offline mode", "Disable rules"], "answer": 1, "explain": "Depth = expensive reads." },
+    { "q": "Presence implementation?", "options": ["Poll every 5s", "onDisconnect().set('offline') + set('online') on connect", "Cloud Function", "Client timer"], "answer": 1, "explain": "Server executes onDisconnect when WS dies." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Write and stream messages in a chat room path." },
-    { "level": "Medium", "text": "Implement online/offline presence with onDisconnect()." },
-    { "level": "Hard", "text": "Flatten a nested tree; measure read savings." },
-    { "level": "Expert", "text": "Shard the DB across instances for large user bases." }
+    { "level": "Easy", "text": "Push messages to rooms/{id}/messages; real-time list; ordered by ts." },
+    { "level": "Easy", "text": "orderByChild with limitToLast(50); add .indexOn rule." },
+    { "level": "Medium", "text": "Presence: onDisconnect().set('offline'); kill app; verify status flips." },
+    { "level": "Medium", "text": "Optimistic transaction on a counter; verify auto-retries under contention." },
+    { "level": "Hard", "text": "Flatten a nested schema; measure bandwidth savings via console." },
+    { "level": "Hard", "text": "Cascading rules gotcha: prove reading child bypasses child-only rule when parent allows." },
+    { "level": "Expert", "text": "Shard across two RTDB instances; app-layer routing; unified rules." }
   ],
   "interviewQuestions": [
-    "RTDB vs Firestore — when use each?",
-    "How does presence work with onDisconnect?",
-    "How do RTDB Security Rules differ from Firestore?",
-    "How do you avoid huge reads?",
-    "What is RTDB's scaling model?"
+    "RTDB vs Firestore — when to use each?",
+    "How does presence work with onDisconnect()?",
+    "How do RTDB Security Rules differ from Firestore's?",
+    "How do you avoid huge reads in RTDB?",
+    "What's RTDB's scaling model?",
+    "What are common RTDB cost drivers and fixes?"
   ],
   "references": [
-    { "label": "Realtime Database docs", "url": "https://firebase.google.com/docs/database" }
+    { "label": "Realtime Database docs", "url": "https://firebase.google.com/docs/database" },
+    { "label": "RTDB Security Rules", "url": "https://firebase.google.com/docs/database/security" }
   ]
 }
