@@ -3,51 +3,100 @@
   "levelId": 8,
   "title": "Query Optimization",
   "xp": 50,
-  "estimatedMinutes": 25,
+  "estimatedMinutes": 45,
   "objectives": [
-    "Read EXPLAIN plans and spot problems",
-    "Avoid N+1s and full scans",
-    "Rewrite queries to use indexes and aggregates"
+    "Understand how the query planner picks a plan",
+    "Read EXPLAIN ANALYZE and identify bottlenecks",
+    "Rewrite slow queries: join order, sub-queries, N+1, aggregations",
+    "Use the right index + know when to force a plan",
+    "Answer query-optimization interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Query optimization is the practice of shaping SQL and schemas so the planner picks efficient plans — index scans instead of sequential scans, hash joins with correct build sides, streaming aggregates instead of sorts." },
-    { "type": "code", "language": "sql", "code": "EXPLAIN (ANALYZE, BUFFERS)\nSELECT o.id, u.name\nFROM orders o JOIN users u ON u.id = o.user_id\nWHERE o.status = 'PAID' AND o.created_at > now() - interval '7 days'\nORDER BY o.created_at DESC\nLIMIT 20;\n\n-- Fix: index (status, created_at DESC) on orders" },
-    { "type": "table", "headers": ["Symptom", "Likely fix"], "rows": [
-      ["Seq Scan on hot table", "Add matching index"],
-      ["Sort on large result", "Order-matching composite index"],
-      ["Nested Loop with high loops", "Wrong join order / stats"],
-      ["N+1 queries in app", "JOIN or IN-batch fetch"],
-      ["Filter after fetch", "Push predicate into query"],
-      ["OFFSET on huge tables", "Cursor / keyset pagination"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of the query planner as a GPS.**\n\nWhen you type an address, the GPS considers many routes: shortest, fastest, avoid tolls, avoid highways. It weighs them using estimated distance, traffic, road speed limits — then picks the best. It's not perfect: if its traffic data is stale, it might send you into a jam.\n\nThe **database query planner** works exactly the same way for your SQL:\n\n- **Every query has multiple execution plans.** For `SELECT * FROM users u JOIN orders o ON o.user_id = u.id WHERE u.country = 'IN'`:\n  - Plan A: Scan users, filter by country, look up orders per user (nested loop).\n  - Plan B: Scan orders, hash-join to users (hash join).\n  - Plan C: Sort both, merge-join (sort merge).\n- **The planner estimates cost** for each plan using STATISTICS (histograms of column values, row counts, index selectivity).\n- **Picks the cheapest.**\n\n**When planners go wrong:**\n- Stale statistics → wrong cost estimates → bad plan.\n- Function on indexed column → planner CAN'T use index.\n- Correlated columns (city + zip) → planner underestimates rows.\n- Skewed data → histograms miss the outlier.\n\n**The senior skill is diagnosing the plan and helping the planner** — by refreshing stats, rewriting queries, adding indexes, or (rarely) forcing a plan. **Every backend performance problem eventually becomes a query plan problem.** This topic is why senior engineers earn 2-3x — they can look at `EXPLAIN` output, diagnose the bottleneck, and fix it in minutes. Junior devs stare at it. **Master this.**" },
+    { "type": "callout", "variant": "definition", "markdown": "**Query optimization** is the process of making a slow query fast — by improving the plan the database picks. The planner uses statistics + heuristics to choose between join orders, index scans, hash joins, etc. Your job as the engineer: read `EXPLAIN ANALYZE`, spot the bottleneck (seq scan, wrong join order, missing index), and fix it (add index, rewrite, refresh stats). This is the **highest-leverage skill in backend engineering** — a single index or rewrite can turn a 30-second query into a 5-ms one." },
+    { "type": "theory", "markdown": "## The optimizer pipeline" },
+    { "type": "table", "headers": ["Stage", "What happens"], "rows": [
+      ["**1. Parse**", "SQL → AST"],
+      ["**2. Rewrite**", "Expand views, apply rewrite rules"],
+      ["**3. Plan**", "Enumerate candidate plans, cost each, pick cheapest"],
+      ["**4. Execute**", "Run the plan"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "'Show me the slow query' → run EXPLAIN ANALYZE, look for **Seq Scan** on big tables, **Sort** without an ordered index, and **Rows Removed by Filter** (predicate not pushed down). Rewrites often beat re-indexes." },
-    { "type": "callout", "variant": "mistake", "markdown": "OFFSET pagination on large tables — the DB scans and discards N rows for each page. Use **keyset pagination**: `WHERE (created_at, id) < (?, ?) ORDER BY created_at DESC, id DESC LIMIT 20` — O(log n) per page." },
-    { "type": "callout", "variant": "best", "markdown": "Enable pg_stat_statements / Performance Schema. Rewrite `SELECT *` to specific columns. Batch fetches with IN(?, ?, ?, …) to kill N+1. Cache read-heavy aggregates or use materialized views." }
+    { "type": "theory", "markdown": "**Cost inputs the planner uses:**\n\n- **Row counts** — from statistics, per table + per column.\n- **Column histograms** — value distribution (`WHERE age > 60` — how many rows?).\n- **Selectivity** — % of rows matching a predicate.\n- **Index selectivity** — how many distinct values in the index.\n- **Cost constants** — random_page_cost, cpu_tuple_cost, etc.\n\n**Update statistics:**\n- Postgres: `VACUUM ANALYZE` (or autovacuum handles it).\n- MySQL: `ANALYZE TABLE`.\n- Wildly wrong rows= vs actual → run analyze." },
+    { "type": "theory", "markdown": "## Reading EXPLAIN ANALYZE — the essential DBA skill" },
+    { "type": "code", "language": "sql", "code": "-- The command:\nEXPLAIN (ANALYZE, BUFFERS, VERBOSE)\nSELECT u.name, COUNT(o.id) AS order_count\nFROM users u\nLEFT JOIN orders o ON o.user_id = u.id AND o.status = 'paid'\nWHERE u.country = 'IN'\nGROUP BY u.id, u.name\nORDER BY order_count DESC\nLIMIT 20;\n\n-- Sample output (annotated):\n\n-- Limit  (cost=1250.30..1250.35 rows=20) (actual time=45.12..45.13 rows=20 loops=1)\n--   ->  Sort  (cost=1250.30..1252.80 rows=1000) (actual time=45.11..45.12 rows=20 loops=1)\n--         Sort Key: (count(o.id)) DESC\n--         Sort Method: top-N heapsort  Memory: 27kB\n--         ->  HashAggregate  (cost=1200.00..1210.00 rows=1000) (actual time=44.5..44.9 rows=1000 loops=1)\n--               Group Key: u.id, u.name\n--               ->  Hash Left Join  (cost=250.00..1100.00 rows=5000) (actual time=5.1..40.3 rows=5000 loops=1)\n--                     Hash Cond: (o.user_id = u.id)\n--                     ->  Seq Scan on orders o  (cost=0.00..800.00 rows=5000)   ← if huge, add index on (user_id, status)\n--                           Filter: (status = 'paid')\n--                     ->  Hash\n--                           ->  Index Scan using idx_users_country on users u  (cost=0.29..200.00 rows=1000)\n--                                 Index Cond: (country = 'IN')\n-- Planning Time: 0.234 ms\n-- Execution Time: 45.234 ms\n\n-- Read from the DEEPEST inner node outward — that's the first thing executed.\n-- Look for:\n--   * Seq Scan on a large table → likely needs an index.\n--   * Nested Loop with many outer rows → consider hash join / better index.\n--   * 'rows=X' (estimate) vs 'actual rows=Y' → if 10x off, statistics are wrong.\n--   * 'loops=N' on inner side → N iterations; multiply cost.\n--   * Sort Method: 'external merge' → not enough work_mem.\n--   * Bitmap Heap Scan with many 'Rows Removed by Filter' → index not selective enough." },
+    { "type": "theory", "markdown": "## Rewrite patterns that matter" },
+    { "type": "code", "language": "sql", "code": "-- Pattern 1: N+1 query anti-pattern\n\n-- BAD (pseudocode): 100 users → 101 queries.\n-- for user in db.query('SELECT * FROM users LIMIT 100'):\n--     orders = db.query('SELECT * FROM orders WHERE user_id = ' + user.id)\n\n-- GOOD: one join.\nSELECT u.*, o.id AS oid, o.total\nFROM users u LEFT JOIN orders o ON o.user_id = u.id\nWHERE u.id IN (SELECT id FROM users LIMIT 100);\n\n-- Pattern 2: EXISTS vs IN\n\n-- SLOW: IN with subquery (may materialize the whole list):\nSELECT * FROM users WHERE id IN (SELECT user_id FROM orders WHERE status = 'paid');\n\n-- FAST: EXISTS (short-circuits per user):\nSELECT * FROM users u WHERE EXISTS (\n    SELECT 1 FROM orders o WHERE o.user_id = u.id AND o.status = 'paid'\n);\n\n-- Pattern 3: SELECT * vs specific columns\n\n-- BAD: fetches everything (defeats covering indexes; more network).\nSELECT * FROM orders WHERE user_id = 42;\n\n-- GOOD: fetches only what you use (may allow Index Only Scan).\nSELECT id, total FROM orders WHERE user_id = 42;\n\n-- Pattern 4: LIMIT without ORDER BY is ambiguous — always specify order.\nSELECT * FROM orders ORDER BY created_at DESC LIMIT 20;\n\n-- Pattern 5: OFFSET pagination is O(N)\n\n-- SLOW: skips 10000 rows for page 500.\nSELECT * FROM orders ORDER BY id LIMIT 20 OFFSET 10000;\n\n-- FAST — keyset / cursor pagination:\nSELECT * FROM orders WHERE id > $last_seen_id ORDER BY id LIMIT 20;\n\n-- Pattern 6: Function on indexed column disables the index.\n\n-- BAD:\nSELECT * FROM orders WHERE DATE(created_at) = '2026-06-01';\n\n-- GOOD:\nSELECT * FROM orders WHERE created_at >= '2026-06-01' AND created_at < '2026-06-02';\n\n-- Pattern 7: ORDER BY random() is disaster on big tables.\n-- SLOW: sorts entire table.\nSELECT * FROM users ORDER BY RANDOM() LIMIT 10;\n\n-- FAST: TABLESAMPLE (Postgres).\nSELECT * FROM users TABLESAMPLE SYSTEM (0.1) LIMIT 10;" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: `SELECT *` everywhere.** Defeats covering indexes, adds network transfer, fills disk cache. Fetch only needed columns." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: N+1 queries from ORMs.** 100 users → 101 queries. Always eager-load relations you'll access." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: OFFSET pagination on large tables.** Each page slower than the last. Use keyset pagination (`WHERE id > $last_id`)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Function on indexed column.** `WHERE DATE(created_at) = '2026-06-01'` — index dead. Use `WHERE created_at >= '2026-06-01' AND created_at < '2026-06-02'`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Stale statistics.** Planner picks bad plan. Run `VACUUM ANALYZE` after big bulk loads." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Not looking at EXPLAIN.** Guessing without measuring. Always EXPLAIN slow queries." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Correlated subqueries.** Runs inner query per outer row. Rewrite as JOIN." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. `EXPLAIN (ANALYZE, BUFFERS)` every slow query.** No guessing." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Enable slow query log.** Postgres `log_min_duration_statement = 500`; MySQL slow log." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Use `pg_stat_statements`.** Aggregates query stats — find biggest CPU/IO consumers." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Column-specific SELECT.** No `*`." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Keyset pagination for infinite scroll.** Not OFFSET." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Eager-load relations.** Avoid N+1." },
+    { "type": "callout", "variant": "best", "markdown": "**7. `LIMIT` early.** Push predicates + limits deep into the query." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Refresh stats after bulk loads.** `VACUUM ANALYZE table_name;`" },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — EXPLAIN a query.** Take any query, run EXPLAIN ANALYZE, identify the bottleneck." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Rewrite N+1.** Convert loop-issued queries to eager-load; verify one query in the log." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Keyset pagination.** Convert an OFFSET paginator to keyset; benchmark deep-page performance." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Rewrite a slow report query.** Add indexes + rewrite; go from >5s to <100ms." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard) — Materialized view.** For expensive aggregations, create a materialized view; refresh nightly." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert) — Query plan forcing.** With `pg_hint_plan`, force a plan; measure to prove it beats the planner's choice." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What does the query planner do?**\n\n**A:** Given a SQL query, the planner enumerates possible EXECUTION PLANS — different join orders, join methods (nested loop / hash / merge), scan methods (seq / index / bitmap) — and picks the cheapest based on ESTIMATED COST. Cost estimates come from STATISTICS: row counts, histograms of column values, index selectivity. Then the executor runs the chosen plan. **When it goes wrong:** stale statistics → wrong estimates → bad plan. Function on indexed column → can't use index. Correlated columns → misestimates. **Your job:** run `EXPLAIN ANALYZE`, diagnose, help the planner (refresh stats, rewrite, add index). **This is THE core skill of backend performance.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What is EXPLAIN ANALYZE and how do you read it?**\n\n**A:** `EXPLAIN` shows the plan; `EXPLAIN ANALYZE` runs the query AND shows actual times/rows alongside estimates. **Read from the deepest inner node outward** — that's what runs first. **Key things to check:** (1) 'Seq Scan' on a big table = probably need an index. (2) 'estimated rows' vs 'actual rows' — 10x off = stale stats, need ANALYZE. (3) 'loops=N' on inner side of nested loop = N iterations. (4) 'Bitmap Heap Scan' with lots of 'Rows Removed by Filter' = index not selective enough. (5) 'Sort Method: external merge' = ran out of work_mem. (6) 'Total time' at top vs inner-node times to find the bottleneck. **Also add `BUFFERS`** to see disk vs cache. **Every interview grills this.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What's the N+1 query problem?**\n\n**A:** You fetch a list of N parent records, then for each ONE loop-issue a follow-up query for its children — 1 + N queries instead of 1 or 2. **Example:** load 100 users, then `for user in users: user.orders = query(...)` — that's 101 queries. **Cost:** each roundtrip is milliseconds; 100 roundtrips = seconds. **Fix:** eager-load — one JOIN or one `IN (...)` batch query. In ORMs: `.joinedload()`, `.selectinload()`, `.include()`, `.populate()`. **How to detect:** enable query log; if a page load issues dozens of similar queries, you have N+1. **Most common backend performance bug.** Every ORM interview asks this. Fixing N+1 is often the difference between 100ms and 3s page loads. **CRITICAL.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What's the difference between OFFSET and keyset pagination?**\n\n**A:** **OFFSET pagination** — `LIMIT 20 OFFSET 10000` — the database SCANS and skips 10000 rows before returning 20. On page 500, that's 10000 wasted row reads. Each page is slower than the last. Also inconsistent under concurrent inserts (rows shift). **Keyset (cursor) pagination** — `WHERE id > $last_seen_id ORDER BY id LIMIT 20`. Uses the index to jump directly to `$last_seen_id`; then reads 20 sequential rows. **O(log N) per page regardless of depth.** Downside: no random access ('page 500' isn't directly addressable) — but that matches real UX (users scroll forward). **Standard for infinite-scroll feeds.** Trickier for multi-column sorts — need a composite cursor. **The right answer for any large table.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you diagnose a suddenly slow query?**\n\n**A:** Systematic checklist: **(1) Confirm it's slow** — run it; time it. **(2) `EXPLAIN ANALYZE`** — compare to what it USED to be. **(3) Check stats** — actual vs estimated rows way off? Run `VACUUM ANALYZE`. **(4) Recent schema change?** New column, dropped index. Check `pg_stat_user_indexes` for unused/dropped indexes. **(5) Data growth** — table 10x bigger now? Plan may have changed. **(6) Concurrency** — long-running transactions holding locks? Check `pg_stat_activity` for blockers. **(7) Cache miss** — cold cache after restart? Check `BUFFERS` in EXPLAIN. **(8) Parameter sniffing** (SQL Server) — plan cached for one parameter is wrong for another. **(9) Blocking bloat** — long-lived transactions preventing vacuum → dead tuples → seq-scan slowdown. **A senior engineer walks this checklist in 5 minutes.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: When would you force a query plan?**\n\n**A:** RARELY — the planner is usually right. Force only when: (1) You've verified via `EXPLAIN ANALYZE` that a different plan is faster. (2) You can't fix the root cause (bad stats, poor query design). (3) The hint is contained (`pg_hint_plan` scoped to a specific query, or `USE INDEX` in MySQL). **Reasons to avoid:** locks in a suboptimal plan; makes the query brittle to data changes; hides the real problem. **Better fixes:** refresh stats, rewrite the query, add the right index, increase `default_statistics_target` for skewed columns. **Common escape hatches:** MySQL `FORCE INDEX (name)`, Postgres `SET enable_seqscan = OFF` for one session, `pg_hint_plan` for pinned hints, SQL Server `OPTION (RECOMPILE)`. **Interview take:** 'I would exhaust rewrites + stats + indexes first, and only pin a hint when I can prove via measurement that the planner's choice is repeatedly wrong.'" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: When would you denormalize or use a materialized view?**\n\n**A:** When the query is expensive AND the freshness requirement is loose. **Materialized view** — precompute an aggregation (`SELECT date, sum(revenue) FROM orders GROUP BY date`); refresh nightly. Reads become O(1) instant. Postgres: `CREATE MATERIALIZED VIEW ... AS SELECT ...; REFRESH MATERIALIZED VIEW CONCURRENTLY ...`. **Denormalization** — store `user.order_count` directly instead of computing it; keep it fresh with triggers or app writes. **When:** analytics dashboards, top-N leaderboards, computed columns hot on read paths. **Trade-off:** stale data + more write complexity + storage. **Alternative:** cache in Redis with TTL — simpler, no schema change. **Real-world:** every large app has some denormalization; the senior skill is knowing when it's warranted vs premature." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every backend performance interview** — this topic is 50% of DB interviews.\n- **Every scaled backend** — Twitter, Airbnb, Reddit all have query optimization teams.\n- **`pg_stat_statements`** — automated slow-query aggregation in Postgres.\n- **`EXPLAIN ANALYZE`** — the daily tool.\n- **`pg_hint_plan`** — controversial but sometimes necessary.\n- **`pt-query-digest`** (Percona) — MySQL slow-log analyzer." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`pg_stat_statements`** — aggregates queries by hash; find biggest CPU consumers.\n- **`auto_explain`** — logs EXPLAIN for slow queries automatically.\n- **`pg_hint_plan`** — force plans via SQL comments.\n- **`hypopg`** — hypothetical index testing.\n- **`work_mem`** — memory per sort/hash; too low → disk spills.\n- **`shared_buffers`** — database cache; typically 25% of RAM.\n- **`random_page_cost`** — lower for SSDs (1.1 vs 4.0 default).\n- **Partitioning** — HUGE tables split by range; prune irrelevant partitions.\n- **CTE materialization** — pre-PG 12, CTEs were fences; now inlined unless MATERIALIZED.\n- **Parallel query** — Postgres uses multiple workers for big scans; tune `max_parallel_workers_per_gather`.\n- **JIT compilation** — Postgres 11+ compiles hot query expressions for speed.\n- **Adaptive query optimization** — Oracle's cardinality feedback; adjusts plans mid-execution.\n- **Query fingerprinting** — normalize literals for grouping in stats." }
   ],
   "flashcards": [
-    { "front": "First tool for a slow query?", "back": "EXPLAIN ANALYZE (or the equivalent) — read the actual plan." },
-    { "front": "Why avoid OFFSET on large tables?", "back": "The DB scans OFFSET+LIMIT rows on every page; use keyset (cursor) pagination instead." },
-    { "front": "How to eliminate N+1 in the app?", "back": "Batch fetches (IN clauses) or single JOIN; avoid per-row queries in loops." }
+    { "front": "N+1 query?", "back": "1 parent query + N child queries in a loop. Fix: eager-load via JOIN / IN batch." },
+    { "front": "EXPLAIN ANALYZE?", "back": "Runs query + shows actual times. Read innermost node first; check Seq Scan / estimate vs actual." },
+    { "front": "OFFSET vs keyset?", "back": "OFFSET is O(N) — DB scans skipped rows. Keyset (WHERE id > last) is O(log N) — index seek." },
+    { "front": "SELECT * problem?", "back": "Defeats covering indexes, extra network. Select only needed columns." },
+    { "front": "Function on indexed column?", "back": "Disables index. Rewrite: WHERE created_at >= 'X' AND < 'Y' instead of DATE(...) = 'X'." },
+    { "front": "Stale stats symptom?", "back": "EXPLAIN estimated rows way off from actual. Fix: VACUUM ANALYZE." },
+    { "front": "pg_stat_statements?", "back": "Aggregates query stats — find biggest consumers." }
   ],
   "quiz": [
-    { "q": "For paging huge result sets, prefer…", "options": ["Bigger OFFSET", "Keyset (cursor) pagination", "SELECT *", "No index"], "answer": 1, "explain": "Keyset pagination is O(log n) per page." },
-    { "q": "'Seq Scan' on a hot large table usually means…", "options": ["Faster query", "Missing/inapplicable index", "Perfect plan", "Locked table"], "answer": 1, "explain": "Add or fix the index to enable an index scan." },
-    { "q": "Best way to kill an app-side N+1…", "options": ["Add more threads", "Batch fetch with IN() or JOIN", "Disable caching", "Restart DB"], "answer": 1, "explain": "One query for many rows beats N per-row queries." }
+    { "q": "How to read EXPLAIN?", "options": ["Top-down", "Deepest inner node first (executes first)", "Random", "By cost"], "answer": 1, "explain": "Innermost node runs first." },
+    { "q": "N+1 fix?", "options": ["Add index", "Eager-load: JOIN or IN(...) batch", "Loop faster", "Cache"], "answer": 1, "explain": "One query for all children." },
+    { "q": "OFFSET 10000 LIMIT 20?", "options": ["Fast — indexed", "Slow — scans 10020 rows", "Same as keyset", "O(1)"], "answer": 1, "explain": "Must skip all offset rows." },
+    { "q": "Stale statistics?", "options": ["Great — cached", "Planner picks bad plans", "Automatic", "Only Oracle"], "answer": 1, "explain": "Cost estimates depend on stats." },
+    { "q": "When to force plans?", "options": ["Always", "Rarely — after exhausting rewrites + stats + indexes", "Never", "For every query"], "answer": 1, "explain": "Hints are brittle." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "EXPLAIN a query; identify Seq Scan vs Index Scan." },
-    { "level": "Medium", "text": "Convert OFFSET pagination to keyset pagination." },
-    { "level": "Hard", "text": "Rewrite a subquery to a JOIN and confirm faster plan." },
-    { "level": "Expert", "text": "Add a materialized view + refresh strategy for a heavy aggregate." }
+    { "level": "Easy", "text": "EXPLAIN ANALYZE a query; find the biggest cost node; add an index; re-run." },
+    { "level": "Easy", "text": "Enable slow query log; find your app's top 5 slowest." },
+    { "level": "Medium", "text": "Fix an N+1: convert loop-issued queries to a single JOIN; verify in log." },
+    { "level": "Medium", "text": "Convert an OFFSET-based paginator to keyset; benchmark deep pages." },
+    { "level": "Hard", "text": "Take a slow report query; add composite + covering index; rewrite; achieve 100x speedup." },
+    { "level": "Hard", "text": "Create a materialized view for a nightly-refreshed dashboard aggregation." },
+    { "level": "Expert", "text": "Use pg_hint_plan to force a plan; measure to prove it beats the planner's default." }
   ],
   "interviewQuestions": [
-    "Walk through reading an EXPLAIN ANALYZE plan.",
-    "How do you fix an N+1 problem?",
-    "Why is OFFSET pagination bad on large tables?",
-    "How do you find slow queries in production?",
-    "When would you use a materialized view?"
+    "What does the query planner do?",
+    "What is EXPLAIN ANALYZE and how do you read it?",
+    "What's the N+1 query problem?",
+    "What's the difference between OFFSET and keyset pagination?",
+    "How do you diagnose a suddenly slow query?",
+    "When would you force a query plan?",
+    "When would you denormalize or use a materialized view?"
   ],
   "references": [
-    { "label": "Postgres — Using EXPLAIN", "url": "https://www.postgresql.org/docs/current/using-explain.html" }
+    { "label": "Postgres query planning docs", "url": "https://www.postgresql.org/docs/current/planner-optimizer.html" },
+    { "label": "Use The Index, Luke!", "url": "https://use-the-index-luke.com" }
   ]
 }

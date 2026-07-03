@@ -83,145 +83,17 @@ body.push(...topicToChapter(loadTopic("level_08", "isar"),
 body.push(...topicToChapter(loadTopic("level_08", "objectbox"),
   { chapterNumber: 8, bookmarkId: "ch8" }));
 
-body.push(H1("9. Realm", "ch9"));
-body.push(callout("definition", ["MongoDB's object-oriented mobile database with live objects — query results stay in sync with the DB — and optional Atlas Device Sync."]));
-body.push(callout("interview", ["Live-object model is Realm's superpower: writes make all held references reflect changes immediately. Combined with Device Sync, this makes real-time collaborative apps unusually simple."]));
-body.push(...summary([
-  "Live objects auto-refresh with the DB.",
-  "Realm Query Language (RQL) + type-safe API.",
-  "Atlas Device Sync for multi-device conflict resolution.",
-  "Per-isolate Realms; frozen for cross-isolate reads.",
-]));
-body.push(...interview([
-  "What are live objects?",
-  "How does Atlas Device Sync work?",
-  "Realm vs Isar/ObjectBox?",
-  "Threading rules in Realm?",
-  "How do you handle conflicts?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Local Realm CRUD." },
-  { level: "Medium", text: "RQL filter + observe changes." },
-  { level: "Hard", text: "One-to-many relation + query across it." },
-  { level: "Expert", text: "Prototype Device Sync with two devices + a conflict." },
-]));
-body.push(...realworld(["Retail POS systems, field service, and healthcare apps use Realm because Device Sync eliminates a huge amount of custom sync code."]));
-body.push(...miniproject(["Build a shared shopping list with Realm + Device Sync between two accounts; explore conflict rules."]));
-body.push(...advanced(["Sync permissions, flexible sync queries, breaking-change schema migrations."]));
+body.push(...topicToChapter(loadTopic("level_08", "realm"),
+  { chapterNumber: 9, bookmarkId: "ch9" }));
 
-// 10. Indexing
-body.push(H1("10. Indexing", "ch10"));
-body.push(callout("definition", ["An index maps lookup keys to row positions, turning O(n) scans into O(log n) lookups — at the cost of extra storage and slower writes."]));
-body.push(table(["Type", "Idea", "Use"], [
-  ["Single-column B-tree", "Ordered on one column", "Equality + range"],
-  ["Composite", "Ordered on multiple columns", "Left-prefix queries"],
-  ["Covering", "All queried columns included", "Index-only scan"],
-  ["Partial", "WHERE predicate", "Small hot subsets"],
-  ["Unique", "Enforces uniqueness", "Emails, natural keys"],
-], [1800, 3400, 4160]));
-body.push(callout("interview", ["Leftmost-prefix rule: (A, B, C) serves queries filtering by A, or A+B, or A+B+C — never B alone. Design composites to match your top queries in that order."]));
-body.push(callout("mistake", ["Indexing everything 'just in case.' Each index slows writes and eats storage. Add indexes to real hot queries only."]));
-body.push(...summary([
-  "Indexes trade write speed + storage for read speed.",
-  "Leftmost-prefix rule governs composites.",
-  "Covering indexes enable index-only scans.",
-  "EXPLAIN to confirm; watch for bloat.",
-]));
-body.push(...interview([
-  "How does a B-tree index work?",
-  "Explain the leftmost-prefix rule.",
-  "What is a covering index?",
-  "When use partial indexes?",
-  "Why is over-indexing bad?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Add single-column index; EXPLAIN plan." },
-  { level: "Medium", text: "Composite matching a top query; test with/without." },
-  { level: "Hard", text: "Convert a query to an index-only scan (covering)." },
-  { level: "Expert", text: "Detect bloat; rebuild without downtime." },
-]));
-body.push(...realworld(["Every product outage story about 'the DB is slow' is really 'we forgot an index.' Interviewers love index design questions because the impact is huge and the reasoning is simple."]));
-body.push(...miniproject(["Take a slow endpoint; add correct indexes and prove 100× improvement with pg_stat_statements or a benchmark."]));
-body.push(...advanced(["Function/expression indexes, hash and BRIN internals, bloom filters as pre-indexes, inverted indexes in search engines."]));
+body.push(...topicToChapter(loadTopic("level_08", "indexing"),
+  { chapterNumber: 10, bookmarkId: "ch10" }));
 
-// 11. Query Optimization
-body.push(H1("11. Query Optimization", "ch11"));
-body.push(callout("definition", ["Shape SQL + schema so the planner picks efficient plans: index scans over seq scans, streaming aggregates over sorts, hash joins with right build sides."]));
-body.push(code([
-  "EXPLAIN (ANALYZE, BUFFERS)",
-  "SELECT o.id, u.name",
-  "FROM orders o JOIN users u ON u.id = o.user_id",
-  "WHERE o.status = 'PAID' AND o.created_at > now() - interval '7 days'",
-  "ORDER BY o.created_at DESC",
-  "LIMIT 20;",
-  "",
-  "-- Fix: index (status, created_at DESC) on orders",
-], "explain analyze"));
-body.push(callout("interview", ["Slow query drill: EXPLAIN ANALYZE → look for Seq Scan on hot tables, Sort without an ordered index, and 'Rows Removed by Filter' (predicate not pushed down). Rewrites often beat re-indexes."]));
-body.push(callout("mistake", ["OFFSET pagination on large tables — the DB scans and discards N rows for each page. Use keyset (cursor) pagination: `WHERE (created_at, id) < (?, ?) ORDER BY ... LIMIT 20`."]));
-body.push(...summary([
-  "EXPLAIN ANALYZE is the entry point.",
-  "Kill Seq Scan / OFFSET / N+1 patterns.",
-  "Push filters into the query; select specific columns.",
-  "Materialized views or caches for hot aggregates.",
-]));
-body.push(...interview([
-  "Walk through reading an EXPLAIN ANALYZE plan.",
-  "How to fix an N+1?",
-  "Why is OFFSET pagination bad?",
-  "How to find slow queries in production?",
-  "When use a materialized view?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "EXPLAIN a query; identify Seq Scan vs Index Scan." },
-  { level: "Medium", text: "Convert OFFSET to keyset pagination." },
-  { level: "Hard", text: "Rewrite subquery → JOIN; confirm faster plan." },
-  { level: "Expert", text: "Materialized view + refresh strategy for a heavy aggregate." },
-]));
-body.push(...realworld(["Nearly every 'API is slow' postmortem involves a bad query plan. Being fluent in EXPLAIN reads and rewriting queries is a real senior-engineer differentiator."]));
-body.push(...miniproject(["Take a real slow endpoint (or seed one); progressively fix it with indexes, rewrites, and pagination changes; document each round with plan diffs."]));
-body.push(...advanced(["Planner hints, prepared statement plans, parallel query, extended statistics, HypoPG for what-if analysis."]));
+body.push(...topicToChapter(loadTopic("level_08", "query_optimization"),
+  { chapterNumber: 11, bookmarkId: "ch11" }));
 
-// 12. Transactions
-body.push(H1("12. Transactions", "ch12"));
-body.push(callout("definition", ["Groups of operations that succeed or fail together. ACID — Atomicity, Consistency, Isolation, Durability — guarantees correctness under concurrency and crashes."]));
-body.push(table(["Isolation", "Prevents", "Allows"], [
-  ["READ UNCOMMITTED", "—", "Dirty reads"],
-  ["READ COMMITTED", "Dirty reads", "Non-repeatable + phantoms"],
-  ["REPEATABLE READ", "Dirty + non-repeatable", "Phantoms (some engines)"],
-  ["SERIALIZABLE", "All", "Aborts on conflict"],
-], [2400, 3400, 3560]));
-body.push(code([
-  "BEGIN;",
-  "SELECT balance FROM accounts WHERE id=1 FOR UPDATE;",
-  "UPDATE accounts SET balance = balance-100 WHERE id=1;",
-  "UPDATE accounts SET balance = balance+100 WHERE id=2;",
-  "COMMIT;",
-], "transfer"));
-body.push(callout("interview", ["Classic proof of atomicity: without a transaction, a crash between the two updates leaves money missing. Combined with isolation, you also avoid seeing half-applied transfers from other users."]));
-body.push(callout("mistake", ["Long transactions across UI clicks/API calls. They block others, hold locks, and (in Postgres) prevent VACUUM. Keep transactions small and fast."]));
-body.push(...summary([
-  "ACID gives all-or-nothing + safe concurrency + durability.",
-  "Choose isolation by anomaly you can't tolerate.",
-  "Retry on deadlocks; keep transactions short.",
-  "Distributed = sagas / outbox, not 2PC.",
-]));
-body.push(...interview([
-  "Explain ACID.",
-  "Isolation levels + anomalies each prevents?",
-  "How to handle deadlocks?",
-  "Optimistic vs pessimistic locking?",
-  "Why avoid distributed transactions?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Wrap a transfer in a transaction." },
-  { level: "Medium", text: "Reproduce lost-update; fix with SELECT FOR UPDATE." },
-  { level: "Hard", text: "Trigger a deadlock; fix with consistent lock ordering + retry." },
-  { level: "Expert", text: "Saga across two services with compensations." },
-]));
-body.push(...realworld(["Bank ledgers, ticketing, e-commerce checkout — anywhere money or scarce inventory changes hands relies on transactions to stay correct under load."]));
-body.push(...miniproject(["Build a ledger service with correct isolation, deadlock retry, and property-based tests that money is never lost or duplicated."]));
-body.push(...advanced(["Serializable Snapshot Isolation (SSI), 2PC pitfalls, Percolator/TrueTime, deterministic databases (FaunaDB, YugabyteDB)."]));
+body.push(...topicToChapter(loadTopic("level_08", "transactions"),
+  { chapterNumber: 12, bookmarkId: "ch12" }));
 
 // Revision
 body.push(H1("Volume 8 Revision Cheat Sheet", "cheat"));

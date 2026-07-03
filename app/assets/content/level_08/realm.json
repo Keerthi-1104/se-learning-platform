@@ -1,51 +1,84 @@
 {
   "id": "db.realm",
   "levelId": 8,
-  "title": "Realm",
+  "title": "Realm (MongoDB Realm / Atlas Device Sync)",
   "xp": 40,
-  "estimatedMinutes": 20,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Explain Realm's live objects and reactivity",
-    "Use Realm from Dart/Flutter",
-    "Understand Atlas Device Sync"
+    "Understand Realm via a real-life analogy",
+    "See its live-object model (queries that stay in sync with the DB)",
+    "Know when Atlas Device Sync is the killer feature vs overkill",
+    "Handle threading + isolate rules correctly",
+    "Answer Realm interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Realm is an object-oriented mobile database from MongoDB with **live objects** — query results stay in sync with the DB automatically — and optional cloud sync via MongoDB Atlas Device Sync." },
-    { "type": "code", "language": "dart", "code": "@RealmModel()\nclass _User { @PrimaryKey() late ObjectId id;\n  late String name;\n}\nfinal config = Configuration.local([User.schema]);\nfinal realm = Realm(config);\nrealm.write(() => realm.add(User(ObjectId(), 'Ada')));\nfinal users = realm.all<User>().query('name == \\$0', ['Ada']);" },
-    { "type": "table", "headers": ["Feature", "Realm"], "rows": [
-      ["Model", "Live objects — auto-refresh with DB"],
-      ["Query", "Realm query language + type-safe API"],
-      ["Sync", "Atlas Device Sync (conflict resolution)"],
-      ["Threading", "Realms are per-isolate; use frozen for cross-isolate reads"]
-    ]},
-    { "type": "callout", "variant": "interview", "markdown": "The live-object model is Realm's superpower: when you write to the DB, any object references you hold reflect the change immediately. Combined with Device Sync, this makes real-time collaborative mobile apps unusually simple." },
-    { "type": "callout", "variant": "mistake", "markdown": "Passing live objects across isolates. Live objects are tied to their Realm's isolate — snapshot them (`freeze()` in some SDKs) or re-query on the target isolate." },
-    { "type": "callout", "variant": "tip", "markdown": "For offline-first with server sync, Atlas Device Sync + conflict rules can replace a lot of custom infrastructure. Just watch the cost model for large user bases." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Realm as a mirrored whiteboard between your phone and the cloud.**\n\n- With other DBs you FETCH a snapshot: 'give me the current user' — you get a copy. If someone else updates that user, YOUR copy is stale until you re-fetch.\n- **Realm's LIVE OBJECTS** are like a whiteboard where each side (your app + the DB) has a copy that stays IN SYNC AUTOMATICALLY. Query for a User → you get a live reference. Someone (or your code, or the sync engine) updates that user → your reference reflects the change immediately. No re-fetch, no listener plumbing. **The reference is the query result AND the source of truth simultaneously.**\n- **Atlas Device Sync** takes this one step further: the whiteboard is mirrored across DEVICES and to a MongoDB Atlas backend. Update a doc on the phone; the tablet + web + backend see it seconds later, with conflict resolution handled for you.\n\n**Concretely:** Realm is an object database originally from Realm Inc. (acquired by MongoDB in 2019, now part of MongoDB Atlas). Data lives as typed objects; queries return LIVE, auto-updating collections; multi-device sync is a first-class feature.\n\n**Where Realm shines uniquely:**\n- **Real-time collaborative apps** — shared todo lists, chat, whiteboards. Atlas Device Sync eliminates weeks of custom sync code.\n- **Offline-first with server sync** — writes queue locally, sync on reconnect, conflicts resolved automatically.\n- **Live UI without streams** — the model auto-updates; widgets rebind naturally.\n\n**Trade-offs:**\n- **Threading is strict** — Realm objects can't cross isolate boundaries without freezing.\n- **Sync is a paid MongoDB Atlas feature** — free tier exists; production costs money.\n- **Vendor lock-in** — you're on MongoDB's stack.\n- **Smaller Flutter community** than Isar/Drift/Hive.\n- **Model migrations** — sync requires careful schema evolution to avoid client resets." },
+    { "type": "callout", "variant": "definition", "markdown": "**Realm** is an object database with **live objects** (query results that stay in sync with the DB automatically) and optional cloud sync via **MongoDB Atlas Device Sync**. Originally Realm Inc.; acquired by MongoDB (2019). Available for Flutter/Dart via the official `realm` package. **Data model:** typed Dart objects (`RealmObject` subclasses). **Queries:** Realm Query Language (RQL) or LINQ-style. **Sync:** bidirectional device ↔ Atlas with conflict resolution. **Best for:** real-time collaborative apps, offline-first apps that need server sync, apps where 'live UI' matters. **Not for:** simple local persistence without sync — Drift/Isar/Hive are lighter." },
+    { "type": "theory", "markdown": "## Sample program — Realm CRUD + live queries" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml:\n//   dependencies:\n//     realm: ^3.6.0\n//   dev_dependencies:\n//     realm_generator: ^3.6.0\n//     build_runner: ^2.4.13\n\n// user.dart\nimport 'package:realm/realm.dart';\npart 'user.realm.dart';\n\n@RealmModel()\nclass _User {\n  @PrimaryKey() late ObjectId id;\n  late String email;\n  late String name;\n\n  @Indexed() late DateTime createdAt;\n\n  late RealmList<_Order> orders;   // backing model class\n}\n\n@RealmModel()\nclass _Order {\n  @PrimaryKey() late ObjectId id;\n  late int totalCents;\n  late DateTime createdAt;\n}\n\n// Run: dart run realm generate\n// Produces User (public class), UserSchema, etc. from _User.\n\n// ============ Open ============\nimport 'user.realm.dart';\n\nfinal config = Configuration.local([User.schema, Order.schema]);\nfinal realm = Realm(config);\n\n// ============ Write ============\nrealm.write(() {\n  final ada = User(ObjectId(), 'ada@x.com', 'Ada', DateTime.now());\n  realm.add(ada);\n\n  final order = Order(ObjectId(), 4299, DateTime.now());\n  realm.add(order);\n  ada.orders.add(order);\n});\n\n// ============ Query — RESULTS ARE LIVE ============\nfinal activeUsers = realm.all<User>()\n    .query('createdAt > \\$0 SORT(createdAt DESC)', [DateTime(2026, 1, 1)]);\n\n// LIVE: no re-fetch needed. Update any User → activeUsers.length + contents change.\n\n// React to changes\nfinal subscription = activeUsers.changes.listen((changes) {\n  print('inserted: ${changes.inserted}');\n  print('modified: ${changes.modified}');\n  print('deleted:  ${changes.deleted}');\n  print('now ${activeUsers.length} active users');\n});\n\n// ============ Widget consumption ============\n// The idiomatic pattern: pass the RealmResults to a widget; it listens to changes.\nStreamBuilder<RealmResultsChanges<User>>(\n  stream: activeUsers.changes,\n  builder: (ctx, snap) {\n    return ListView.builder(\n      itemCount: activeUsers.length,   // always current — live results\n      itemBuilder: (_, i) => ListTile(title: Text(activeUsers[i].name)),\n    );\n  },\n);\n\n// ============ Update a live object ============\n// Any reference stays in sync — after write, the reference IS the new state.\nrealm.write(() {\n  ada.name = 'Ada Lovelace';\n});\n// Everyone holding `ada` immediately sees the new name. No cache invalidation.\n\n// ============ Threading rules ============\n// Realm objects are tied to their isolate. Cross-isolate: freeze first.\nfinal frozen = ada.freeze();          // snapshot; safe to send to another isolate\nawait Isolate.run(() => processFrozen(frozen));" },
+    { "type": "theory", "markdown": "## Atlas Device Sync — the killer feature (paid)" },
+    { "type": "code", "language": "dart", "code": "// Atlas Device Sync — data automatically syncs between phone, tablet, web, and\n// MongoDB Atlas cloud with conflict resolution. Setup outline:\n\n// 1. Create an App in MongoDB Atlas dashboard; enable Device Sync.\n// 2. Configure schema in Atlas (matches your Realm models).\n// 3. In Flutter:\n\nfinal app = App(AppConfiguration('your-atlas-app-id'));\nfinal user = await app.logIn(Credentials.emailPassword('u@x.com', 'password'));\n\n// Flexible sync — client subscribes to a subset of data.\nfinal config = Configuration.flexibleSync(user, [User.schema, Order.schema]);\nfinal realm = Realm(config);\n\nrealm.subscriptions.update((subs) {\n  subs.add(realm.all<User>(), name: 'all-users');\n  subs.add(realm.query<Order>('owner == \\$0', [user.id]), name: 'my-orders');\n});\nawait realm.subscriptions.waitForSynchronization();\n\n// Writes queue locally when offline; sync when reconnected.\nrealm.write(() {\n  realm.add(Order(ObjectId(), 5000, DateTime.now()));\n});\n\n// Conflict resolution — Atlas uses 'last write wins' by default for scalar fields\n// and CRDTs for lists/counters/collections. Custom logic possible via Atlas Functions.\n\n// This eliminates a LOT of sync-engine work you'd otherwise write yourself.\n// The trade-off is vendor lock-in and per-sync-user pricing." },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Passing Realm objects across isolates without freezing.** Realm objects are isolate-bound. Use `.freeze()` for immutable cross-isolate snapshots." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Writes outside a `realm.write` block.** All mutations must be in a transaction. Setting a property without `write` throws." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Ignoring `client reset` in sync.** Sync schema changes can trigger client reset — your local unsynced writes may be lost. Design your sync migration path carefully." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Not `.close()`-ing the Realm on app shutdown.** Leaks native resources." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Assuming Atlas Sync is free at scale.** Per-user pricing; production costs money. Model your billing carefully." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Complex embedded objects with sync.** Deeply nested objects + sync can have quirks; test edge cases." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Live objects — embrace the pattern.** Your widget listens to `results.changes`; the DB is the source of truth." },
+    { "type": "callout", "variant": "best", "markdown": "**2. All writes in `realm.write` blocks.** Non-negotiable." },
+    { "type": "callout", "variant": "best", "markdown": "**3. `.freeze()` for cross-isolate.** Never send live Realm objects." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Design sync migrations carefully.** Test schema evolution + client reset handling." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Use flexible sync for scale.** Subscribe to just the data this client needs." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Test offline + reconnect.** Verify writes queue locally + sync on reconnect." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Local Realm CRUD.** User model; put + query + observe changes." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Live query bound to widget.** `results.changes` StreamBuilder → auto-refreshing list." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — RQL filters.** Complex queries with SORT + AND + IN." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Atlas Device Sync.** Free-tier Atlas app; sync data between two clients." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Conflict resolution.** Two clients edit same doc offline; reconnect; observe the merge." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is Realm and what makes it different?**\n\n**A:** Realm is an object database with two distinctive features. **(1) Live objects** — queries return references that stay IN SYNC with the DB automatically. Update a User anywhere in your code and every held reference reflects the change immediately. No re-fetching, no manual invalidation. **(2) Optional MongoDB Atlas Device Sync** — bidirectional device ↔ cloud sync with conflict resolution. Original Realm Inc. product; acquired by MongoDB (2019). **Best for:** real-time collaborative apps, offline-first with server sync. **Trade-offs:** paid sync at scale, vendor lock-in to MongoDB Atlas, strict threading rules." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What are live objects?**\n\n**A:** Query results and object references that AUTOMATICALLY reflect changes to the DB. Traditional DBs return snapshots — you fetch, use, re-fetch when stale. In Realm, `realm.all<User>()` returns a `RealmResults` that behaves like a live list — `.length` and `[i]` always reflect the current state. Modify a User anywhere → your reference sees the new value. Combined with `.changes` streams, UI updates without any cache-invalidation code. **The trade-off:** these references are isolate-bound. Cross-isolate → `.freeze()` first for an immutable snapshot. **The killer app:** offline-first + collaborative — the DB is the source of truth, the UI observes it directly." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What is Atlas Device Sync?**\n\n**A:** MongoDB's Realm-based product for syncing data between mobile devices, web clients, and a MongoDB Atlas backend. Setup: create App in Atlas + enable Device Sync + configure schema. In Flutter: `App(AppConfiguration('...'))` + `Realm(Configuration.flexibleSync(user, schemas))`. **Sync semantics:** writes queue locally when offline, sync on reconnect. Conflict resolution automatic (last-write-wins for scalar fields, CRDT-based for lists/counters). **Flexible sync** — clients subscribe to subsets of data. **Trade-offs:** MongoDB Atlas vendor lock-in, per-user pricing at scale. **Best for:** apps where you'd otherwise write custom sync (shared todos, whiteboards, collaborative editing) — Device Sync saves months of infrastructure work." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: When would you use Realm vs Isar/Drift/Hive?**\n\n**A:** **Use Realm when:** you need Atlas Device Sync (multi-device + cloud sync + conflict resolution — the killer feature); real-time collaborative apps where the DB IS the source of truth for the UI. **Use Drift** when you want SQL, migrations, and Flutter-first ecosystem. **Use Isar** when you want NoSQL + high performance + Flutter-native. **Use Hive** for KV persistence only. **Rule:** if you need SYNC, Realm has a strong case (or roll your own with Isar/Drift + a sync layer). Without sync, Realm's live-objects convenience is nice but not worth the vendor lock-in vs the alternatives. Most Flutter apps → Drift or Isar. Sync-heavy apps → Realm." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What are Realm's threading rules?**\n\n**A:** Realm objects and results are LIVE and tied to the isolate where they were created. You cannot send them across isolate boundaries. **To share across isolates:** **(1) `.freeze()`** — creates an immutable snapshot that's safe to send. Data doesn't update. **(2) `.thaw()`** on the target isolate — get a live version rooted in that isolate's Realm. **Alternative:** just send the ObjectId across and re-fetch on the target isolate. **In practice:** most Realm work happens on the UI isolate; use `Isolate.run` for heavy computation and pass frozen data. This is stricter than Drift/Isar and can trip people up. Getting it right requires reading the threading docs once." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Retail POS systems** — offline-first with Atlas Sync for backend reconciliation.\n- **Field service apps** — technicians offline in the field; sync when back on network.\n- **Healthcare** — offline patient records with sync to compliant backend.\n- **Collaborative editing / whiteboards** — Atlas Sync's conflict resolution shines.\n- **NOT for** — apps where you're not going to use sync; Drift/Isar/Hive are lighter." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Flexible sync subscriptions** — clients query subsets of Atlas data.\n- **Partition-based sync** (legacy) — different clients get different partitions.\n- **Custom conflict resolution** — via Atlas Functions.\n- **Schema migrations** — matching client + server schema versions crucial for sync.\n- **Encryption at rest** — enable with `encryptionKey` config option.\n- **Realm Studio** — GUI for inspecting Realm files during dev.\n- **`realm generate`** — codegen command; alternative to `dart run build_runner`.\n- **`.freeze()` + `.thaw()`** — the cross-isolate pattern.\n- **`Results.changes` vs `Realm.subscribe`** — different APIs for reactive updates.\n- **App Services (formerly Realm Sync)** — MongoDB's serverless backend platform." }
   ],
   "flashcards": [
-    { "front": "What are live objects in Realm?", "back": "Query results that auto-update with the DB — reads always see the latest committed state." },
-    { "front": "What is Atlas Device Sync?", "back": "MongoDB's managed sync that keeps Realm data in sync across devices with conflict resolution." },
-    { "front": "Threading rule for Realm?", "back": "Realms and live objects are per-isolate; don't pass live objects between isolates." }
+    { "front": "Realm's superpower?", "back": "Live objects — references auto-sync with DB changes. No re-fetch, no cache invalidation." },
+    { "front": "Sync product?", "back": "MongoDB Atlas Device Sync — bidirectional device ↔ cloud with conflict resolution. Paid at scale." },
+    { "front": "Write rule?", "back": "All writes inside realm.write(() => ...). Non-negotiable." },
+    { "front": "Threading?", "back": "Realm objects are isolate-bound. Cross-isolate = .freeze() → snapshot; .thaw() on target." },
+    { "front": "vs Isar/Drift/Hive?", "back": "Realm's edge is Atlas Device Sync. Without sync, alternatives are lighter." },
+    { "front": "Live query?", "back": "realm.all<T>() returns RealmResults; .changes is a Stream of change deltas." }
   ],
   "quiz": [
-    { "q": "Realm's defining feature is…", "options": ["SQL joins", "Live objects that auto-refresh", "GraphQL native", "Pure Dart no native code"], "answer": 1, "explain": "Live objects reflect DB changes without re-querying." },
-    { "q": "Realm's cloud sync product is…", "options": ["Firebase", "Atlas Device Sync", "Amplify", "Realtime DB"], "answer": 1, "explain": "MongoDB Atlas Device Sync." },
-    { "q": "Live objects across isolates…", "options": ["Are safe", "Are not — snapshot or re-query", "Improve speed", "Are required"], "answer": 1, "explain": "Live objects are tied to the Realm's isolate." }
+    { "q": "Live objects?", "options": ["Manual re-fetch", "Auto-refresh with DB — references stay in sync", "Immutable snapshots", "Cloud-only"], "answer": 1, "explain": "Realm's differentiator." },
+    { "q": "Writes must be…", "options": ["Anywhere", "Inside realm.write(() => ...)", "Async only", "In a subscription"], "answer": 1, "explain": "Realm transactions." },
+    { "q": "Cross-isolate?", "options": ["Just pass the object", ".freeze() for immutable snapshot", "Impossible", "Only ObjectIds"], "answer": 1, "explain": "Realm objects are isolate-bound." },
+    { "q": "Sync product?", "options": ["Free forever", "Atlas Device Sync — paid at scale", "Not offered", "Firebase"], "answer": 1, "explain": "MongoDB-hosted." },
+    { "q": "When Realm over Isar?", "options": ["Always", "When you need Atlas Device Sync", "For pure local", "For SQL"], "answer": 1, "explain": "Sync is the killer feature." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Define a model and CRUD via a local Realm." },
-    { "level": "Medium", "text": "Use RQL to filter and observe changes reactively." },
-    { "level": "Hard", "text": "Model a one-to-many relation and query across it." },
-    { "level": "Expert", "text": "Prototype Atlas Device Sync with two devices and a conflict scenario." }
+    { "level": "Easy", "text": "Local Realm CRUD: User model + put + query." },
+    { "level": "Medium", "text": "Live query bound to widget via results.changes stream." },
+    { "level": "Medium", "text": "RQL: SORT + AND + IN filters." },
+    { "level": "Hard", "text": "Atlas Device Sync between two clients using free-tier Atlas." },
+    { "level": "Hard", "text": ".freeze() + .thaw() for cross-isolate work." },
+    { "level": "Expert", "text": "Simulate conflict: two clients edit same doc offline; reconnect; verify merge." }
   ],
   "interviewQuestions": [
+    "What is Realm and what makes it different?",
     "What are live objects?",
-    "How does Atlas Device Sync work?",
-    "Realm vs Isar/ObjectBox?",
-    "Threading rules in Realm?",
-    "How do you handle conflict resolution?"
+    "What is Atlas Device Sync?",
+    "When would you use Realm vs Isar/Drift/Hive?",
+    "What are Realm's threading rules?"
   ],
   "references": [
-    { "label": "Realm docs", "url": "https://www.mongodb.com/docs/realm/" }
+    { "label": "Realm for Flutter", "url": "https://www.mongodb.com/docs/atlas/device-sdks/sdk/flutter/" },
+    { "label": "realm on pub.dev", "url": "https://pub.dev/packages/realm" }
   ]
 }

@@ -2,51 +2,104 @@
   "id": "db.indexing",
   "levelId": 8,
   "title": "Indexing",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 50,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Choose the right index for a workload",
-    "Understand covering, partial and composite indexes",
-    "Avoid index bloat and write amplification"
+    "Understand indexes via a real-life analogy",
+    "Know the index types: B-tree, hash, composite, covering, partial, GIN, GiST, BRIN",
+    "Design composite indexes using the leftmost-prefix rule",
+    "Read `EXPLAIN` output and know when indexes are (not) used",
+    "Answer indexing interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "An index is a separate data structure (usually a B+ tree) that maps lookup keys to row positions, turning O(n) table scans into O(log n) lookups — at the cost of extra storage and slower writes." },
-    { "type": "table", "headers": ["Type", "Idea", "Use"], "rows": [
-      ["Single-column B-tree", "Ordered on one column", "Equality + range"],
-      ["Composite / compound", "Ordered on multiple columns", "Left-prefix queries"],
-      ["Covering", "Includes all queried columns", "Index-only scan, no row fetch"],
-      ["Partial", "WHERE predicate", "Small subset (deleted_at IS NULL)"],
-      ["Unique", "Enforces uniqueness", "Emails, natural keys"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of a database index as the alphabetical tabs in a phone book.**\n\n- Without tabs, finding 'Ada Lovelace' means reading every entry from A → Ada. In a phone book with 10M entries, that's ~10M page turns.\n- With alphabetical tabs, you jump to 'L' (one tab), then narrow to 'Lovelace' (a few pages). ~30 page turns total.\n- In DB terms: **without an index**, a query for `WHERE name = 'Ada Lovelace'` scans EVERY row (full table scan — O(N)). **With an index** on `name`, it uses a B-tree to find matches in O(log N). On a 10M-row table, that's 20 index lookups vs 10M row reads. **500,000x faster.**\n\n**But indexes aren't free:**\n- Every INSERT/UPDATE/DELETE also updates every index → writes get slower.\n- Each index takes disk space (often 10-30% of the table's size).\n- **10 indexes on one table = 10x the write overhead** and 10x the space.\n\n**The senior skill is knowing WHICH indexes to add.** Not enough → slow queries. Too many → slow writes. The right amount → dramatically faster reads with acceptable write cost. **Every senior DB interview drills this.**\n\nEvery DB engine (MySQL, Postgres, Mongo, SQLite, Isar, Realm) uses the same fundamental idea — a sorted data structure that maps keys to row locations, letting you skip most of the table. The specific TYPE of index (B-tree, hash, GIN, GiST, BRIN) varies by engine and use case, but the ONE core insight is universal: **sacrifice write speed + storage for query speed.**" },
+    { "type": "callout", "variant": "definition", "markdown": "**An index** is an auxiliary data structure (usually a B-tree) that maps sorted keys to row locations. Enables `O(log N)` lookup instead of `O(N)` table scan. Every table has a primary-key index automatically; secondary indexes are added explicitly for common query patterns. **Trade-off:** faster reads, slower writes, more disk space. **The core skill:** knowing which columns need indexes based on your query patterns, verified via `EXPLAIN`." },
+    { "type": "theory", "markdown": "## Index types you'll actually meet" },
+    { "type": "table", "headers": ["Type", "Purpose", "Example DB"], "rows": [
+      ["**B-tree (default)**", "Ordered — equality + range + sort", "Every RDBMS"],
+      ["**Hash**", "Equality only; O(1) but no range", "Rare; Postgres, MongoDB"],
+      ["**Composite (multi-column)**", "Multi-column filter/sort with leftmost-prefix rule", "Every RDBMS"],
+      ["**Covering (INCLUDE)**", "Index has all columns the query needs — no table lookup", "PostgreSQL, SQL Server, MySQL 8+"],
+      ["**Unique**", "Enforces uniqueness + faster lookup", "Every RDBMS"],
+      ["**Partial (filtered)**", "Only rows matching a WHERE — smaller + faster", "Postgres, SQLite, SQL Server"],
+      ["**Full-text**", "Word / token search", "Every RDBMS + Elasticsearch"],
+      ["**GIN**", "Inverted index for arrays, JSONB, full-text", "Postgres"],
+      ["**GiST**", "Range + geospatial (PostGIS)", "Postgres"],
+      ["**BRIN**", "Block-range summaries for huge time-correlated data", "Postgres"]
     ]},
-    { "type": "code", "language": "sql", "code": "-- Composite: leftmost-prefix rule\nCREATE INDEX idx_orders_uid_status ON orders(user_id, status);\n-- Serves: WHERE user_id=? or WHERE user_id=? AND status=?\n-- Not:    WHERE status=?  (skips leftmost)\n\n-- Partial index: hot subset only\nCREATE INDEX idx_active ON orders(user_id) WHERE status='OPEN';\n\n-- Covering (Postgres): include columns without indexing them\nCREATE INDEX idx_cover ON orders(user_id) INCLUDE (total, status);" },
-    { "type": "callout", "variant": "interview", "markdown": "The **leftmost-prefix rule**: a composite index on (A, B, C) serves queries filtering by A, or A+B, or A+B+C — but NOT queries filtering by B alone. Design compound indexes to match your top queries in that order." },
-    { "type": "callout", "variant": "mistake", "markdown": "Indexing every column 'just in case.' Each index slows every INSERT/UPDATE/DELETE and eats storage. Measure query patterns first; add indexes to real slow queries." },
-    { "type": "callout", "variant": "tip", "markdown": "Use EXPLAIN/EXPLAIN ANALYZE to confirm the index is used (index scan, not seq scan). Watch for **index bloat** in Postgres; rebuild/repack when needed." }
+    { "type": "theory", "markdown": "## The leftmost-prefix rule (composite indexes)" },
+    { "type": "code", "language": "sql", "code": "-- Index on (user_id, created_at, status):\nCREATE INDEX idx_orders_user_created_status ON orders (user_id, created_at, status);\n\n-- SERVES these queries (uses the index):\nSELECT * FROM orders WHERE user_id = 42;                                      -- ✓ leftmost\nSELECT * FROM orders WHERE user_id = 42 AND created_at >= '2026-01-01';       -- ✓ leftmost + 2nd\nSELECT * FROM orders WHERE user_id = 42 AND created_at BETWEEN ? AND ?;       -- ✓\nSELECT * FROM orders WHERE user_id = 42 AND created_at = ? AND status = ?;    -- ✓ all three\nSELECT * FROM orders WHERE user_id = 42 ORDER BY created_at DESC;             -- ✓ (also for sort)\n\n-- DOES NOT SERVE (full table scan):\nSELECT * FROM orders WHERE created_at >= '2026-01-01';                        -- ✗ skips leftmost\nSELECT * FROM orders WHERE status = 'paid';                                   -- ✗\nSELECT * FROM orders WHERE user_id = 42 AND status = 'paid';                  -- ✗ skips middle\n\n-- Rule: the index is a sorted list keyed by concatenation (user_id, created_at, status).\n-- You can only navigate it starting from the LEFT. Skipping any column loses ordering.\n\n-- The one exception: if the LEFT column has few distinct values,\n-- an 'index skip scan' can sometimes help — but don't rely on it.\n\n-- Composite index design:\n--   1. Column most-often filtered → leftmost.\n--   2. Column filtered by equality → before column filtered by range.\n--   3. Column used for ORDER BY → align direction (ASC/DESC).\n--   4. Trailing columns for covering (INCLUDE).\n\n-- Example decision: 'top 20 recent orders for a user'\n--   SELECT id, total FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 20;\n-- Best index:\n--   CREATE INDEX idx_orders_user_created ON orders (user_id, created_at DESC) INCLUDE (id, total);\n-- Includes = 'covering'. The query is served ENTIRELY from the index — no table read." },
+    { "type": "theory", "markdown": "## Reading EXPLAIN — the essential DB skill" },
+    { "type": "code", "language": "sql", "code": "-- Postgres:\nEXPLAIN (ANALYZE, BUFFERS) SELECT * FROM orders WHERE user_id = 42 AND created_at > '2026-01-01';\n\n-- Good plan (uses index):\n--   Index Scan using idx_orders_user_created on orders  (cost=0.29..8.31 rows=1 width=32)\n--     Index Cond: ((user_id = 42) AND (created_at > '2026-01-01'::date))\n--   Planning Time: 0.123 ms\n--   Execution Time: 0.045 ms\n\n-- Bad plan (full table scan):\n--   Seq Scan on orders  (cost=0.00..2540.00 rows=1 width=32)\n--     Filter: ((user_id = 42) AND (created_at > '2026-01-01'::date))\n--     Rows Removed by Filter: 199999\n--   Planning Time: 0.089 ms\n--   Execution Time: 245.678 ms   ← 5000x slower!\n\n-- What to look for:\n--   * 'Index Scan' or 'Index Only Scan' → good, uses your index.\n--   * 'Seq Scan' → full table scan; missing/wrong index or query defeats it.\n--   * 'Bitmap Index Scan' → useful for OR conditions or multi-index queries.\n--   * 'rows=X' vs actual rows → optimizer's estimate; VACUUM ANALYZE if wildly off.\n--   * 'Rows Removed by Filter' → indicates non-selective filtering after scanning.\n\n-- MySQL: EXPLAIN outputs 'type': ref/range/index/ALL. 'ALL' = full scan (bad).\n-- SQLite: EXPLAIN QUERY PLAN shows 'SCAN' (bad) vs 'SEARCH' (uses index).\n\n-- The senior skill: run EXPLAIN on your slow queries; understand which indexes are\n-- used and which aren't; add the right indexes; re-run to verify improvement." },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Function on the column in WHERE.** `WHERE LOWER(email) = 'ada@x.com'` — the function on `email` disables the index. Store emails lowercased, or use a functional index." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Leading wildcard `LIKE '%foo%'`.** B-tree indexes are useless with a leading `%`. Use `LIKE 'foo%'` (index-friendly) or full-text search / trigram indexes." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Indexing every column.** Every index slows writes. Add indexes based on real query patterns, not 'just in case'." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Wrong column order in composite.** Index on `(status, user_id)` won't serve `WHERE user_id = 42` — the leftmost is `status`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Ignoring maintenance.** Autovacuum in Postgres, `ANALYZE TABLE` in MySQL — keeps statistics fresh so the planner picks good plans." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Forgetting foreign key indexes.** MySQL doesn't auto-index FK columns; a `JOIN` on an unindexed FK is a table scan." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Data-type mismatch.** `WHERE user_id = '42'` (string) vs `user_id BIGINT` may skip the index due to implicit conversion." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Index every foreign key + every WHERE / JOIN / ORDER BY column** used in a hot query." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Composite indexes for AND queries.** Equality first, range next, sort last." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Covering indexes for critical read paths.** `INCLUDE (columns)` — no table lookup." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Verify with EXPLAIN.** Never guess — measure." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Partial indexes for skewed data.** `WHERE status = 'active'` — smaller + faster than full." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Remove unused indexes.** `pg_stat_user_indexes` shows idle indexes." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Consider `CREATE INDEX CONCURRENTLY`** (Postgres) or `pt-online-schema-change` (MySQL) for production adds." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Reindex bloated indexes.** Postgres `REINDEX INDEX name;`, MySQL `OPTIMIZE TABLE`." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — EXPLAIN a slow query.** Take a query on a 1M-row table with no relevant index; observe Seq Scan; add index; observe Index Scan." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Composite design.** For 'top 20 recent orders per user', design the composite; verify it serves the query." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Covering index.** `INCLUDE` to eliminate the table lookup; observe 'Index Only Scan'." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Function-index gotcha.** Deliberately write `LOWER(email)`; observe full scan; fix with a functional index." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard) — Partial index.** Only index active users (`WHERE is_active = TRUE`); measure size + query speed." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert) — Live index add.** `CREATE INDEX CONCURRENTLY` on a 100M-row table under load; no downtime; verify." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is a database index and what's the trade-off?**\n\n**A:** An index is an auxiliary data structure (usually a B-tree) that maps SORTED keys to row locations. Enables `O(log N)` lookup instead of `O(N)` full-table scan. **Trade-off:** faster reads, but every INSERT/UPDATE/DELETE also updates the index → writes slower; each index takes disk space. **Rule:** add indexes based on ACTUAL query patterns, verified with `EXPLAIN`. Don't add speculatively; don't skip indexes on frequently-queried columns. This is the fundamental knob in DB performance. **Every senior DB question tests understanding of this trade-off.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What's the leftmost-prefix rule?**\n\n**A:** A composite index on `(A, B, C)` is a sorted list keyed by the concatenation `A|B|C`. You can navigate it starting from A. **Serves queries filtering on:** A alone, `A AND B`, `A AND B AND C`, and any of these plus an ORDER BY starting with A. **Doesn't serve:** filters that skip A — `WHERE B = ?`, `WHERE C = ?`, `WHERE B = ? AND C = ?`. Skipping the left prefix means you lose the sort order the index provides. **Design implication:** put the most-selective / most-often-filtered column FIRST. Range filters last (they can't be followed by equality filters using the index). Order-by columns should align with the composite for zero-cost sorting. **The single most-tested rule in DB interviews.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What's a covering index?**\n\n**A:** An index that includes ALL the columns a query needs — so the DB can answer the query ENTIRELY from the index without looking up the row. **Syntax:** `CREATE INDEX ix ON orders (user_id, created_at) INCLUDE (id, total)`. The `INCLUDE` clause adds columns to the index leaf pages without affecting the ordering. **EXPLAIN shows 'Index Only Scan'** — dramatically faster than 'Index Scan' + row lookup. **When:** critical read paths where you want the fastest possible query. **Trade-off:** larger index size; still updated on every INSERT/UPDATE. **Best for:** hot lists like feeds, dashboards, top-N queries. **Postgres syntax:** `INCLUDE`. MySQL 8+: also supports it. Older MySQL: implied by putting all needed columns in the index (before INCLUDE existed)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: When does a query NOT use an index?**\n\n**A:** Several patterns disable indexes: **(1) Function on the indexed column** — `WHERE LOWER(email) = ?` uses the function output, not the raw column. Fix: functional index or store normalized values. **(2) Leading wildcard `LIKE '%foo%'`** — B-tree can't seek arbitrary substrings. Fix: full-text or trigram indexes. **(3) Implicit type conversion** — `WHERE user_id = '42'` on a BIGINT column. Fix: pass the right type. **(4) Low-selectivity index** — if 40% of the table matches, the planner may prefer a seq scan. Fix: partial index. **(5) Wrong column order in composite** — leftmost-prefix rule violated. **(6) OR conditions across different indexes** — sometimes; watch out. **(7) Stale statistics** — planner picks bad plan. Fix: `VACUUM ANALYZE` (Postgres) / `ANALYZE TABLE` (MySQL). **Diagnose with EXPLAIN.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What are Postgres's GIN, GiST, and BRIN indexes?**\n\n**A:** Beyond B-tree, Postgres offers specialized index types. **GIN (Generalized Inverted Index)** — for arrays, JSONB, full-text search. Slow to update (rebuilds inverted structures) but fast to search. Perfect for `WHERE data @> '{...}'` on JSONB. **GiST (Generalized Search Tree)** — for range types, geospatial (PostGIS), full-text with proximity. Balanced tree with custom compare functions per type. **BRIN (Block Range Index)** — TINY index for very large tables where rows correlate with insertion order (log data, time series). Only stores min/max per block range (e.g., 128 pages). MUCH smaller than B-tree; only useful when the correlation is strong. **Rule:** default to B-tree. Reach for GIN on JSONB / arrays / full-text. GiST for geospatial. BRIN for huge append-heavy tables. Knowing these separates a Postgres user from a Postgres expert." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How do you decide whether to add an index?**\n\n**A:** Data-driven: **(1) Identify the slow queries** — enable slow query log; use `pg_stat_statements` (Postgres) or MySQL's slow log. **(2) `EXPLAIN` each slow query** — is it doing a Seq Scan / full table scan? On what column? **(3) Design the index** — leftmost-prefix rule; equality-then-range; consider covering. **(4) Add via `CREATE INDEX CONCURRENTLY`** (Postgres) to avoid table lock. **(5) Re-`EXPLAIN`** — verify Index Scan; measure new time. **(6) Monitor unused indexes** — `pg_stat_user_indexes` shows idle ones; drop them (they cost write throughput). **Never guess** — always measure. This entire loop is the daily practice of senior DBAs and backend engineers." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every RDBMS interview** — expect deep index questions.\n- **Backend performance work** — 90% is index tuning + query rewriting.\n- **DBs at scale (Twitter, Facebook)** — index design shapes the entire schema.\n- **Postgres extensions** — pg_stat_statements automates slow-query discovery.\n- **NOT for** — full-text search at scale (use Elasticsearch), massive analytics (use ClickHouse / BigQuery)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`EXPLAIN (ANALYZE, BUFFERS)`** — real execution + buffer stats.\n- **`pg_hint_plan`** — force specific plans (careful).\n- **`hypopg`** — Postgres extension for hypothetical index testing.\n- **`pt-index-usage`** (Percona) — analyzes MySQL slow log for index recommendations.\n- **`CREATE INDEX CONCURRENTLY`** — zero-downtime index add in Postgres.\n- **`REINDEX CONCURRENTLY`** — rebuild bloated indexes online.\n- **Invisible indexes** (MySQL 8+) — mark index as invisible to test if removal is safe.\n- **`ANALYZE`** — refresh statistics for the query planner.\n- **Multi-column histograms** — advanced planner statistics.\n- **Foreign key indexes** — Postgres auto-indexes primary keys but NOT foreign key targets; add manually.\n- **Include vs implicit covering** — `INCLUDE` doesn't affect ordering; just adds columns for coverage.\n- **`pg_stat_user_indexes.idx_scan = 0`** — the index is never used; consider dropping.\n- **Extension: `pg_repack`** — online index/table rebuild.\n- **`ALTER INDEX ... RENAME`** — atomic rename." }
   ],
   "flashcards": [
-    { "front": "Leftmost-prefix rule?", "back": "A composite index (A,B,C) serves queries on A, A+B, A+B+C — not B alone or C alone." },
-    { "front": "What is a covering index?", "back": "One that includes all columns a query needs, letting the DB answer without reading the row (index-only scan)." },
-    { "front": "Why not index everything?", "back": "Every index slows writes and eats storage; add indexes to real hot queries." }
+    { "front": "Index trade-off?", "back": "Faster reads (O(log N) vs O(N)); slower writes; more disk space. Add based on query patterns." },
+    { "front": "Leftmost-prefix rule?", "back": "Index on (A,B,C) serves A, (A,B), (A,B,C) — NEVER B alone or (B,C)." },
+    { "front": "Covering index?", "back": "Includes all columns query needs. EXPLAIN shows 'Index Only Scan'. No table lookup." },
+    { "front": "Index disabled by?", "back": "Function on column, leading wildcard LIKE '%x', implicit type conversion, low selectivity." },
+    { "front": "Postgres advanced indexes?", "back": "GIN (JSONB/arrays/full-text), GiST (geospatial/ranges), BRIN (huge time-series). B-tree is default." },
+    { "front": "Verify with?", "back": "EXPLAIN — look for 'Index Scan' good, 'Seq Scan' bad." },
+    { "front": "Live index add?", "back": "CREATE INDEX CONCURRENTLY (Postgres) — no table lock." }
   ],
   "quiz": [
-    { "q": "An index on (user_id, status) does NOT help…", "options": ["WHERE user_id=?", "WHERE user_id=? AND status=?", "WHERE status=?", "None of the above"], "answer": 2, "explain": "Leftmost prefix — status alone can't use the index." },
-    { "q": "A covering index enables…", "options": ["Faster writes", "Index-only scans without row lookups", "Fewer transactions", "Better locking"], "answer": 1, "explain": "All needed columns are in the index." },
-    { "q": "Partial indexes are useful when…", "options": ["Small, frequently queried subsets exist", "You want to slow writes", "You have no schema", "You can't use B-trees"], "answer": 0, "explain": "Index only the rows matching a predicate." }
+    { "q": "Index on (A,B,C) serves?", "options": ["A, B, C alone", "A / (A,B) / (A,B,C) — leftmost prefix only", "Any subset", "C alone"], "answer": 1, "explain": "Sort order requires starting from leftmost." },
+    { "q": "Full table scan in EXPLAIN?", "options": ["Index Scan", "Seq Scan", "Index Only Scan", "Bitmap Index Scan"], "answer": 1, "explain": "Bad — missing index or query defeats it." },
+    { "q": "LOWER(email) in WHERE?", "options": ["Fine — index still used", "Disables index on email; use functional index or normalize", "Faster", "Required"], "answer": 1, "explain": "Function on column defeats the index." },
+    { "q": "Postgres JSONB queries?", "options": ["B-tree", "GIN", "Hash", "BRIN"], "answer": 1, "explain": "Inverted index for keys/paths." },
+    { "q": "Zero-downtime index add?", "options": ["Always locks", "CREATE INDEX CONCURRENTLY (Postgres)", "Impossible", "Only replicas"], "answer": 1, "explain": "Standard modern pattern." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Add a single-column B-tree; prove the plan uses it with EXPLAIN." },
-    { "level": "Medium", "text": "Add a composite matching a top query; test with/without." },
-    { "level": "Hard", "text": "Convert a slow query into an index-only scan with a covering index." },
-    { "level": "Expert", "text": "Detect bloat and rebuild/repack indexes without downtime." }
+    { "level": "Easy", "text": "EXPLAIN a query on a 100k-row table; add index; observe plan change." },
+    { "level": "Easy", "text": "Create a unique index on email; test that duplicate insert fails." },
+    { "level": "Medium", "text": "Composite index (user_id, created_at DESC) — verify it serves 'top 20 recent per user'." },
+    { "level": "Medium", "text": "Covering index with INCLUDE — verify 'Index Only Scan' in EXPLAIN." },
+    { "level": "Hard", "text": "Function-index gotcha: LOWER(email) query; observe full scan; fix with functional index." },
+    { "level": "Hard", "text": "Partial index WHERE is_active=TRUE; measure size vs full index." },
+    { "level": "Expert", "text": "CREATE INDEX CONCURRENTLY on a 100M-row table under load; no downtime." }
   ],
   "interviewQuestions": [
-    "How does a B-tree index work?",
-    "Explain the leftmost-prefix rule.",
-    "What is a covering index?",
-    "When use partial indexes?",
-    "Why is indexing every column bad?"
+    "What is a database index and what's the trade-off?",
+    "What's the leftmost-prefix rule?",
+    "What's a covering index?",
+    "When does a query NOT use an index?",
+    "What are Postgres's GIN, GiST, and BRIN indexes?",
+    "How do you decide whether to add an index?"
   ],
   "references": [
-    { "label": "Use The Index, Luke!", "url": "https://use-the-index-luke.com" }
+    { "label": "Use The Index, Luke!", "url": "https://use-the-index-luke.com" },
+    { "label": "Postgres index types", "url": "https://www.postgresql.org/docs/current/indexes-types.html" }
   ]
 }
