@@ -2,51 +2,104 @@
   "id": "be.docker",
   "levelId": 7,
   "title": "Docker",
-  "xp": 50,
-  "estimatedMinutes": 30,
+  "xp": 45,
+  "estimatedMinutes": 35,
   "objectives": [
-    "Distinguish images, containers, and layers",
-    "Write a small, secure Dockerfile",
-    "Use compose for local multi-service dev"
+    "Understand Docker via a real-life analogy",
+    "Distinguish images, containers, layers, volumes, networks",
+    "Write a production-grade multi-stage Dockerfile",
+    "Use docker-compose for local multi-service dev",
+    "Answer Docker interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Docker packages an app and its dependencies into a portable **image** that runs as an isolated **container** using Linux namespaces + cgroups. It solves 'works on my machine' by making the environment part of the artifact." },
-    { "type": "table", "headers": ["Concept", "Meaning"], "rows": [
-      ["Image", "Read-only template built in layers"],
-      ["Container", "A running instance of an image"],
-      ["Dockerfile", "Recipe to build an image"],
-      ["Volume", "Persistent storage outside the container"],
-      ["Compose", "Multi-service local orchestration (yaml)"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Docker as shipping containers for software.**\n\n- Before shipping containers (1950s), moving cargo was chaos — every ship was custom-loaded, every dock had its own cranes, every truck had its own dimensions. A crate that fit in one truck was too big for another. Delays were massive; theft was rampant; unloading took days.\n- **The standardized shipping container** changed everything. Same box, same corners, same locks. Any crane, any truck, any ship can move it. What's INSIDE the container is your business — cars, refrigerators, tea. The container's OUTSIDE is standard.\n- **Docker containers** do the same for software. Your app + all its dependencies (Java 21, specific curl version, specific timezone data, config files, everything except the OS kernel) are packaged into a standard IMAGE. Any machine with Docker installed can run any image identically — laptop, staging server, production Kubernetes.\n\n**Concretely:** Docker packages your app into an IMAGE (a layered filesystem + start command). You run an image to create a CONTAINER (a process isolated by Linux namespaces + cgroups). The container thinks it has its own filesystem, network, PID space — but shares the host kernel (unlike a VM). Result: startup in milliseconds, image sizes in MB, thousands of containers per host.\n\n**Why it dominates:** every non-trivial backend in the last 10 years ships as a Docker image. Kubernetes assumes it. CI/CD pipelines build/push it. 'Works on my machine' died the day teams started using Docker. **Learn Docker deeply; every ops-adjacent role expects it.**" },
+    { "type": "callout", "variant": "definition", "markdown": "**Docker** is a platform for building, shipping, and running applications as **containers** — lightweight, isolated processes sharing the host OS kernel. Built on Linux **namespaces** (process/network/filesystem isolation) and **cgroups** (CPU/memory limits). Core concepts: **image** (immutable layered filesystem template), **container** (running instance of an image), **Dockerfile** (recipe for building an image), **registry** (image storage — Docker Hub, ECR, GHCR), **volume** (persistent data outside the container's writable layer), **network** (virtual networks between containers). Introduced 2013; standard for backend deployment since ~2016." },
+    { "type": "theory", "markdown": "## The four things you'll use every day" },
+    { "type": "table", "headers": ["Concept", "Purpose", "Command example"], "rows": [
+      ["**Image**", "Immutable, layered app package", "`docker pull node:22-alpine`"],
+      ["**Container**", "Running instance of an image", "`docker run -d node:22-alpine`"],
+      ["**Dockerfile**", "Recipe for building images", "`docker build -t myapp:1.0 .`"],
+      ["**Registry**", "Where images live", "`docker push registry.io/myapp:1.0`"],
+      ["**Volume**", "Persistent data outside container's layer", "`docker run -v ./data:/app/data`"],
+      ["**Network**", "Virtual networking between containers", "`docker network create appnet`"],
+      ["**docker-compose**", "Define multi-container apps declaratively", "`docker compose up -d`"]
     ]},
-    { "type": "code", "language": "docker", "code": "# Multi-stage: build small, run smaller\nFROM eclipse-temurin:21-jdk AS build\nWORKDIR /src\nCOPY . .\nRUN ./gradlew bootJar\n\nFROM eclipse-temurin:21-jre-alpine\nWORKDIR /app\nCOPY --from=build /src/build/libs/*.jar app.jar\nUSER 1000\nEXPOSE 8080\nENTRYPOINT [\"java\",\"-jar\",\"/app/app.jar\"]" },
-    { "type": "callout", "variant": "interview", "markdown": "**Layer caching** = Dockerfile performance. Docker caches each instruction as a layer; changing an earlier line invalidates all following. Copy `pom.xml`/`package.json` and install deps BEFORE copying source, so a code change doesn't reinstall the world." },
-    { "type": "callout", "variant": "mistake", "markdown": "Running as root inside containers, or shipping a 1GB image because you baked JDK+build tools into the runtime layer. Use multi-stage builds + a small base (alpine/distroless) + a non-root USER." },
-    { "type": "callout", "variant": "best", "markdown": "Pin base images by tag/digest, add `.dockerignore` (skip .git, node_modules), define a HEALTHCHECK, and scan images (Trivy/Grype) in CI. Never bake secrets into images — use env or a secret manager at runtime." }
+    { "type": "theory", "markdown": "## Sample program — production-grade multi-stage Dockerfile" },
+    { "type": "code", "language": "dockerfile", "code": "# Dockerfile — multi-stage build for a Spring Boot app.\n# Multi-stage separates the BUILD environment (heavy — JDK + Gradle + sources)\n# from the RUNTIME (small — JRE only). Final image is 10x smaller.\n\n# ---------- STAGE 1: build ----------\nFROM eclipse-temurin:21-jdk-alpine AS build\nWORKDIR /src\n\n# Copy dependency manifests first — layer caching means Gradle downloads only re-run\n# if these change. Copying sources later ensures code edits don't invalidate deps.\nCOPY gradlew settings.gradle build.gradle ./\nCOPY gradle ./gradle\nRUN ./gradlew --no-daemon dependencies || true\n\nCOPY src ./src\nRUN ./gradlew --no-daemon bootJar\n\n# ---------- STAGE 2: runtime ----------\nFROM eclipse-temurin:21-jre-alpine\n\n# Non-root user — never run as root in prod containers.\nRUN addgroup -S app && adduser -S app -G app\nWORKDIR /app\nUSER app\n\n# Copy JUST the fat jar from the build stage.\nCOPY --from=build --chown=app:app /src/build/libs/*.jar app.jar\n\n# Environment: JVM heap sensible for containers.\nENV JAVA_OPTS=\"-XX:MaxRAMPercentage=75.0 -XX:+UseZGC\"\n\n# Health check — Kubernetes and monitors use this.\nHEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \\\n  CMD wget -q --spider http://localhost:8080/actuator/health || exit 1\n\nEXPOSE 8080\n\n# ENTRYPOINT with exec form — signals (SIGTERM) forwarded correctly to Java.\nENTRYPOINT [\"sh\", \"-c\", \"java $JAVA_OPTS -jar app.jar\"]\n\n# Result:\n#   docker build -t myapp:1.0 .\n#   docker image ls  → ~180MB (vs ~800MB with JDK)\n#   docker run -p 8080:8080 --rm myapp:1.0" },
+    { "type": "theory", "markdown": "## docker-compose — the local-dev workhorse" },
+    { "type": "code", "language": "yaml", "code": "# compose.yaml — multi-container app for local development.\nname: myapp-dev\n\nservices:\n  app:\n    build: .\n    ports:\n      - \"8080:8080\"\n    environment:\n      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/myapp\n      SPRING_DATASOURCE_USERNAME: myapp\n      SPRING_DATASOURCE_PASSWORD: dev\n      SPRING_REDIS_HOST: redis\n    depends_on:\n      postgres:\n        condition: service_healthy\n      redis:\n        condition: service_healthy\n\n  postgres:\n    image: postgres:16-alpine\n    environment:\n      POSTGRES_DB: myapp\n      POSTGRES_USER: myapp\n      POSTGRES_PASSWORD: dev\n    ports:\n      - \"5432:5432\"\n    volumes:\n      - pgdata:/var/lib/postgresql/data     # named volume — survives compose down\n    healthcheck:\n      test: [\"CMD-SHELL\", \"pg_isready -U myapp\"]\n      interval: 5s\n      timeout: 3s\n      retries: 5\n\n  redis:\n    image: redis:7-alpine\n    ports:\n      - \"6379:6379\"\n    healthcheck:\n      test: [\"CMD\", \"redis-cli\", \"ping\"]\n      interval: 5s\n      timeout: 3s\n      retries: 5\n\nvolumes:\n  pgdata:\n\n# Run:\n#   docker compose up -d          # start everything\n#   docker compose logs -f app    # tail app logs\n#   docker compose exec postgres psql -U myapp    # shell into postgres\n#   docker compose down           # stop; keep volumes\n#   docker compose down -v        # stop; DELETE volumes (fresh start)" },
+    { "type": "theory", "markdown": "## Layer caching — the biggest perf win to understand" },
+    { "type": "code", "language": "text", "code": "Dockerfile builds are LAYERED. Each instruction (COPY, RUN, etc.) creates a layer.\nDocker CACHES layers. If a layer's input hasn't changed, Docker reuses the cached\nlayer instead of re-running the command.\n\nBAD ordering — one line change invalidates everything:\n\n  COPY . .                      # entire source tree — changes every edit\n  RUN npm install                # re-runs on EVERY code change (slow)\n\nGOOD ordering — copy files that change RARELY first:\n\n  COPY package.json package-lock.json ./     # rarely changes\n  RUN npm install                             # cached unless package files change\n  COPY . .                                     # source last\n\nRule: put SLOW, RARELY-CHANGING steps at the TOP.\nPut FAST, FREQUENTLY-CHANGING steps at the BOTTOM.\n\nBuild time drops from '3 minutes every edit' to '3 seconds every edit'." },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Running as root.** Default Docker containers run as UID 0. If someone escapes the container, they're root on the host. Always `USER app` (non-root) in your Dockerfile." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: `latest` tag in production.** Which version is running? Impossible to say. Pin explicit versions: `myapp:1.2.3`, not `myapp:latest`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: No multi-stage builds.** Shipping a 1GB image with the entire JDK + Gradle. Runtime doesn't need those — use a small runtime base." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Storing state in the container.** Containers are EPHEMERAL. Any writes to the container's writable layer die on restart. Use volumes / external DBs for persistence." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Secrets baked into images.** `ENV DB_PASSWORD=hunter2` — anyone who pulls your image can `docker inspect` and see it. Inject at runtime (env vars, Docker secrets, K8s Secrets)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: No `.dockerignore`.** Every build ships your `.git/`, `node_modules/`, `target/`, `.env`. Big context, slow builds, potential secret leaks. Write `.dockerignore` like `.gitignore`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Ignoring image size.** 1.5GB base image = slow deploys + big attack surface. Use `-alpine` or distroless variants; strip debug tools." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Multi-stage builds.** JDK for build, JRE (or distroless) for runtime. 10x smaller." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Non-root user.** `USER app` (not root)." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Pin explicit versions.** `alpine:3.20` not `alpine:latest`. Reproducible builds." },
+    { "type": "callout", "variant": "best", "markdown": "**4. `.dockerignore` file.** Exclude `.git/`, `node_modules/`, `build/`, secrets." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Layer caching order.** Rarely-changing files first (`package.json`), then `RUN install`, then source." },
+    { "type": "callout", "variant": "best", "markdown": "**6. HEALTHCHECK.** K8s + monitors use it to know if the app is truly ready." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Signal handling.** Use `exec` form of ENTRYPOINT so SIGTERM reaches your app. `[\"java\", \"-jar\", \"app.jar\"]`." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Scan images.** Trivy, Snyk, Docker Scout — catch CVEs before deploy." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Hello world image.** `FROM alpine` + `CMD echo hello`. Build, run, verify output." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Multi-stage Java build.** Dockerfile that builds a Spring Boot jar in stage 1 and runs it on JRE in stage 2. Measure image sizes before/after." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — docker-compose stack.** App + Postgres + Redis with healthchecks; verify `depends_on: service_healthy` works." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Named volume for Postgres.** Add data, restart, verify persistence. Use `docker compose down -v` to wipe and confirm fresh state." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard) — Optimize layer caching.** Measure build time for a code-only change with bad vs good Dockerfile ordering." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert) — Distroless image + Trivy scan.** Move to `gcr.io/distroless/java-base`; scan with Trivy; fix any CVEs found." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is Docker and how is it different from a VM?**\n\n**A:** Docker is a platform for packaging apps as **containers** — lightweight isolated processes sharing the host OS KERNEL. **Difference from VMs:** a VM runs a full guest OS (kernel + userland) on top of a hypervisor — heavy (GBs), slow to start (minutes), full isolation. A container is just a PROCESS with its own filesystem, network, and PID namespace, sharing the host kernel — lightweight (MBs), starts in ms, 'strong-enough' isolation. **Trade-off:** VMs give hardware-level isolation (safer for untrusted multi-tenant); containers give speed + density (thousands per host). **In practice:** modern backends run in containers; VMs are used for infrastructure (host the container engine) or when you need full OS isolation." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What is a Docker image vs a container?**\n\n**A:** An **image** is an IMMUTABLE, layered filesystem template plus metadata (default command, exposed ports, environment). Think 'blueprint' or 'installer'. A **container** is a RUNNING INSTANCE of an image — a live process with its own writable layer on top. **Analogy:** image is like a class; container is like an object. You can create many containers from one image. Containers share the underlying image's layers (efficient — the JVM base layer is shared across every Spring Boot container on the host). **Lifecycle:** `docker build` produces images; `docker run` creates + starts containers; `docker ps` lists running; `docker exec` runs a command inside; `docker stop`/`rm` cleans up." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What is a multi-stage Dockerfile?**\n\n**A:** A Dockerfile with multiple `FROM` statements — each starts a new BUILD STAGE. You typically use a HEAVY stage (JDK + Gradle) to compile, then COPY the artifact into a LIGHTER stage (JRE only, or distroless). The final image contains ONLY the runtime stage — build tools are discarded. **Why:** dramatically smaller images (a Spring Boot image drops from ~800MB to ~180MB). Smaller images = faster pull/push, smaller attack surface, faster K8s scheduling. **Syntax:** `FROM ... AS build`, then `FROM ... COPY --from=build /path/to/artifact /app`. Standard practice for any production Dockerfile since ~2017." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How does Docker layer caching work?**\n\n**A:** Each Dockerfile instruction (`COPY`, `RUN`, `ENV`, etc.) produces a LAYER. Docker caches layers based on the instruction's INPUTS. When building, Docker checks: for each layer, are the inputs (previous layer hash + instruction + files copied) the same as last time? If yes → REUSE the cached layer. If no → re-run this instruction AND every layer after it. **Optimization:** put SLOW + RARELY-CHANGING steps FIRST. Example: `COPY package.json` + `RUN npm install` BEFORE `COPY .`. If only source changes, `npm install` layer is cached — build takes seconds instead of minutes. **Killer mistake:** `COPY . .` before `RUN npm install` invalidates dependencies on every code edit. This ONE ordering rule saves hours per week." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What's the difference between a volume and a bind mount?**\n\n**A:** Both persist data outside the container's writable layer. **Volume** — managed by Docker (`docker volume create data`; `-v data:/app/data`). Stored in Docker's storage location (`/var/lib/docker/volumes/`). Preferred for production. Portable across environments. **Bind mount** — maps a HOST path to a container path (`-v /home/me/code:/app`). Useful for dev (edit code on host, container sees changes live) or for shared filesystems. Less portable — host path must exist. **Rule:** volumes for persistent app data (Postgres, uploaded files); bind mounts for dev-only source editing. **Anonymous volumes** (`-v /app/data` with no name) are created on the fly and orphaned when the container is removed — mostly a mistake." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How do you keep secrets out of Docker images?**\n\n**A:** **Never bake them in.** `ENV DB_PASSWORD=hunter2` or `COPY .env /app/` is a leak. Anyone who pulls your image can `docker inspect` or extract layers and find them. **Options:** **(1) Environment variables at runtime** — `docker run -e DB_PASSWORD=$SECRET` with the secret from your deployment platform (K8s Secrets, HashiCorp Vault). **(2) Docker secrets** (Swarm) — mounted as tmpfs files at `/run/secrets/`. **(3) K8s Secrets** — mounted as env or files at container start. **(4) External secret manager** — app fetches secrets from Vault/AWS Secrets Manager at startup. **(5) BuildKit `--secret` mount** — a secret available ONLY during `RUN` steps and NOT persisted in image layers. **Rule:** the image is public information. Never put secrets there." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: What's docker-compose and when do you use it?**\n\n**A:** `docker-compose` (now `docker compose` — built into Docker CLI since 2022) is a tool for defining and running MULTI-CONTAINER apps declaratively via a YAML file. You define services (app, database, cache, message broker), their networks, volumes, environment. `docker compose up -d` starts them all with correct dependencies. **When:** primarily for LOCAL DEVELOPMENT (spin up your app + Postgres + Redis with one command) and CI (integration tests against real dependencies). **Also for:** small deployments (single-host, 5-10 containers). **When NOT:** production at scale — use Kubernetes. Compose has no cluster support, no rolling deploys, no autoscaling. Rule: `docker compose up` for laptop; K8s for prod." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every non-trivial backend** ships as a Docker image.\n- **Kubernetes** assumes container images (OCI format = Docker + others).\n- **CI/CD** builds images on every commit; pushes to a registry (Docker Hub, GHCR, ECR, GCR).\n- **Local dev** — `docker compose up` for the whole app stack.\n- **Testing** — Testcontainers spins up real Postgres/Kafka/Redis for integration tests.\n- **Alternatives** — Podman (rootless, daemonless), containerd (Docker's underlying runtime), OCI standards mean images work across all of them." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **BuildKit** — the modern Docker build backend; enables `--secret`, `--ssh`, parallel stages, faster caching.\n- **`.dockerignore`** — exclude files from build context (`.git`, `node_modules`, build artifacts).\n- **Distroless images** — Google's minimal images with NO shell, NO package manager. Just your app + runtime.\n- **Non-root by default** — many modern base images (`node:22-alpine`) now include a `node` user; use it.\n- **`--platform`** — build for arm64 or amd64 explicitly; matters for M-series Macs.\n- **Multi-arch images** — one tag, multiple architectures; `docker buildx build --platform linux/amd64,linux/arm64`.\n- **`docker system prune`** — reclaim disk from stopped containers, unused images, dangling layers.\n- **Registry proxies** — pull-through cache for offline / slow-network builds.\n- **Container escape CVEs** — patch your Docker engine + runc regularly.\n- **Rootless Docker** — run the Docker daemon as non-root user; stronger isolation.\n- **OCI runtime spec** — the standard behind `runc`, `crun`, etc.\n- **Windows containers** — Windows-native containers exist; different than Linux containers." }
   ],
   "flashcards": [
-    { "front": "Image vs container?", "back": "Image = read-only template; container = a running instance of that image." },
-    { "front": "Why multi-stage builds?", "back": "Build in a big image with all tools; copy just the artifact into a tiny runtime image." },
-    { "front": "Common Docker security mistakes?", "back": "Running as root, huge base images, secrets baked in, unscanned images." }
+    { "front": "Container vs VM?", "back": "Container shares host KERNEL (lightweight, ms startup, MB size). VM has full guest OS (heavy, minutes, GB)." },
+    { "front": "Image vs container?", "back": "Image = immutable template. Container = running instance of an image." },
+    { "front": "Multi-stage build?", "back": "Multiple FROM stages; final stage COPYs artifact from build stage. Result: 10x smaller image." },
+    { "front": "Layer caching rule?", "back": "Put SLOW + RARELY-CHANGING steps at the top; FAST + FREQUENTLY-CHANGING at the bottom." },
+    { "front": "Volume vs bind mount?", "back": "Volume = Docker-managed (production). Bind mount = host path (dev, source editing)." },
+    { "front": "Secrets in images?", "back": "NEVER bake them in. Inject at runtime via env vars, Docker/K8s Secrets, or Vault." }
   ],
   "quiz": [
-    { "q": "Docker isolates containers using…", "options": ["A full hypervisor VM", "Linux namespaces + cgroups", "eBPF only", "Chroot alone"], "answer": 1, "explain": "Containers share the host kernel with namespace/cgroup isolation." },
-    { "q": "Multi-stage builds mainly help…", "options": ["Faster runtime", "Smaller final image", "Bigger images", "Encryption"], "answer": 1, "explain": "You leave build tools behind and only ship the artifact." },
-    { "q": "The right place for production secrets is…", "options": ["Inside the Dockerfile", "Baked into the image", "Injected at runtime (env / secret manager)", "In .dockerignore"], "answer": 2, "explain": "Never bake secrets into images." }
+    { "q": "Container vs VM key difference?", "options": ["Containers are Windows only", "Containers share host kernel (lightweight)", "VMs are faster", "Same thing"], "answer": 1, "explain": "Namespaces + cgroups, not a full guest OS." },
+    { "q": "Layer caching order?", "options": ["Random", "Slow rarely-changing FIRST; fast frequently-changing LAST", "Alphabetical", "Only one layer"], "answer": 1, "explain": "Maximizes cache hits." },
+    { "q": "Multi-stage build purpose?", "options": ["Faster runtime", "Smaller image — discard build tools in final stage", "Multi-cloud", "Better security only"], "answer": 1, "explain": "Ship only what you need to run." },
+    { "q": "Where do secrets go?", "options": ["Baked in image", "Injected at runtime (env, Docker Secrets, K8s Secrets, Vault)", "Committed to git", "In the tag"], "answer": 1, "explain": "Image is public information." },
+    { "q": "docker-compose for?", "options": ["Prod at scale", "Local multi-container dev + small deployments", "Nothing", "Only Kubernetes"], "answer": 1, "explain": "Not a cluster manager." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Write a Dockerfile for a Spring Boot app; build and run it." },
-    { "level": "Medium", "text": "Rewrite it as a multi-stage build using a distroless runtime image." },
-    { "level": "Hard", "text": "Set up docker-compose with app + Postgres + Redis for local dev." },
-    { "level": "Expert", "text": "Add HEALTHCHECK, non-root USER, image scanning (Trivy) in CI." }
+    { "level": "Easy", "text": "Write a Dockerfile that runs `nginx` serving a static HTML page." },
+    { "level": "Easy", "text": "Build + tag + push an image to Docker Hub." },
+    { "level": "Medium", "text": "Multi-stage Spring Boot Dockerfile; compare image sizes." },
+    { "level": "Medium", "text": "compose.yaml with app + Postgres + Redis + healthchecks." },
+    { "level": "Hard", "text": "Optimize layer caching; measure build time delta." },
+    { "level": "Hard", "text": "Non-root user, distroless image, Trivy scan clean." },
+    { "level": "Expert", "text": "Multi-arch buildx image (amd64 + arm64) pushed to a registry." }
   ],
   "interviewQuestions": [
-    "Image vs container?",
-    "How does Docker isolate processes?",
-    "What is layer caching and how do you exploit it?",
-    "How do you keep images small and secure?",
-    "Where should secrets live?"
+    "What is Docker and how is it different from a VM?",
+    "What is a Docker image vs a container?",
+    "What is a multi-stage Dockerfile?",
+    "How does Docker layer caching work?",
+    "What's the difference between a volume and a bind mount?",
+    "How do you keep secrets out of Docker images?",
+    "What's docker-compose and when do you use it?"
   ],
   "references": [
-    { "label": "Docker — get started", "url": "https://docs.docker.com/get-started/" }
+    { "label": "Docker docs", "url": "https://docs.docker.com" },
+    { "label": "Dockerfile best practices", "url": "https://docs.docker.com/develop/develop-images/dockerfile_best-practices/" }
   ]
 }

@@ -2,53 +2,110 @@
   "id": "be.redis",
   "levelId": 7,
   "title": "Redis",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 45,
+  "estimatedMinutes": 35,
   "objectives": [
-    "Use Redis for caching, sessions and rate limiting",
-    "Know the main data structures",
-    "Choose eviction and persistence policies"
+    "Understand Redis via a real-life analogy",
+    "Master the core data types: strings, hashes, lists, sets, sorted sets, streams",
+    "Know when to use Redis (cache, rate limit, session, queue, pub/sub, leaderboard)",
+    "Handle persistence, replication, and clustering correctly",
+    "Answer Redis interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Redis is an in-memory data store with rich types (strings, hashes, lists, sets, sorted sets, streams). Sub-millisecond reads make it the default cache + rate-limit + session store, and its atomic ops enable clever patterns." },
-    { "type": "table", "headers": ["Type", "Example use"], "rows": [
-      ["String + TTL", "Cache value with expiry"],
-      ["Hash", "Session or object fields"],
-      ["List", "Simple queue (LPUSH/BRPOP)"],
-      ["Set", "Uniqueness (dedupe, followers)"],
-      ["Sorted Set", "Leaderboards, rate limiting"],
-      ["Stream", "Append-only log (Kafka-lite)"],
-      ["PubSub", "Fire-and-forget events"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Redis as your kitchen counter next to a distant pantry.**\n\n- The **pantry (your database — Postgres, MySQL)** stores EVERYTHING. Reliable. Huge. Every request has to walk to the pantry, dig through shelves, and walk back. Fine when you cook once. Painful when you cook 50 meals per second.\n- The **kitchen counter (Redis)** sits RIGHT NEXT TO YOU. You put the most-used ingredients — salt, pepper, olive oil — on the counter. Next time you cook, you grab from the counter. Instant. Only if the counter's empty do you walk to the pantry.\n- The counter is SMALLER than the pantry, so you can't put EVERYTHING there. You keep the HOT stuff (most-accessed, most-recent) and let cold stuff live in the pantry.\n\n**In code:** Redis is an in-memory data store. Reads + writes take **~0.1ms** (vs 5-50ms for Postgres). But it's memory-bound — smaller capacity than disk-based DBs. Used for **caching** (the most common use), **rate limiting**, **session storage**, **pub/sub**, **queues**, **leaderboards**, **distributed locks**. Every serious backend has Redis somewhere.\n\n**Beyond caching — Redis is a Swiss army knife.** It's not just 'faster than Postgres for get/set'. Its native data structures (sorted sets, streams, HyperLogLog) enable use cases that would be awkward in SQL: leaderboards, sliding-window rate limiters, activity feeds, real-time analytics. Learning Redis's data types unlocks entire architectural patterns." },
+    { "type": "callout", "variant": "definition", "markdown": "**Redis** (REmote DIctionary Server) is an open-source in-memory data store used as a cache, message broker, and lightweight database. Single-threaded (per command) but blazing fast (~0.1ms per operation). Supports **rich data types** beyond strings: hashes, lists, sets, sorted sets, streams, HyperLogLog, geospatial. Optional persistence (RDB snapshots + AOF log). Supports replication, clustering, pub/sub. Created by Salvatore Sanfilippo (2009); acquired by Redis Ltd; the open-source project rebranded / forked as Valkey in 2024 after license changes." },
+    { "type": "theory", "markdown": "## The seven core data types — pick the right one" },
+    { "type": "table", "headers": ["Type", "Best for", "Example commands"], "rows": [
+      ["**String**", "Simple key/value, counters, cached HTML", "`SET user:42 Ada`, `GET user:42`, `INCR views:home`"],
+      ["**Hash**", "Objects with fields — cheaper than JSON strings", "`HSET user:42 name Ada age 34`, `HGETALL user:42`"],
+      ["**List**", "Queue, stack, most-recent-N items", "`LPUSH queue task1`, `RPOP queue`, `LRANGE queue 0 9`"],
+      ["**Set**", "Uniqueness, tags, membership tests", "`SADD roles:42 admin editor`, `SISMEMBER roles:42 admin`"],
+      ["**Sorted Set (ZSET)**", "Leaderboards, priority queues, time-ordered feeds", "`ZADD leaderboard 1500 alice`, `ZRANGE leaderboard 0 9 REV`"],
+      ["**Stream**", "Append-only event log; Kafka-lite", "`XADD orders * userId 42 amount 99.99`, `XREAD ...`"],
+      ["**HyperLogLog**", "Approximate unique count with 12KB memory", "`PFADD visitors user1 user2`, `PFCOUNT visitors`"]
     ]},
-    { "type": "code", "language": "text", "code": "// Cache-aside\nvalue = GET user:42        // hit?\nif not: value = db.load(); SET user:42 <value> EX 60\n\n// Rate limit (token bucket, atomic Lua script) …\n\n// Distributed lock (single-instance)\nSET lock:jobA <token> NX PX 30000    // NX = only if not set" },
-    { "type": "callout", "variant": "interview", "markdown": "Cache patterns to know: **cache-aside** (app loads DB on miss, writes to cache), **write-through** (write DB + cache together), **write-behind** (write cache, sync to DB later). Cache-aside is the default; watch for stampedes on hot keys (mitigate with request coalescing / TTL jitter)." },
-    { "type": "callout", "variant": "mistake", "markdown": "Using SETNX for distributed locking without a token + release check (someone else's expired lock gets released by you). Use the Redlock pattern for multi-node; for single-node use SET NX PX + a fencing token." },
-    { "type": "callout", "variant": "best", "markdown": "Choose an eviction policy (allkeys-lru for pure caches; volatile-ttl mixed). Set maxmemory. Persist with RDB snapshots + AOF for durability if used as a DB. Never store secrets in Redis in cleartext." }
+    { "type": "callout", "variant": "interview", "markdown": "**The insight that matters:** Redis is fast because it's IN-MEMORY, single-threaded, and its data types are IMPLEMENTED as C data structures (not serialized JSON). A sorted set is a real skip-list + hash map. Operations like `ZRANGEBYSCORE` are O(log N + M) — you can't beat that in an app-layer implementation over Postgres." },
+    { "type": "theory", "markdown": "## Sample program — Redis as a Spring Boot cache + rate limiter" },
+    { "type": "code", "language": "java", "code": "// build.gradle: implementation 'org.springframework.boot:spring-boot-starter-data-redis'\n\n// application.yaml:\n// spring:\n//   data:\n//     redis:\n//       host: redis.default.svc.cluster.local\n//       port: 6379\n\n// ============ 1. CACHE — Spring Cache abstraction over Redis ============\n@Configuration\n@EnableCaching\npublic class RedisConfig {\n  @Bean\n  RedisCacheManager cacheManager(RedisConnectionFactory factory) {\n    var config = RedisCacheConfiguration.defaultCacheConfig()\n        .entryTtl(Duration.ofMinutes(10))                  // default TTL\n        .disableCachingNullValues()\n        .serializeValuesWith(SerializationPair.fromSerializer(\n            new GenericJackson2JsonRedisSerializer()));\n    return RedisCacheManager.builder(factory)\n        .cacheDefaults(config)\n        .withCacheConfiguration(\"userProfiles\", config.entryTtl(Duration.ofHours(1)))\n        .build();\n  }\n}\n\n@Service\npublic class UserService {\n  // Auto-caches by userId. First call hits DB; subsequent calls hit Redis.\n  @Cacheable(cacheNames = \"userProfiles\", key = \"#userId\")\n  public User getUser(long userId) {\n    return userRepo.findById(userId).orElseThrow();\n  }\n\n  // Invalidate the cache on update.\n  @CacheEvict(cacheNames = \"userProfiles\", key = \"#user.id\")\n  public User updateUser(User user) {\n    return userRepo.save(user);\n  }\n}\n\n// ============ 2. RATE LIMITER — sliding-window with sorted sets ============\n@Component\npublic class RateLimiter {\n  private final StringRedisTemplate redis;\n\n  public RateLimiter(StringRedisTemplate redis) { this.redis = redis; }\n\n  // Allow N requests per WINDOW seconds. Uses ZADD + ZREMRANGEBYSCORE + ZCARD.\n  public boolean allow(String key, int limit, int windowSeconds) {\n    long now = System.currentTimeMillis();\n    long windowStart = now - windowSeconds * 1000L;\n\n    // Remove old entries\n    redis.opsForZSet().removeRangeByScore(key, 0, windowStart);\n    // Count entries in the current window\n    Long count = redis.opsForZSet().zCard(key);\n\n    if (count != null && count >= limit) {\n      return false;   // over the limit\n    }\n    // Add this request timestamp (score = timestamp)\n    redis.opsForZSet().add(key, String.valueOf(now), now);\n    redis.expire(key, Duration.ofSeconds(windowSeconds + 5));\n    return true;\n  }\n}\n\n// Usage: if (!rateLimiter.allow(\"login:\" + ip, 5, 60)) throw new TooManyRequests();\n\n// ============ 3. DISTRIBUTED LOCK — SET with NX + EX ============\npublic class DistributedLock {\n  private final StringRedisTemplate redis;\n  private final String key;\n  private final String token;    // random per instance — prevents accidental release\n\n  public boolean tryAcquire(Duration ttl) {\n    return Boolean.TRUE.equals(redis.opsForValue().setIfAbsent(key, token, ttl));\n    //  SET key token NX EX 30 — atomic, expires so a crashed holder doesn't deadlock\n  }\n\n  public void release() {\n    // Atomic check-and-delete via Lua: only delete if we still hold the lock.\n    String script = \"if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end\";\n    redis.execute(new DefaultRedisScript<>(script, Long.class), List.of(key), token);\n  }\n}" },
+    { "type": "theory", "markdown": "## Persistence — RDB vs AOF" },
+    { "type": "table", "headers": ["Mode", "How it works", "Trade-off"], "rows": [
+      ["**RDB (snapshotting)**", "Fork and dump memory to disk every N seconds", "Fast + small file; can lose N seconds on crash"],
+      ["**AOF (append-only file)**", "Every write appended to a log", "Nearly no data loss; larger file; slower rewrites"],
+      ["**RDB + AOF**", "Both enabled", "Best durability; more disk + I/O"],
+      ["**No persistence**", "In-memory only", "Pure cache; lose everything on restart"]
+    ]},
+    { "type": "callout", "variant": "interview", "markdown": "**The interview answer:** if Redis is a CACHE, no persistence needed — data reloads from Postgres. If Redis is a PRIMARY store (rate limits, sessions, queues you don't want to lose), enable AOF with `appendfsync everysec` — best balance of durability and throughput." },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: No TTL on cache entries.** Redis fills up until it hits `maxmemory`, then evicts (or errors). Every cached entry should have a TTL — `SET key value EX 3600`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Cache stampede.** Cache expires; 1000 concurrent requests all miss + hit DB simultaneously → DB overloads. Fix: singleflight (one request rebuilds; others wait) or probabilistic early expiration." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: `KEYS *` in production.** Blocks Redis (single-threaded!) for the whole scan. Use `SCAN` (cursor-based, non-blocking) instead." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Storing huge blobs.** 100MB values eat memory + block the network on GET. Chunk large data; consider S3 for big blobs." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Serialization overhead.** JSON-serializing everything is heavy. Consider MessagePack or plain Redis Hashes for structured data." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: No `maxmemory` policy.** Redis grows until it OOMs the container. Set `maxmemory` + `maxmemory-policy allkeys-lru` (or another eviction policy)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Distributed lock without token + Lua release.** Client A's lock expires → Client B acquires → Client A finishes and `DEL`s → releases B's lock. Fix: unique token + atomic check-and-delete." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Every cache entry has a TTL.** Even 'permanent' values should expire eventually." },
+    { "type": "callout", "variant": "best", "markdown": "**2. `maxmemory` + eviction policy.** `allkeys-lru` for pure cache; `volatile-lru` if you mix cache + non-cache in one DB." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Prefer Hashes for structured objects.** Cheaper than JSON strings; supports partial updates (`HSET`)." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Use SCAN instead of KEYS.** Cursor-based; doesn't block Redis." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Distributed lock with token + Lua release.** Prevents accidental release of someone else's lock (Redlock pattern for stronger guarantees)." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Persistence matched to use case.** Cache → none. Rate limits + sessions → AOF everysec. Primary store → AOF always + replicas." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Redis Cluster for horizontal scaling.** Shards keys across N masters; each has a replica. Slots are auto-managed." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Monitor slow log.** `SLOWLOG GET 10` catches expensive queries (blocking O(N) commands, hot keys)." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — CLI tour.** `redis-cli`; try SET/GET/INCR, HSET/HGETALL, LPUSH/RPOP, SADD/SMEMBERS, ZADD/ZRANGE." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Cache a Spring Boot service.** `@Cacheable` on `getUser`; measure latency with/without cache." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Sliding-window rate limiter.** Build the sample; verify 6th request in a 60s window is rejected." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Leaderboard.** ZADD scores; ZRANGE for top 10 + ZRANK for user's rank." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard) — Distributed lock with token + Lua release.** Simulate two clients competing; verify only one enters the critical section." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert) — Stream-based event log.** XADD orders + XREAD consumer group; simulate multiple workers reading in parallel." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is Redis and why is it so fast?**\n\n**A:** Redis is an in-memory key-value data store that supports rich data types (strings, hashes, lists, sets, sorted sets, streams, HyperLogLog). **Why fast:** (1) **In-memory** — no disk I/O per operation. (2) **Single-threaded** (per command) — no locks, no context switches. (3) **Native C data structures** — a sorted set is a real skip-list + hash map, not a serialized JSON blob. (4) **Simple protocol (RESP)** — binary-safe, easy to parse. Sub-millisecond latency (~0.1ms) for most operations. **Trade-off:** memory-bound; smaller working set than disk-based DBs. **Use cases:** cache (most common), rate limiting, sessions, pub/sub, queues, leaderboards, distributed locks. Every serious backend has Redis somewhere." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: When would you use a Hash vs a JSON string?**\n\n**A:** **Hash** — a Redis object type with named fields. `HSET user:42 name Ada age 34 email ada@x.com`. **Advantages:** memory-efficient for small objects (special encoding for <100 fields), supports **partial reads** (`HGET user:42 name` — no need to deserialize the whole object), supports **partial writes** (`HSET user:42 email new@x.com` without rewriting everything). **JSON string** — `SET user:42 '{\"name\":\"Ada\",\"age\":34,...}'`. Simpler, works with any language, but every read/write is the FULL object. **Rule:** for small structured objects (User, Product, Order), prefer Hash. For deeply nested or type-heterogeneous data, JSON string. Redis JSON module (`RedisJSON`) blends both — first-class JSON with partial ops." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What is a cache stampede and how do you prevent it?**\n\n**A:** **Cache stampede** (aka thundering herd): a popular cache entry expires; hundreds of concurrent requests all MISS simultaneously; all hit the underlying DB; the DB drowns. **Prevention:** **(1) Singleflight** — the first request that misses acquires a mutex, rebuilds the cache, and returns. Concurrent misses WAIT for the rebuilder to finish. Most languages have libraries: Java `Caffeine` supports this; Go `singleflight` package. **(2) Probabilistic early expiration** — refresh the cache slightly BEFORE it actually expires, based on a random probability that grows near expiry. Prevents synchronized misses. **(3) Cache warming** — pre-populate before deploy. **(4) Longer TTL + explicit invalidation on writes.** **The right answer** is usually singleflight + short TTL. Every serious cache library supports it out of the box." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you implement a rate limiter with Redis?**\n\n**A:** Multiple algorithms, all fit Redis: **(1) Fixed window** — one counter per (user, minute). `INCR key EX 60`. Fast but bursty at the window boundary. **(2) Sliding window log** — a sorted set of request timestamps. `ZADD key now now`; `ZREMRANGEBYSCORE key 0 (now - windowMillis)`; `ZCARD key`. Accurate but O(log N + M) per request. **(3) Sliding window counter** — combine two fixed windows with weighted averaging. Smoother than fixed, cheaper than log. **(4) Token bucket** — a Lua script that maintains {tokens, lastRefill}; refills on each request based on elapsed time. Very flexible; used by Kong, envoy, cloud gateways. **Rule:** for simple per-user rate limits, sliding window log is a good default. For high-throughput API gateways, token bucket via a Lua script minimizes round trips. Always test with realistic load." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How does Redis persistence work?**\n\n**A:** Two mechanisms: **(1) RDB (Redis Database Backup)** — periodic snapshots. Redis forks; the child writes the entire dataset to a compact binary file. Fast to start, small file. **Trade-off:** you can lose N seconds of data (whatever's between snapshots). **(2) AOF (Append-Only File)** — every write command appended to a log. **`appendfsync always`** — flush on every write (safest, slowest). **`appendfsync everysec`** — flush once/sec (good balance; up to 1s data loss). **`appendfsync no`** — let the OS decide (fast, unpredictable). **Both together** = best durability. **Rule:** cache → no persistence. Rate limiter / session store / queue → AOF everysec. Primary datastore → AOF always + replication + backups. Restart replay: RDB first (fast), then AOF (catches up recent writes)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What's Redis Cluster and when do you need it?**\n\n**A:** **Redis Cluster** shards a key space across multiple Redis masters. 16,384 hash slots are distributed across nodes; every key hashes to a slot. Clients can connect to any node — it either serves the request or redirects (MOVED) to the right one. Each master has one or more replicas for high availability. **When:** single Redis instance has ~50-100GB memory ceiling (bigger causes fork stalls during RDB); you need horizontal scaling. **Trade-offs:** **(1)** Multi-key operations only work if keys hash to the same slot — use **hash tags** (`{userId}:profile`, `{userId}:orders`) to group. **(2)** Some commands (MULTI-KEY MSET across slots) don't work across nodes. **(3)** Rebalancing (adding nodes) is manual. **Rule:** below 50GB, run a single primary + 1-2 replicas + Sentinel for HA. Above, Redis Cluster (or Redis Enterprise / Elasticache / MemoryDB)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: How do distributed locks with Redis work?**\n\n**A:** Simple form: `SET lock:resource <randomToken> NX EX 30`. **NX** = only set if not exists (mutex); **EX 30** = expire after 30s (self-heals if client crashes). Client checks the response — 'OK' means acquired. To release, use a Lua script: `if GET lock:resource == token then DEL lock:resource`. **Why the token?** if client A's lock expires before it finishes (long GC), client B acquires. A then tries to `DEL lock:resource` and releases B's lock — data corruption. The token check makes release safe. **Redlock** — Salvatore's algorithm for multi-node distributed locks; more resilient to individual node failures but more complex and controversial (Martin Kleppmann's critique). **Rule:** for simple in-process serialization, single-node SET NX + Lua release. For genuinely-distributed locks with strong requirements, evaluate ZooKeeper / etcd / a proper consensus system." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every serious backend caches with Redis** — Instagram, Twitter, GitHub, Stack Overflow.\n- **Rate limiting** — Cloudflare, Kong, envoy, API gateways.\n- **Session stores** — Spring Session Redis, Django cache, Rails.\n- **Job queues** — Sidekiq (Ruby), Bull (Node), RQ (Python).\n- **Pub/sub for real-time** — chat, notifications, live updates.\n- **Leaderboards** — gaming, social feeds, ranking systems.\n- **Feature flags + config** — LaunchDarkly, Unleash back-ends.\n- **Managed services** — AWS ElastiCache, GCP MemoryStore, Azure Cache for Redis, Redis Cloud, Upstash.\n- **Valkey** (2024 fork) after Redis's license change — same protocol, permissive license." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Redis Sentinel** — monitors + auto-failover for master/replica setups.\n- **Redis Streams** — Kafka-lite log with consumer groups; simpler for lower volume.\n- **RediSearch** — full-text search module.\n- **RedisJSON** — first-class JSON with partial ops.\n- **RedisBloom** — probabilistic data structures (Bloom filters, Count-Min sketch).\n- **RedisGraph** — property-graph queries.\n- **RedisTimeSeries** — time-series data.\n- **Lua scripting** — atomic multi-command operations; runs inside Redis (`EVAL`).\n- **PIPELINE** — batch multiple commands in one round-trip.\n- **Client-side caching (RESP3)** — Redis notifies clients of invalidation.\n- **`WAIT` command** — synchronous replication wait for stronger durability.\n- **CLUSTER commands** — CLUSTER NODES, CLUSTER SLOTS, MIGRATE.\n- **Common eviction policies** — `noeviction`, `allkeys-lru`, `volatile-lru`, `allkeys-lfu`, `volatile-random`, `volatile-ttl`.\n- **RESP protocol** — client wire format; simple + binary-safe." }
   ],
   "flashcards": [
-    { "front": "Common Redis cache pattern?", "back": "Cache-aside: read from cache; on miss load DB, write to cache with TTL." },
-    { "front": "What is a sorted set used for?", "back": "Leaderboards, priority queues, rate-limit windows — score-ordered members with O(log N) ops." },
-    { "front": "Basic distributed lock command?", "back": "SET lock:key <token> NX PX <ms> — set only if absent, with an expiry." }
+    { "front": "Redis speed source?", "back": "In-memory + single-threaded + native C data structures + simple RESP protocol. ~0.1ms per op." },
+    { "front": "Seven core data types?", "back": "String, Hash, List, Set, Sorted Set (ZSET), Stream, HyperLogLog." },
+    { "front": "Cache stampede fix?", "back": "Singleflight (one request rebuilds, others wait) + probabilistic early expiration." },
+    { "front": "Rate limiter algorithms?", "back": "Fixed window, sliding window log (ZADD + ZREMRANGEBYSCORE + ZCARD), sliding window counter, token bucket." },
+    { "front": "Distributed lock?", "back": "SET key token NX EX 30 + Lua release with token check." },
+    { "front": "Persistence trade-offs?", "back": "RDB (snapshots, faster, ~N-second loss) vs AOF (append log, ~1s loss with everysec). Both = best durability." },
+    { "front": "When Redis Cluster?", "back": "Above ~50GB memory or when you need to shard write throughput." }
   ],
   "quiz": [
-    { "q": "Redis stores data primarily in…", "options": ["Disk only", "Memory, optionally persisted", "Object storage", "Network only"], "answer": 1, "explain": "In-memory speed is Redis's superpower." },
-    { "q": "Cache-aside means…", "options": ["Cache writes back to DB", "App loads DB on miss then caches", "Kernel caches everything", "No cache at all"], "answer": 1, "explain": "Application controls the cache; DB is source of truth." },
-    { "q": "Best structure for a leaderboard?", "options": ["List", "Hash", "Sorted Set", "PubSub"], "answer": 2, "explain": "Sorted sets keep members ordered by score." }
+    { "q": "Why fast?", "options": ["Multi-threaded parallel", "In-memory + single-threaded + native data structures", "Disk-based cache", "SSD"], "answer": 1, "explain": "No I/O per op." },
+    { "q": "Leaderboard use?", "options": ["List", "Sorted Set (ZSET)", "Hash", "String"], "answer": 1, "explain": "O(log N) rank + range queries." },
+    { "q": "Rate limiter data type?", "options": ["String only", "Sorted Set with ZREMRANGEBYSCORE + ZCARD", "Nothing", "List only"], "answer": 1, "explain": "Sliding-window log." },
+    { "q": "Prevent stampede?", "options": ["Ignore", "Singleflight — one request rebuilds; others wait", "Longer TTL only", "Nothing"], "answer": 1, "explain": "Prevents thundering herd." },
+    { "q": "Distributed lock release?", "options": ["DEL key", "Lua script that only deletes if token matches", "Nothing", "EXPIRE 0"], "answer": 1, "explain": "Prevents releasing another client's lock." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Implement cache-aside for a hot GET endpoint with TTL." },
-    { "level": "Medium", "text": "Build a token-bucket rate limiter with a Lua script." },
-    { "level": "Hard", "text": "Build a leaderboard: add score, top-K, user rank via sorted sets." },
-    { "level": "Expert", "text": "Implement a Redlock-style distributed lock for a critical job." }
+    { "level": "Easy", "text": "redis-cli: SET/GET/INCR/HSET/HGETALL/LPUSH/RPOP/SADD/ZADD." },
+    { "level": "Easy", "text": "Add @Cacheable to a Spring service; measure latency delta." },
+    { "level": "Medium", "text": "Sliding-window rate limiter with sorted set." },
+    { "level": "Medium", "text": "Leaderboard: ZADD scores + ZRANGE top 10 + ZRANK user's rank." },
+    { "level": "Hard", "text": "Distributed lock with token + Lua release; two-client race test." },
+    { "level": "Hard", "text": "Cache stampede: reproduce it; fix with singleflight." },
+    { "level": "Expert", "text": "Redis Streams: consumer group with two workers; XCLAIM stuck messages." }
   ],
   "interviewQuestions": [
-    "Which cache pattern do you use and why?",
-    "How do you prevent cache stampedes?",
-    "Common Redis eviction policies?",
-    "How would you build a rate limiter with Redis?",
-    "Trade-offs of using Redis as a primary DB?"
+    "What is Redis and why is it so fast?",
+    "When would you use a Hash vs a JSON string?",
+    "What is a cache stampede and how do you prevent it?",
+    "How do you implement a rate limiter with Redis?",
+    "How does Redis persistence work?",
+    "What's Redis Cluster and when do you need it?",
+    "How do distributed locks with Redis work?"
   ],
   "references": [
-    { "label": "Redis — commands & docs", "url": "https://redis.io/docs/latest/" }
+    { "label": "Redis docs", "url": "https://redis.io/docs/" },
+    { "label": "Distributed Locks with Redis", "url": "https://redis.io/docs/manual/patterns/distributed-locks/" }
   ]
 }

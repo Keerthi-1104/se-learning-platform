@@ -87,125 +87,16 @@ body.push(...topicToChapter(loadTopic("level_07", "oauth2"),
   { chapterNumber: 7, bookmarkId: "ch7" }));
 
 // 8. Microservices
-body.push(H1("8. Microservices", "ch8"));
-body.push(callout("definition", ["Small, independently deployable services owning their own data. Trade in-process for distributed complexity — teams ship independently, but every call is a network call."]));
-body.push(table(["Wins", "Costs"], [
-  ["Independent deploys per team", "Distributed debugging"],
-  ["Per-service tech choice", "Cross-service consistency"],
-  ["Scale hot services alone", "Network latency + failures"],
-  ["Contained blast radius", "Ops overhead"],
-], [4680, 4680]));
-body.push(callout("interview", ["'Cross-service transactions?' → Sagas: local transactions + compensating actions. Choreography (event-driven) vs orchestration (a coordinator). Both valid — pick by team preference and observability needs."]));
-body.push(callout("mistake", ["Splitting too early. Start with a well-modularized monolith; split when team/domain boundaries demand it."]));
-body.push(...summary([
-  "One service owns its DB; publish events via Outbox for consistency.",
-  "Sync: REST/gRPC. Async: Kafka/RabbitMQ. Edge: API gateway.",
-  "Resilience: timeouts, retries, circuit breakers, bulkheads.",
-  "Observability: logs + metrics + distributed traces with propagated traceId.",
-]));
-body.push(...interview([
-  "When would you NOT choose microservices?",
-  "How do you handle cross-service transactions?",
-  "Sync vs async communication?",
-  "What is the Outbox pattern?",
-  "What is a circuit breaker?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Split a monolith into users + orders with REST." },
-  { level: "Medium", text: "Timeouts + retries + circuit breaker with Resilience4j." },
-  { level: "Hard", text: "Saga: order → payment → shipping with compensations." },
-  { level: "Expert", text: "Outbox + Kafka relay so events are never lost." },
-]));
-body.push(...realworld(["Netflix, Amazon, Uber, PhonePe run thousands of microservices. Their org structure and their architecture look the same — Conway's Law at scale."]));
-body.push(...miniproject(["Build a 3-service system (users, orders, payments) with sagas, outbox, and a distributed trace end-to-end."]));
-body.push(...advanced(["Domain-driven design (bounded contexts), event sourcing, CQRS, service mesh (Istio/Linkerd) for mTLS + traffic policy."]));
+body.push(...topicToChapter(loadTopic("level_07", "microservices"),
+  { chapterNumber: 8, bookmarkId: "ch8" }));
 
 // 9. Docker
-body.push(H1("9. Docker", "ch9"));
-body.push(callout("definition", ["Package apps + deps into a portable image that runs as an isolated container (Linux namespaces + cgroups). Solves 'works on my machine' by making the environment part of the artifact."]));
-body.push(code([
-  "FROM eclipse-temurin:21-jdk AS build",
-  "WORKDIR /src",
-  "COPY . .",
-  "RUN ./gradlew bootJar",
-  "",
-  "FROM eclipse-temurin:21-jre-alpine",
-  "WORKDIR /app",
-  "COPY --from=build /src/build/libs/*.jar app.jar",
-  "USER 1000",
-  "EXPOSE 8080",
-  "ENTRYPOINT [\"java\",\"-jar\",\"/app/app.jar\"]",
-], "multi-stage dockerfile"));
-body.push(callout("interview", ["Layer caching is Dockerfile performance. Copy pom.xml/package.json and install deps BEFORE copying source, so a code change doesn't reinstall dependencies."]));
-body.push(callout("mistake", ["Running as root, huge JDK-in-runtime images, secrets baked in. Use multi-stage + small base + non-root USER + external secrets."]));
-body.push(...summary([
-  "Image = read-only template; Container = running instance.",
-  "Multi-stage builds keep images small.",
-  ".dockerignore, HEALTHCHECK, non-root, image scanning.",
-  "Never bake secrets into images.",
-]));
-body.push(...interview([
-  "Image vs container?",
-  "How does Docker isolate processes?",
-  "What is layer caching and how do you exploit it?",
-  "How do you keep images small and secure?",
-  "Where should secrets live?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Dockerfile for a Spring Boot app." },
-  { level: "Medium", text: "Multi-stage build with a distroless runtime." },
-  { level: "Hard", text: "docker-compose for app + Postgres + Redis." },
-  { level: "Expert", text: "HEALTHCHECK, non-root USER, Trivy scanning in CI." },
-]));
-body.push(...realworld(["Every modern CI/CD pipeline builds Docker images. Every major cloud can run containers directly (ECS/Fargate, Cloud Run, App Service)."]));
-body.push(...miniproject(["Dockerize the Orders API; run app + Postgres + Redis with compose; add HEALTHCHECK, scanning, and multi-arch build."]));
-body.push(...advanced(["BuildKit + secrets, buildx multi-arch, distroless/wolfi images, rootless containers, SBOM generation."]));
+body.push(...topicToChapter(loadTopic("level_07", "docker"),
+  { chapterNumber: 9, bookmarkId: "ch9" }));
 
 // 10. Kubernetes
-body.push(H1("10. Kubernetes", "ch10"));
-body.push(callout("definition", ["Container orchestrator: you declare the desired state; controllers converge toward it — self-healing pods, rolling updates, autoscaling included."]));
-body.push(code([
-  "apiVersion: apps/v1",
-  "kind: Deployment",
-  "metadata: { name: api }",
-  "spec:",
-  "  replicas: 3",
-  "  selector: { matchLabels: { app: api } }",
-  "  template:",
-  "    metadata: { labels: { app: api } }",
-  "    spec:",
-  "      containers:",
-  "      - name: api",
-  "        image: registry/api:1.2.0",
-  "        readinessProbe: { httpGet: { path: /health, port: 8080 } }",
-  "        resources:",
-  "          requests: { cpu: 100m, memory: 128Mi }",
-  "          limits:   { cpu: 500m, memory: 512Mi }",
-], "deployment"));
-body.push(callout("interview", ["Liveness = restart wedged pods; Readiness = remove from LB when not ready. Missing readiness = 500s during deploys. Set requests/limits correctly or the scheduler misplaces pods."]));
-body.push(callout("mistake", ["Hand-editing YAML across envs. Use Helm/Kustomize + GitOps (Argo CD/Flux) so cluster state is version-controlled."]));
-body.push(...summary([
-  "Objects: Pod, Deployment, Service, Ingress, ConfigMap/Secret, StatefulSet, HPA.",
-  "Liveness/readiness/startup probes are non-negotiable.",
-  "Templatize with Helm/Kustomize; deploy with GitOps.",
-  "Secrets via Vault/SOPS/Sealed Secrets, not raw K8s Secrets.",
-]));
-body.push(...interview([
-  "Pod vs Deployment vs Service vs StatefulSet?",
-  "Liveness vs readiness?",
-  "How do rolling updates work?",
-  "How do you keep secrets safe?",
-  "What is GitOps?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Deploy an app to kind/minikube with Deployment + Service." },
-  { level: "Medium", text: "Add readiness/liveness probes + rolling update." },
-  { level: "Hard", text: "HPA on CPU + PodDisruptionBudget." },
-  { level: "Expert", text: "Deploy via Argo CD from Git with Kustomize overlays." },
-]));
-body.push(...realworld(["Google, Spotify, Airbnb, Netflix (partially), and most Fortune-500 IT departments run K8s. Cloud providers offer managed K8s (GKE/EKS/AKS)."]));
-body.push(...miniproject(["Deploy the Orders API to a local K8s cluster with 3 replicas, probes, HPA, and Kustomize dev/prod overlays."]));
-body.push(...advanced(["Operators (CRDs + reconcilers), service mesh, Karpenter/cluster autoscaler, admission controllers, cost/policy (OPA/Gatekeeper)."]));
+body.push(...topicToChapter(loadTopic("level_07", "kubernetes"),
+  { chapterNumber: 10, bookmarkId: "ch10" }));
 
 // 11. Kafka
 body.push(H1("11. Kafka", "ch11"));
@@ -281,40 +172,8 @@ body.push(...miniproject(["Add async email/notifications to the Orders API via R
 body.push(...advanced(["Quorum queues, streams, plugins (shovel/federation), MQTT/STOMP bridges."]));
 
 // 13. Redis
-body.push(H1("13. Redis", "ch13"));
-body.push(callout("definition", ["In-memory data store with rich types: strings, hashes, lists, sets, sorted sets, streams, pubsub. Sub-ms reads make it the default cache + session + rate-limit store."]));
-body.push(code([
-  "// Cache-aside",
-  "value = GET user:42",
-  "if not: value = db.load(); SET user:42 <value> EX 60",
-  "",
-  "// Distributed lock (single instance)",
-  "SET lock:jobA <token> NX PX 30000",
-], "redis"));
-body.push(callout("interview", ["Cache patterns: cache-aside (app-managed, default), write-through, write-behind. Watch stampedes on hot keys — mitigate with request coalescing + TTL jitter."]));
-body.push(callout("mistake", ["SETNX-only distributed locks without a token/release check — someone else's expired lock can be released by you. Use SET NX PX + fencing tokens; use Redlock for multi-node."]));
-body.push(...summary([
-  "Rich types: strings/hashes/lists/sets/sorted sets/streams/pubsub.",
-  "Cache-aside is the default; add TTL and consider stampede protection.",
-  "Sorted sets power leaderboards + rate-limit windows.",
-  "Pick eviction (allkeys-lru); persist with RDB+AOF if used as a DB.",
-]));
-body.push(...interview([
-  "Which cache pattern and why?",
-  "How to prevent stampedes?",
-  "Eviction policies?",
-  "How to build a rate limiter?",
-  "Trade-offs using Redis as primary DB?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Cache-aside on a hot GET endpoint with TTL." },
-  { level: "Medium", text: "Token-bucket rate limiter with a Lua script." },
-  { level: "Hard", text: "Leaderboard with sorted sets (top-K, user rank)." },
-  { level: "Expert", text: "Redlock-style distributed lock." },
-]));
-body.push(...realworld(["Twitter's timelines, Uber's ETA, Instagram's counters — Redis is behind almost every product feature that needs to be fast."]));
-body.push(...miniproject(["Add caching + rate limiting to the Orders API with Redis; measure p50/p99 latency before and after."]));
-body.push(...advanced(["Redis Cluster sharding + resharding, keyspace notifications, RedisJSON/Search modules, RedisTimeSeries, Redis Streams as light Kafka."]));
+body.push(...topicToChapter(loadTopic("level_07", "redis"),
+  { chapterNumber: 13, bookmarkId: "ch13" }));
 
 // 14. API Security
 body.push(...topicToChapter(loadTopic("level_07", "api_security"),
