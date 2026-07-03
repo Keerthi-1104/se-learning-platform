@@ -99,77 +99,12 @@ body.push(...topicToChapter(loadTopic("level_07", "kubernetes"),
   { chapterNumber: 10, bookmarkId: "ch10" }));
 
 // 11. Kafka
-body.push(H1("11. Kafka", "ch11"));
-body.push(callout("definition", ["Distributed append-only log. Producers write to topics split across partitions; consumer groups read at their own pace via offsets. Retention is by time/size — records don't disappear on read."]));
-body.push(code([
-  "topic 'orders' with 3 partitions:",
-  "  P0: [r0 r1 r2 r3 ...]  offset per consumer group",
-  "  P1: [r0 r1 r2 r3 ...]",
-  "  P2: [r0 r1 r2 r3 ...]",
-  "Producer records key=userId → same partition → per-user order",
-  "Consumer group 'billing' has 3 consumers → each owns 1 partition",
-], "kafka"));
-body.push(callout("interview", ["Ordering is per-partition, not per-topic. Pick a partition key so related records go to the same partition (e.g., userId). More consumers than partitions = idle consumers."]));
-body.push(callout("mistake", ["Committing offsets before processing succeeds — you'll skip records on crash. Commit AFTER success; use idempotent processing to handle duplicates."]));
-body.push(...summary([
-  "Log semantics enable replay and multiple independent consumers.",
-  "At-least-once by default; exactly-once needs transactional producer + read-committed consumer.",
-  "Compacted topics for state per key; tiered storage for long retention.",
-  "Consumer lag is the top-line SLI.",
-]));
-body.push(...interview([
-  "How does Kafka guarantee ordering?",
-  "Why partition by key?",
-  "How do consumer groups work?",
-  "At-least-once vs exactly-once?",
-  "How do you monitor Kafka?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Produce & consume on a 3-partition topic." },
-  { level: "Medium", text: "Partition-key design for per-user order." },
-  { level: "Hard", text: "At-least-once + idempotent DB upserts." },
-  { level: "Expert", text: "Transactional producer + read-committed consumer." },
-]));
-body.push(...realworld(["LinkedIn (Kafka's origin), Netflix, Uber, banks — anywhere with event-driven systems, analytics pipelines, or CDC (change data capture) uses Kafka."]));
-body.push(...miniproject(["Emit 'order.placed' events from the Orders API to Kafka; consume them in a billing service with idempotent processing."]));
-body.push(...advanced(["Kafka Streams / ksqlDB, Schema Registry (Avro/Protobuf), tiered storage (KRaft), MirrorMaker for multi-region."]));
+body.push(...topicToChapter(loadTopic("level_07", "kafka"),
+  { chapterNumber: 11, bookmarkId: "ch11" }));
 
 // 12. RabbitMQ
-body.push(H1("12. RabbitMQ", "ch12"));
-body.push(callout("definition", ["AMQP message broker. Producers send to an exchange; bindings route to queues; consumers ack messages. Great for task queues + flexible routing."]));
-body.push(code([
-  "Producer -> exchange('orders', type: topic)",
-  "                       │  routing key: 'orders.eu.paid'",
-  "                       ▼",
-  "           binding 'orders.*.paid' → queue.billing",
-  "           binding 'orders.eu.*'    → queue.eu_dashboard",
-  "Consumer acks message → removed from queue",
-  "Nack no-requeue → sent to DLX (dead letter exchange)",
-], "rabbitmq"));
-body.push(callout("interview", ["Kafka = ordered log for streaming/replay. RabbitMQ = flexible routing + per-message ack + task queues. Different tools for different jobs."]));
-body.push(callout("mistake", ["Auto-ack — a crash loses in-flight work. Use manual acks + prefetch + DLX for poisoned messages."]));
-body.push(...summary([
-  "Exchange types: direct, fanout, topic, headers.",
-  "Manual acks + prefetch + DLX for safe processing.",
-  "Delayed exchange plugin for backoff retries.",
-  "Mirrored queues / quorum queues for HA.",
-]));
-body.push(...interview([
-  "Producer → exchange → queue?",
-  "Kafka vs RabbitMQ?",
-  "What is a DLX?",
-  "Manual vs auto ack?",
-  "How to handle retries and idempotency?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Publish/consume via direct exchange." },
-  { level: "Medium", text: "Add a topic exchange with two queues." },
-  { level: "Hard", text: "Retry with exponential backoff via delayed exchange + DLX." },
-  { level: "Expert", text: "Set up an HA cluster; test failover." },
-]));
-body.push(...realworld(["Task queues at Instagram, background jobs in countless Rails/Django apps, financial-messaging systems — RabbitMQ has been the boring, reliable choice for over a decade."]));
-body.push(...miniproject(["Add async email/notifications to the Orders API via RabbitMQ; DLQ + retries + prefetch tuning."]));
-body.push(...advanced(["Quorum queues, streams, plugins (shovel/federation), MQTT/STOMP bridges."]));
+body.push(...topicToChapter(loadTopic("level_07", "rabbitmq"),
+  { chapterNumber: 12, bookmarkId: "ch12" }));
 
 // 13. Redis
 body.push(...topicToChapter(loadTopic("level_07", "redis"),

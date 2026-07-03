@@ -2,50 +2,104 @@
   "id": "be.rabbitmq",
   "levelId": 7,
   "title": "RabbitMQ",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 45,
+  "estimatedMinutes": 35,
   "objectives": [
-    "Explain the AMQP producer→exchange→queue model",
-    "Choose the right exchange type",
-    "Handle acknowledgments, retries and DLQ"
+    "Understand RabbitMQ via a real-life analogy",
+    "Distinguish exchange types (direct, fanout, topic, headers)",
+    "Configure acknowledgements, TTL, dead-letter exchanges correctly",
+    "Know when RabbitMQ beats Kafka (and when it doesn't)",
+    "Answer RabbitMQ interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "RabbitMQ is a message broker implementing AMQP. Producers send to an **exchange**; bindings route it to one or more **queues**; consumers ack messages as they process. Great for task queues and flexible routing." },
-    { "type": "table", "headers": ["Exchange type", "Routes by"], "rows": [
-      ["direct", "Exact routing key match"],
-      ["fanout", "Broadcast to all bound queues"],
-      ["topic", "Pattern like orders.eu.*"],
-      ["headers", "Header attributes"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of RabbitMQ as a busy post office with multiple sorting stations.**\n\n- You (**producer**) drop a letter at the counter. You don't know which mailbox it'll end up in.\n- The letter goes to a **SORTING STATION (exchange)**. Different stations have different rules:\n  - **Direct** — one label, one bin. Letter labeled 'billing' → billing bin.\n  - **Fanout** — copy the letter into EVERY bin (broadcast).\n  - **Topic** — pattern-match: labels like 'orders.paid.premium' → routed by wildcards.\n  - **Headers** — route by envelope metadata instead of labels.\n- Each **BIN (queue)** is drained by workers (**consumers**). One letter, one worker. When the worker finishes and confirms delivery (**ack**), the letter is permanently REMOVED from the bin. No replay.\n\n**In code:** RabbitMQ is a message broker implementing the **AMQP** protocol. Producers publish to EXCHANGES; the exchange routes to zero or more QUEUES based on bindings; consumers read from queues. Once a message is consumed and acknowledged, it's GONE. **Contrast with Kafka:** Kafka keeps every event forever (or per retention). RabbitMQ deletes after successful delivery.\n\n**Why teams pick RabbitMQ:** (1) **Task queues** — 'process this order', 'send this email'. One worker takes each job. (2) **Complex routing** — fanout for events, topic for hierarchical routing, direct for point-to-point. (3) **Low latency** — sub-ms delivery for small messages. (4) **Simpler ops than Kafka** — no ZooKeeper, no partitions, easier to run.\n\n**Trade-offs vs Kafka:** RabbitMQ isn't a REPLAYABLE LOG. It's not built for millions-of-events-per-second streaming. Complex routing has learning curve (exchanges + bindings + queue arguments). Use RabbitMQ for TASK DISTRIBUTION and RPC; use Kafka for streaming + event sourcing." },
+    { "type": "callout", "variant": "definition", "markdown": "**RabbitMQ** is an open-source message broker (2007, originally from Rabbit Technologies; owned by VMware / Broadcom) implementing the **AMQP 0-9-1** protocol (plus MQTT, STOMP via plugins). Model: producers publish to **EXCHANGES**; exchanges route to **QUEUES** based on **BINDINGS**; consumers read from queues with **acknowledgements**. Consumed + acked messages are DELETED. Supports rich routing (direct, fanout, topic, headers exchanges), TTL, dead-letter exchanges, mirrored/quorum queues for HA. Best for TASK QUEUES and complex routing." },
+    { "type": "theory", "markdown": "## The four exchange types" },
+    { "type": "table", "headers": ["Exchange", "Routing rule", "Use case"], "rows": [
+      ["**Direct**", "Exact match on routing key", "Point-to-point: 'billing' routes to billing queue"],
+      ["**Fanout**", "Ignore routing key; deliver to ALL bound queues", "Broadcast: notify every service of an event"],
+      ["**Topic**", "Pattern match on routing key (`orders.*.premium`)", "Hierarchical routing: subscribers filter by pattern"],
+      ["**Headers**", "Route by header metadata, not routing key", "Rare; use when you need multi-field routing"]
     ]},
-    { "type": "code", "language": "text", "code": "Producer -> exchange('orders', type: topic)\n                       │  routing key: 'orders.eu.paid'\n                       ▼\n           binding 'orders.*.paid' → queue.billing\n           binding 'orders.eu.*'    → queue.eu_dashboard\nConsumer acks message → removed from queue\nNack + no-requeue → sent to DLX (dead letter exchange)" },
-    { "type": "callout", "variant": "interview", "markdown": "Kafka vs RabbitMQ: **Kafka** = ordered log for streaming/replay/high-throughput. **RabbitMQ** = flexible routing + per-message ack + task queues; simpler to operate for job systems. Different tools for different jobs." },
-    { "type": "callout", "variant": "mistake", "markdown": "Using auto-ack — a consumer crash loses in-flight messages. Use manual acks, set prefetch to bound in-flight work per consumer, and configure a Dead Letter Exchange for poisoned messages." },
-    { "type": "callout", "variant": "best", "markdown": "Idempotent consumers, retry with backoff via delayed exchange plugin, and DLQ + alarms so unprocessed messages surface. Mirror queues for HA in a cluster." }
+    { "type": "theory", "markdown": "## Sample program — Spring Boot RabbitMQ producer + consumer" },
+    { "type": "code", "language": "java", "code": "// build.gradle: implementation 'org.springframework.boot:spring-boot-starter-amqp'\n\n// application.yaml:\n// spring:\n//   rabbitmq:\n//     host: rabbitmq.default.svc.cluster.local\n//     port: 5672\n//     username: app\n//     password: ${RABBIT_PASS}\n//     virtual-host: /\n//     publisher-confirm-type: correlated   # confirm each publish server-side\n//     listener:\n//       simple:\n//         acknowledge-mode: manual        # commit only after processing\n//         concurrency: 3\n//         max-concurrency: 10\n//         prefetch: 20                     # per-consumer fair dispatch\n//         retry:\n//           enabled: true\n//           max-attempts: 4\n//           initial-interval: 2s\n//           multiplier: 2.0\n\n// ============ TOPOLOGY — declare queues, exchanges, bindings ============\n@Configuration\npublic class RabbitConfig {\n\n  @Bean\n  DirectExchange billingExchange() { return new DirectExchange(\"billing\"); }\n\n  @Bean\n  Queue billingQueue() {\n    return QueueBuilder.durable(\"billing.orders\")\n        .withArgument(\"x-dead-letter-exchange\", \"billing.dlx\")\n        .withArgument(\"x-dead-letter-routing-key\", \"failed\")\n        .withArgument(\"x-message-ttl\", 600_000)     // 10-min TTL\n        .build();\n  }\n\n  @Bean\n  Binding billingBinding(Queue billingQueue, DirectExchange billingExchange) {\n    return BindingBuilder.bind(billingQueue).to(billingExchange).with(\"process\");\n  }\n\n  // Dead-letter exchange + queue — failed messages land here.\n  @Bean DirectExchange billingDlx() { return new DirectExchange(\"billing.dlx\"); }\n  @Bean Queue billingDlq() { return QueueBuilder.durable(\"billing.failed\").build(); }\n  @Bean Binding billingDlqBinding(Queue billingDlq, DirectExchange billingDlx) {\n    return BindingBuilder.bind(billingDlq).to(billingDlx).with(\"failed\");\n  }\n\n  @Bean\n  MessageConverter jsonMessageConverter() {\n    return new Jackson2JsonMessageConverter();\n  }\n}\n\n// ============ PRODUCER ============\n@Service\npublic class BillingProducer {\n  private final RabbitTemplate rabbit;\n\n  public BillingProducer(RabbitTemplate rabbit) { this.rabbit = rabbit; }\n\n  public void enqueueBilling(Order order) {\n    // Publisher confirms — the broker acks that the message was persisted.\n    rabbit.convertAndSend(\"billing\", \"process\", order, msg -> {\n      msg.getMessageProperties().setDeliveryMode(MessageDeliveryMode.PERSISTENT);\n      msg.getMessageProperties().setMessageId(UUID.randomUUID().toString());\n      msg.getMessageProperties().setHeader(\"x-idempotency-key\", order.getId());\n      return msg;\n    });\n  }\n}\n\n// ============ CONSUMER ============\n@Component\npublic class BillingConsumer {\n  private final BillingService svc;\n\n  public BillingConsumer(BillingService svc) { this.svc = svc; }\n\n  @RabbitListener(queues = \"billing.orders\")\n  public void handle(@Payload Order order,\n                     @Header(\"x-idempotency-key\") Long idempotencyKey,\n                     Channel channel,\n                     @Header(AmqpHeaders.DELIVERY_TAG) long deliveryTag) throws IOException {\n    try {\n      svc.processIdempotent(order, idempotencyKey);\n      channel.basicAck(deliveryTag, false);     // permanent commit\n    } catch (RetryableException e) {\n      // requeue = true → retry immediately. Spring auto-retry handles the pattern.\n      channel.basicNack(deliveryTag, false, true);\n    } catch (Exception e) {\n      log.error(\"Permanent failure — moving to DLX\", e);\n      channel.basicNack(deliveryTag, false, false);   // routes to DLX by queue arg\n    }\n  }\n}" },
+    { "type": "theory", "markdown": "## Acknowledgements — the crucial delivery semantic" },
+    { "type": "table", "headers": ["Ack mode", "Behavior", "When"], "rows": [
+      ["**Auto-ack**", "Broker deletes on delivery", "Fastest; loses messages if consumer crashes mid-process. Avoid for anything important."],
+      ["**Manual ack**", "Consumer explicitly `basicAck` after success", "Default for production; must be idempotent because network glitches cause redelivery"],
+      ["**nack + requeue: true**", "Message goes back to the head of the queue", "For transient failures (DB blip); careful — can loop forever"],
+      ["**nack + requeue: false**", "Message goes to dead-letter exchange (if configured)", "Poison messages; investigate offline"]
+    ]},
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Auto-ack in production.** Consumer crashes mid-process → message lost. Always use manual ack for critical work." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: No idempotency in consumers.** Retries + network glitches = same message delivered twice → double-charge. Dedup by idempotency key." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: No DLX (dead-letter exchange).** Poison message keeps nack+requeuing → CPU-loop. Route to DLX after N retries; investigate offline." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Prefetch = unbounded.** One consumer takes 10,000 messages, dies, others idle. Set `prefetch: 20-100` for fair dispatch." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Non-durable queues in prod.** Broker restart = queue disappears. Always `durable: true` on production queues." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Non-persistent messages in prod.** Broker restart = messages disappear. Set `deliveryMode: PERSISTENT`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Using RabbitMQ for streaming millions of events.** Wrong tool — RabbitMQ optimizes for small messages + task distribution, not high-volume log. Use Kafka." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Manual ack, always.** Explicit `basicAck` after success." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Idempotent consumers.** Dedup by idempotency-key in Redis or DB unique constraint." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Durable queues + persistent messages.** Survive broker restart." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Publisher confirms.** Ensure the broker actually received your publish." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Dead-letter exchange.** Route poison messages away from the main queue." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Prefetch tuned to workload.** 20-100 usually good; higher for tiny messages, lower for slow work." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Quorum queues for HA (RabbitMQ 3.8+).** Replace legacy mirrored queues." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Monitor queue depth + consumer utilization.** Alert on backlog." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Local RabbitMQ.** docker-compose with RabbitMQ + management UI; publish + consume via CLI." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Direct exchange producer + consumer.** Spring Boot; verify routing by key." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Fanout broadcast.** Publish once; three consumers each get their own copy." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Medium) — Topic routing.** `orders.paid.premium`, `orders.paid.*`, `orders.#` — verify hierarchical matching." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard) — Dead-letter exchange.** Throw an exception on the consumer; verify message moves to DLQ after N retries." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert) — RPC pattern.** Publish request + reply-to; consumer replies to a temporary queue." },
+    { "type": "theory", "markdown": "## Interview Q&A — with full answers you can quote" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is RabbitMQ and how does it work?**\n\n**A:** RabbitMQ is a message broker implementing AMQP. Model: **Producers** publish to **EXCHANGES**; the exchange routes messages to **QUEUES** based on **BINDINGS**; **consumers** read from queues and acknowledge (**ack**). Once ack'd, the message is DELETED. **Best for:** task queues (one worker takes each job), request/response RPC, complex routing (fanout for broadcasts, topic for hierarchical, direct for point-to-point). **Not for:** high-volume replayable event streaming — that's Kafka. Delivery guarantee: at-least-once with manual ack + idempotency. Sub-ms latency for small messages." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What are the four exchange types?**\n\n**A:** **(1) Direct** — routes by EXACT routing-key match. Publish with key 'billing' → any queue bound with key 'billing' receives it. Point-to-point routing. **(2) Fanout** — ignores routing key; delivers to ALL bound queues. Broadcast. Perfect for 'notify every microservice of this event'. **(3) Topic** — routing key uses dot-separated segments; queues bind with patterns using `*` (one segment) and `#` (zero+ segments). `orders.paid.premium` matches `orders.*.premium`, `orders.paid.*`, `orders.#`. Hierarchical filtering — subscribers pick which patterns they care about. **(4) Headers** — route by header metadata instead of key. Rare; use when routing depends on multiple attributes. **Rule:** direct for simple 1:1; fanout for broadcast; topic for pub/sub with categories; headers rarely." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How does message acknowledgement work?**\n\n**A:** RabbitMQ delivers a message; the consumer processes it; the consumer sends an **ack** back; the broker deletes the message. **Modes:** **(1) Auto-ack** — broker deletes on delivery. Fastest; loses messages if consumer crashes mid-process. **(2) Manual ack** — consumer calls `basicAck(deliveryTag)` after success. Safe. Requires idempotency because network glitches can cause the broker to redeliver (it didn't see the ack). **(3) Nack (negative ack)** — with `requeue: true`, the message goes back to the queue (for transient failures). With `requeue: false` + a dead-letter exchange configured, it goes to the DLX. **Rule:** production ALWAYS uses manual ack. Ack ONLY after processing succeeds. Redelivery is expected; consumers must be idempotent." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What's a Dead Letter Exchange (DLX)?**\n\n**A:** A DLX is a normal exchange that receives messages when they FAIL — rejected with `requeue: false`, exceeded a queue's TTL, or exceeded the queue length limit. Route to a DLX by setting queue arguments: `x-dead-letter-exchange: billing.dlx`, `x-dead-letter-routing-key: failed`. **Why:** without a DLX, a poison message that keeps failing loops forever (nack+requeue), blocking progress. With a DLX, after N retries (via Spring retry annotation or manual counting), the message is routed to a DLX queue where humans can investigate. Alert on non-empty DLQ. After fixing the bug, replay from DLQ back to main. **Rule:** every production queue has a DLX. Without it, one bad message ruins your morning." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: RabbitMQ vs Kafka — when to use which?**\n\n**A:** **RabbitMQ** — TASK QUEUE model. One worker processes each message; message deleted after ack. Rich routing (fanout, topic, direct). Sub-ms latency. Simpler ops (no ZooKeeper, no partitions). **Best for:** job queues (email sending, image processing), RPC, complex routing patterns, low-latency messaging, moderate volume (thousands/sec). **Kafka** — STREAMING LOG model. Messages retained; multiple consumer groups replay independently. Ordered per-partition. **Best for:** event sourcing, high-volume streaming (millions/sec), replayable event bus, analytics/CDC. **Rule:** RabbitMQ for TASK DISTRIBUTION and RPC; Kafka for STREAMING and event history. Many teams use BOTH: RabbitMQ for immediate jobs, Kafka for the event log." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What are quorum queues?**\n\n**A:** Quorum queues (RabbitMQ 3.8+) are the modern HA queue type — replicated across multiple broker nodes using Raft consensus. A quorum queue with N replicas survives (N-1)/2 replica failures without data loss. **Contrast with mirrored (classic) queues** — legacy replication, prone to split-brain, being deprecated. **Trade-offs:** quorum queues are more predictable + consistent; slightly higher latency + memory than classic; can't hold non-durable messages. **Rule:** for new production deployments, use quorum queues for anything durable + important. Classic queues fine for single-node dev or non-critical short-lived work." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q7: How do you make a RabbitMQ consumer idempotent?**\n\n**A:** Same techniques as Kafka. Because network glitches cause the broker to redeliver even after successful processing (broker didn't see the ack), consumers MUST assume messages will arrive more than once. **Techniques:** **(1) Producer-supplied idempotency key** — UUID per business action; consumer checks Redis SET NX `processed:{key}` before running side effects. **(2) DB unique constraint** on event id; catch duplicate on INSERT. **(3) Conditional UPDATE** — `UPDATE orders SET status='CHARGED' WHERE id=42 AND status='PENDING'` — no-op if already charged. **(4) Deterministic state derivation** — recompute state from all events; duplicates converge to same value. **Rule:** every side effect (external API call, DB write, email) needs its own idempotency safety. Rely on the broker for delivery; rely on your code for correctness." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Small to medium services** — RabbitMQ is the default message broker for many Spring Boot / Django / Rails apps.\n- **Celery (Python), Sidekiq (Ruby), Bull (Node)** — job queue frameworks often built on Redis, but Celery also supports RabbitMQ.\n- **Reddit, Instagram (task queues), Robinhood** — public RabbitMQ users.\n- **CloudAMQP** — managed RabbitMQ.\n- **RPC patterns** — Reply-To queues.\n- **NOT for** — high-volume streaming, event sourcing, replay (use Kafka)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **AMQP 1.0** (different from 0-9-1) — supported via plugin; used by Azure Service Bus, ActiveMQ.\n- **MQTT plugin** — RabbitMQ can speak MQTT (IoT).\n- **STOMP plugin** — text-based messaging protocol.\n- **Federation + Shovel** — cross-broker message transfer.\n- **Priority queues** — `x-max-priority` for priority messages.\n- **Delayed messages** — via delayed-message plugin.\n- **Stream queues (RabbitMQ 3.9+)** — Kafka-like log inside RabbitMQ; use for hybrid workloads.\n- **`rabbitmqctl`** — CLI for cluster operations.\n- **Management UI** — inspect queues, publish messages, view stats.\n- **Prometheus + Grafana** — monitoring.\n- **`spring-cloud-stream-binder-rabbit`** — abstracts broker; same code works with Kafka.\n- **Consumer prefetch (QoS)** — how many unacked messages a consumer can hold.\n- **Consistent hash exchange (plugin)** — sharding by routing key hash.\n- **Publisher confirms + returns** — reliable publishing." }
   ],
   "flashcards": [
-    { "front": "AMQP flow?", "back": "Producer → Exchange → (bindings) → Queue → Consumer (with ack)." },
-    { "front": "Kafka vs RabbitMQ in one line?", "back": "Kafka: ordered log/streaming. RabbitMQ: flexible routing + task queues with per-message ack." },
-    { "front": "What is a DLX?", "back": "A dead-letter exchange that receives rejected/expired messages for later inspection or retry." }
+    { "front": "RabbitMQ model?", "back": "Producer -> Exchange -> (routing rules) -> Queue -> Consumer -> ack -> DELETED." },
+    { "front": "Four exchange types?", "back": "Direct (exact key), Fanout (broadcast), Topic (pattern), Headers (metadata)." },
+    { "front": "Production ack mode?", "back": "Manual ack — commit after processing; requires idempotent consumer." },
+    { "front": "Dead-letter exchange?", "back": "Route failed messages after N retries to an investigation queue. Non-negotiable." },
+    { "front": "vs Kafka?", "back": "RabbitMQ = task queue (consume removes). Kafka = replayable log (many consumers, retained events)." },
+    { "front": "Modern HA queue type?", "back": "Quorum queues (Raft consensus). Classic mirrored queues being deprecated." }
   ],
   "quiz": [
-    { "q": "In RabbitMQ, producers send to a…", "options": ["Queue directly", "Exchange, which routes to queues", "Consumer", "Broker root"], "answer": 1, "explain": "Exchanges own routing; queues receive after binding." },
-    { "q": "For pattern routing like 'orders.eu.*' use…", "options": ["direct", "fanout", "topic", "headers"], "answer": 2, "explain": "Topic exchanges match patterns on the routing key." },
-    { "q": "A safe consumption pattern is…", "options": ["auto-ack + no retries", "manual ack + prefetch + DLX", "no ack + no timeouts", "single consumer only"], "answer": 1, "explain": "Manual acks + DLX prevent loss and handle poison messages." }
+    { "q": "Model?", "options": ["Log with replay", "Producer -> Exchange -> Queue -> Consumer -> ack (deletes)", "None", "Kafka clone"], "answer": 1, "explain": "Task queue semantics." },
+    { "q": "Fanout exchange?", "options": ["Random one queue", "Broadcasts to ALL bound queues", "Routes by header", "One consumer only"], "answer": 1, "explain": "Ignores routing key." },
+    { "q": "Prod ack?", "options": ["Auto-ack", "Manual ack after processing", "No ack", "Nack always"], "answer": 1, "explain": "Prevents data loss." },
+    { "q": "DLX purpose?", "options": ["Speed", "Route failed messages after retries; unblock main queue", "Encryption", "Backup"], "answer": 1, "explain": "Handle poison messages." },
+    { "q": "For high-volume streaming?", "options": ["RabbitMQ", "Kafka", "Neither", "Both same"], "answer": 1, "explain": "Kafka's optimized for it." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Publish/consume messages via a direct exchange." },
-    { "level": "Medium", "text": "Add a topic exchange and route to two queues." },
-    { "level": "Hard", "text": "Add retry with exponential backoff via delayed exchange + DLX." },
-    { "level": "Expert", "text": "Set up a mirrored HA cluster and test failover." }
+    { "level": "Easy", "text": "docker-compose RabbitMQ + Management UI; publish via CLI." },
+    { "level": "Easy", "text": "Direct exchange producer + consumer in Spring Boot." },
+    { "level": "Medium", "text": "Fanout: publish once, three consumers each receive their own copy." },
+    { "level": "Medium", "text": "Topic: subscribe to `orders.paid.*` and `orders.#`; verify pattern matching." },
+    { "level": "Hard", "text": "DLX + manual ack + retry-with-backoff; verify move-to-DLQ." },
+    { "level": "Hard", "text": "Idempotent consumer with Redis SET NX; simulate redelivery." },
+    { "level": "Expert", "text": "RPC pattern: reply-to + correlation-id; measure round-trip latency." }
   ],
   "interviewQuestions": [
-    "Explain producer → exchange → queue.",
-    "When choose Kafka vs RabbitMQ?",
-    "What is a Dead Letter Exchange?",
-    "Manual vs auto ack?",
-    "How do you handle retries and idempotency?"
+    "What is RabbitMQ and how does it work?",
+    "What are the four exchange types?",
+    "How does message acknowledgement work?",
+    "What's a Dead Letter Exchange (DLX)?",
+    "RabbitMQ vs Kafka — when to use which?",
+    "What are quorum queues?",
+    "How do you make a RabbitMQ consumer idempotent?"
   ],
   "references": [
-    { "label": "RabbitMQ — tutorials", "url": "https://www.rabbitmq.com/getstarted.html" }
+    { "label": "RabbitMQ docs", "url": "https://www.rabbitmq.com/documentation.html" },
+    { "label": "Spring AMQP reference", "url": "https://docs.spring.io/spring-amqp/reference/html/" }
   ]
 }
