@@ -1,51 +1,85 @@
 {
   "id": "db.isar",
   "levelId": 8,
-  "title": "Isar",
+  "title": "Isar (Flutter NoSQL)",
   "xp": 40,
-  "estimatedMinutes": 20,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Explain Isar's NoSQL model + native performance",
-    "Query with indexes and full-text search",
-    "Watch data with streams"
+    "Understand Isar via a real-life analogy",
+    "See why it's ~10x faster than SQLite for many workloads",
+    "Model collections + indexes + queries idiomatically",
+    "Use links (relations without SQL)",
+    "Answer Isar interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Isar is a fast, cross-platform NoSQL database for Flutter/Dart — schemas defined by Dart classes with codegen, native binaries under the hood, and rich query + full-text + relation support." },
-    { "type": "code", "language": "dart", "code": "@collection\nclass User {\n  Id id = Isar.autoIncrement;\n  @Index(caseSensitive: false) late String name;\n  late DateTime createdAt;\n}\n\nfinal isar = await Isar.open([UserSchema]);\nawait isar.writeTxn(() => isar.users.put(User()..name = 'Ada'));\nfinal adas = await isar.users.filter().nameEqualTo('Ada').findAll();" },
-    { "type": "table", "headers": ["", "Isar", "Drift"], "rows": [
-      ["Model", "Documents + relations", "Relational SQL"],
-      ["Perf", "Very fast native store", "Fast SQLite"],
-      ["Queries", "Query DSL + indexes + FTS", "SQL + typed DSL"],
-      ["Reactivity", "watch() on collections/queries", "Streams on tables"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Isar as a race-tuned motorcycle vs SQLite's family sedan.**\n\n- SQLite (with Drift) is a solid, well-understood family sedan. Gets you everywhere, well-known, comfortable, universal.\n- **Isar** is a purpose-built race motorcycle from the Hive author. Rebuilt from the ground up in **Rust**, with **memory-mapped I/O**, **zero-copy** deserialization, **compile-time indexed queries**. Its benchmarks show 5-10x throughput of SQLite for typical Flutter workloads.\n\n**Concretely:** Isar is a NoSQL, embedded database for Dart + Flutter. Data is organized into **collections** of typed Dart objects. Queries use a fluent Dart DSL (no SQL). Reactive streams built in. Indexes are compile-time declared. Cross-collection **links** replace SQL foreign keys. Written in Rust for speed + safety.\n\n**Where it shines:**\n- **Query-heavy Flutter apps** — 'give me all products where price < 100 and category = electronics'.\n- **Offline-first apps with real data** — reactive .watch() queries mean UI auto-updates.\n- **High-throughput workloads** — real-time analytics on device, sync engines, chat message stores.\n- **Migration from Hive** — same author, same 'Dart-first' feel, way more power.\n\n**Trade-offs:**\n- **No SQL** — you can't leverage decades of SQL knowledge.\n- **Newer** — smaller community than SQLite; changes over time.\n- **Isar 3 vs Isar 4** — Isar 4 was a rewrite; check current stability + docs before adopting.\n- **Codegen required** — `build_runner` on every schema change.\n\n**The 2026 reality:** Isar is a strong choice for NEW Flutter apps that want speed + reactive queries + no SQL. Drift/SQLite is the safer, longer-track-record default for the same goals. Both are excellent — the choice often comes down to team preference and whether you want SQL." },
+    { "type": "callout", "variant": "definition", "markdown": "**Isar** is a fast, cross-platform, NoSQL database for Flutter and Dart. Written in Rust, with memory-mapped I/O and zero-copy reads. Data lives in **collections** of typed Dart objects (like Hive, but with queries). Supports **rich queries** (fluent DSL), **compile-time indexes**, **cross-collection links** (relations), **reactive streams**, and **full-text search**. From the author of Hive; addresses Hive's query limitations. Best for query-heavy Flutter apps needing high performance without SQL." },
+    { "type": "theory", "markdown": "## Sample program — a real Isar setup" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml:\n//   dependencies:\n//     isar: ^3.1.0+1\n//     isar_flutter_libs: ^3.1.0+1\n//     path_provider: ^2.1.4\n//   dev_dependencies:\n//     isar_generator: ^3.1.0+1\n//     build_runner: ^2.4.13\n\n// user.dart\nimport 'package:isar/isar.dart';\npart 'user.g.dart';\n\n@Collection()\nclass User {\n  Id id = Isar.autoIncrement;                   // primary key\n\n  @Index(unique: true, replace: true)\n  late String email;                             // indexed for equality lookups\n\n  @Index(caseSensitive: false)                   // case-insensitive text index\n  late String name;\n\n  DateTime? createdAt;\n\n  @Enumerated(EnumType.name)                     // store enum as string\n  UserStatus status = UserStatus.active;\n\n  // Cross-collection link (like a foreign key, but bidirectional)\n  final orders = IsarLinks<Order>();\n}\n\nenum UserStatus { active, banned, pending }\n\n@Collection()\nclass Order {\n  Id id = Isar.autoIncrement;\n\n  @Index()\n  late int totalCents;\n\n  late DateTime createdAt;\n\n  final owner = IsarLink<User>();                // singular link back\n}\n\n// Run: dart run build_runner build --delete-conflicting-outputs\n\n// ============ Open + use the database ============\nimport 'package:isar/isar.dart';\nimport 'package:path_provider/path_provider.dart';\n\nlate final Isar isar;\n\nFuture<void> openIsar() async {\n  final dir = await getApplicationDocumentsDirectory();\n  isar = await Isar.open(\n    [UserSchema, OrderSchema],                    // generated schemas\n    directory: dir.path,\n  );\n}\n\n// CRUD\nfinal ada = User()\n  ..email = 'ada@x.com'\n  ..name = 'Ada Lovelace'\n  ..createdAt = DateTime.now();\n\nawait isar.writeTxn(() async {\n  await isar.users.put(ada);\n});\n\n// Query — fluent DSL, compile-time-verified\nfinal recentActiveAdults = await isar.users\n    .filter()\n    .statusEqualTo(UserStatus.active)\n    .and()\n    .createdAtGreaterThan(DateTime(2026, 1, 1))\n    .sortByCreatedAtDesc()\n    .limit(20)\n    .findAll();\n\n// Reactive stream — auto-emits on writes\nStream<List<User>> topSpendersStream() {\n  return isar.users\n      .filter()\n      .statusEqualTo(UserStatus.active)\n      .watch(fireImmediately: true);\n}\n\n// Links — cross-collection relations without SQL FKs\nfinal user = await isar.users.get(1);\nawait user!.orders.load();                       // fetch linked orders\nprint(user.orders.length);                       // typed collection\n\n// Full-text search\nfinal matches = await isar.users\n    .filter()\n    .nameStartsWith('ada')\n    .findAll();" },
+    { "type": "theory", "markdown": "## Why Isar is fast" },
+    { "type": "table", "headers": ["Feature", "How it helps"], "rows": [
+      ["**Written in Rust**", "Zero garbage-collection overhead; efficient memory management"],
+      ["**Memory-mapped I/O**", "OS caches pages of the DB in RAM — reads are effectively zero-cost after warm-up"],
+      ["**Zero-copy reads**", "Deserialize objects directly from the mmap'd region; no intermediate buffers"],
+      ["**Compile-time schema**", "No runtime schema resolution — indexes and layouts baked at build"],
+      ["**Native code, not FFI-per-call**", "Batched operations minimize FFI crossings"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "Isar's edge: **write speed and cross-platform native perf** without dealing with SQL migrations. Great for mobile-first apps with lots of local data. Downside: smaller community/tooling than SQLite-backed Drift." },
-    { "type": "callout", "variant": "mistake", "markdown": "Doing multiple writes without a `writeTxn` — each write is its own transaction (slower). Batch writes inside one transaction." },
-    { "type": "callout", "variant": "tip", "markdown": "Index only the fields you filter/sort on. Isar's queries use only one index at a time — compose your indexes to match your top queries." }
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Forgetting `writeTxn` for writes.** All writes must go through a transaction. `await isar.writeTxn(() async { await isar.users.put(u); })`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Not indexing common query columns.** Without an index on `email`, `.filter().emailEqualTo(...)` scans all rows." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Not calling `.load()` on links.** Links are lazy — `user.orders.length` is 0 until you load." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Adopting Isar 4 blindly for a production app.** Isar 4 has been in flux; verify current stability. Isar 3 is well-established." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Migration from Hive without a data-copy step.** Hive TypeAdapters and Isar collections are different formats. Migrations need explicit transfer code." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Index every query filter.** `@Index()` on commonly-filtered fields." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Use `writeTxn` for writes, `txn` for reads.** Batching operations in one transaction is much faster." },
+    { "type": "callout", "variant": "best", "markdown": "**3. `IsarLinks` for many-to-many, `IsarLink` for one-to-one.** Bidirectional link management built in." },
+    { "type": "callout", "variant": "best", "markdown": "**4. `.watch(fireImmediately: true)` for reactive UI.** Emits current value + all subsequent changes." },
+    { "type": "callout", "variant": "best", "markdown": "**5. `@Enumerated(EnumType.name)` for enums.** Human-readable, evolvable." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Test on real devices for perf claims.** Benchmarks vary by workload; measure YOUR workload." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is Isar and how is it different from Hive?**\n\n**A:** Isar is a fast, NoSQL, cross-platform database for Flutter + Dart from the Hive author. **Differences from Hive:** (1) **Rich queries** (filter, sort, limit, aggregate) — Hive is KV-only. (2) **Compile-time indexes** — order-of-magnitude faster than Hive iterating. (3) **Cross-collection links** — one-to-many + many-to-many relations without FK ceremony. (4) **Written in Rust with memory-mapped I/O** — 5-10x SQLite throughput for many workloads. **Best for:** query-heavy Flutter apps that want NoSQL + speed + reactive streams. **Not for:** apps that need SQL portability (leverage SQL knowledge, cross-team consistency)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How do queries work in Isar?**\n\n**A:** Fluent Dart DSL over compile-time-verified schema. Example:\n```dart\nisar.users\n  .filter()\n  .statusEqualTo(UserStatus.active)\n  .and()\n  .createdAtGreaterThan(cutoff)\n  .sortByCreatedAtDesc()\n  .limit(20)\n  .findAll();\n```\nEvery `.filter*`, `.sortBy*` method is generated from your schema — no strings, no runtime typos. Queries use indexed lookups automatically when available. **`.watch()`** returns a Stream that auto-emits on collection writes. **`findFirst()`, `findAll()`, `count()`, `deleteAll()`** — typical terminal operations. Very fast because Isar's query engine reads directly from memory-mapped pages." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What are IsarLinks and IsarLink?**\n\n**A:** Cross-collection relations without SQL foreign keys. **`IsarLink<T>`** — one-to-one (a Order has one User owner). **`IsarLinks<T>`** — one-to-many (a User has many Orders). Declared as `final orders = IsarLinks<Order>();` on the collection class. **Lazy loading:** `user.orders.length` is 0 until `await user.orders.load()`. Bidirectional links can be inverse-populated via `@Backlink(to: '...')`. **Compared to SQL FKs:** no separate join table for many-to-many; Isar handles the mapping. **Compared to embedding:** references maintain identity — updating a User once updates all references." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: When would you pick Isar over Drift/SQLite?**\n\n**A:** **Pick Isar when:** (1) You don't need SQL (team doesn't require it, workload doesn't need JOINs across many tables). (2) Query speed is critical — benchmarks matter for your app (analytics, sync, real-time). (3) You want a modern, Flutter-first NoSQL. **Pick Drift/SQLite when:** (1) You want SQL knowledge to transfer. (2) You need mature migration + backup ecosystem. (3) You want the safest, longest-track-record choice. **Also:** consider Drift for teams that value cross-platform SQL familiarity (backend engineers use SQL too), Isar for teams that are all Flutter-front-end. **Both are excellent for their niches.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What's the state of Isar 3 vs Isar 4?**\n\n**A:** As of early 2026 — Isar 3 is the stable, widely-used version. Isar 4 has been under long development with significant API changes; adoption depends on current stability. **Recommendation:** for a new production app RIGHT NOW, use Isar 3 unless Isar 4 is documented stable in the docs. Watch the GitHub for status. Historically, Isar has evolved rapidly — this is a trade-off vs SQLite's decades of stability. When Isar 4 stabilizes, migration guides will be provided; for now, prefer Isar 3 for production." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Growing Flutter apps** that need NoSQL + queries + performance.\n- **Offline-first apps with reactive UI**.\n- **Analytics on-device**.\n- **Chat/message caches** where read/write throughput matters.\n- **Migration from Hive** — same 'feel', more power.\n- **NOT for** — apps where SQL knowledge should transfer to backend, or apps needing years-established migration tooling." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`@Enumerated(EnumType.name)`** — store enum as name string (safe against reordering).\n- **`@Index(type: IndexType.value)`** — control index storage strategy.\n- **Composite indexes** — `@Index(composite: [CompositeIndex('field2')])`.\n- **Full-text search** — `@Index(type: IndexType.value, caseSensitive: false)` + `startsWith`, `contains`.\n- **Encryption** — via `encryptionKey` when opening Isar.\n- **Inspector** — visual DB inspector during dev.\n- **Instance sharing across isolates** — via `Isar.getInstance()`.\n- **Web support** — via WASM.\n- **Backup / export** — file-based; copy the Isar file.\n- **Migration between schema versions** — currently manual; watch for improvements.\n- **`writeTxnSync` / `txnSync`** — synchronous variants for hot paths." }
   ],
   "flashcards": [
-    { "front": "What is Isar's model?", "back": "NoSQL documents defined by Dart classes with codegen; native binaries provide speed." },
-    { "front": "How do you batch writes?", "back": "Inside a single writeTxn() closure." },
-    { "front": "Isar's reactivity primitive?", "back": "watch() on a collection or query returns a Stream that emits on changes." }
+    { "front": "Isar one-liner?", "back": "Fast NoSQL DB for Flutter; Rust-backed; queries + indexes + streams + links; from Hive author." },
+    { "front": "vs Hive?", "back": "Hive = KV only. Isar = KV + queries + indexes + links + streams. Isar is Hive's successor." },
+    { "front": "Query DSL?", "back": "Fluent Dart: .filter().xEqualTo(y).sortBy().limit(N).findAll()." },
+    { "front": "Links?", "back": "IsarLink<T> (1:1) and IsarLinks<T> (1:N). Lazy — call .load() before use." },
+    { "front": "Why fast?", "back": "Rust core + memory-mapped I/O + zero-copy reads + compile-time schema." },
+    { "front": "Writes?", "back": "Always in isar.writeTxn(() async { ... }). Reads outside a txn are fine." },
+    { "front": "vs Drift?", "back": "Isar = NoSQL + speed. Drift = SQL + type safety + reactive. Pick by workload + team." }
   ],
   "quiz": [
-    { "q": "Isar is best described as…", "options": ["A cloud DB", "A native cross-platform NoSQL DB for Dart", "A KV store like Hive", "A GraphQL engine"], "answer": 1, "explain": "Document model + indexes + native perf." },
-    { "q": "For fast bulk writes…", "options": ["One write per transaction", "Wrap them in one writeTxn()", "Disable indexes", "Use isolates only"], "answer": 1, "explain": "One transaction avoids per-write overhead." },
-    { "q": "Isar's queries use…", "options": ["Multiple indexes at once", "One index at a time", "No indexes ever", "SQL joins"], "answer": 1, "explain": "Design indexes to match your top queries." }
+    { "q": "Isar's core language?", "options": ["Dart only", "Rust core with Dart bindings", "C++", "Kotlin"], "answer": 1, "explain": "Rust for speed + safety." },
+    { "q": "Query returning a Stream?", "options": ["findAll()", ".watch(fireImmediately: true)", "get()", "list()"], "answer": 1, "explain": "Auto-emits on collection writes." },
+    { "q": "Writes require…", "options": ["Nothing special", "isar.writeTxn(() async { ... })", "Manual FFI", "raw SQL"], "answer": 1, "explain": "Batched transactions." },
+    { "q": "IsarLinks?", "options": ["Just references", "1:N relations, lazy — call .load()", "Only strings", "Deprecated"], "answer": 1, "explain": "Bidirectional link collections." },
+    { "q": "vs Drift?", "options": ["Isar always faster", "Isar = NoSQL, Drift = SQL. Pick by shape of data + team", "Drift deprecated", "Same thing"], "answer": 1, "explain": "Different niches." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Define a collection and insert/read a document." },
-    { "level": "Medium", "text": "Add an index and query with filter().equalTo()." },
-    { "level": "Hard", "text": "Model a one-to-many relation with links." },
-    { "level": "Expert", "text": "Add full-text search over a collection and watch results as a Stream." }
+    { "level": "Easy", "text": "User collection with @Index on email; put + get." },
+    { "level": "Easy", "text": "Fluent query: active users sorted by createdAt." },
+    { "level": "Medium", "text": "IsarLinks: User → Orders; load + iterate." },
+    { "level": "Medium", "text": "Reactive .watch() bound to a StreamBuilder." },
+    { "level": "Hard", "text": "Composite index; sort by two fields." },
+    { "level": "Hard", "text": "Encrypted Isar instance; key from Secure Storage." },
+    { "level": "Expert", "text": "Migrate a Hive-backed app to Isar with a data-copy step." }
   ],
   "interviewQuestions": [
-    "Isar vs Drift vs Hive?",
-    "How does Isar achieve high write throughput?",
-    "How do transactions work?",
-    "How do you index a query?",
-    "How do you handle schema changes?"
+    "What is Isar and how is it different from Hive?",
+    "How do queries work in Isar?",
+    "What are IsarLinks and IsarLink?",
+    "When would you pick Isar over Drift/SQLite?",
+    "What's the state of Isar 3 vs Isar 4?"
   ],
   "references": [
-    { "label": "Isar docs", "url": "https://isar.dev" }
+    { "label": "Isar docs", "url": "https://isar.dev" },
+    { "label": "isar on pub.dev", "url": "https://pub.dev/packages/isar" }
   ]
 }

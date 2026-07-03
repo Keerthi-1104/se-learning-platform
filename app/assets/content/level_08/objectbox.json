@@ -1,51 +1,80 @@
 {
   "id": "db.objectbox",
   "levelId": 8,
-  "title": "ObjectBox",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "title": "ObjectBox (Flutter Object DB)",
+  "xp": 35,
+  "estimatedMinutes": 25,
   "objectives": [
-    "Explain ObjectBox's object-first, native design",
-    "Use relations and queries efficiently",
-    "Enable Sync for offline-first"
+    "Understand ObjectBox via a real-life analogy",
+    "See its object-oriented model + built-in vector search",
+    "Distinguish from Isar / Hive / Drift",
+    "Handle relations (ToOne / ToMany) properly",
+    "Answer ObjectBox interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "ObjectBox is a very fast, native embedded object database (C++ core) with clients in many languages (Dart/Flutter, Java/Kotlin, Swift, Go). Objects in, objects out — no ORM mapping code." },
-    { "type": "code", "language": "dart", "code": "@Entity()\nclass User {\n  @Id() int id = 0;\n  String name;\n  final orders = ToMany<Order>();      // relation\n  User(this.name);\n}\nfinal store = await openStore();\nfinal box = store.box<User>();\nbox.put(User('Ada'));\nfinal all = box.query().build().find();" },
-    { "type": "table", "headers": ["Feature", "ObjectBox"], "rows": [
-      ["Model", "Objects + relations (ToOne, ToMany)"],
-      ["Perf", "Native C++ core; best-in-class writes"],
-      ["Query", "Builder DSL + indexes"],
-      ["Sync (paid)", "Multi-device data sync built in"]
-    ]},
-    { "type": "callout", "variant": "interview", "markdown": "ObjectBox is the choice when you need **raw local speed** with strongly-typed objects and no SQL boilerplate. Its optional Sync product is a differentiator for teams building offline-first collaborative apps." },
-    { "type": "callout", "variant": "mistake", "markdown": "Ignoring the Store lifecycle: opening/closing repeatedly leaks resources. Open once, close on app termination. Also: forgetting to run codegen after entity changes." },
-    { "type": "callout", "variant": "tip", "markdown": "Index only what you query. Use lazy loading for large ToMany relations. Version-tag your data model when you migrate." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of ObjectBox as an object storage room where you put entire toys instead of parts on shelves.**\n\n- In a **relational DB (SQL)**, you break every toy down into parts and store them on labeled shelves (columns) — the toy's wheels on one shelf, its body on another. Reassembling on read costs work.\n- In **ObjectBox**, you store the WHOLE toy as-is. When you retrieve it, you get the object back exactly as you put it in. No decomposition, no reassembly, no ORM mapping layer.\n\n**Concretely:** ObjectBox is a NoSQL, object-oriented database for Flutter, Android, iOS, and desktop. **You store Dart objects directly** — no ORM ceremony, no manual JSON serialization. Fast (their benchmarks put it faster than SQLite/Realm/Hive for most operations). Backed by native C++ code + Dart FFI.\n\n**Where it shines:**\n- **Object-graph-heavy apps** — deep relations (User → Orders → OrderItems → Products) navigate naturally.\n- **On-device AI + vector search** — built-in HNSW vector search for RAG / semantic search / embeddings (a rare feature for embedded DBs).\n- **Cross-platform sync** — ObjectBox Sync (commercial) provides multi-device sync out of the box.\n- **High-throughput workloads** — real-time analytics, sensor logging, chat.\n\n**Trade-offs:**\n- **Smaller community** than SQLite/Hive/Isar in the Flutter world.\n- **Sync is a paid feature** (ObjectBox Sync) — not free.\n- **Native code + FFI** — larger app size than pure-Dart Hive/Isar.\n- **Licensing** — Apache 2.0 for core, commercial for Sync + Vector Search (as of 2026, verify current terms).\n\n**When to consider ObjectBox:** you specifically need on-device vector search for AI/RAG use cases, or you're already using ObjectBox in the Android/Java world and want Dart parity. Otherwise, Drift / Isar / Hive cover most Flutter needs first." },
+    { "type": "callout", "variant": "definition", "markdown": "**ObjectBox** is a NoSQL, object-oriented database for mobile + embedded, with native Dart / Flutter bindings. Data lives in **boxes** of typed Dart objects. Uses a native C++ core via FFI for speed. Supports **ToOne / ToMany relations**, **reactive queries**, **encryption**, and (as of ObjectBox 4+) **built-in HNSW vector search** for embeddings — a differentiator vs Hive/Isar. Multi-platform sync available (paid). From the German company ObjectBox Ltd. Best for object-graph-heavy or vector-search Flutter apps." },
+    { "type": "theory", "markdown": "## Sample program — ObjectBox in Flutter" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml:\n//   dependencies:\n//     objectbox: ^4.0.0\n//     objectbox_flutter_libs: ^4.0.0\n//     path_provider: ^2.1.4\n//   dev_dependencies:\n//     objectbox_generator: ^4.0.0\n//     build_runner: ^2.4.13\n\n// user.dart\nimport 'package:objectbox/objectbox.dart';\n\n@Entity()\nclass User {\n  @Id() int id = 0;                        // primary key (0 = auto-assign)\n\n  @Unique()\n  @Index()\n  String email;\n\n  String name;\n\n  DateTime? createdAt;\n\n  // Relations — bidirectional by design\n  final orders = ToMany<Order>();          // 1:N\n  final profile = ToOne<Profile>();        // 1:1\n\n  User({required this.email, required this.name, this.createdAt});\n}\n\n@Entity()\nclass Order {\n  @Id() int id = 0;\n\n  @Index()\n  int totalCents = 0;\n\n  DateTime createdAt = DateTime.now();\n\n  final owner = ToOne<User>();             // back-reference (auto by ObjectBox)\n}\n\n@Entity()\nclass Profile { /* ... */ }\n\n// Run: dart run build_runner build --delete-conflicting-outputs\n\n// ============ Open + use ============\nimport 'objectbox.g.dart';                  // generated by build_runner\nimport 'package:path_provider/path_provider.dart';\nimport 'package:path/path.dart' as p;\n\nlate final Store store;\nlate final Box<User> userBox;\nlate final Box<Order> orderBox;\n\nFuture<void> openObjectBox() async {\n  final dir = await getApplicationDocumentsDirectory();\n  store = await openStore(directory: p.join(dir.path, 'objectbox'));\n  userBox  = store.box<User>();\n  orderBox = store.box<Order>();\n}\n\n// Insert\nfinal ada = User(email: 'ada@x.com', name: 'Ada Lovelace', createdAt: DateTime.now());\nada.id = userBox.put(ada);                   // put returns the assigned id\n\n// Add a related order\nfinal order = Order()..totalCents = 4299;\norder.owner.target = ada;                    // ToOne\norderBox.put(order);\nada.orders.add(order);                       // ToMany\nuserBox.put(ada);\n\n// Query — fluent DSL\nfinal query = userBox.query(User_.email.equals('ada@x.com')).build();\nfinal ada2 = query.findFirst();\nquery.close();\n\n// Complex query\nfinal recentBigSpenders = orderBox\n    .query(Order_.totalCents.greaterThan(10000)\n           .and(Order_.createdAt.greaterThan(DateTime(2026, 1, 1).millisecondsSinceEpoch)))\n    .order(Order_.totalCents, flags: Order.descending)\n    .build();\nfinal top = recentBigSpenders.find();\nrecentBigSpenders.close();\n\n// Reactive stream\nfinal stream = userBox.query().watch(triggerImmediately: true);\nstream.listen((q) {\n  final users = q.find();\n  print('now ${users.length} users');\n});\n\n// ============ Vector search (ObjectBox 4+) ============\n// For on-device semantic search / RAG / embeddings\n\n@Entity()\nclass Document {\n  @Id() int id = 0;\n  String text = '';\n\n  @HnswIndex(dimensions: 768)                // vector index — HNSW nearest-neighbor\n  @Property(type: PropertyType.floatVector)\n  List<double> embedding = [];\n}\n\nfinal docs = store.box<Document>();\n\n// Add a doc with its embedding\ndocs.put(Document()..text = 'Ada wrote the first program'..embedding = myEmbedding(text));\n\n// Nearest-neighbor search\nfinal query = docs\n    .query(Document_.embedding.nearestNeighborsF32(queryVector, 5))\n    .build();\nfinal similar = query.find();                // top-5 semantically closest documents\nquery.close();" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Not closing queries.** Every `.build()` opens a native resource; leaks pile up. Always `.close()`. Or use `Query.findAsync()` which closes automatically." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Forgetting to persist relations.** `user.orders.add(order)` only updates the in-memory link; you need `userBox.put(user)` (or `applyToDb: true` param on some methods) to persist." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Not indexing frequently-queried fields.** Same rule as any DB — `@Index` on WHERE columns." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Assuming sync is free.** ObjectBox Sync is a paid product; verify pricing before committing to it as your sync solution." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Ignoring the `objectbox_flutter_libs` size hit.** Native libs add MBs to your app; use split-per-abi releases (`--split-per-abi` in Flutter build)." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Always close queries.** Or use `findAsync`." },
+    { "type": "callout", "variant": "best", "markdown": "**2. `@Index` + `@Unique`** on business identifiers (email, sku)." },
+    { "type": "callout", "variant": "best", "markdown": "**3. ToOne / ToMany for relations** — objects link naturally." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Batch writes in a transaction** — `store.runInTransaction()`." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Vector search — leverage HNSW for on-device RAG.** ObjectBox's differentiator." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Backup by copying the ObjectBox directory** — files, easy." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — User + Order entities.** Put, get, query by email." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Relations.** ToMany from User to Orders; iterate." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Reactive query.** `.watch()` bound to StreamBuilder." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Vector search.** Compute embeddings for 100 documents; find top-5 similar to a query embedding." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert) — Batched writes.** Insert 100k users in a single transaction; measure vs one-at-a-time." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is ObjectBox?**\n\n**A:** ObjectBox is a NoSQL, object-oriented database for Flutter + Dart (also Android, iOS, desktop). You store Dart objects directly — no ORM mapping layer. Native C++ core via FFI for speed. Supports ToOne/ToMany relations, reactive queries, encryption, and (as of ObjectBox 4+) built-in **HNSW vector search** for on-device AI / semantic search — a differentiator among embedded DBs. **Best for:** object-graph-heavy Flutter apps, apps needing on-device vector search, teams already using ObjectBox on Android. **Not for:** most Flutter apps — Drift, Isar, or Hive cover typical needs and have larger communities." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: ObjectBox vs Isar for a Flutter app?**\n\n**A:** Both are NoSQL, fast, cross-platform, native-backed. **ObjectBox** — built-in vector search (huge for RAG/AI features), commercial sync product, longer history (originated in Android/Java world). **Isar** — Flutter-first design, pure Rust, active in the Flutter ecosystem, from the Hive author. **Rule for 2026:** if you specifically need on-device vector search or paid sync → ObjectBox. Otherwise → Isar has the momentum in Flutter. Both are fast and capable; the choice comes down to specific features and team familiarity. Neither is dramatically better for typical CRUD workloads." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do relations work in ObjectBox?**\n\n**A:** Two types: **`ToOne<T>`** — 1:1 relation. `order.owner.target = user;` establishes the link. **`ToMany<T>`** — 1:N or N:M. `user.orders.add(order);`. **Bidirectional** — ObjectBox generates the back-references automatically. **Lazy loading** — accessing `user.orders` triggers a DB query for related items. **Persistence** — after modifying a relation, call `box.put(user)` to save. **Compared to SQL FKs:** no separate join table needed for many-to-many; ObjectBox handles the mapping internally. **Compared to Isar's IsarLinks:** ObjectBox integrates a bit more seamlessly (no explicit `.load()` needed for most cases); Isar's model is more explicit." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What is HNSW and why is it valuable in a DB?**\n\n**A:** **HNSW (Hierarchical Navigable Small World)** is a graph-based nearest-neighbor search algorithm — the industry standard for vector similarity search. Given a query vector, HNSW returns the top-K most similar vectors in near-logarithmic time, even across millions of vectors. **Why in ObjectBox:** RAG (retrieval-augmented generation) and on-device semantic search need this. Traditionally you'd run a separate vector DB (Pinecone, Weaviate, Chroma). ObjectBox has it BUILT IN — one library covers both structured data + vectors. For Flutter apps building on-device AI features (search, chatbots, semantic content), this is a big deal. **Trade-off:** the vector-search feature may be gated (verify current licensing)." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Android/Java apps** — ObjectBox has been popular in native Android for years; Flutter bindings are the newer path.\n- **On-device AI apps** — the vector search feature is unique among embedded DBs.\n- **Multi-device apps** — ObjectBox Sync (paid) provides sync.\n- **Not commonly seen** in typical Flutter apps yet — Drift/Isar dominate that space.\n- **When to consider:** genuinely needing HNSW, or already in an ObjectBox shop." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`Store.runInTransaction()`** — batch writes.\n- **Async queries** — `.findAsync()` runs off UI thread.\n- **Query builder** — supports `and`, `or`, `not`, ordering, limit, offset.\n- **Encryption** — enable with `openStore(macosApplicationGroup: ..., debugFlag: DebugFlags.logAsyncQueue)` and specify encryption key.\n- **`admin`** — ObjectBox Admin lets you inspect the DB in a browser at dev time.\n- **Backup** — copy the ObjectBox directory (data.mdb, lock.mdb files).\n- **Sync** — ObjectBox Sync product supports multi-device, offline-first, conflict resolution.\n- **App size** — native libs add ~5-10 MB; use `--split-per-abi` when building.\n- **Type support** — primitives, strings, DateTime, List<primitives>, custom @Property(type:) mappings.\n- **Migrations** — schema evolution via UID annotations; complex migrations may need manual data copy." }
   ],
   "flashcards": [
-    { "front": "ObjectBox's core language?", "back": "C++, with client bindings in Dart, Java/Kotlin, Swift, Go, etc." },
-    { "front": "Two relation types?", "back": "ToOne<T> and ToMany<T> in the entity class." },
-    { "front": "ObjectBox differentiator?", "back": "Very fast writes + an optional multi-device Sync product for offline-first." }
+    { "front": "ObjectBox one-liner?", "back": "NoSQL object DB; native C++ core via FFI; ToOne/ToMany relations; built-in HNSW vector search (4+)." },
+    { "front": "Differentiator vs Isar/Hive?", "back": "Built-in HNSW vector search — for on-device AI/RAG use cases." },
+    { "front": "Relations?", "back": "ToOne<T> for 1:1, ToMany<T> for 1:N. Bidirectional. Persist with box.put()." },
+    { "front": "Queries?", "back": "Fluent DSL — .query(X_.field.equals(y)).build().find(). Always .close() or use findAsync." },
+    { "front": "Sync?", "back": "ObjectBox Sync = paid product. Not part of open-source core." },
+    { "front": "When pick it?", "back": "Need on-device vector search or already an ObjectBox shop. Otherwise Isar/Drift/Hive." }
   ],
   "quiz": [
-    { "q": "ObjectBox is powered by…", "options": ["A SQL engine", "A native C++ core", "Firebase", "Postgres"], "answer": 1, "explain": "C++ core with language bindings." },
-    { "q": "Two relation types are…", "options": ["OneToOne / ManyToMany", "ToOne / ToMany", "HasA / IsA", "ForeignKey / Primary"], "answer": 1, "explain": "Dart ToOne<T> and ToMany<T>." },
-    { "q": "Best-fit use case?", "options": ["Cloud analytics", "Local offline-first apps needing speed + optional sync", "Static assets", "Web-only apps"], "answer": 1, "explain": "Native local DB with an optional Sync product." }
+    { "q": "Unique ObjectBox feature?", "options": ["SQL support", "Built-in HNSW vector search", "Free sync", "Pure Dart"], "answer": 1, "explain": "On-device semantic search." },
+    { "q": "Relations?", "options": ["Just references", "ToOne<T> and ToMany<T> with automatic back-refs", "SQL joins", "None"], "answer": 1, "explain": "Bidirectional." },
+    { "q": "Sync (multi-device)?", "options": ["Free with library", "Paid ObjectBox Sync product", "Not supported", "Cloud-only"], "answer": 1, "explain": "Verify pricing." },
+    { "q": "Query cleanup?", "options": ["Automatic", ".close() or use findAsync", "Ignored", "Sync only"], "answer": 1, "explain": "Native resources." },
+    { "q": "Backend?", "options": ["Pure Dart", "Native C++ core via FFI", "SQL", "JavaScript"], "answer": 1, "explain": "For speed." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Define a User entity, put and find some objects." },
-    { "level": "Medium", "text": "Add a ToMany relation and query across it." },
-    { "level": "Hard", "text": "Benchmark ObjectBox vs Isar for 100k inserts." },
-    { "level": "Expert", "text": "Prototype ObjectBox Sync across two clients." }
+    { "level": "Easy", "text": "User + Order entities; put, get, query by email." },
+    { "level": "Easy", "text": "@Unique + @Index on email; verify constraint." },
+    { "level": "Medium", "text": "ToMany relation: User with orders; add, iterate, persist." },
+    { "level": "Medium", "text": "Reactive .watch() → StreamBuilder list." },
+    { "level": "Hard", "text": "Batched insert of 100k rows in one transaction; measure vs one-at-a-time." },
+    { "level": "Hard", "text": "Vector search: 100 documents with embeddings; find top-5 similar to a query vector." },
+    { "level": "Expert", "text": "Bidirectional sync via ObjectBox Sync (paid — evaluation license)." }
   ],
   "interviewQuestions": [
-    "What is ObjectBox and its differentiator?",
-    "How do relations work?",
-    "ObjectBox vs Isar vs Drift?",
-    "How do you handle data-model migrations?",
-    "What is ObjectBox Sync?"
+    "What is ObjectBox?",
+    "ObjectBox vs Isar for a Flutter app?",
+    "How do relations work in ObjectBox?",
+    "What is HNSW and why is it valuable in a DB?"
   ],
   "references": [
-    { "label": "ObjectBox docs", "url": "https://docs.objectbox.io" }
+    { "label": "ObjectBox for Dart/Flutter", "url": "https://docs.objectbox.io/getting-started" },
+    { "label": "objectbox on pub.dev", "url": "https://pub.dev/packages/objectbox" }
   ]
 }

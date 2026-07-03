@@ -71,136 +71,18 @@ body.push(...topicToChapter(loadTopic("level_08", "mongodb"),
 body.push(...topicToChapter(loadTopic("level_08", "sqlite"),
   { chapterNumber: 4, bookmarkId: "ch4" }));
 
-body.push(H1("5. Hive", "ch5"));
-body.push(callout("definition", ["Pure-Dart lightweight NoSQL key-value store: data in boxes (like Maps), no native code, no query engine — just fast get/put."]));
-body.push(code([
-  "await Hive.initFlutter();",
-  "final box = await Hive.openBox('settings');",
-  "await box.put('theme', 'dark');",
-  "final t = box.get('theme', defaultValue: 'light');",
-], "hive"));
-body.push(callout("interview", ["Hive shines for app preferences, small caches, and simple lookups where SQLite/Isar are overkill. For any structured data with queries or joins, reach for Drift or Isar."]));
-body.push(...summary([
-  "Pure-Dart key-value store; boxes are files.",
-  "TypeAdapters + build_runner for custom classes.",
-  "Encrypt sensitive boxes with HiveAesCipher.",
-  "Not a query engine — reach for Drift/Isar when needed.",
-]));
-body.push(...interview([
-  "When choose Hive over SQLite?",
-  "How do TypeAdapters work?",
-  "How to encrypt Hive data?",
-  "Lazy box vs box?",
-  "When have you outgrown Hive?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Persist a theme setting with Hive." },
-  { level: "Medium", text: "Store a User class via a TypeAdapter." },
-  { level: "Hard", text: "Encrypt a box; rotate the key." },
-  { level: "Expert", text: "Migrate from Hive to Isar/Drift as data outgrows KV." },
-]));
-body.push(...realworld(["Tons of Flutter apps use Hive for settings, tokens, and small caches — including this very SE Learning Platform for progress/XP."]));
-body.push(...miniproject(["Add Hive-backed favorites/bookmarks to a small app; export/import boxes as JSON."]));
-body.push(...advanced(["Hive vs Hive-CE, Isar migration paths, secure enclave for cipher keys."]));
+body.push(...topicToChapter(loadTopic("level_08", "hive"),
+  { chapterNumber: 5, bookmarkId: "ch5" }));
 
-// 6. Drift
-body.push(H1("6. Drift", "ch6"));
-body.push(callout("definition", ["Reactive typed persistence layer over SQLite for Flutter/Dart. Tables in Dart or .drift SQL files; generated type-safe APIs; Streams that emit on table changes."]));
-body.push(code([
-  "class Users extends Table {",
-  "  IntColumn get id => integer().autoIncrement()();",
-  "  TextColumn get name => text()();",
-  "}",
-  "Stream<List<User>> watchAll() =>",
-  "  (select(users)..orderBy([(u) => OrderingTerm.desc(u.id)])).watch();",
-], "drift"));
-body.push(callout("interview", ["Drift = full SQL power + compile-time type safety. Scales from a small table to complex joins; streams make offline-first UIs trivial (query re-emits when tables change)."]));
-body.push(...summary([
-  "SQLite under the hood + typed Dart DSL + Streams.",
-  ".drift files for complex SQL you want reviewed as SQL.",
-  "Background isolate for heavy work.",
-  "Versioned migrations + Drift's schema tests.",
-]));
-body.push(...interview([
-  "Drift vs Isar vs Hive?",
-  "How does Drift give type safety?",
-  "How do reactive queries work?",
-  "How to handle migrations?",
-  "When move Drift to a background isolate?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Users table + watch stream." },
-  { level: "Medium", text: "Migration adding a column with default backfill." },
-  { level: "Hard", text: "Complex JOIN in a .drift file with typed API." },
-  { level: "Expert", text: "Background isolate; measure UI jank." },
-]));
-body.push(...realworld(["Drift is popular for offline-first apps with rich schemas — inventory apps, field-service tools, reader apps with sync."]));
-body.push(...miniproject(["Ship a reactive Notes app in Drift with categories + tags + full-text search."]));
-body.push(...advanced(["Drift on Web via WASM SQLite, ffi vs Moor bridges, custom types, virtual columns."]));
+body.push(...topicToChapter(loadTopic("level_08", "drift"),
+  { chapterNumber: 6, bookmarkId: "ch6" }));
 
-// 7. Isar
-body.push(H1("7. Isar", "ch7"));
-body.push(callout("definition", ["Fast cross-platform NoSQL DB for Flutter/Dart. Schema by Dart classes with codegen; native binaries; rich query + full-text + relations."]));
-body.push(code([
-  "@collection",
-  "class User {",
-  "  Id id = Isar.autoIncrement;",
-  "  @Index(caseSensitive: false) late String name;",
-  "}",
-  "final adas = await isar.users.filter().nameEqualTo('Ada').findAll();",
-], "isar"));
-body.push(callout("interview", ["Isar's edge: write speed and native perf without SQL migrations. Great for mobile-first apps with lots of local data. Downside: smaller community/tooling than SQLite-backed Drift."]));
-body.push(...summary([
-  "NoSQL document model + indexes + FTS + relations.",
-  "Batch writes inside writeTxn().",
-  "One index per query; design indexes for top queries.",
-  "watch() for reactive Streams.",
-]));
-body.push(...interview([
-  "Isar vs Drift vs Hive?",
-  "How does Isar achieve high write throughput?",
-  "How do transactions work?",
-  "How to index a query?",
-  "How to handle schema changes?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "Collection + put/find." },
-  { level: "Medium", text: "Index + filter().equalTo() query." },
-  { level: "Hard", text: "One-to-many with links." },
-  { level: "Expert", text: "Full-text search + reactive Stream." },
-]));
-body.push(...realworld(["Isar is chosen for consumer apps with heavy local data (bookmarks, chat history, offline media caches) where raw speed matters."]));
-body.push(...miniproject(["Build an offline library reader with Isar: 10k books, index title/author, full-text over descriptions."]));
-body.push(...advanced(["Isar v4 changes, custom types, encryption, running Isar in a background isolate."]));
+body.push(...topicToChapter(loadTopic("level_08", "isar"),
+  { chapterNumber: 7, bookmarkId: "ch7" }));
 
-// 8. ObjectBox
-body.push(H1("8. ObjectBox", "ch8"));
-body.push(callout("definition", ["Very fast native embedded object database (C++ core) with clients in Dart/Flutter, Java/Kotlin, Swift, Go. Objects in, objects out."]));
-body.push(callout("interview", ["ObjectBox is the choice for raw local speed with typed objects and no SQL boilerplate. Its optional Sync product is a differentiator for offline-first collaborative apps."]));
-body.push(...summary([
-  "C++ core with language bindings.",
-  "Relations via ToOne / ToMany.",
-  "Very fast writes; small footprint.",
-  "Optional Sync for multi-device data sync.",
-]));
-body.push(...interview([
-  "What differentiates ObjectBox?",
-  "How do relations work?",
-  "ObjectBox vs Isar vs Drift?",
-  "How to handle model migrations?",
-  "What is ObjectBox Sync?",
-]));
-body.push(...coding([
-  { level: "Easy", text: "User entity, put/find." },
-  { level: "Medium", text: "ToMany + query across it." },
-  { level: "Hard", text: "Benchmark 100k inserts vs Isar." },
-  { level: "Expert", text: "Prototype ObjectBox Sync across two clients." },
-]));
-body.push(...realworld(["Used in high-performance IoT, industrial, and mobile apps where every millisecond of write latency matters."]));
-body.push(...miniproject(["Offline-first inventory app: ObjectBox local, optional Sync between two devices with conflict handling."]));
-body.push(...advanced(["Vector search in ObjectBox, encryption, backups, migration strategies."]));
+body.push(...topicToChapter(loadTopic("level_08", "objectbox"),
+  { chapterNumber: 8, bookmarkId: "ch8" }));
 
-// 9. Realm
 body.push(H1("9. Realm", "ch9"));
 body.push(callout("definition", ["MongoDB's object-oriented mobile database with live objects — query results stay in sync with the DB — and optional Atlas Device Sync."]));
 body.push(callout("interview", ["Live-object model is Realm's superpower: writes make all held references reflect changes immediately. Combined with Device Sync, this makes real-time collaborative apps unusually simple."]));
