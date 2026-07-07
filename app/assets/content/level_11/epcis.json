@@ -1,51 +1,103 @@
 {
   "id": "gs1.epcis",
   "levelId": 11,
-  "title": "EPCIS",
-  "xp": 50,
-  "estimatedMinutes": 25,
+  "title": "EPCIS — Electronic Product Code Information Services",
+  "xp": 60,
+  "estimatedMinutes": 50,
   "objectives": [
-    "Explain EPCIS's event model",
-    "Distinguish the four event types",
-    "Emit and query EPCIS events"
+    "Understand EPCIS via a real-life analogy",
+    "Distinguish the 5 event types + CBV vocabularies",
+    "Design queries via EPCIS 2.0 REST APIs",
+    "Publish + subscribe to events across parties",
+    "Fit EPCIS into a Flutter app + backend architecture",
+    "Answer EPCIS interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "**EPCIS** (Electronic Product Code Information Services) is the GS1 standard for **event-based supply-chain visibility**. Every meaningful action — shipped, received, packed, dispensed — becomes a structured event with GTINs/SSCCs/GLNs, timestamps, business step, and disposition. Version 2.0 (2022) is JSON/JSON-LD-based." },
-    { "type": "table", "headers": ["Event type", "Purpose"], "rows": [
-      ["ObjectEvent", "Something happened to one or more objects (ship, receive)"],
-      ["AggregationEvent", "Objects packed/unpacked into a container (SSCC ↔ SGTINs)"],
-      ["TransactionEvent", "Objects associated with a business transaction (PO, invoice)"],
-      ["TransformationEvent", "Inputs consumed → outputs produced (manufacturing)"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of EPCIS as the log format + query language for supply-chain events.**\n\nEvery physical event (packed, shipped, received, dispensed, disaggregated) that touches a GS1 identifier gets recorded as an EPCIS event — a structured JSON (or XML) with WHO, WHAT, WHEN, WHERE, WHY. Parties store their own events + expose them via a standard REST API so other parties (regulators, downstream partners) can query.\n\n- **Event = a fact about a physical thing at a moment** — 'at 2026-03-10 14:23 UTC, SGTIN X was shipped from GLN Y to GLN Z on PO 12345.'\n- **5 event types** — Object, Aggregation, Transaction, Transformation, Association (2.0).\n- **CBV (Core Business Vocabulary)** — standardized values for `bizStep` (shipping, receiving, packing, dispense, destroy) + `disposition` (in_transit, in_progress, sold, destroyed).\n- **Master data** — separate GLN + product + party metadata shared alongside events.\n- **Query API** — get events matching filters (SGTIN, time, GLN, bizStep) via EPCIS Query Language.\n- **Subscribe** — long-poll or webhook for real-time event delivery.\n\n**Why EPCIS is the backbone of every serious modern supply-chain / pharma app:** without it, each party stores in its own DB + no interop = fragmented trace. With EPCIS, cross-party queries answer 'where is this batch?' in seconds. GS1 EPCIS 2.0 (2022+) moves to JSON-LD + REST + open standard — dramatically easier to implement in modern stacks including Flutter." },
+    { "type": "callout", "variant": "definition", "markdown": "**EPCIS (Electronic Product Code Information Services)** is a GS1 standard for capturing + sharing supply-chain events. **Model:** an event describes a physical activity involving one or more EPCs (SGTINs, SSCCs). **Event types (5):** Object, Aggregation, Transaction, Transformation, Association. **Vocabularies:** CBV (Core Business Vocabulary) standardizes bizStep + disposition values. **API:** EPCIS 2.0 defines REST endpoints for capture + query + subscribe using JSON-LD. **Governance:** ISO/IEC 19987 + GS1 standards." },
+    { "type": "theory", "markdown": "## Event types" },
+    { "type": "table", "headers": ["Event type", "Describes", "Example"], "rows": [
+      ["**ObjectEvent**", "One or more EPCs observed", "SGTIN X shipped"],
+      ["**AggregationEvent**", "EPCs aggregated into parent", "SGTINs packed onto SSCC"],
+      ["**DisaggregationEvent**", "Parent broken into children", "SSCC unpacked into SGTINs"],
+      ["**TransactionEvent**", "EPCs linked to a business transaction (PO)", "Delivery confirmation"],
+      ["**TransformationEvent**", "Input EPCs → output EPCs", "Repacking, cutting cloth, blending"],
+      ["**AssociationEvent (2.0)**", "Link identifiers (SGTIN ↔ RFID)", "Tag applied to unit"]
     ]},
-    { "type": "code", "language": "json", "code": "{\n  \"type\": \"ObjectEvent\",\n  \"eventTime\": \"2026-07-01T10:15:30Z\",\n  \"eventTimeZoneOffset\": \"+05:30\",\n  \"epcList\": [ \"urn:epc:id:sgtin:8901234.00001.SN-777\" ],\n  \"action\": \"OBSERVE\",\n  \"bizStep\": \"urn:epcglobal:cbv:bizstep:shipping\",\n  \"disposition\": \"urn:epcglobal:cbv:disp:in_transit\",\n  \"readPoint\": { \"id\": \"urn:epc:id:sgln:8901234.00021.dock5\" },\n  \"bizLocation\": { \"id\": \"urn:epc:id:sgln:8901234.00021.0\" }\n}" },
-    { "type": "callout", "variant": "interview", "markdown": "EPCIS is powerful because it **standardizes 'what happened' across companies**. A regulator, brand, retailer and 3PL can each ingest the same event stream and reconstruct the same picture. Version 2.0 adopted JSON/JSON-LD, so modern APIs feel native to REST engineers." },
-    { "type": "callout", "variant": "mistake", "markdown": "Skipping `readPoint` vs `bizLocation` — different fields with different meanings. `readPoint` = exactly where the scan happened (dock door); `bizLocation` = the business site the object is at (warehouse). Confusing them corrupts location-based queries." },
-    { "type": "callout", "variant": "best", "markdown": "For a manufacturer flow: TransformationEvent (make) → AggregationEvent (pack into SSCC) → ObjectEvent (ship) → ObjectEvent (receive at retailer) → ObjectEvent (dispense to consumer). Store events append-only; drive dashboards from CBV vocabularies (bizStep, disposition)." }
+    { "type": "theory", "markdown": "## Anatomy of an ObjectEvent (EPCIS 2.0 JSON)" },
+    { "type": "code", "language": "json", "code": "{\n  \"@context\": \"https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld\",\n  \"eventID\": \"ni:///sha-256;abcdef123...\",\n  \"type\": \"ObjectEvent\",\n  \"eventTime\": \"2026-03-10T14:23:00Z\",\n  \"eventTimeZoneOffset\": \"+05:30\",\n  \"recordTime\": \"2026-03-10T14:23:05Z\",\n  \"epcList\": [\n    \"urn:epc:id:sgtin:8901234.567895.001\",\n    \"urn:epc:id:sgtin:8901234.567895.002\"\n  ],\n  \"action\": \"OBSERVE\",\n  \"bizStep\": \"https://ref.gs1.org/cbv/BizStep-shipping\",\n  \"disposition\": \"https://ref.gs1.org/cbv/Disp-in_transit\",\n  \"readPoint\": {\"id\": \"urn:epc:id:sgln:8901234.00001.0\"},\n  \"bizLocation\": {\"id\": \"urn:epc:id:sgln:8901234.00001.0\"},\n  \"bizTransactionList\": [\n    {\n      \"type\": \"https://ref.gs1.org/cbv/BTT-po\",\n      \"bizTransaction\": \"urn:epcglobal:cbv:bt:po:12345\"\n    }\n  ],\n  \"sourceList\": [\n    {\"type\": \"https://ref.gs1.org/cbv/SDT-owning_party\",\n     \"source\": \"urn:epc:id:pgln:8901234.00001\"}\n  ],\n  \"destinationList\": [\n    {\"type\": \"https://ref.gs1.org/cbv/SDT-owning_party\",\n     \"destination\": \"urn:epc:id:pgln:8901234.00002\"}\n  ]\n}" },
+    { "type": "theory", "markdown": "## EPCIS 2.0 REST API surface" },
+    { "type": "code", "language": "bash", "code": "# Capture — POST an event\ncurl -X POST https://epcis.example.com/capture \\\n  -H 'Content-Type: application/ld+json' \\\n  -d @event.json\n\n# Query events\ncurl 'https://epcis.example.com/queries/all?EQ_bizStep=shipping&GE_eventTime=2026-03-01T00:00:00Z'\n\n# Subscribe (webhook)\ncurl -X POST https://epcis.example.com/queries/all/subscriptions \\\n  -d '{\"destination\":\"https://mycallback.example.com/hook\", \"schedule\":\"immediate\"}'\n\n# Get specific event by ID\ncurl 'https://epcis.example.com/events/{eventID}'\n\n# Get all events for an EPC\ncurl 'https://epcis.example.com/eventTypes/ObjectEvent/events?EQ_MATCH_epc=urn:epc:id:sgtin:8901234.567895.001'" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Missing eventID.** No dedup on replay. Compute a stable hash of event contents + partner ID." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Non-CBV bizStep values.** Custom strings break interop; use the CBV URIs." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Missing readPoint + bizLocation.** Regulators reject." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: PII in event extensions.** Never." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: XML EPCIS 1.x for new projects.** 2.0 JSON-LD is the modern standard; XML is legacy." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Not versioning events.** Schema evolution + regulator changes; keep event `type` + `@context` current." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Global timestamps in local timezone.** Store in UTC; `eventTimeZoneOffset` for local reference." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Central single-DB assumption.** Each party owns their events; share via query/subscribe API." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. EPCIS 2.0 JSON-LD** for new projects." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Idempotent eventID** hash for replay safety." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Strict CBV vocabulary** — no custom strings." },
+    { "type": "callout", "variant": "best", "markdown": "**4. All 5 dimensions (WHO/WHAT/WHEN/WHERE/WHY)** in every event." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Master data separately** from events." },
+    { "type": "callout", "variant": "best", "markdown": "**6. UTC timestamps + tz offset.**" },
+    { "type": "callout", "variant": "best", "markdown": "**7. Rate-limit + auth** on capture + query endpoints." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Sensor payloads** via 2.0 SensorEvent extension." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Generate a valid ObjectEvent JSON in Dart." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Capture endpoint: POST an event to a local EPCIS server (drift-backed)." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Query endpoint: filter events by bizStep + time range." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — AggregationEvent + subsequent DisaggregationEvent for a pallet." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Subscribe via webhook + verify HMAC signature." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Cross-partner event share: mock a two-party pipeline with idempotent replay + audit trail." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What are the 5 EPCIS event types + when do you use each?**\n\n**A:** **(1) ObjectEvent** — one or more EPCs observed at a location + time (most common; used for commissioning, shipping, receiving, dispense). **(2) AggregationEvent** — child EPCs added to a parent (SGTINs packed onto SSCC pallet). **(3) DisaggregationEvent** — child EPCs removed from a parent (pallet broken into cases). **(4) TransactionEvent** — link EPCs to a business transaction (a PO delivery confirmation, an invoice reference). **(5) TransformationEvent** — inputs consumed + outputs produced (blending, cutting, repacking; food ingredient → product). **(6) AssociationEvent (2.0)** — link two identifiers (SGTIN ↔ RFID EPC). **Each event has REQUIRED dimensions:** action (ADD/OBSERVE/DELETE), eventTime, eventTimeZoneOffset, readPoint, bizLocation, bizStep, disposition. **Interviewer signal:** knowing all 5 + when to use each shows depth." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What is CBV + why does it matter?**\n\n**A:** **CBV (Core Business Vocabulary)** is GS1's standardized VALUE SET for EPCIS fields — bizStep (shipping / receiving / commissioning / dispense / destroy / repacking / …), disposition (in_transit / in_progress / sold / destroyed / recalled / …), source-destination-type (owning_party / possessing_party / …), transaction-type (po / invoice / bol / …). **Why it matters:** interop. If Party A uses `shipping` + Party B uses `ship` + Party C uses `outbound` — cross-party queries can't unify. CBV forces everyone to use the same URIs. Also CBV values encode as URIs like `https://ref.gs1.org/cbv/BizStep-shipping` — self-describing + resolvable. **Trap:** using custom strings for bizStep = breaks EPCIS conformance + regulator submission. Always use CBV." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How does EPCIS 2.0 differ from 1.x?**\n\n**A:** **EPCIS 1.x** (~2007) — XML data format; SOAP + REST APIs; monolithic centralized repositories. **EPCIS 2.0** (2022+) — JSON-LD data format; **REST-only** API surface with clear endpoint patterns; **AssociationEvent** + **SensorEvent** extensions; cleaner schema. **Benefits:** JSON-LD parses + queries with modern tooling (Node, Python, Dart); REST endpoints are easier than SOAP; sensor + IoT-native events. **Migration path:** legacy 1.x systems still exist; adapters convert; regulators (India CDSCO) supported both during transition. **New projects → 2.0 by default**; 1.x only when integrating with a legacy partner. Interviewer bonus: knowing the SensorEvent addition." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How would you architect cross-party event sharing?**\n\n**A:** **(1) Each party runs an EPCIS repository** — could be a hosted service (RaphAI, Movilitas, Systech) or self-built on Postgres. **(2) Capture endpoint** — receives events from party's internal systems (POS, WMS, ERP). **(3) Query + subscribe API** — exposes events to authorized partners. **(4) Authorization** — OAuth 2.0 + scopes; a wholesaler can query events for SGTINs they own or received. **(5) Idempotency** — eventID hash prevents duplicates on retry. **(6) Rate-limit** on partner queries. **(7) Regulator submission** — dispense events pushed to CDSCO / DSCSA per regulation. **(8) Consortium hubs** in some sectors — central repository parties push to + query. **(9) Change data capture** — internal DB → EPCIS events via triggers or Kafka Connect. **The mental model** — federated event ownership + standardized interop API. Interviewer signal: not proposing a monolith." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How would you consume EPCIS events from a Flutter app?**\n\n**A:** **(1) Backend service** proxies EPCIS repository (never expose raw repo to mobile; add auth + caching). **(2) REST client (Dio) with typed API** — Retrofit-generated interfaces. **(3) Local cache** — Isar / drift for offline event browsing; last-N events per SGTIN. **(4) UI** — timeline view of an SGTIN's journey (scan → chain); recall dashboard; cold-chain history. **(5) FCM push** on subscribed criteria — 'when SGTIN in a recall batch is scanned anywhere, notify.' **(6) Capture flow** — worker scans SGTIN + confirms bizStep → app POSTs an ObjectEvent to the backend. **(7) Offline capture queue** — WorkManager retries when connectivity returns. **(8) Auth** — OAuth to the backend; scoped access per user role. **(9) Analytics** — event volume, capture-fail rate, sync lag. **(10) Compliance UI** — show regulator submission status per event." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What are common performance + scale considerations?**\n\n**A:** **Scale reality:** a global pharma brand emits ~10 events per SGTIN × billions of SGTINs = petabytes. **Design:** (1) **Time-partitioned storage** (BigQuery, Snowflake, Postgres partitioned tables). (2) **Indexes on epcList + eventTime + bizStep + bizLocation** — most queries filter these. (3) **Streaming ingest** via Kafka / Pub/Sub → materialized event store. (4) **Cold storage** for historic events (compliance retention often 7-10 years). (5) **Query optimization** — precomputed views for common queries ('latest event per SGTIN'). (6) **Rate-limits + query throttles.** (7) **Pagination + cursor** on large result sets. (8) **CDN caching** for stable historical data. (9) **Read-replica** for query traffic. (10) **Cost monitoring** — compliance data explodes if not partitioned + tiered. Interviewer signal: knowing this is a data-engineering problem, not just an API." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Pharma track-and-trace** — CDSCO / DSCSA / EU FMD.\n- **Cold chain** — vaccines + biologics.\n- **Food safety** — farm-to-fork.\n- **Anti-counterfeit** — luxury + medical.\n- **Retail Sunrise 2027** — consumer trace via Digital Link + EPCIS backends.\n- **NOT ideal for** — low-value FMCG (batch trace enough); non-serialized goods." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **@context** — JSON-LD context anchoring vocabulary.\n- **CBV URIs** — `https://ref.gs1.org/cbv/…`.\n- **EQL (EPCIS Query Language)** — subset of query params for filtering.\n- **Master Data (MD)** — separate REST endpoint for GLN / product / party metadata.\n- **Subscribe schedules** — immediate / periodic / cron.\n- **Sensor Element (2.0)** — attaches temperature / humidity / other readings.\n- **Error codes** — 400 for validation, 404 for missing, 401 for unauthorized.\n- **Standard REST paths** — /capture /events /eventTypes /queries /subscriptions /vocabularies.\n- **JSON Schema** — 2.0 ships with a schema for validation.\n- **Extension attributes** — beyond CBV, custom `bizStepExt` etc. discouraged for interop.\n- **Time series analytics** — Grafana / Superset dashboards on the event repository.\n- **Regulator connectors** — CDSCO submission format is a superset of standard EPCIS." }
   ],
   "flashcards": [
-    { "front": "Four EPCIS event types?", "back": "Object, Aggregation, Transaction, Transformation." },
-    { "front": "readPoint vs bizLocation?", "back": "readPoint = where the scan happened (specific); bizLocation = the business site the object is now at." },
-    { "front": "EPCIS 2.0 format?", "back": "JSON / JSON-LD (was XML in 1.x) — much friendlier for modern REST." }
+    { "front": "EPCIS 2.0 format?", "back": "JSON-LD + REST endpoints; replaces XML SOAP of 1.x." },
+    { "front": "Event dimensions?", "back": "WHO (party) + WHAT (EPCs) + WHEN (time) + WHERE (readPoint/bizLocation) + WHY (bizStep + disposition)." },
+    { "front": "5 event types?", "back": "Object / Aggregation / Disaggregation / Transaction / Transformation (+ Association in 2.0)." },
+    { "front": "CBV?", "back": "Core Business Vocabulary — standardized URIs for bizStep + disposition values." },
+    { "front": "Idempotency key?", "back": "eventID — stable hash of event contents; dedup on replay." },
+    { "front": "Interop pattern?", "back": "Each party owns events; standardized REST endpoints (capture / query / subscribe)." },
+    { "front": "Sensor payloads?", "back": "SensorEvent (2.0 extension) for cold chain + IoT readings." }
   ],
   "quiz": [
-    { "q": "Packing items into an SSCC pallet is a…", "options": ["ObjectEvent", "AggregationEvent", "TransactionEvent", "TransformationEvent"], "answer": 1, "explain": "Aggregation captures parent↔children object relationships." },
-    { "q": "readPoint captures…", "options": ["Which company", "The exact scan location", "The business site", "The disposition"], "answer": 1, "explain": "Specific place (e.g., dock door) where the scan occurred." },
-    { "q": "EPCIS 2.0 uses…", "options": ["Only XML", "JSON / JSON-LD", "CSV only", "MessagePack"], "answer": 1, "explain": "REST + JSON friendly by design." }
+    { "q": "Latest EPCIS format?", "options": ["XML 1.0", "JSON-LD 2.0", "CSV", "protobuf"], "answer": 1, "explain": "2.0 = JSON-LD + REST." },
+    { "q": "SSCC pack event?", "options": ["ObjectEvent", "AggregationEvent (parent + children)", "TransactionEvent", "Disaggregation"], "answer": 1, "explain": "Children linked to parent SSCC." },
+    { "q": "bizStep should use…", "options": ["Custom strings", "CBV URIs", "Company enum", "Random"], "answer": 1, "explain": "Interop requirement." },
+    { "q": "Central monolithic EPCIS repo?", "options": ["Yes", "No — federated per party, standardized API", "iOS only", "Free tier"], "answer": 1, "explain": "Each party owns their events." },
+    { "q": "Cold-chain readings via?", "options": ["Custom fields", "SensorEvent (2.0)", "None", "Excel"], "answer": 1, "explain": "IoT-native event type." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Emit an ObjectEvent JSON for a 'shipping' step." },
-    { "level": "Medium", "text": "Build an AggregationEvent packing 10 SGTINs into an SSCC." },
-    { "level": "Hard", "text": "Query event history for a given SGTIN across a stream store." },
-    { "level": "Expert", "text": "Implement CBV-driven dashboards (bizStep + disposition) for a mock retailer." }
+    { "level": "Easy", "text": "Generate a valid ObjectEvent JSON in Dart." },
+    { "level": "Medium", "text": "Capture endpoint POST + drift-backed local repository." },
+    { "level": "Medium", "text": "Query endpoint: filter by bizStep + time range." },
+    { "level": "Hard", "text": "AggregationEvent + DisaggregationEvent for a pallet lifecycle." },
+    { "level": "Hard", "text": "Subscribe via webhook + verify HMAC signature." },
+    { "level": "Expert", "text": "Cross-party pipeline: mock 2 parties + idempotent replay + audit trail." }
   ],
   "interviewQuestions": [
-    "Four EPCIS event types?",
-    "readPoint vs bizLocation?",
-    "How does EPCIS enable cross-actor traceability?",
-    "EPCIS 1.x vs 2.0?",
-    "How do you query event history?"
+    "What are the 5 EPCIS event types + when each?",
+    "What is CBV + why does it matter?",
+    "How does EPCIS 2.0 differ from 1.x?",
+    "Architect cross-party event sharing?",
+    "Consume EPCIS events from a Flutter app?",
+    "Performance + scale considerations?"
   ],
   "references": [
-    { "label": "GS1 EPCIS 2.0", "url": "https://www.gs1.org/standards/epcis" }
+    { "label": "GS1 EPCIS 2.0", "url": "https://ref.gs1.org/standards/epcis/" },
+    { "label": "GS1 CBV", "url": "https://ref.gs1.org/cbv/" },
+    { "label": "ISO/IEC 19987", "url": "https://www.iso.org/standard/64758.html" }
   ]
 }

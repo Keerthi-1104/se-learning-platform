@@ -2,44 +2,105 @@
   "id": "gs1.serialization",
   "levelId": 11,
   "title": "Serialization",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 50,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Explain SGTIN, SSCC serial semantics",
-    "Design a serial-number allocator",
-    "Meet DSCSA / FMD regulatory needs"
+    "Understand serialization via a real-life analogy",
+    "Distinguish SGTIN, SGLN, SSCC + other serialized identifiers",
+    "Generate serials — sequential vs random vs UUID-like",
+    "Handle serial exhaustion + partitioning + collision defense",
+    "Fit serialization into regulatory + operational workflows",
+    "Answer serialization interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "**Serialization** attaches a unique per-unit identifier to each physical item. GTIN identifies the product type; serialization identifies **this specific bottle / this specific pallet**. The GS1 EPC syntax combines them: **SGTIN** = GTIN + serial, **SSCC** = its own serial." },
-    { "type": "code", "language": "text", "code": "SGTIN (Serialized GTIN) URN:\n  urn:epc:id:sgtin:8901234.00001.SN-777\n           GCP           Item     Serial\n\nOn a pack (GS1 DataMatrix):\n  <FNC1> 01 08901234000015 21 SN-777 17 261231 10 BATCH42\n     GTIN(14)          Serial(≤20)   Expiry     Batch\n\nRegulatory 'four elements' on pharma packs (DSCSA, EU FMD):\n  GTIN + Serial + Batch + Expiry" },
-    { "type": "callout", "variant": "interview", "markdown": "Serial-space design matters: use a **random serial** for tamper resistance (attackers can't guess valid serials) or a **counter** for auditability, but never mix. Keep the space large (10–12 chars) so exhaustion doesn't force reissue. Reserve a checksum/HMAC-like segment if you want offline validation." },
-    { "type": "callout", "variant": "mistake", "markdown": "Sequential serials 000001, 000002, … printed in the clear. Attackers infer volumes and generate valid-looking clones. Prefer **randomized** or **format-preserving encrypted** serials." },
-    { "type": "callout", "variant": "best", "markdown": "For pharma/regulated flows, generate serials centrally with an authenticated allocator; log every allocation to an EPCIS commissioning event. For consumer engagement, keep serials short + human-friendly on-pack (for shorter URLs)." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of serialization as issuing a passport number to every individual physical unit.**\n\nA GTIN says WHAT the product is; a **serial** says WHICH INDIVIDUAL BOX. Combined, they form an **SGTIN** — Serialized GTIN — uniquely identifying every physical unit worldwide.\n\n- **Regulatory driver** — pharma + medical + high-value goods MUST serialize per DSCSA, EU FMD, India CDSCO.\n- **Anti-counterfeit** — serials + server-side verification catch fakes.\n- **Traceability** — each unit's chain of custody visible via EPCIS events.\n- **Recall precision** — 'recall SGTIN X' vs. 'recall entire batch' saves huge waste.\n\nSerial number strategies:\n- **Sequential** — simple, predictable, but exposes production volume + easy for attackers to guess.\n- **Random** — unpredictable, harder to guess, requires uniqueness check on generation.\n- **UUID-shaped compact** — 20-char alphanumeric fits AI (21) max length.\n- **Cryptographic (HMAC-based)** — serial embeds a signature; verifiable without server call.\n\n**Why every regulated Flutter app deals with serialization:** printing serials on packaging is one problem; storing + querying billions of them is another; verifying + reporting them is a third. Get any wrong + compliance breaks." },
+    { "type": "callout", "variant": "definition", "markdown": "**Serialization** in GS1 = assigning a unique **serial number** to each individual physical unit. Combined with a GS1 key (GTIN → SGTIN, GLN → SGLN, ...) via **AI (21)** (or embedded in URN structure). Serials are up to 20 alphanumeric characters (AI 21 constraint). Governed by brand-owner assignment policies + regulator uniqueness requirements. Central concept in DSCSA, EU FMD, India CDSCO, UDI, and consumer anti-counterfeit flows." },
+    { "type": "theory", "markdown": "## Serialized identifiers cheat sheet" },
+    { "type": "table", "headers": ["Identifier", "Base + serial", "Purpose"], "rows": [
+      ["**SGTIN**", "GTIN + AI (21) serial", "Individual product unit"],
+      ["**SSCC**", "GCP + serial reference", "Logistics unit (pallet/container)"],
+      ["**SGLN**", "GLN + extension component", "Sub-location within a GLN"],
+      ["**GRAI**", "Global Returnable Asset Identifier", "Reusable transport items"],
+      ["**GIAI**", "Global Individual Asset Identifier", "Fixed assets, machinery"],
+      ["**GDTI**", "Global Document Type Identifier + serial", "Documents (invoices, certificates)"],
+      ["**GSRN**", "Global Service Relation Number", "Loyalty members, employees"],
+      ["**GSIN**", "Global Shipment Identification Number", "Group of SSCCs"]
+    ]},
+    { "type": "theory", "markdown": "## Generate a serial — sequential vs random" },
+    { "type": "code", "language": "dart", "code": "class SerialGenerator {\n  final String gcp;\n  int _counter = 0;\n  final Random _rand = Random.secure();\n\n  SerialGenerator(this.gcp);\n\n  /// Sequential: predictable, easy to sort, but exposes production volume.\n  String nextSequential() => '${_counter++}';\n\n  /// Random 16-char alphanumeric — must dedup on generation.\n  String nextRandom(Set<String> issued) {\n    while (true) {\n      final buf = StringBuffer();\n      for (int i = 0; i < 16; i++) {\n        buf.write(_alphabet[_rand.nextInt(_alphabet.length)]);\n      }\n      final s = buf.toString();\n      if (issued.add(s)) return s;\n    }\n  }\n\n  /// HMAC-based: serial doubles as a signature. Verifiable without DB lookup.\n  String nextHmac(int counter, String key) {\n    final data = utf8.encode('$gcp-$counter');\n    final hmac = Hmac(sha256, utf8.encode(key)).convert(data).toString().substring(0, 16);\n    return hmac.toUpperCase();\n  }\n\n  static const _alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';\n}\n\n// SGTIN URN\nString sgtinUrn({required String gtin14, required String serial}) {\n  // Remove indicator digit + check digit from GTIN-14 to derive GCP + itemRef.\n  final gcpLen = 7;   // varies; look up in table\n  final gcp = gtin14.substring(1, 1 + gcpLen);\n  final itemRef = gtin14.substring(1 + gcpLen, 13);\n  return 'urn:epc:id:sgtin:$gcp.$itemRef.$serial';\n}" },
+    { "type": "theory", "markdown": "## Serial exhaustion + partitioning" },
+    { "type": "code", "language": "dart", "code": "// AI (21) allows up to 20 alphanumeric characters — enormous space.\n// If sequential integers, 20-digit range is 10^20 — practically inexhaustible for a single brand.\n// But brand owners often partition by:\n//   - plant (first 2 chars indicate site)\n//   - year of production (next 2 chars)\n//   - sequence within (remaining)\n// e.g., 'IN26' + '00000001' = plant India, 2026, serial 1.\n\n// Reuse policy: GS1 recommends NEVER reusing an SGTIN serial for the same GTIN\n// for at least 4 years after decommissioning. Some regulators require 10 years.\n\n// Collision defense: for random-generated serials, DB unique constraint on\n// (gtin, serial) — insert-then-fail-then-retry pattern with jitter." },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Reusing serials.** Same (GTIN, serial) across products = trace + compliance broken." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Predictable sequential without volume-hiding.** Competitors count your daily output." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Not enforcing DB uniqueness.** Concurrent generators emit dup serials." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Very long serials.** AI (21) allows up to 20 chars; DataMatrix + print quality suffer with long serials." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Ignoring EPC URN format.** SGTIN URNs have specific structure; misformed URNs break EPCIS validation." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Serial with special characters not in AI (21) allowed set.** GS1 restricts to A-Z, 0-9, and a few specific chars." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: No expiry / decommissioning event.** Serials pile up in the active set forever." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: HMAC key in code.** Same issue as any secret — extract from APK; server-side signing only." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Never reuse (GTIN, serial)** for at least 4 years post-decommissioning." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Random or HMAC-based** for anti-counterfeit; sequential OK for internal ops." },
+    { "type": "callout", "variant": "best", "markdown": "**3. DB unique constraint (gtin, serial).**" },
+    { "type": "callout", "variant": "best", "markdown": "**4. Partition namespace** by plant + year to avoid coordination overhead." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Length ≤ 20 chars; prefer 12-16** for print + scan reliability." },
+    { "type": "callout", "variant": "best", "markdown": "**6. AI (21) allowed character set enforced.**" },
+    { "type": "callout", "variant": "best", "markdown": "**7. HMAC signing on server** — never client." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Decommissioning events** close active-set." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Sequential serial generator + SGTIN URN builder." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Random 16-char generator + DB unique enforcement." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Partition serials by plant + year prefix." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — HMAC-signed serial — client verifies signature without server call." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Decommissioning flow: mark serials 'dispensed'; reject re-scans." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Regulator submission: serialize + submit to CDSCO Track & Trace API." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Sequential vs random serials — trade-offs?**\n\n**A:** **Sequential (1, 2, 3, ...):** simple, easy to debug + audit, low DB coordination overhead. **Costs:** exposes production volume ('the sequence advanced by 10 million overnight = 10 M units produced'); attackers guess valid serials for counterfeit. **Random:** uniform distribution; unpredictable; counterfeit resistant. **Costs:** requires DB uniqueness enforcement; slightly higher generation cost; harder to audit ordering. **Hybrid:** partition-then-sequential (plant × year × sequence) — hides overall volume while keeping per-partition ordering. **HMAC-based:** serial IS the signature; verify authenticity by re-signing + comparing. **Rule:** consumer-facing anti-counterfeit → random or HMAC; internal ops → sequential OK. Interviewer signal: knowing the volume-exposure risk." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What's the AI (21) constraint + how do you build a compliant serial?**\n\n**A:** AI (21) allows **up to 20 characters** from a restricted alphabet: uppercase A-Z, digits 0-9, and characters `!\"%&'()*+,-./:;<=>?_` (see GS1 spec for the exact set). No spaces + no lowercase in standard forms. **Case sensitivity:** treated as case-sensitive per GS1 spec. **In practice:** most brands use `A-Z0-9` only (safer across encoding pipelines). **Length:** 12-16 chars balances entropy with DataMatrix print + scan reliability. **Encoding:** in DataMatrix, longer serials = more modules = bigger code. **Interview trap:** using lowercase or specific special chars that break some scanners' decode paths." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do you prevent serial-number collisions in a multi-plant global brand?**\n\n**A:** Options: **(1) Central serial issuance service** — one authority allocates blocks to plants; strong consistency but coordination overhead + single point of failure. **(2) Partitioned namespace** — each plant/year prefix carves out a range; independent generation; no coordination. Recommended for scale. **(3) UUID-based** — each generator emits UUIDs; DB constraint dedups; theoretical collision probability negligible. **(4) Distributed monotonic** (Snowflake ID pattern) — 64-bit counter with plant + time + sequence; each plant has unique bits. **(5) DB unique constraint (GTIN, serial)** as the last line of defense in every strategy; on conflict, retry with new value. **Real-world:** partitioned namespace + DB constraint is the sweet spot. Interviewer signal: recognizing this as distributed-systems territory." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What does decommissioning mean + why does it matter?**\n\n**A:** A serialized unit's LIFECYCLE has a start (commissioning at manufacture) + steps (shipping, receiving, storage) + END (decommissioning). **Decommissioning triggers:** dispense to patient, sold to consumer, destroyed, returned + destroyed, expired. **Why matters:** (1) Active set stays bounded (avoids linear growth). (2) Recall investigation ignores already-dispensed. (3) Re-scans of decommissioned serials = counterfeit signal. (4) Regulator reports include lifecycle status. **EPCIS event:** ObjectEvent with `bizStep=dispense` + `disposition=sold` or similar. **After decommissioning:** the serial should NOT reappear in the active supply chain; if it does, alert. **Reuse policy:** GS1 recommends never reusing the same (GTIN, serial) for at least 4 years post-decommissioning; some regulators require longer. **Interviewer red flag:** thinking serials 'exist forever' without a lifecycle model." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How does HMAC-based serial verification work?**\n\n**A:** **Idea:** each serial doubles as a cryptographic signature. Server signs `HMAC(counter || GTIN || timestamp, secret_key)` → truncate to 16 chars → serial. **Verification:** scanner extracts (GTIN, serial); calls verification service; server re-signs the same input + compares. **Advantages:** (1) Offline verification possible if scanner has the key (usually undesirable). (2) Counterfeit resistant — attacker can't forge without the key. (3) No DB lookup needed for existence check. **Costs:** (1) Key management — rotate + protect. (2) All serials signed by the same key; key compromise = mass forgery. (3) 16 chars from HMAC → 62^16 collision probability negligible but non-zero. **Alternative:** hybrid — random serial + HMAC signature stored separately + verified server-side. **Pharma flows** rarely use HMAC standalone; they use random + server database + regulator API for defense in depth." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How would you architect serial issuance + tracking at scale?**\n\n**A:** **(1) Serialization Service** — REST API that issues serials in bulk (block of 10K per request). **(2) Namespace partitioning** — plant × year × sequence bits ensures no coordination. **(3) DB unique constraint (GTIN, serial)** as final defense. **(4) Async event pipeline** — issued serials emitted as commissioning ObjectEvents to EPCIS repo. **(5) Regulator submission** — dispense events pushed to regulator API. **(6) Anti-counterfeit API** — consumer scans → server lookup + one-time redemption logic. **(7) Data retention** — 7-10 years per regulator; cold-tier storage after 1 year. **(8) Monitoring** — issuance rate, collisions, unusual patterns. **(9) Load model** — plants issue ~thousands per minute; server issues millions per hour peak. **(10) Client SDK** — plants call serialization service; get block; use offline until block exhausted. Interviewer respect: recognizing scale + distributed-systems concerns." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Pharma DSCSA / CDSCO / FMD** — serialization mandatory for prescription drugs.\n- **Medical devices** — UDI (Unique Device Identification).\n- **Luxury goods** — anti-counterfeit + provenance.\n- **Wine + spirits** — bottle-level serialization.\n- **Cold chain** — serialized biologics.\n- **NOT ideal for** — low-value FMCG (batch trace enough)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **EPC URN** — `urn:epc:id:sgtin:GCP.itemRef.serial`.\n- **Tag URI** — RFID encoding of SGTIN with binary form (96 bits).\n- **AI (21)** — serial in classic AI element string.\n- **AI (10)** — batch/lot (bulk level; NOT serial).\n- **AI (254)** — GLN extension component.\n- **SSCC serial** — 17-char (GCP + serial reference).\n- **GIAI / GRAI** — asset serials.\n- **Serial pool** — pre-generated blocks awaiting use; audit for shrinkage.\n- **Reprint recovery** — new serial + parent-child link to invalidated one.\n- **Regulator-specific formats** — CDSCO adds encryption + mandatory reporting timing.\n- **Analytics** — issue-vs-dispense ratio; unusual gaps trigger investigation.\n- **Reserved ranges** — some brands reserve serial prefixes for pilot / production / recall test." }
   ],
   "flashcards": [
-    { "front": "SGTIN in one sentence?", "back": "The URN combining a GTIN and a per-item serial to identify one specific physical unit." },
-    { "front": "Pharma 'four elements'?", "back": "GTIN + Serial + Batch + Expiry — required by DSCSA / EU FMD." },
-    { "front": "Why avoid sequential public serials?", "back": "Attackers infer volumes and mint valid-looking clones. Prefer randomized or FPE serials." }
+    { "front": "SGTIN?", "back": "GTIN + AI (21) serial; identifies a specific unit." },
+    { "front": "Sequential vs random?", "back": "Sequential = simple + exposes volume; random = counterfeit-resistant + needs dedup." },
+    { "front": "Max serial length?", "back": "20 alphanumeric characters (AI 21)." },
+    { "front": "Reuse policy?", "back": "GS1 recommends never reusing (GTIN, serial) for at least 4 years post-decommissioning." },
+    { "front": "Decommissioning?", "back": "Lifecycle end — dispense/sold/destroyed/expired; ObjectEvent closes active-set." },
+    { "front": "Multi-plant collision defense?", "back": "Partitioned namespace (plant × year) + DB unique constraint (GTIN, serial)." },
+    { "front": "HMAC-based?", "back": "Serial IS the signature; verifiable server-side by re-signing input." }
   ],
   "quiz": [
-    { "q": "SGTIN identifies…", "options": ["A brand", "A trade item type", "One specific physical unit (GTIN + serial)", "A location"], "answer": 2, "explain": "GTIN + serial = per-item identity." },
-    { "q": "For counterfeit resistance, prefer…", "options": ["Sequential public serials", "Randomized serials", "One serial for everyone", "No serial"], "answer": 1, "explain": "Non-guessable serials are harder to clone." },
-    { "q": "'Four elements' means…", "options": ["GCP + GTIN + item + check", "GTIN + Serial + Batch + Expiry", "GLN + SSCC + Batch + Serial", "None"], "answer": 1, "explain": "Regulatory pharma requirement." }
+    { "q": "Max AI (21) length?", "options": ["12", "16", "20", "50"], "answer": 2, "explain": "GS1 spec allows up to 20 alphanumeric." },
+    { "q": "Sequential serials expose…", "options": ["Nothing", "Production volume", "Country", "GTIN"], "answer": 1, "explain": "Predictability = competitor intel + counterfeit risk." },
+    { "q": "Reuse minimum window?", "options": ["Never any wait", "≥ 4 years GS1 recommendation", "1 day", "Any"], "answer": 1, "explain": "Some regulators require 10 years." },
+    { "q": "Decommission event…", "options": ["Optional", "Closes active-set; re-scans = suspicious", "Nothing", "Only US"], "answer": 1, "explain": "Lifecycle model." },
+    { "q": "Cross-plant collisions?", "options": ["Coincidence", "Partitioned namespace + DB unique (GTIN, serial)", "Handled by scan", "Ignore"], "answer": 1, "explain": "Distributed-systems approach." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Emit an SGTIN URN from a GTIN + serial." },
-    { "level": "Medium", "text": "Design a serial allocator that guarantees uniqueness + auditable log." },
-    { "level": "Hard", "text": "Emit an EPCIS commissioning event for a batch of 10k serials." },
-    { "level": "Expert", "text": "Design a two-stage anti-counterfeit strategy: printed serial + server-signed short token stored in Digital Link params." }
+    { "level": "Easy", "text": "Sequential serial generator + SGTIN URN builder." },
+    { "level": "Easy", "text": "SGTIN parser: extract GTIN + serial from a URN." },
+    { "level": "Medium", "text": "Random 16-char generator + DB unique enforcement." },
+    { "level": "Medium", "text": "Partitioned serial namespace by plant + year." },
+    { "level": "Hard", "text": "HMAC-signed serial; server verification via re-signing." },
+    { "level": "Hard", "text": "Lifecycle: commissioning + dispensing + decommissioning events." },
+    { "level": "Expert", "text": "Regulator submission: bulk-serialize + push to CDSCO Track & Trace API." }
   ],
   "interviewQuestions": [
-    "GTIN vs SGTIN vs SSCC?",
-    "How would you allocate serials for a pharma line?",
-    "What are the 'four elements'?",
-    "Why avoid sequential public serials?",
-    "How do serials integrate with EPCIS?"
+    "Sequential vs random serials — trade-offs?",
+    "AI (21) constraints + compliant serial construction?",
+    "How do you prevent multi-plant collisions?",
+    "What does decommissioning mean + why matter?",
+    "How does HMAC-based serial verification work?",
+    "Architect serial issuance + tracking at scale?"
   ],
   "references": [
-    { "label": "GS1 — Serialization for Pharma", "url": "https://www.gs1.org/industries/healthcare" }
+    { "label": "GS1 Serialization guide", "url": "https://www.gs1.org/standards/id-keys/serial-numbers" },
+    { "label": "EPCIS 2.0", "url": "https://ref.gs1.org/standards/epcis/" },
+    { "label": "India CDSCO Track & Trace", "url": "https://cdsco.gov.in" }
   ]
 }

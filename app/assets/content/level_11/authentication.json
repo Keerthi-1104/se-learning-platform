@@ -2,50 +2,101 @@
   "id": "gs1.authentication",
   "levelId": 11,
   "title": "Product Authentication",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 50,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Explain how GS1 identifiers enable authentication",
-    "Combine GTIN + serial + crypto signals",
-    "Design a scan-to-verify flow"
+    "Understand product authentication via a real-life analogy",
+    "Layer identifiers, cryptographic tags + serialization",
+    "Design a consumer authentication scan flow",
+    "Combine authentication with anti-counterfeit + gray-market defense",
+    "Comply with pharma + medical + luxury regulations",
+    "Answer product-authentication interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "**Product authentication** uses GS1 identifiers (GTIN + serial) plus additional signals (crypto tokens, one-time codes, tamper evidence) so a consumer or supply-chain actor can verify a product is genuine and hasn't been diverted." },
-    { "type": "table", "headers": ["Signal", "Strength", "Notes"], "rows": [
-      ["GTIN + serial lookup", "Weak alone", "Anyone can copy printed data"],
-      ["Signed token in Digital Link", "Medium", "Verifiable offline with a public key"],
-      ["Server-side one-scan tokens", "Strong", "Detects clones (both scan the same code)"],
-      ["Tamper-evident + Digital Link", "Strongest", "Physical + digital layers combined"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of product authentication as the signature + hologram on a passport.**\n\nA passport has several security layers: the printed data (visible), the machine-readable zone (parseable), the RFID chip (cryptographic), the hologram (visual), and the country database (server-side check). Any one alone is spoofable; combined, they're strong.\n\nProduct authentication mirrors this:\n\n- **Visible identifier** — GTIN + serial number printed on the box.\n- **Machine-readable code** — QR / DataMatrix carrying GTIN + batch + serial + Digital Link URL.\n- **Cryptographic tag** — signed URL, NFC chip with unique keys, or blockchain-anchored serial.\n- **Server verification** — call the brand's authentication API to confirm serial is legit + not already dispensed/opened.\n- **Consumer UX** — a scan reveals authenticity status; counterfeits show 'unknown' or explicit warning.\n\n**Why every luxury / pharma / high-value Flutter app builds authentication flows:** counterfeit costs India $30B+ annually; pharma counterfeit kills people; luxury goods brand equity erodes with fakes. A phone-based authentication flow lets consumers verify BEFORE buying + AFTER buying — closing the gap between manufacturer + end-user." },
+    { "type": "callout", "variant": "definition", "markdown": "**Product authentication** is the process of confirming a physical item is genuine + not counterfeit. GS1-based flows combine: (1) **Serialized identifier** (SGTIN, EPC) uniquely identifying each unit; (2) **Machine-readable code** (DataMatrix / QR) carrying the identifier + related data; (3) **Server-side verification** (brand-owner authentication API + optional regulator database); (4) **Optional cryptographic tag** (NFC / QR with HMAC / signed Digital Link) making tampering detectable; (5) **Consumer UX** delivering a clear authentic / suspicious signal." },
+    { "type": "theory", "markdown": "## Authentication layers" },
+    { "type": "table", "headers": ["Layer", "Provides", "Weakness alone"], "rows": [
+      ["**Printed serial**", "Uniqueness", "Copyable"],
+      ["**GS1 Digital Link URL**", "Machine-readable identity + attributes", "Copyable"],
+      ["**Server-side lookup**", "Real-time authenticity check", "Requires network"],
+      ["**One-time redemption flag**", "Detects re-scanned counterfeits", "Legit user must scan once"],
+      ["**NFC tag with HMAC**", "Cryptographic proof of origin", "Chips cost"],
+      ["**Blockchain anchor**", "Immutable trace record", "Overkill for many"],
+      ["**Regulator database**", "Trusted external verification", "API rate limits"]
     ]},
-    { "type": "code", "language": "text", "code": "Simple scan-to-verify flow:\n  scan QR (Digital Link) -> resolver returns \n    { gtin, serial, brand, first-scanned-at, last-scanned-at, status }\n  App logic:\n    - Unknown serial      -> FAKE (not issued)\n    - Serial already used -> LIKELY CLONE (already scanned as sold)\n    - Fresh serial        -> OK; server marks it as consumed" },
-    { "type": "callout", "variant": "interview", "markdown": "The clever bit: serials are **first-sale tokens**. The first scan after purchase is expected; subsequent scans of the same serial suggest either the buyer re-scanning (fine) or a clone with the same printed code (not fine). Server-side state turns a static barcode into a one-shot proof." },
-    { "type": "callout", "variant": "mistake", "markdown": "Relying only on 'is this GTIN valid?' Counterfeiters copy GTINs trivially. Real authentication needs a UNIQUE per-item element (serial + server state, or a crypto signature)." },
-    { "type": "callout", "variant": "best", "markdown": "Combine a Digital Link QR (public, human-readable-ish) with a **server-signed short opaque token** so even without network the app can partially verify, and with network the server can catch clones and enforce first-scan policies." }
+    { "type": "theory", "markdown": "## Consumer authentication scan flow (Dart pseudocode)" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml: mobile_scanner + Dio\nFuture<AuthResult> authenticate(String scannedValue) async {\n  // 1. Parse Digital Link URL or GS1 element string.\n  final gs1 = parseGs1(scannedValue);   // returns {01: gtin, 21: serial, 17: expiry, ...}\n  if (gs1 == null) return AuthResult.invalid(reason: 'Malformed code');\n\n  // 2. Local sanity checks.\n  if (!isValidGtin(gs1['01']!)) return AuthResult.invalid(reason: 'Bad GTIN');\n  if (_expiryPassed(gs1['17'])) return AuthResult.invalid(reason: 'Expired');\n\n  // 3. Backend call — brand-owner authentication service.\n  try {\n    final resp = await dio.get('/authenticate',\n      queryParameters: {'gtin': gs1['01'], 'serial': gs1['21'], 'batch': gs1['10']});\n    if (resp.data['status'] == 'authentic') {\n      // 4. Optional: verify HMAC signature on the URL\n      if (!_verifyHmac(scannedValue, resp.data['signature'])) {\n        return AuthResult.suspicious(reason: 'Signature mismatch');\n      }\n      // 5. Log the scan (analytics + tamper detection)\n      unawaited(_logScan(gs1, location: await currentLocation()));\n      return AuthResult.authentic(product: resp.data['product']);\n    }\n    if (resp.data['status'] == 'already_scanned') {\n      return AuthResult.suspicious(reason: 'Serial already redeemed');\n    }\n    return AuthResult.counterfeit(reason: resp.data['reason']);\n  } catch (_) {\n    return AuthResult.unknown(reason: 'Cannot verify (offline?)');\n  }\n}" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: One-layer authentication.** A single printed serial is trivial to copy. Layer identity + server-check + one-time redemption + optional crypto tag." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Trusting the client.** Sending 'this is authentic' locally = client-owned + spoofable. Authentication result MUST come from the server." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: No rate limiting on authentication API.** Attackers batch-check serials to build a database of valid IDs → counterfeit with valid printed values." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Leaking scan geography.** If attackers know 'serials from XYZ have been scanned in India,' they can predict + counterfeit. Aggregate + delay analytics." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Ignoring 'already scanned' events.** Serial scanned twice within minutes in different cities = counterfeit signal; don't ignore." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: No user-friendly UX for uncertainty.** Consumers see 'error' + assume counterfeit; be clear ('Cannot verify offline — try again')." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: HMAC key in the client.** Same as any secret — extract from APK + forge signatures. Server-side only." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Blockchain overkill.** Public chain for FMCG counterfeit is expensive + slow; save it for high-value or regulator-mandated flows." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Multi-layer** — printed + machine-readable + server + optional crypto." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Server-side truth** — client never decides authenticity." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Rate-limit + anomaly-detect** the authentication API." },
+    { "type": "callout", "variant": "best", "markdown": "**4. One-time redemption** — first scan = authentic; repeated = suspicious." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Clear UX for authentic / uncertain / counterfeit.**" },
+    { "type": "callout", "variant": "best", "markdown": "**6. Aggregate + delay analytics** — don't leak scan geography." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Compliance path** — pharma + medical must align with regulator APIs." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Report counterfeits** — enable users to submit suspected fakes with photo + location." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Scan → parse → local sanity checks (GTIN + expiry)." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Backend authentication call + result routing." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — One-time redemption: block re-scans across sessions." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — HMAC-signed Digital Link URL + server verification." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — NFC tag (via `flutter_nfc_kit`) with counter-based rotating identifier." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — End-to-end pharma flow: scan → CDSCO authentication → EPCIS event → consumer confirmation UI." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Why is a single-layer serial insufficient for authentication?**\n\n**A:** Because a counterfeiter can PHOTOGRAPH a legit product's serial + print it on their fake. Consumer scans the fake, gets `SERIAL42` which IS a valid legit serial → 'authentic' from any lookup that only checks 'does this serial exist?'. **Multi-layer defense:** (1) Server-side flag on first scan → subsequent scans of the same serial from a different device/location marked suspicious. (2) One-time redemption on high-value goods. (3) Cryptographic tag (HMAC-signed URL or NFC chip response) that a photocopy can't reproduce. (4) Physical tamper indicator (broken seal). No single layer is bulletproof; each raises the counterfeiter's cost. Interviewer signal: understanding it's a layered defense, not a silver bullet." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How does one-time redemption / first-scan-wins work?**\n\n**A:** Each SGTIN can be scanned + marked as 'redeemed' at some point in its lifecycle. **Pattern:** first authenticated scan by consumer → server flags as `redeemed`. Subsequent scans of that same serial return 'this has already been redeemed — either you're re-scanning your own item (fine) or someone else is trying with a copy (counterfeit warning).' **UX:** allow user to bind serials to their account so repeat scans by them show 'still your item'; scans from a different device/geography → warn. **Trade-off:** consumers might scan post-purchase and be confused if they scan again months later; UX must explain. **Alternative:** rate-limit repeated scans + report high-frequency serials for investigation. **Common in luxury handbags, expensive wine, high-value pharmaceuticals.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What role does NFC play in product authentication?**\n\n**A:** **NFC tags** (small chips embedded in packaging or hangtags) offer cryptographic authentication that print alone can't. **How:** (1) Each tag has a unique key stored in secure element. (2) On tap, the tag computes an HMAC of a counter + reader-provided nonce. (3) Consumer app forwards to server; server verifies signature + counter monotonic. (4) Photocopying doesn't help — the counterfeiter can't clone the chip's secret key + counter. **Cost:** NFC chips (NTAG 424 DNA + similar) run $0.10-$0.50 each — affordable for luxury / high-value; expensive for FMCG. **Consumer UX:** hold phone near tag; app shows authentic + product story. **Real deployments:** Diageo whisky, Louis Vuitton bags, luxury watches. **Interviewer signal:** knowing that NFC-based auth is the strongest consumer-scanning defense; QR alone is copyable." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you design a consumer authentication UX?**\n\n**A:** **(1) Clear entry point** — 'Verify authenticity' button in app. **(2) Camera scan** with visible guide rectangle + haptic feedback. **(3) Progress + micro-copy** during backend check — 'Confirming with brand…' **(4) Three-state result** — GREEN CHECK ('Authentic! Made in Chennai, batch B7, expires 2027-01'); YELLOW WARN ('Cannot verify — check your connection'); RED FLAG ('Suspicious — this serial has been scanned before. Report?'). **(5) Product story on success** — recipes, brand video, warranty registration. **(6) Report flow on counterfeit** — photo + location + user feedback → brand's fraud team. **(7) Progressive disclosure** — hide technical details; consumers want a simple answer. **(8) Accessibility** — VoiceOver-friendly result announcements. **(9) Offline handling** — 'Try again when online' + queue for background verify. **The UX is 80 % of the value; the auth is 20 %.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What's the pharma / regulator side of authentication?**\n\n**A:** In India + EU + US, pharma authentication is REGULATED: **India CDSCO** — National Serialization Track & Trace requires GS1 DataMatrix on Schedule H1 drugs; each serial reported to central + queryable via API. **DSCSA (US)** — Drug Supply Chain Security Act; interoperable trace requirements; brand-owner + wholesaler + pharmacy all report events. **EU FMD** — Falsified Medicines Directive; National Medicines Verification System (NMVS) per country. **How apps plug in:** (1) Brand's authentication API mirrors regulator's status; consumer app calls brand → brand calls regulator on demand. (2) Serial + batch stored + queryable end-to-end via EPCIS chain. (3) 'Decommissioned' events (dispensed to patient) recorded → subsequent scans warn. (4) Compliance audits trace every serial's chain of custody. **App-side responsibilities:** correctly parse DataMatrix, secure server call, honest UX. **Regulators require rigor + rate-limit consumer APIs to prevent abuse.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: When would you use blockchain for product authentication?**\n\n**A:** **Yes when:** (1) High-value goods (luxury, art, rare wines) where immutable provenance matters. (2) Multi-party supply chain where no single party can be trusted with the ledger. (3) Regulator or industry consortium requires it. (4) Consumer-facing story about traceability sells the product (marketing angle). **No when:** (1) FMCG — blockchain per SKU is overkill + expensive. (2) You have a trusted central authority (brand + regulator + retailer all sync data). (3) Latency + cost of public chain isn't justified. **Practical middle ground:** private / permissioned chains (Hyperledger, Corda) with brand + retailer + regulator as nodes. **Interviewer red flag:** 'always blockchain' — nuance matters. **Real deployments:** IBM Food Trust, VeChain luxury goods, some pharma pilots. Most consumer authentication is HTTPS + database, not blockchain." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Luxury** — Diageo, LVMH, Rolex authenticate via NFC + QR.\n- **Pharma** — CDSCO Track & Trace, DSCSA, EU FMD.\n- **Wine + spirits** — signed QR + serial verification.\n- **Automotive parts** — DataMatrix + supplier registry.\n- **NOT for** — low-value FMCG where authentication cost > product value." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **HMAC-signed Digital Link** — brand-owner-side signing key; server verifies signature.\n- **NFC NTAG 424 DNA** — modern secure NFC with rotating identifier.\n- **NTAG 213** — cheaper but not cryptographic.\n- **Aztec / QR with signed URLs** — signature in query param.\n- **VeChain / Chronicled / IBM Food Trust** — blockchain-based product-provenance platforms.\n- **Consumer app federation** — one universal 'verify' app (Certilogo, Blockmarker) vs brand-specific.\n- **Gray-market detection** — track scans by geography; product sold outside authorized region = gray-market flag.\n- **Return-fraud** — one-time redemption + return-scan flow detects wardrobing / return-and-swap.\n- **Rate-limit + anomaly detection** — cloud API + WAF (Cloud Armor, AWS WAF).\n- **Analytics** — first-scan geography maps + repeat-scan detection.\n- **Legal notice** — data collection during authentication scans requires privacy notice + consent (GDPR / DPDPA).\n- **Reporting** — consumer reports of suspected counterfeit feed into brand's fraud investigation team." }
   ],
   "flashcards": [
-    { "front": "Why is GTIN alone weak for authentication?", "back": "GTIN is public; anyone can print the same number." },
-    { "front": "How does a serial catch clones?", "back": "Server tracks 'first scan' — a second unrelated device scanning the same serial signals a duplicate." },
-    { "front": "Strongest layer?", "back": "Digital + tamper-evident physical (holograms, seals) + server state + optional crypto." }
+    { "front": "One-layer authentication safe?", "back": "No — printed serials are copyable; layer with server-side check + one-time redemption + optional crypto." },
+    { "front": "Who decides authenticity?", "back": "Always the server — never trust the client." },
+    { "front": "One-time redemption?", "back": "First scan flags serial as redeemed; repeat scans warn." },
+    { "front": "NFC vs QR for auth?", "back": "NFC HMAC chip = cryptographic + copy-resistant; QR alone = copyable." },
+    { "front": "Pharma regulators?", "back": "India CDSCO / DSCSA (US) / EU FMD — mandatory API + trace chain." },
+    { "front": "Blockchain?", "back": "For high-value or multi-party trust deficit; not for FMCG." },
+    { "front": "UX three-state?", "back": "Authentic (green) / Cannot verify (yellow) / Counterfeit (red) — clear consumer copy." }
   ],
   "quiz": [
-    { "q": "GTIN alone provides…", "options": ["Strong authentication", "Weak (public + copyable)", "Cryptographic proof", "Nothing"], "answer": 1, "explain": "Public identifier; easily copied." },
-    { "q": "Server tracking 'first scan' catches…", "options": ["Battery drain", "Cloned duplicates of the same serial", "Slow queries", "GC pauses"], "answer": 1, "explain": "Duplicate scans are red flags." },
-    { "q": "Best mobile UX for scan-to-verify?", "options": ["Show raw JSON", "Green/yellow/red with clear explanation + action", "Only vibrate", "Play music"], "answer": 1, "explain": "Clear consumer signal + actionable next step." }
+    { "q": "Client-side 'authentic' verdict?", "options": ["Fine", "Spoofable — server must decide", "iOS only", "Only in tests"], "answer": 1, "explain": "Never trust the client." },
+    { "q": "Copy-resistant tag?", "options": ["Printed QR", "NFC HMAC chip", "Barcode", "Sticker"], "answer": 1, "explain": "Cryptographic response per tap." },
+    { "q": "One-time redemption purpose?", "options": ["Speed", "Detect copies scanning same serial repeatedly", "Marketing", "Nothing"], "answer": 1, "explain": "First-scan-wins pattern." },
+    { "q": "Blockchain always?", "options": ["Yes", "No — high-value or trust-deficit only", "iOS only", "Free"], "answer": 1, "explain": "Overkill for FMCG." },
+    { "q": "Pharma flow requires…", "options": ["Nothing", "Regulator API + trace chain (CDSCO/DSCSA/FMD)", "Only NFC", "Only barcode"], "answer": 1, "explain": "Regulated compliance." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Design a JSON response for authentic vs suspicious vs unknown." },
-    { "level": "Medium", "text": "Implement server 'first-scan' state with abuse detection." },
-    { "level": "Hard", "text": "Add signed short tokens verifiable offline with a rotating key." },
-    { "level": "Expert", "text": "Design an anti-cloning strategy combining Digital Link + tamper-evident seals + server-side heuristics (geo/time)." }
+    { "level": "Easy", "text": "Scan + parse GS1 element string; sanity check GTIN + expiry." },
+    { "level": "Medium", "text": "Backend authentication call + three-state UX." },
+    { "level": "Medium", "text": "One-time redemption logic on server + client warning." },
+    { "level": "Hard", "text": "HMAC-signed Digital Link URL + server verification." },
+    { "level": "Hard", "text": "NFC tag reading via flutter_nfc_kit + cryptographic verification." },
+    { "level": "Expert", "text": "Full pharma flow: DataMatrix → CDSCO API → EPCIS event → consumer confirmation." }
   ],
   "interviewQuestions": [
-    "Why isn't GTIN alone sufficient?",
-    "How does a serial defeat clones?",
-    "Offline vs online authentication?",
-    "How to combine physical + digital signals?",
-    "How would you architect a scan-to-verify app?"
+    "Why is a single-layer serial insufficient?",
+    "How does one-time redemption work?",
+    "What role does NFC play in authentication?",
+    "Design a consumer authentication UX?",
+    "Pharma / regulator side of authentication?",
+    "When would you use blockchain?"
   ],
   "references": [
-    { "label": "GS1 — Brand Protection", "url": "https://www.gs1.org/industries/brand-protection" }
+    { "label": "GS1 Digital Link", "url": "https://www.gs1.org/standards/gs1-digital-link" },
+    { "label": "India CDSCO", "url": "https://cdsco.gov.in" },
+    { "label": "NTAG 424 DNA", "url": "https://www.nxp.com/products/rfid-nfc/nfc-hf/ntag-for-tags-labels/ntag-424-dna-424-dna-tagtamper-advanced-security-and-privacy-for-trusted-iot-applications:NTAG424DNA" }
   ]
 }

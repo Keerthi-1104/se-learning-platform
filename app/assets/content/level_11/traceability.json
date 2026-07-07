@@ -2,44 +2,99 @@
   "id": "gs1.traceability",
   "levelId": 11,
   "title": "Product Traceability",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 50,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Explain 'one step up / one step down' traceability",
-    "Model events + master data correctly",
-    "Handle recalls end-to-end"
+    "Understand traceability via a real-life analogy",
+    "Distinguish forward + backward + full traceability",
+    "Design an EPCIS-backed trace chain across the supply network",
+    "Handle recalls + cold-chain excursions + gray-market via trace data",
+    "Balance data ownership + privacy + regulatory reporting",
+    "Answer traceability interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "**Product traceability** is the ability to follow a product's journey — from raw ingredients through manufacturing, distribution and retail to the consumer — and back again for recall. GS1 identifiers make each step referenceable with the same keys everyone agrees on." },
-    { "type": "code", "language": "text", "code": "'One up, one down' minimum:\n  Every actor records who they received from (one up)\n  and who they shipped to (one down).\n  Combined across the chain -> full journey.\n\nFive traceability questions (What/When/Where/Why/Who):\n  What?  GTIN + batch/serial\n  When?  Event timestamp\n  Where? GLN / SGLN (read point, biz location)\n  Why?   Business step (shipping, receiving, transforming)\n  Who?   Party GLN" },
-    { "type": "callout", "variant": "interview", "markdown": "The senior lens: traceability is **not just recording events** — it's ensuring the whole chain uses the **same identifiers** so events from Farm → Factory → Distributor → Retailer can be joined by GTIN + batch + SSCC without reconciliation. That's why GS1 keys are the bedrock." },
-    { "type": "callout", "variant": "mistake", "markdown": "Free-text 'source' fields ('supplier X, batch #12'). Recalls collapse: 'batch #12' means different things per supplier. Use GTIN + batch + GLN — machine-joinable and audit-friendly." },
-    { "type": "callout", "variant": "best", "markdown": "Model events with **EPCIS** (next topic). Recall SLA: from decision → target retrievals in < 4 hours for critical categories (pharma, high-risk food). Test recalls quarterly — you don't want to find out during a real one." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of product traceability as the flight history of every physical unit.**\n\nA plane's flight records tell you every airport it visited, every crew that flew it, every maintenance action. If it crashes, investigators reconstruct events. If it wins an award, marketers celebrate the record. Traceability is the same for products: every event (packed, shipped, received, dispensed) is recorded against the unit's SGTIN + SSCC. When a recall hits, you can answer: 'which batches went to which pharmacies + which patients received them?'\n\nThree traceability directions:\n- **Backward (one-up)** — 'where did this batch of milk come from?' → cows, farms, processing plant.\n- **Forward (one-down)** — 'which retailers received this batch?' → distribution list.\n- **Full trace** — end-to-end, farm-to-fork or manufacturer-to-patient.\n\nThe **GS1 tech stack** provides the identifiers (GTIN, SGTIN, GLN, SSCC), the events (EPCIS), and the resolution services (Digital Link, GEPIR). Without them, traceability is Excel + heroics; with them, it's real-time queryable.\n\n**Why every regulated Flutter app must handle traceability data:** food safety (FSSAI, EU 178/2002), pharma (CDSCO, DSCSA, FMD), medical devices (UDI), luxury (anti-counterfeit + gray-market). Being able to answer 'where is this batch now + who has consumed it?' in minutes vs. days is a legal + reputational + safety necessity." },
+    { "type": "callout", "variant": "definition", "markdown": "**Product traceability** is the ability to reconstruct where a product has been + where it's going, at any granularity from lot/batch (bulk) down to individual serialized unit (SGTIN). GS1 provides the identifiers (GTIN, SGTIN, GLN, SSCC), the event standard (EPCIS), and the resolution services. Regulatory frameworks (India FSSAI, CDSCO Track & Trace, US DSCSA, EU FMD, UDI) mandate specific traceability + reporting timelines." },
+    { "type": "theory", "markdown": "## Traceability directions" },
+    { "type": "table", "headers": ["Direction", "Question answered", "Typical use"], "rows": [
+      ["**Backward (one-up)**", "Where did this unit / batch come from?", "Recall investigation, quality complaint"],
+      ["**Forward (one-down)**", "Where has this batch gone next?", "Recall dispatch, forecast"],
+      ["**Full end-to-end**", "Complete history + destination map", "Regulator audit, cold-chain, farm-to-fork story"]
+    ]},
+    { "type": "theory", "markdown": "## Trace event model (EPCIS-based)" },
+    { "type": "code", "language": "text", "code": "// One SGTIN's journey → sequence of EPCIS events\n\n1. commissioning   at manufacturer plant (bizStep=commissioning)\n2. packing         SGTIN aggregated into SSCC (AggregationEvent)\n3. shipping        SSCC leaves plant → 3PL (ObjectEvent)\n4. receiving       3PL receives SSCC (ObjectEvent)\n5. shipping        3PL → wholesaler (ObjectEvent)\n6. receiving       wholesaler receives\n7. disaggregation  SSCC broken into cases (DisaggregationEvent)\n8. shipping        cases → pharmacy\n9. receiving       pharmacy receives\n10. dispensing     SGTIN dispensed to patient (bizStep=dispense) → decommissioned\n\n// Each event has: eventTime, GLN(readPoint), GLN(bizLocation), SGTIN(s), bizStep, disposition, source/destination, bizTransactionList (PO + invoice references).\n// Cold-chain events additionally record temperature + humidity via sensor readings." },
+    { "type": "theory", "markdown": "## Recall workflow" },
+    { "type": "code", "language": "dart", "code": "// A recall on batch B7 of GTIN 08901234567895 — need to find all affected SGTINs\n// and their current downstream locations.\n\nclass RecallInvestigator {\n  final EpcisRepo _repo;\n  RecallInvestigator(this._repo);\n\n  Future<RecallReport> investigate({required String gtin, required String batch}) async {\n    // 1. Find all SGTINs commissioned in that (GTIN, batch)\n    final sgtins = await _repo.querySgtins(gtin: gtin, batch: batch);\n\n    // 2. For each SGTIN, walk the event chain to find current bizLocation\n    final rows = <RecallRow>[];\n    for (final s in sgtins) {\n      final chain = await _repo.getEventChain(s);\n      final last = chain.lastWhere(\n        (e) => e.bizStep != 'dispense',   // dispense = out of trace\n        orElse: () => chain.last,\n      );\n      rows.add(RecallRow(\n        sgtin: s,\n        currentLocation: last.bizLocation,\n        disposition: last.disposition,\n        events: chain.length,\n      ));\n    }\n\n    // 3. Group by current location → dispatch recall notices\n    final byLocation = groupBy(rows, (r) => r.currentLocation);\n    return RecallReport(byLocation);\n  }\n}\n\n// UI: recall coordinator sees a map of pharmacies + counts; sends notices via FCM." },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Batch-level only.** Recall requires you to remove a batch, but you can't tell WHICH specific units per pharmacy without SGTINs." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Missing events.** A gap in the trace chain (goods stored 3 days off-record) breaks compliance + safety." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Events not idempotent.** Retrying an ObjectEvent creates duplicates; use event IDs + dedup." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: No dispense / decommissioning event.** SGTIN forever in trace → confused reports. Dispense event closes the chain." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: PII in trace records.** Patient name = wrong; use pseudo-ID or GS1 anonymous references." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Trace only in one company.** Real supply chain crosses parties; each party owns their events + shares via EPCIS interop." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Ignoring cold-chain excursions.** Temperature breach during shipping voids product; must be event-logged + alertable." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Batch tolerance.** If your app only supports GTIN + batch (no serial), you can't trace individual sales; regulators require SGTIN for most modern pharma flows." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. SGTIN-level trace** for pharma + high-value goods." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Event-per-event ID + dedup on replay** (idempotency)." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Dispense / decommissioning events** close the chain." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Cold-chain + sensor data** attached to events." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Interop via EPCIS** — cross-partner event exchange." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Recall API** in < 30 min from initiation to affected locations." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Privacy** — pseudonymous patient IDs, aggregated analytics." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Regulator API integration** — FSSAI, CDSCO, DSCSA, FMD — automated reporting." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Store EPCIS events in Hive + query by SGTIN." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Walk the event chain forward + backward from a given SGTIN." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Recall investigator: given (GTIN, batch) return affected downstream locations." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Cold-chain excursion detection: sensor-attached events + threshold alerts." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Cross-partner EPCIS event exchange with idempotent replay." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Regulator API integration: automated report submission on dispense events." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Batch-level vs SGTIN-level traceability — when do you need each?**\n\n**A:** **Batch-level** (lot/batch of thousands of units share one identifier) — sufficient for food + FMCG recalls where 'remove all 500 g Amul packs from batch B7' is the granularity. Cheaper: fewer records + no per-unit serialization. **SGTIN-level** — required when each unit is uniquely important: pharma serial dispensing, luxury anti-counterfeit, medical devices UDI. Also required by regulators (India CDSCO, DSCSA) for prescription drugs. **Cost:** each SGTIN generates its own event chain; petabytes of data at scale. **Real-world:** most pharma is now serialized; most FMCG stays at batch. Interviewer signal: knowing that regulator + product-value drives the level." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: Walk through a recall from initiation to closure.**\n\n**A:** **(1) Trigger** — QC lab detects contamination in batch B7. **(2) Regulator notification** — brand notifies CDSCO / FSSAI within regulator's window (often 4-24 h). **(3) Event query** — trace system finds all SGTINs in (GTIN, batch B7); walks event chain to CURRENT bizLocation of each. **(4) Segmentation** — SGTINs already dispensed (patient) vs at retailer (still recoverable) vs at wholesaler. **(5) Dispatch notices** — FCM notifications + emails to retailers + wholesalers with return instructions. **(6) Consumer notice** — public recall notice via media + brand app + government portal. **(7) Return + destroy** — physical logistics + event recording ('returned' + 'destroyed' bizSteps). **(8) Regulator report** — final report with counts + affected patients if identifiable. **(9) Post-mortem + prevention.** **Key metric:** time-from-trigger-to-safe (all affected units accounted for); regulators demand < 72 h for pharma. Interviewer signal: end-to-end flow." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do multiple parties collaborate on end-to-end traceability?**\n\n**A:** Each party OWNS + STORES their own events (privacy + practical). **Interop via EPCIS**: brand shares events to wholesalers via EPCIS query/subscribe; wholesalers share to retailers. **Modern approach:** GS1 EPCIS 2.0 + REST APIs; parties expose EPCIS endpoints; queries traverse. **Alternative:** central industry consortium hosting shared repo (India NPPA-mandated portals; DSCSA-authorized hubs). **Trust boundaries:** each party sees only events they participated in OR were explicitly shared with (bizTransactionList + destinations). **Privacy:** no PII in events; GLNs identify parties. **Governance:** industry consortium sets schema + APIs; regulators audit compliance. **Interview signal:** recognizing decentralized event ownership + centralized query/subscribe as the state of the art (not a single monolith DB)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you handle cold-chain compliance in traceability?**\n\n**A:** **(1) Sensors on shipments** — IoT temperature + humidity loggers per pallet SSCC. **(2) Events extended with sensor payloads** — EPCIS SensorEvent (2.0+) attaches min/max/mean + duration outside spec. **(3) Real-time alerts** — sensor gateway pushes threshold breaches; ops team + downstream pharmacy see excursion. **(4) At receiving** — pharmacy scans SSCC + reads excursion history; DECIDES whether to accept / reject / hold. **(5) EPCIS event on rejection** — destroys traceability; reason logged. **(6) Regulator reports** — vaccine cold chain (India CoWIN + eVIN) mandates temperature reports per batch. **(7) Insurance + accountability** — sensor data used to attribute loss to specific carrier. **(8) Consumer transparency** — some brands publish sensor data on consumer app via Digital Link resolver. **This is where GS1 + IoT converge.** Interviewer bonus: knowing SensorEvent in EPCIS 2.0." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What privacy considerations apply to traceability data?**\n\n**A:** **(1) No patient PII in events.** Use pseudonymous patient IDs (GS1 GIAI-style) or hashed identifiers. Regulators can re-identify via separate secure mapping. **(2) GDPR / DPDPA** — traceability data is personal data when tied to a consumer purchase; explicit consent required for consumer-side scans; retention limits. **(3) Trade secrets** — a brand's supplier list + distribution network is sensitive; event sharing must respect confidentiality (limit visibility). **(4) Competitive intelligence** — a wholesaler leaking their supply chain to a competitor via shared events = damaging. **(5) Regulator access** — regulators DO get access under compliance frameworks; scope is legally defined. **(6) Consumer opt-in / opt-out** — for optional consumer scans (loyalty), consent-first. **(7) Encryption in transit + at rest.** **(8) Access logs** — who queried what event when — audit trail for insider risk. **Interview signal:** traceability doesn't mean 'expose everything'; it means 'right data to right party.'" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How do you architect a traceability layer in a Flutter app for a supply-chain client?**\n\n**A:** **(1) Local event store** — Isar / drift on device holds recent SGTIN + SSCC + events (offline-first). **(2) Event capture UI** — scan barcode → auto-record event (bizStep, GLN, sensor data). **(3) Sync outbox** — WorkManager queues events for backend upload; idempotent via event IDs. **(4) Query UI** — role-based (worker sees only their events; supervisor sees more). **(5) Recall + alert notifications** — FCM data messages when a batch is recalled; app highlights inventory. **(6) Server** — EPCIS-compatible repository (drift + REST or a hosted EPCIS provider); partner APIs. **(7) Regulator adapter** — CDSCO / FSSAI / etc. APIs for automated reporting. **(8) Analytics** — recall time, cycle time, exceptions. **(9) Auth** — SGTIN authenticity check as a bonus consumer flow. **(10) Cold-chain** — Bluetooth sensor integration; sensor readings attached to events. **This is the full stack** — senior interviewers respect the end-to-end grasp." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Pharma** — CDSCO Track & Trace, DSCSA, EU FMD.\n- **Food** — FSSAI, farm-to-fork initiatives.\n- **Medical devices** — UDI.\n- **Cold chain** — vaccines, biologics, perishables.\n- **Luxury / anti-counterfeit** — first-scan + provenance.\n- **NOT ideal for** — very low-value FMCG where cost > benefit." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **EPCIS 2.0** — JSON-LD + REST APIs (replacing XML).\n- **CBV (Core Business Vocabulary)** — standardized bizStep + disposition values.\n- **Master Data (MD)** — location + product + party metadata shared alongside events.\n- **Query API** — EPCIS Query Language (EQL) or SPARQL for graph queries.\n- **Subscribe API** — push notification on new events matching criteria.\n- **Aggregation vs Object vs Transaction events** — different EPCIS event types.\n- **SensorEvent (2.0+)** — cold chain + IoT.\n- **AssociationEvent** — link identifiers (SGTIN ↔ RFID EPC).\n- **Persistent Disposition Code (CBV)** — 'sold,' 'destroyed,' 'in-transit.'\n- **Serialization + aggregation quality** — brand-owner data quality audit.\n- **Regulatory reporting formats** — HL7 + XML in some regulators; JSON in newer ones.\n- **Data volume** — a global pharma brand generates ~10 events per SGTIN × billions of SGTINs = petabytes; cloud-scale data warehouses (BigQuery, Snowflake) common." }
   ],
   "flashcards": [
-    { "front": "'One up, one down' rule?", "back": "Each actor records who they received from and who they shipped to — chained across the industry it yields full traceability." },
-    { "front": "Five W's of a traceable event?", "back": "What (GTIN/batch), When, Where (GLN), Why (bizStep), Who (party GLN)." },
-    { "front": "Why GS1 keys not free text?", "back": "Only globally-agreed keys let separate actors' records join for cross-chain traceability." }
+    { "front": "Batch vs SGTIN trace?", "back": "Batch = lot-level for FMCG recalls; SGTIN = unit-level for regulated pharma + high-value goods." },
+    { "front": "Backward vs forward vs full?", "back": "Backward = 'where from?'; Forward = 'where to next?'; Full = end-to-end." },
+    { "front": "Event standard?", "back": "GS1 EPCIS (2.0 = JSON-LD + REST); event types = Object / Aggregation / Transaction / Sensor / Association." },
+    { "front": "Recall time target?", "back": "Pharma regulators typically < 72 h from trigger to all affected units accounted for." },
+    { "front": "PII in events?", "back": "Never — use pseudonymous IDs; regulators can re-identify via separate secure mapping." },
+    { "front": "Cross-partner interop?", "back": "Each party owns events; share via EPCIS query/subscribe or consortium hubs." },
+    { "front": "Cold chain?", "back": "SensorEvent (EPCIS 2.0) attaches temperature + humidity; alerts on threshold." }
   ],
   "quiz": [
-    { "q": "The minimum bar for traceability across the industry is…", "options": ["Full mesh visibility", "One up, one down at each actor", "Blockchain always", "Nothing"], "answer": 1, "explain": "Every actor tracking neighbors is enough to reconstruct chains." },
-    { "q": "Standard identifiers matter because…", "options": ["They look pretty", "Actors' records can be joined without reconciliation", "They're patented", "They save disk"], "answer": 1, "explain": "Shared keys avoid ambiguous joins." },
-    { "q": "Free-text sources fail at recall because…", "options": ["Too fast", "Ambiguity → wrong batches / missed products", "Too legible", "None"], "answer": 1, "explain": "Ambiguity across suppliers." }
+    { "q": "Pharma recall unit?", "options": ["Batch only", "SGTIN (per-unit)", "Company only", "Country"], "answer": 1, "explain": "Serial-level trace required." },
+    { "q": "Full end-to-end trace via?", "options": ["Central monolith", "EPCIS event sharing across parties", "Excel", "SMS"], "answer": 1, "explain": "Decentralized event ownership + interop." },
+    { "q": "Dispense event…", "options": ["Optional", "Closes the SGTIN's active chain (decommissioning)", "Not required", "Just for pharma"], "answer": 1, "explain": "Marks end of active trace." },
+    { "q": "PII in events?", "options": ["Fine", "Never — pseudonymous only", "iOS only", "Only encrypted"], "answer": 1, "explain": "Privacy + GDPR." },
+    { "q": "Cold chain excursion tracked via?", "options": ["Nothing", "EPCIS SensorEvent (2.0)", "Manual note", "Excel"], "answer": 1, "explain": "IoT + event payloads." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Model a 'received / shipped' event with GTIN + batch + GLN." },
-    { "level": "Medium", "text": "Simulate a mock recall using an EPCIS-like event store." },
-    { "level": "Hard", "text": "Implement 'given a batch, list everywhere it's currently held' via aggregation events." },
-    { "level": "Expert", "text": "Design an industry-wide recall SLA + rehearsal process." }
+    { "level": "Easy", "text": "Store EPCIS events in Hive + query by SGTIN." },
+    { "level": "Medium", "text": "Walk backward + forward from a given SGTIN." },
+    { "level": "Medium", "text": "Recall investigator: (GTIN, batch) → affected downstream locations." },
+    { "level": "Hard", "text": "Cold-chain excursion detection + alert on threshold." },
+    { "level": "Hard", "text": "Cross-partner EPCIS event exchange with idempotent replay." },
+    { "level": "Expert", "text": "Regulator API integration: automated report submission on dispense events." }
   ],
   "interviewQuestions": [
-    "Explain 'one up, one down'.",
-    "The five W's of a traceable event?",
-    "Why GS1 keys not free text?",
-    "How would you architect a recall in <4 hours?",
-    "What data must every event carry?"
+    "Batch-level vs SGTIN-level — when do you need each?",
+    "Walk through a recall from initiation to closure.",
+    "How do multiple parties collaborate on end-to-end traceability?",
+    "How do you handle cold-chain compliance?",
+    "Privacy considerations?",
+    "Architect a traceability layer for a supply-chain client?"
   ],
   "references": [
-    { "label": "GS1 Global Traceability Standard", "url": "https://www.gs1.org/standards/traceability" }
+    { "label": "GS1 EPCIS 2.0", "url": "https://ref.gs1.org/standards/epcis/" },
+    { "label": "GS1 Traceability standards", "url": "https://www.gs1.org/standards/traceability" },
+    { "label": "India CDSCO Track and Trace", "url": "https://cdsco.gov.in" }
   ]
 }
