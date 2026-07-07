@@ -2,44 +2,102 @@
   "id": "plg.permission_handler",
   "levelId": 10,
   "title": "permission_handler",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "xp": 40,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Request runtime permissions correctly",
-    "Handle 'permanently denied' with a settings redirect",
-    "Configure Info.plist and AndroidManifest"
+    "Understand permission_handler via a real-life analogy",
+    "Request runtime permissions correctly on Android + iOS",
+    "Handle 'permanently denied' + open settings",
+    "Design permission-explainer UX (pre-prompt)",
+    "Work with Android 13+ media + notification permissions",
+    "Answer permission_handler interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "`permission_handler` unifies runtime permissions across iOS and Android: request them, check status, and route the user to app settings when they've permanently denied." },
-    { "type": "code", "language": "dart", "code": "var s = await Permission.camera.status;\nif (!s.isGranted) s = await Permission.camera.request();\nif (s.isPermanentlyDenied) await openAppSettings();" },
-    { "type": "callout", "variant": "interview", "markdown": "Request in-context: ask when the user taps the feature that needs it, not on app launch. Explain WHY before showing the OS prompt — better acceptance rates and less rejection risk from Apple review." },
-    { "type": "callout", "variant": "mistake", "markdown": "Missing Info.plist keys (iOS) or AndroidManifest permissions — request calls silently fail. Also: not handling `permanentlyDenied` — the OS won't show a prompt again; you must guide the user to settings." },
-    { "type": "callout", "variant": "tip", "markdown": "Group related permissions and request only what you use. On Android 13+ POST_NOTIFICATIONS is a runtime permission; on iOS `criticalAlert` needs an entitlement." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of `permission_handler` as the concierge that goes downstairs + asks the OS for a key on your behalf.**\n\nPermissions are a triangle: manifest declaration (you) + OS prompt (concierge) + user decision (guest). Miss one leg + you get silent failures.\n\n- **Declare in manifest / Info.plist first** — the OS only shows prompts for permissions you've listed.\n- **Check current state** — `Permission.camera.status` returns `granted / denied / restricted / limited / permanentlyDenied / provisional`.\n- **Request if not granted** — one call shows the OS dialog.\n- **`permanentlyDenied` on Android** — user tapped 'Don't ask again.' Future `request()` calls no-op. Only path is `openAppSettings`.\n- **Explainer UI first** — a bespoke 'why we need X' screen BEFORE the OS prompt dramatically boosts acceptance rates.\n- **Android 13+ split-media** — one permission for images, another for videos, another for audio. Old READ_EXTERNAL_STORAGE is deprecated.\n- **Post-notification permission (Android 13+)** — apps must ask; older Android grants automatically.\n\n**Why the plugin exists despite being 'just a wrapper':** each permission has platform-specific quirks (iOS 'Ask Every Time' for photos, Android 'While in Use' vs 'Precise location', tri-state 'limited' for photos). `permission_handler` normalizes them into one Dart API + handles the manifest declarations + edge cases across ~40 permission types." },
+    { "type": "callout", "variant": "definition", "markdown": "**`permission_handler`** normalizes Android + iOS runtime permission APIs into a Dart interface. `Permission` enum (camera, location, storage, photos, contacts, calendar, microphone, sms, notification, bluetooth, ...); each has `status`, `request`, `shouldShowRequestRationale` (Android). `openAppSettings()` bounces to the platform Settings app. Handles Android 13+ granular media permissions + POST_NOTIFICATIONS + Android 12 Bluetooth split." },
+    { "type": "theory", "markdown": "## Permission status states" },
+    { "type": "table", "headers": ["Status", "Meaning", "What to do"], "rows": [
+      ["`granted`", "Approved", "Proceed"],
+      ["`denied`", "Not decided yet or user denied once", "Call `request()`"],
+      ["`permanentlyDenied` (Android)", "'Don't ask again' or admin blocks", "`openAppSettings()` — request() no-ops"],
+      ["`restricted` (iOS)", "Parental control / MDM blocks", "Cannot request; disable feature"],
+      ["`limited` (iOS 14+ photos)", "User picked a subset", "Feature works with limits"],
+      ["`provisional` (iOS notifications)", "Silent-only notifications allowed", "Ask user to enable full"]
+    ]},
+    { "type": "theory", "markdown": "## Complete request flow" },
+    { "type": "code", "language": "xml", "code": "<!-- android/app/src/main/AndroidManifest.xml -->\n<uses-permission android:name=\"android.permission.CAMERA\" />\n<uses-permission android:name=\"android.permission.ACCESS_FINE_LOCATION\" />\n<uses-permission android:name=\"android.permission.POST_NOTIFICATIONS\" />\n<uses-permission android:name=\"android.permission.READ_MEDIA_IMAGES\" />\n<uses-permission android:name=\"android.permission.RECORD_AUDIO\" />\n\n<!-- ios/Runner/Info.plist -->\n<key>NSCameraUsageDescription</key><string>Scan barcodes.</string>\n<key>NSLocationWhenInUseUsageDescription</key><string>Find nearby stores.</string>\n<key>NSPhotoLibraryUsageDescription</key><string>Attach photos.</string>" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml: permission_handler: ^11.3.0\nimport 'package:permission_handler/permission_handler.dart';\n\n// ────── Reusable helper with pre-prompt explainer ──────\nFuture<bool> ensurePermission(BuildContext context, Permission p, {\n  required String title, required String rationale,\n}) async {\n  var status = await p.status;\n  if (status.isGranted || status.isLimited) return true;\n\n  if (status.isPermanentlyDenied) {\n    // Only path: user must open settings\n    final go = await showDialog<bool>(context: context, builder: (_) => AlertDialog(\n      title: Text(title),\n      content: Text('$rationale\\nOpen Settings to enable.'),\n      actions: [\n        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),\n        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Open Settings')),\n      ],\n    ));\n    if (go == true) await openAppSettings();\n    return false;\n  }\n\n  // Show explainer BEFORE system prompt — dramatically improves acceptance\n  final proceed = await showDialog<bool>(context: context, builder: (_) => AlertDialog(\n    title: Text(title),\n    content: Text(rationale),\n    actions: [\n      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Not now')),\n      FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Continue')),\n    ],\n  ));\n  if (proceed != true) return false;\n\n  status = await p.request();\n  return status.isGranted || status.isLimited;\n}\n\n// ────── Usage in a widget ──────\nFuture<void> _scanBarcode() async {\n  final ok = await ensurePermission(context, Permission.camera,\n    title: 'Camera access',\n    rationale: 'We use the camera to scan barcodes on products.');\n  if (!ok) return;\n  // proceed to scan\n}\n\n// ────── Android 13+ media split ──────\nfinal photosOk = await Permission.photos.request();      // iOS photo lib\nfinal imagesOk = await Permission.photosAddOnly.request(); // iOS add-only\n// On Android 13+, images / videos / audio each have separate permissions\nfinal androidImages = await Permission.photos.request();  // maps to READ_MEDIA_IMAGES\n\n// ────── Bluetooth (Android 12+ split) ──────\nfinal btScan = await Permission.bluetoothScan.request();\nfinal btConnect = await Permission.bluetoothConnect.request();\nfinal btAdvertise = await Permission.bluetoothAdvertise.request();\n\n// ────── Batched request ──────\nfinal statuses = await [Permission.camera, Permission.microphone, Permission.location].request();\nfor (final e in statuses.entries) print('${e.key} = ${e.value}');" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: No pre-prompt explainer.** Cold OS prompts get denied ~40 %+ of the time. A 30-word screen explaining WHY doubles acceptance." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Ignoring `permanentlyDenied`.** Calling `request()` after 'Don't ask again' silently no-ops. Detect + prompt user to open Settings." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Requesting on app startup.** All prompts at once = user overwhelmed + denies all. Request just-in-time when the feature is used." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Missing manifest / Info.plist entries.** Silent failure on iOS; runtime crash on Android. Add ALL the ones you'll ever request." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Handling `restricted` as denied.** On iOS, parental control / MDM blocks may set restricted; user CANNOT grant. Disable the feature gracefully." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Assuming location is one permission.** Android 12+ has Approximate vs Precise; Always vs While-in-use; Background is separate." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Skipping POST_NOTIFICATIONS on Android 13+.** No FCM notifications appear; older Android auto-granted so devs forget." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Not handling `limited` photos (iOS 14+).** UI treats it as denied → user sees 'permission denied' when they DID grant a subset. Support limited mode." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Pre-prompt explainer** before every non-trivial permission." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Just-in-time** — request when the feature is used, not at launch." },
+    { "type": "callout", "variant": "best", "markdown": "**3. `openAppSettings` fallback** for permanentlyDenied." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Batched requests** for tightly-coupled features (camera + mic for video)." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Analytics on decision** — grant / deny / open settings — learn your permission funnel." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Support `limited` + `provisional` + `restricted` states**, not just denied/granted." },
+    { "type": "callout", "variant": "best", "markdown": "**7. React to Settings changes** — user may enable while app is background; re-check on resume." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Test permission-denied paths** — feature should degrade gracefully, not crash." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Camera permission request with pre-prompt explainer." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Handle permanentlyDenied via `openAppSettings`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Batched request (camera + mic) for video-calling flow." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — iOS 14+ limited-photos support: partial access UI." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Android 13+ POST_NOTIFICATIONS gated FCM enablement." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Permission funnel analytics + measure grant-rate delta from adding explainer." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What's the difference between `denied` and `permanentlyDenied`?**\n\n**A:** **`denied`** = the user hasn't decided yet OR denied once but didn't check 'Don't ask again.' A `request()` will show the OS prompt. **`permanentlyDenied`** = on Android, user tapped 'Don't ask again' at the OS prompt (or admin policy blocks). Future `request()` calls are NO-OPS — the OS won't re-prompt. The only recovery is calling `openAppSettings()` to bounce the user into iOS/Android Settings, where they toggle the permission manually. iOS analog: after the second denial, the OS remembers + won't show the system prompt again. **UX:** on `permanentlyDenied`, show an explicit dialog: 'Please enable Camera in Settings.' Deep-link to the specific settings page via `openAppSettings`." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: Why show a pre-prompt explainer before the OS prompt?**\n\n**A:** Cold OS prompts get denied ~40 % of the time — the user has no context for why the app suddenly wants access. A **30-word Flutter screen** first ('We use your camera to scan barcodes — no photos saved') gives context AND lets the user opt out BEFORE hitting the OS prompt. If they say 'Not now,' the OS prompt never fires — the counter of denials doesn't tick up (crucial for Android's 'Don't ask again' flow). If they say 'Continue,' the OS prompt appears with the user already primed to accept. **Real-world measurement:** adding a good pre-prompt commonly moves grant rate from ~55 % → ~85 %. Google + Meta both recommend this pattern in their permission guidelines. Analytics: log 'shown / continued / declined / OS-granted / OS-denied' — you'll see the funnel + tune the copy." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What changed with Android 13+ media permissions?**\n\n**A:** Pre-Android 13, `READ_EXTERNAL_STORAGE` granted access to the whole media store. On Android 13+, it's **split into 3 granular permissions**: `READ_MEDIA_IMAGES`, `READ_MEDIA_VIDEO`, `READ_MEDIA_AUDIO`. Request only what you need — an image-only app should NOT request audio. **In `permission_handler`,** `Permission.photos` maps to `READ_MEDIA_IMAGES` on Android 13+. **Android 14+** added **partial access** (like iOS 14+ limited photos) — user grants access to a subset via the system picker. **Best practice:** unless you MUST enumerate the library (rare), skip these permissions entirely + use the Android Photo Picker via `image_picker` — no permission needed for pick-only. **Interview highlight:** knowing 'you often don't need the permission at all' is the senior answer." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: Location permissions have three axes on Android — walk through them.**\n\n**A:** **(1) Accuracy** — `ACCESS_FINE_LOCATION` (GPS-precise) vs `ACCESS_COARSE_LOCATION` (network-cell-precise ~200 m). Android 12+ user can grant COARSE even if you request FINE. **(2) Lifecycle** — `WhileUsing` (foreground only) vs Always. Android 10+ requires `ACCESS_BACKGROUND_LOCATION` as a separate permission grant; user goes to Settings to allow. **(3) Precise vs Approximate toggle** — Android 12+ user can toggle precision even after grant. **In `permission_handler`:** `Permission.location`, `Permission.locationAlways`, `Permission.locationWhenInUse` — request in sequence: When-in-use first, then Always if truly needed. **UX:** never request Always up-front; earn trust with When-in-use first. iOS analog: `whileInUse` first; user upgrades to `always` in Settings via `openAppSettings`. **The 3-axis grid is a common interview question — knowing all three signals senior-level familiarity.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you handle `limited` (iOS 14+ photos)?**\n\n**A:** iOS 14+ introduced `PHAuthorizationStatus.limited` — user grants access to a **subset** of photos via a system picker. Treating limited as denied breaks the UX; treating as granted breaks queries that return only the subset. **Best practice:** if `Permission.photos.request()` returns `.limited`, the app has access but may only see selected photos. `photo_manager` / `image_picker` handle this transparently for their APIs. If you must enumerate: (1) call `PHPhotoLibrary.presentLimitedLibraryPicker(from:)` to let the user add more selected photos (via `photo_manager` package). (2) show UI 'You've shared X photos. [Add more]' — respects their consent. **Trap:** iOS 15+ apps that don't handle `.limited` may be flagged by Apple in App Review. **Interview highlight:** mentioning limited by name is a differentiator." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How do you test permission-dependent code?**\n\n**A:** **Don't test the OS permission dialog.** Instead: **(1) Wrap the permission call in a `PermissionsGateway` interface**; production impl uses `permission_handler`. **(2) In tests, inject a fake gateway that returns pre-programmed `PermissionStatus` values.** Assert on business logic (denied → show explainer; granted → open scanner). **(3) Widget tests** use `permission_handler`'s `PermissionActions` test doubles (via method channel mocks). **(4) Integration tests on device:** manually grant + revoke; `patrol` package can drive the OS dialog. **(5) Analytics-driven test:** if you log permission decisions, verify the funnel events fire in expected sequence. **Interview signal:** 'we abstract behind an interface' is the target answer; anything mentioning method-channel mocks shows deeper knowledge." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every app that reads camera / location / photos / mic** — foundational.\n- **Notification opt-in** — Android 13+ POST_NOTIFICATIONS gates FCM.\n- **Video calling** — camera + mic batched.\n- **BLE apps** — Android 12+ Bluetooth split.\n- **NOT for** — desktop / Web (fewer runtime permissions; simpler)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`shouldShowRequestRationale`** (Android) — hints whether to show explainer before request.\n- **`openAppSettings(section: AppSettingsType.notification)`** — deep-link to specific settings page (some plugin versions).\n- **App Setup Wizard** — some enterprise apps run a permission-onboarding sequence at first launch; wire analytics.\n- **Permission funnel dashboard** — Firebase Analytics events: `permission_shown` / `permission_granted` / `permission_denied` — one row per permission.\n- **Runtime permission changes** — user can revoke while app is running; re-check on resume via `AppLifecycleState.resumed`.\n- **Precise vs Approximate location toggle** on Android 12+ — surface UI when precision drops.\n- **MDM restrictions** — enterprise devices may deny app-level; can't override — detect + inform.\n- **iOS `restricted`** — parental controls + Screen Time; treat as unrecoverable denial.\n- **Notification permission is 'push' not 'local'** — local notifications still work on Android 12- without POST_NOTIFICATIONS; Android 13+ requires it for all.\n- **Nearby Wi-Fi / Bluetooth Scan** — Android 12+ split; wire them individually.\n- **Health data (HealthKit / Health Connect)** — separate SDKs with their own permission dance; `permission_handler` doesn't cover.\n- **Motion & fitness** — iOS `NSMotionUsageDescription`; Android auto-granted." }
   ],
   "flashcards": [
-    { "front": "What is 'permanently denied'?", "back": "User denied and (Android: 'Don't ask again' / iOS: after prior denial) — the OS won't show the prompt; open settings." },
-    { "front": "iOS runtime permission setup?", "back": "Add the usage description keys to Info.plist (NSCameraUsageDescription, etc.)." },
-    { "front": "Best UX pattern?", "back": "Request in context of a user action, with a pre-prompt explaining the reason." }
+    { "front": "denied vs permanentlyDenied?", "back": "denied → request shows OS prompt. permanentlyDenied → 'Don't ask again' → only openAppSettings recovers." },
+    { "front": "Pre-prompt explainer?", "back": "30-word Flutter screen before OS prompt; typically 55%→85% grant rate." },
+    { "front": "Android 13+ media?", "back": "Split into READ_MEDIA_IMAGES / VIDEO / AUDIO — request only what you need." },
+    { "front": "Location axes?", "back": "Accuracy (fine/coarse) × Lifecycle (WhileUsing/Always) × Precise/Approximate toggle." },
+    { "front": "iOS limited photos?", "back": "PHAuthorizationStatus.limited — user grants subset; support with 'Add more' flow." },
+    { "front": "Just-in-time vs upfront?", "back": "Request when the feature is used; upfront batching = denials." },
+    { "front": "Testing?", "back": "Abstract behind PermissionsGateway interface; inject fake statuses in unit tests." }
   ],
   "quiz": [
-    { "q": "For 'permanently denied' status…", "options": ["Give up", "openAppSettings() and guide user", "Show a fake dialog", "Reinstall app"], "answer": 1, "explain": "OS won't prompt again; user must change it in Settings." },
-    { "q": "Missing Info.plist keys causes…", "options": ["Success", "Silent failure of the request", "Faster app", "Crash-free"], "answer": 1, "explain": "iOS silently fails without the usage description." },
-    { "q": "Best time to request?", "options": ["On splash screen", "When user taps the feature (with pre-prompt)", "In background", "Never"], "answer": 1, "explain": "In-context requests have higher acceptance rates." }
+    { "q": "'Don't ask again' on Android puts status at…", "options": ["denied", "permanentlyDenied", "granted", "limited"], "answer": 1, "explain": "request() then no-ops." },
+    { "q": "Best step BEFORE OS prompt?", "options": ["Nothing", "Pre-prompt explainer", "Restart app", "openAppSettings"], "answer": 1, "explain": "Boosts grant rate." },
+    { "q": "Android 13+ needs POST_NOTIFICATIONS for…", "options": ["Nothing", "All push notifications", "iOS only", "Web only"], "answer": 1, "explain": "Runtime permission required." },
+    { "q": "Batched request pattern?", "options": ["Impossible", "[Permission.camera, .microphone].request()", "Callback hell", "Isolate"], "answer": 1, "explain": "Map of Permission → PermissionStatus." },
+    { "q": "iOS `restricted` means…", "options": ["Denied normally", "Parental/MDM blocked — cannot grant", "Always", "Limited"], "answer": 1, "explain": "Unrecoverable; disable feature." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Request camera permission before opening camera." },
-    { "level": "Medium", "text": "Show a pre-prompt explaining why; handle denial gracefully." },
-    { "level": "Hard", "text": "Handle permanentlyDenied with a Settings redirect + re-check on resume." },
-    { "level": "Expert", "text": "Add POST_NOTIFICATIONS (Android 13+) and iOS notification permission with fallback UX." }
+    { "level": "Easy", "text": "Camera permission request with pre-prompt explainer." },
+    { "level": "Easy", "text": "Handle permanentlyDenied → openAppSettings + rationale dialog." },
+    { "level": "Medium", "text": "Batched camera + mic request for a video-call flow." },
+    { "level": "Medium", "text": "Support iOS limited photos — show 'Add more' UI." },
+    { "level": "Hard", "text": "Android 12+ Precise vs Approximate location UX; degrade gracefully on coarse." },
+    { "level": "Hard", "text": "Android 13+ POST_NOTIFICATIONS gated FCM subscribe flow." },
+    { "level": "Expert", "text": "Permission funnel analytics + measure explainer impact on grant rate." }
   ],
   "interviewQuestions": [
-    "How do you handle 'permanently denied'?",
-    "iOS Info.plist usage descriptions — why required?",
-    "Best UX pattern for permission requests?",
-    "Android 13 POST_NOTIFICATIONS?",
-    "How to test permission flows?"
+    "denied vs permanentlyDenied?",
+    "Why show a pre-prompt explainer?",
+    "What changed with Android 13+ media permissions?",
+    "Location permissions have three axes on Android — walk through them.",
+    "How do you handle iOS limited photos?",
+    "How do you test permission-dependent code?"
   ],
   "references": [
-    { "label": "permission_handler", "url": "https://pub.dev/packages/permission_handler" }
+    { "label": "permission_handler package", "url": "https://pub.dev/packages/permission_handler" },
+    { "label": "Android runtime permissions", "url": "https://developer.android.com/training/permissions/requesting" },
+    { "label": "iOS permission strings", "url": "https://developer.apple.com/documentation/bundleresources/information_property_list/protected_resources" }
   ]
 }

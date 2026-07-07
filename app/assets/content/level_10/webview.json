@@ -2,44 +2,104 @@
   "id": "plg.webview",
   "levelId": 10,
   "title": "webview_flutter",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "xp": 40,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Embed a WebView with a controller",
-    "Bridge JS ↔ Dart with channels",
-    "Handle navigation, cookies and security"
+    "Understand webview_flutter via a real-life analogy",
+    "Configure WebViewController + platform-specific options",
+    "Bridge JS ↔ Dart via JavaScript channels",
+    "Handle navigation delegates + external link routing",
+    "Secure the WebView (mixed content, cookies, storage)",
+    "Answer webview_flutter interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "`webview_flutter` embeds a native WebView (WKWebView on iOS, WebView on Android) inside a Flutter widget. Recent versions use platform views with a controller-based API." },
-    { "type": "code", "language": "dart", "code": "final ctrl = WebViewController()\n  ..setJavaScriptMode(JavaScriptMode.unrestricted)\n  ..setNavigationDelegate(NavigationDelegate(\n    onNavigationRequest: (r) => allow(r.url) ? NavigationDecision.navigate : NavigationDecision.prevent,\n  ))\n  ..addJavaScriptChannel('Flutter', onMessageReceived: (m) => handle(m.message))\n  ..loadRequest(Uri.parse(url));" },
-    { "type": "callout", "variant": "interview", "markdown": "The WebView is a wide-open attack surface. Whitelist origins in `onNavigationRequest`, disable JS unless required, and be careful with `addJavaScriptChannel` — anything the injected page can post reaches your app." },
-    { "type": "callout", "variant": "mistake", "markdown": "Loading arbitrary user-supplied URLs. If a link is untrusted, open it in the system browser (`url_launcher`) — don't embed. Also: forgetting to configure cookies + iOS App Transport Security for HTTPS-only." },
-    { "type": "callout", "variant": "tip", "markdown": "For SSO/OAuth in-app, prefer `flutter_web_auth_2` or an ASWebAuthenticationSession-based flow — safer + supported by IdPs. For rich interop consider `flutter_inappwebview` (more features, more surface)." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of `webview_flutter` as embedding a mini Chrome browser tab inside your Flutter widget.**\n\nSome content — help articles, OAuth flows, third-party checkout pages, existing web dashboards — is easier to render as HTML than to rebuild in Flutter. WebView lets you drop that in as a native view.\n\n- **Native browser engine** — Android uses **WebView (Chromium via Play Services)**, iOS uses **WKWebView** (Safari's engine). Not Flutter's Skia — it's a PlatformView.\n- **JavaScript channels** — post messages between JS ↔ Dart in both directions.\n- **Navigation delegate** — intercept URL loads: block, redirect, open in system browser.\n- **Cookies + storage** — separate from your app's HTTP client; be aware for auth flows.\n- **Progress + title events** — hook the loading UI.\n- **Local HTML** — `loadHtmlString` for embedded content (bundled help pages).\n\n**Why every Flutter app inevitably needs it:** third-party OAuth (Google / Facebook / Twitter often), Stripe / Razorpay checkouts, WordPress-backed help content, legacy web admin dashboards. Building all of that natively is impossible. WebView is the escape hatch. **The trap:** it's a full browser inside your app — permission surfaces, cookie management, security implications." },
+    { "type": "callout", "variant": "definition", "markdown": "**`webview_flutter`** (`^4.x`) is the Flutter team's official WebView plugin. Renders a native browser view: `WebView` on Android (Play Services WebView, Chromium-based), `WKWebView` on iOS. Federated architecture — `webview_flutter_android` + `webview_flutter_wkwebview` + `webview_flutter_web`. API: `WebViewController.load*`, `runJavaScript`, `addJavaScriptChannel`, `setNavigationDelegate`, cookie manager, storage manager." },
+    { "type": "theory", "markdown": "## Core API surface" },
+    { "type": "table", "headers": ["Feature", "How"], "rows": [
+      ["Load URL", "`controller.loadRequest(Uri.parse('https://x.com'))`"],
+      ["Load local HTML", "`loadHtmlString('<html>…</html>')`"],
+      ["Load asset", "`loadFlutterAsset('assets/help.html')`"],
+      ["Nav delegate", "`setNavigationDelegate(NavigationDelegate(onNavigationRequest: ...))`"],
+      ["JS channel Dart ← JS", "`addJavaScriptChannel('Flutter', onMessageReceived: ...)`"],
+      ["Run JS Dart → JS", "`runJavaScript('window.dispatchEvent(...)')`"],
+      ["Cookies", "`WebViewCookieManager().setCookie(...)`"],
+      ["Clear storage", "`clearCache / clearLocalStorage`"],
+      ["Loading progress", "`onProgress: (pct) => ...`"]
+    ]},
+    { "type": "theory", "markdown": "## Setup + full example" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml: webview_flutter: ^4.7.0\nimport 'package:webview_flutter/webview_flutter.dart';\nimport 'package:webview_flutter_android/webview_flutter_android.dart';\nimport 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';\n\nclass HelpWebView extends StatefulWidget {\n  const HelpWebView({super.key, required this.url});\n  final String url;\n  @override State<HelpWebView> createState() => _HelpWebViewState();\n}\n\nclass _HelpWebViewState extends State<HelpWebView> {\n  late final WebViewController _controller;\n  double _progress = 0;\n\n  @override\n  void initState() {\n    super.initState();\n    // Platform-specific params\n    final params = WebViewPlatform.instance is WebKitWebViewPlatform\n        ? WebKitWebViewControllerCreationParams(\n            allowsInlineMediaPlayback: true,\n            mediaTypesRequiringUserAction: const {PlaybackMediaTypes.audio},\n          )\n        : const PlatformWebViewControllerCreationParams();\n\n    _controller = WebViewController.fromPlatformCreationParams(params)\n      ..setJavaScriptMode(JavaScriptMode.unrestricted)\n      ..setBackgroundColor(Colors.white)\n      ..setNavigationDelegate(NavigationDelegate(\n        onProgress: (p) => setState(() => _progress = p / 100),\n        onNavigationRequest: (r) {\n          // Redirect external URLs to the system browser (better UX)\n          if (!r.url.startsWith('https://help.mysite.com')) {\n            launchUrl(Uri.parse(r.url), mode: LaunchMode.externalApplication);\n            return NavigationDecision.prevent;\n          }\n          return NavigationDecision.navigate;\n        },\n        onWebResourceError: (e) => print('web error: ${e.description}'),\n      ))\n      ..addJavaScriptChannel('Flutter', onMessageReceived: (msg) {\n        // JS did: Flutter.postMessage('close')\n        if (msg.message == 'close') Navigator.of(context).pop();\n      })\n      ..loadRequest(Uri.parse(widget.url));\n\n    // Android-specific: enable mixed content only if truly needed\n    if (_controller.platform is AndroidWebViewController) {\n      (_controller.platform as AndroidWebViewController)\n          .setMediaPlaybackRequiresUserGesture(false);\n    }\n  }\n\n  @override\n  Widget build(BuildContext context) {\n    return Scaffold(\n      appBar: AppBar(\n        title: const Text('Help'),\n        bottom: PreferredSize(\n          preferredSize: const Size.fromHeight(2),\n          child: LinearProgressIndicator(value: _progress),\n        ),\n      ),\n      body: WebViewWidget(controller: _controller),\n    );\n  }\n}\n\n// ────── Dart → JS: run script on demand ──────\n_controller.runJavaScript('document.body.style.background = \"lightyellow\"');\n\n// ────── Post a message to JS ──────\n_controller.runJavaScript('window.dispatchEvent(new CustomEvent(\"themeChanged\", {detail: \"dark\"}))');" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Trusting JS in the WebView.** ANY code you `runJavaScript` executes with the page's origin. Never inject secrets or auth tokens into a WebView you don't fully control." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Loading `http://` URLs.** Both platforms block by default. Configure allowances in AndroidManifest / Info.plist only when truly necessary; prefer https." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: JS channel messages are strings.** JSON-encode/decode manually. A big binary through the channel = slow + memory intensive." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: External links opening inside the WebView.** Users get stuck. Add a `NavigationDelegate` that punts non-matching hosts to `launchUrl`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Cookie sharing surprises.** WebView cookies are SEPARATE from Dio's cookie jar. OAuth done in a WebView won't naturally propagate to your API client — use post-redirect + capture the token." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Not disposing.** WebViewController may hold a native handle; leaks contribute to memory pressure. `initState` construct + rely on Flutter's widget lifecycle." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Blindly enabling `unrestricted` JavaScript.** OK for trusted content, dangerous for arbitrary URLs. Set `disabled` for static HTML docs." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Assuming WebView === real browser.** Missing APIs (some Payment Request, some device APIs), different user agents, older engines on some Android devices." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. HTTPS only.** Reject mixed content." },
+    { "type": "callout", "variant": "best", "markdown": "**2. NavigationDelegate whitelists** — only your domain loads inside; else external browser." },
+    { "type": "callout", "variant": "best", "markdown": "**3. JS channels JSON-encoded** for structured data." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Progress bar** at top for UX." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Test on Play Services & non-GMS Android** — WebView engine varies." },
+    { "type": "callout", "variant": "best", "markdown": "**6. `WebViewCookieManager` for auth cookies** if you MUST share state." },
+    { "type": "callout", "variant": "best", "markdown": "**7. `clearLocalStorage` on logout.**" },
+    { "type": "callout", "variant": "best", "markdown": "**8. `flutter_inappwebview` alternative** — more features + control if you outgrow `webview_flutter`." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Load a help URL + progress bar." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — NavigationDelegate opens external links via system browser." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — JS channel: page dispatches 'close' → Flutter pops route." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — OAuth flow: capture the redirect URL + extract token via NavigationDelegate." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Bundled local HTML help page via `loadFlutterAsset`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — flutter_inappwebview migration with fine-grained cookie sharing between WebView and Dio." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: When do you use a WebView vs building the screen in Flutter?**\n\n**A:** WebView when: **(1) Content lives on the web** — WordPress-backed help articles, marketing pages that Product wants to iterate on without a release, blog posts. **(2) Third-party flows** — OAuth (Google, Facebook), Stripe / Razorpay checkout, KYC providers, insurance/banking widgets. **(3) Complex existing web UI** — internal admin dashboard reused inside the app during migration. **Not a WebView when:** the screen is core to the app UX (branded, high-frequency), animations matter, offline required, small deep-linking / user-flow needs. **Cost of WebView:** slower cold-start (browser boot), different UX language (scroll/tap feel differs), cookie/session isolation, third-party trust surface. **Rule:** WebView is an escape hatch, not the default UI framework." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How do JavaScript channels work + when to use them?**\n\n**A:** `addJavaScriptChannel('Flutter', onMessageReceived: (msg) { ... })` injects a `window.Flutter` object into the loaded page. JS calls `Flutter.postMessage(str)`; the string arrives in Dart's callback. **Dart → JS:** `controller.runJavaScript('...')` executes arbitrary JS. **Use cases:** (1) The web page signals 'user closed the flow'; Flutter pops. (2) Web page needs a native feature (open camera, close dialog) — post an action string, Flutter handles + optionally posts back via runJavaScript. (3) Deep integration with a hosted checkout — post payment result → Flutter processes. **Caveats:** messages are STRINGS — JSON-encode structured data. **Security:** you injected `Flutter` into the page's global scope — a compromised/hostile page can now call it. Only add channels for pages you fully control." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do you handle OAuth flows inside a WebView?**\n\n**A:** **Classic pattern:** Provider (Google/Facebook) hosts a login page; on success, redirects to your `redirect_uri` with an auth code in the query string. **Steps:** (1) Load the provider's auth URL in the WebView. (2) `NavigationDelegate.onNavigationRequest` — inspect each nav. (3) When the URL matches your `redirect_uri`, extract the code from the query string. (4) `NavigationDecision.prevent` to stop the WebView loading it. (5) Exchange the code for a token via your backend (or PKCE-based direct exchange). (6) Pop the WebView, store token in `flutter_secure_storage`. **Modern alternative:** `flutter_web_auth_2` uses the platform's ASWebAuthenticationSession / Custom Tabs — better UX, cookies isolated correctly, no WebView view surface. **Recommend the modern path** whenever the provider supports it." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What are the cookie / session isolation gotchas?**\n\n**A:** The WebView has its OWN cookie jar + localStorage / sessionStorage — separate from your Flutter HTTP client's (Dio's). Consequence: (1) Logging into a website inside the WebView does NOT log Dio in. (2) API tokens sent by Dio don't appear in the WebView. (3) A logout must clear cookies in BOTH clients. **Sharing cookies:** `WebViewCookieManager().setCookie(WebViewCookie(name, value, domain))` to inject; read via `runJavaScript('document.cookie')`. **Complex flows** (SSO, shared session) — use `flutter_inappwebview` for finer cookie control, or move auth to a native SDK. **Logout:** `controller.clearCache() + WebViewCookieManager().clearCookies() + clearLocalStorage()`. Do the same on your Dio-side jar." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you keep the WebView secure?**\n\n**A:** **(1) HTTPS-only.** Reject `http://`. Android manifest: no `usesCleartextTraffic`; iOS Info.plist: no NSAllowsArbitraryLoads. **(2) Domain whitelist** via NavigationDelegate — non-whitelisted URLs redirected to system browser. **(3) Never inject secrets into the page.** Any script the page loads sees `window.*`. Only expose safe callbacks. **(4) `runJavaScript` audit** — treat the input as untrusted; escape user input. **(5) `disable` JS mode** for static HTML docs. **(6) `clearCache`/`clearLocalStorage` on logout.** **(7) File / camera access** — WebView asks permission separately; grant only when trusted. **(8) Mixed content** off. **(9) Content Security Policy** on served pages restricts what scripts can do. **(10) Update the WebView engine** — Android's WebView is auto-updated via Play Store, but non-GMS devices may be old. Interviewers respect the layered defense answer." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: When would you migrate to `flutter_inappwebview` instead?**\n\n**A:** `flutter_inappwebview` is a community package with far more control: (1) Fine-grained cookie management (shared jar with a Dio interceptor). (2) Header injection per request. (3) Custom URL scheme handling. (4) Print / PDF export. (5) WebView pool for pre-warmed browsers. (6) Ad-blocking hooks. (7) Content blockers. **Cost:** more features = more API surface; slower to update to new Flutter versions. `webview_flutter` is the official minimal one — recommended for typical needs; `flutter_inappwebview` when you outgrow it. **Common migration triggers:** complex auth cookie sharing; injecting request headers; custom scheme intercepts for deep links; ad-block; PDF viewer. Interviewers score highly on 'pick the smaller tool by default; upgrade when there's a specific need.'" },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Help / support** — WordPress-backed articles.\n- **Third-party checkout** — Stripe / Razorpay / PayPal.\n- **OAuth (fallback)** — when native SDK isn't available; prefer `flutter_web_auth_2`.\n- **Legacy admin dashboards** — during Flutter migration.\n- **Terms + Privacy** — hosted HTML with easy updates.\n- **NOT ideal for** — core UX screens; offline scenarios; animation-heavy content." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`loadFlutterAsset`** — bundled HTML/CSS/JS.\n- **`WKWebViewConfiguration.mediaTypesRequiringUserAction`** — auto-play video.\n- **`androidHardwareAcceleration`** — often needed for smooth scroll.\n- **`onPageStarted` / `onPageFinished`** — analytics + loading state.\n- **`onWebResourceError`** — log 404 / TLS failures.\n- **`shouldOverrideUrlLoading` (inappwebview)** — deeper control.\n- **PWA integration** — WebView can host a PWA; but background sync + push differ.\n- **File download** — configure via `onDownloadStart` (inappwebview) or intercept navigation for cases like PDF.\n- **`gestureRecognizers`** — resolve gesture conflicts with parent scroll.\n- **Web target** — `webview_flutter_web` renders as an iframe; less feature-parity.\n- **Debug** — remote debugging via `chrome://inspect` (Android) or Safari (iOS)." }
   ],
   "flashcards": [
-    { "front": "JS ↔ Dart bridge?", "back": "addJavaScriptChannel exposes a JS object whose postMessage reaches Dart." },
-    { "front": "How to block navigation to untrusted URLs?", "back": "Return NavigationDecision.prevent in onNavigationRequest." },
-    { "front": "For OAuth flows, prefer…", "back": "flutter_web_auth_2 / ASWebAuthenticationSession over an embedded WebView." }
+    { "front": "webview_flutter engine?", "back": "Android: Chromium WebView; iOS: WKWebView; PlatformView-based." },
+    { "front": "JS ↔ Dart bridge?", "back": "addJavaScriptChannel + runJavaScript; strings only, JSON-encode structured data." },
+    { "front": "External link routing?", "back": "NavigationDelegate.onNavigationRequest → launchUrl for non-whitelisted hosts." },
+    { "front": "Cookie isolation?", "back": "WebView jar is separate from Dio's; use WebViewCookieManager if sharing needed." },
+    { "front": "OAuth: WebView vs flutter_web_auth_2?", "back": "Prefer flutter_web_auth_2 (ASWebAuth / Custom Tabs) when provider supports it." },
+    { "front": "Security defaults?", "back": "HTTPS-only, domain whitelist, disable JS for static HTML, clear cookies/storage on logout." },
+    { "front": "When to upgrade to flutter_inappwebview?", "back": "Fine-grained cookies, header injection, print/PDF, custom schemes, ad-block." }
   ],
   "quiz": [
-    { "q": "To whitelist navigation targets…", "options": ["Never possible", "Inspect and return NavigationDecision", "Root the phone", "Disable Flutter"], "answer": 1, "explain": "onNavigationRequest returns navigate/prevent." },
-    { "q": "For an OAuth login flow, prefer…", "options": ["Embedded WebView", "flutter_web_auth_2 / ASWebAuthenticationSession", "http package alone", "Nothing"], "answer": 1, "explain": "Providers block/embargo embedded WebViews for security." },
-    { "q": "addJavaScriptChannel is…", "options": ["Encrypted by default", "A JS→Dart message channel — treat inputs as untrusted", "A REST endpoint", "A DB"], "answer": 1, "explain": "Always validate/limit what the page can send." }
+    { "q": "JS channel messages are…", "options": ["Any type", "Strings only — JSON-encode", "Ints", "Streams"], "answer": 1, "explain": "Post/receive as strings." },
+    { "q": "External link should…", "options": ["Open inside", "Punt to system browser via launchUrl", "Crash", "Print"], "answer": 1, "explain": "Better UX + avoid stuck user." },
+    { "q": "WebView engine on iOS?", "options": ["Custom", "WKWebView", "UIWebView", "Skia"], "answer": 1, "explain": "WKWebView is modern iOS default." },
+    { "q": "Cookies shared with Dio automatically?", "options": ["Yes", "No — separate jar; manage manually", "Only iOS", "Only Android"], "answer": 1, "explain": "Isolated stores." },
+    { "q": "Best OAuth path (when supported)?", "options": ["WebView", "flutter_web_auth_2 → ASWebAuth / Custom Tabs", "Native only", "Nothing works"], "answer": 1, "explain": "Cleaner UX + isolation." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Show a fixed URL in a WebView." },
-    { "level": "Medium", "text": "Bridge JS → Dart via a channel; show messages in a snackbar." },
-    { "level": "Hard", "text": "Block navigation to non-whitelisted origins; open external links in the system browser." },
-    { "level": "Expert", "text": "Implement a secure OAuth flow via flutter_web_auth_2 instead of embedded WebView." }
+    { "level": "Easy", "text": "Load a help URL + progress bar + fade-in title." },
+    { "level": "Easy", "text": "Punt external links to system browser via NavigationDelegate." },
+    { "level": "Medium", "text": "JS channel: page dispatches 'close' → Flutter pops route." },
+    { "level": "Medium", "text": "Load bundled HTML via loadFlutterAsset." },
+    { "level": "Hard", "text": "OAuth: capture redirect URI + extract token via NavigationDelegate." },
+    { "level": "Hard", "text": "Share auth cookie between WebView + Dio via cookie manager." },
+    { "level": "Expert", "text": "Migrate to flutter_inappwebview for shared cookie jar + custom scheme handling." }
   ],
   "interviewQuestions": [
-    "How do you bridge JS and Dart?",
-    "How do you block untrusted navigations?",
-    "Why avoid embedded WebViews for OAuth?",
-    "webview_flutter vs flutter_inappwebview?",
-    "How to handle cookies and downloads?"
+    "When do you use a WebView vs building the screen in Flutter?",
+    "How do JavaScript channels work + when to use them?",
+    "How do you handle OAuth inside a WebView?",
+    "Cookie / session isolation gotchas?",
+    "How do you keep the WebView secure?",
+    "When would you migrate to flutter_inappwebview?"
   ],
   "references": [
-    { "label": "webview_flutter", "url": "https://pub.dev/packages/webview_flutter" }
+    { "label": "webview_flutter", "url": "https://pub.dev/packages/webview_flutter" },
+    { "label": "flutter_inappwebview", "url": "https://pub.dev/packages/flutter_inappwebview" },
+    { "label": "flutter_web_auth_2", "url": "https://pub.dev/packages/flutter_web_auth_2" }
   ]
 }

@@ -2,44 +2,102 @@
   "id": "plg.cached_network_image",
   "levelId": 10,
   "title": "cached_network_image",
-  "xp": 20,
-  "estimatedMinutes": 10,
+  "xp": 30,
+  "estimatedMinutes": 25,
   "objectives": [
-    "Cache network images on disk with placeholders",
-    "Size-request the right variant",
-    "Manage cache lifecycle"
+    "Understand cached_network_image via a real-life analogy",
+    "Cache network images on disk + memory correctly",
+    "Configure placeholder / error / progress widgets",
+    "Tune cache size + TTL via flutter_cache_manager",
+    "Preload + evict + refresh strategies",
+    "Answer cached_network_image interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "`cached_network_image` downloads network images once and reuses them from disk/memory. Provides `placeholder` and `errorWidget` so lists don't flash blank or crash on bad URLs." },
-    { "type": "code", "language": "dart", "code": "CachedNetworkImage(\n  imageUrl: url,\n  placeholder: (_, __) => const ShimmerBox(),\n  errorWidget: (_, __, ___) => const Icon(Icons.broken_image),\n  memCacheWidth: 200,  // decode at target size — huge memory win\n);" },
-    { "type": "callout", "variant": "interview", "markdown": "Set `memCacheWidth`/`memCacheHeight` to the widget's physical size. Otherwise a 4000-px hero image decodes at full resolution into an 80-px thumbnail — a common OOM cause in list screens." },
-    { "type": "callout", "variant": "mistake", "markdown": "Assuming the cache is unbounded/permanent. It's an LRU with defaults you can tune (`DefaultCacheManager`). Call `emptyCache()` on logout for privacy or `removeFile(url)` when an image is updated server-side." },
-    { "type": "callout", "variant": "tip", "markdown": "Combine with a server-side resize (Firebase resize-images extension, imgproxy, or a CDN). Request the correct variant instead of one giant image for all screens." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of `cached_network_image` as `Image.network` with a photo album underneath.**\n\n`Image.network(url)` fetches on every rebuild, decodes in the main isolate, and forgets the moment the widget disposes. On a scrolling feed with 200 thumbnails, this = 200 downloads, 200 decodes, jank + wasted bandwidth.\n\n`CachedNetworkImage` solves it:\n- **Two-tier cache** — in-memory `ImageCache` for the hot set (already decoded, ready to paint); on-disk cache (`flutter_cache_manager`) for the cold set (still avoids network, but has to decode).\n- **Placeholder + error widgets** — first-class API; smooth UX without duct-taping FutureBuilders.\n- **Progress builder** — for slow images with a real download bar.\n- **HTTP cache-aware** — respects `Cache-Control` / `Expires` headers by default.\n- **Custom cache manager** — bump TTL, cache size, storage location.\n- **`fadeInDuration` / `fadeOutDuration`** — matches iOS-style fade transitions out of the box.\n\n**Why every serious Flutter app uses this instead of `Image.network`:** on a real feed, cached_network_image cuts image download bandwidth 5-10× + eliminates re-decode jank. That's not premature optimization — it's the default." },
+    { "type": "callout", "variant": "definition", "markdown": "**`cached_network_image`** wraps Flutter's `Image` with a two-tier cache: (1) Flutter's built-in `ImageCache` for decoded `ui.Image` objects, (2) `flutter_cache_manager` for on-disk file storage keyed by URL. Widgets: `CachedNetworkImage`, `CachedNetworkImageProvider` (for `ImageProvider` slots like DecorationImage). Config via `BaseCacheManager` — TTL, max cache size, custom file naming." },
+    { "type": "theory", "markdown": "## Key APIs" },
+    { "type": "table", "headers": ["API", "Purpose"], "rows": [
+      ["`CachedNetworkImage(imageUrl:)`", "Widget with placeholder/error/progress"],
+      ["`CachedNetworkImageProvider(url)`", "ImageProvider for DecorationImage / Ink.image"],
+      ["`placeholder: (ctx, url) => ...`", "Widget while loading"],
+      ["`errorWidget: (ctx, url, err) => ...`", "Widget on failure"],
+      ["`progressIndicatorBuilder: (ctx, url, dl) => ...`", "Download progress bar"],
+      ["`fadeInDuration`", "Fade transition"],
+      ["`cacheManager`", "Custom BaseCacheManager"],
+      ["`DefaultCacheManager().emptyCache()`", "Wipe cache"]
+    ]},
+    { "type": "theory", "markdown": "## Complete setup + custom cache" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml:\n//   cached_network_image: ^3.3.1\n//   flutter_cache_manager: ^3.3.1\nimport 'package:cached_network_image/cached_network_image.dart';\nimport 'package:flutter_cache_manager/flutter_cache_manager.dart';\n\n// ────── Simple usage in a feed ──────\nCachedNetworkImage(\n  imageUrl: item.photoUrl,\n  fit: BoxFit.cover,\n  memCacheWidth: 400,           // decode at 400 px width — HUGE perf win\n  fadeInDuration: const Duration(milliseconds: 200),\n  placeholder: (_, __) => const ColoredBox(color: Color(0xFFEEEEEE)),\n  errorWidget: (_, __, ___) => const Icon(Icons.broken_image),\n);\n\n// ────── With download progress ──────\nCachedNetworkImage(\n  imageUrl: hero.url,\n  progressIndicatorBuilder: (_, __, dl) => Center(\n    child: CircularProgressIndicator(value: dl.progress),\n  ),\n);\n\n// ────── DecorationImage via provider ──────\nContainer(\n  decoration: BoxDecoration(\n    image: DecorationImage(\n      image: CachedNetworkImageProvider(user.avatarUrl),\n      fit: BoxFit.cover,\n    ),\n  ),\n);\n\n// ────── Custom cache manager — TTL + max size ──────\nclass FeedCacheManager extends CacheManager {\n  static const key = 'feedCache';\n  FeedCacheManager() : super(Config(\n    key,\n    stalePeriod: const Duration(days: 7),\n    maxNrOfCacheObjects: 500,\n  ));\n}\n\nCachedNetworkImage(\n  imageUrl: item.photoUrl,\n  cacheManager: FeedCacheManager(),\n);\n\n// ────── Preload upcoming images ──────\nfor (final url in upcomingUrls) {\n  precacheImage(CachedNetworkImageProvider(url), context);\n}\n\n// ────── Evict a stale URL ──────\nawait DefaultCacheManager().removeFile(oldUrl);\nCachedNetworkImage.evictFromCache(oldUrl);   // memory too\n\n// ────── Wipe everything (logout) ──────\nawait DefaultCacheManager().emptyCache();\nimageCache.clear();\nimageCache.clearLiveImages();" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Not setting `memCacheWidth` / `memCacheHeight`.** Feed thumbnails decoded at full 4K = massive RAM + decode time. Set to the display size (multiply by devicePixelRatio if crisp)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Massive default cache.** 1000-image cache = disk full on entry-level devices. Cap via custom `CacheManager` (500 objects, 100 MB)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Ignoring `Cache-Control`.** Server sends `no-cache` → CachedNetworkImage still caches locally by default. If images are user-specific or short-lived, use signed URLs + evict on rotation." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: No `errorWidget`.** Silent broken-image UX. Ship a fallback ALWAYS." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: URL contains a rotating token.** Every rebuild → different URL → cache miss. Strip auth tokens; use signed URLs with sensible expiry." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Preloading too much.** `precacheImage` for 100 upcoming items = network storm + battery. Cap to next 5-10 above the fold." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Not clearing on logout.** Old user's images visible to new user on shared device. Wipe cache + ImageCache on logout." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Web target with CORS.** Some CDNs don't send CORS headers → CanvasKit throws taint errors → images fail silently on Flutter Web. Configure CDN correctly." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Always `memCacheWidth`.** Match display size × devicePixelRatio." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Custom `CacheManager` for feature-specific TTL** — hero images vs avatars vs thumbnails." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Placeholder + error widgets** — mandatory." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Preload sparingly** — 5-10 next images, not the whole list." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Wipe cache on logout** — privacy + storage hygiene." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Serve WebP / AVIF from CDN** — 30-50 % smaller vs JPEG at similar quality." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Server-side image resizer** — Firebase Extensions Resize Images, Cloudinary, imgix — serve exactly the requested size." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Test with `NetworkImage` mocked** for widget tests — no real network." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Feed thumbnails with placeholder + error + memCacheWidth." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Progress bar for hero images." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Custom CacheManager with 7-day TTL + 500 objects cap." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Preload next 5 items above the fold." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Wipe cache on logout." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Server-side image resize + WebP delivery via Cloudinary; measure bandwidth savings." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Why prefer `CachedNetworkImage` over `Image.network`?**\n\n**A:** `Image.network` fetches + decodes on every rebuild of the widget (unless it's still in Flutter's `ImageCache`, which is small by default). For a scrolling feed with 200 thumbnails, that means 200 network round-trips per view + huge decode churn as tiles enter/leave the viewport. `CachedNetworkImage` adds an **on-disk cache via `flutter_cache_manager`**: URL → file. On the second view, no network — just disk read + decode. On the third view (still in memory), no decode either. Also gives you first-class `placeholder`, `errorWidget`, `progressIndicatorBuilder`, `fadeInDuration` — features you'd hand-roll with FutureBuilder otherwise. **On a real feed:** ~10× bandwidth reduction, ~3× lower jank." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What is `memCacheWidth` and why does it matter?**\n\n**A:** Without it, Flutter decodes the image at its FULL source resolution (say 4096×3072 for a 4K JPEG), keeps that in memory, then Scales at paint time. That's ~50 MB of RAM per image on a modest phone — devastate memory on a scrolling feed. `memCacheWidth: 400` (or `cacheWidth` on other providers) tells Skia/Impeller to decode at that width, discarding pixels beyond. **Rule:** set to `displayWidth * devicePixelRatio` — e.g., 100 px displayed × 3 devicePixelRatio = `memCacheWidth: 300`. **On a 20-tile grid**: full-res = 1 GB RAM; scaled = 60 MB. **Interviewer tip:** most candidates skip this; naming it puts you ahead." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do you configure a custom cache manager?**\n\n**A:** `flutter_cache_manager` uses a `Config` object: `key` (namespace on disk), `stalePeriod` (TTL — how long before re-fetching), `maxNrOfCacheObjects` (LRU eviction cap), `fileService` (custom HTTP), `repo` (SQLite metadata DB). Subclass `CacheManager` + pass a `Config`; feed the manager into `CachedNetworkImage(cacheManager: MyManager())`. **Common tunings:** hero images = long TTL (30 days) + few objects (50); feed thumbnails = medium TTL (7 days) + many objects (500). **Storage caps** — check `flutter_cache_manager` doesn't grow the app sandbox unbounded; the LRU evicts oldest when count exceeded. **Wipe:** `manager.emptyCache()`; per-URL: `manager.removeFile(url)`. Interviewers love hearing about feature-specific managers." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: Preloading — when + how much?**\n\n**A:** `precacheImage(provider, context)` warms the image into memory + disk before the widget is built. **Use when:** the user will imminently see the image — the next hero image, the next 5 feed tiles below the fold, the next carousel slide. **Do NOT preload 100 items** — network storm + battery drain + evicted memory forces re-fetches anyway. **Pattern:** in a list, on scroll, precache the next 5 items. Use a `PageStorageController` or a viewport listener. **Alternative:** rely on `CachedNetworkImage`'s own lazy fetch — for many apps, this is enough. **Interview tip:** knowing when NOT to preload is often the senior signal." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you handle cache invalidation for changing content?**\n\n**A:** **Rule of thumb: the URL is the cache key.** If the image content changes at the same URL, `CachedNetworkImage` won't know. **Solutions:** **(1) Cache-busting query param** — server includes `?v=<hash>` per version; new hash = new key = fresh fetch. **(2) Explicit evict** — after upload / edit, call `DefaultCacheManager().removeFile(url) + CachedNetworkImage.evictFromCache(url) + imageCache.evict(...)` for full clear. **(3) `Cache-Control: no-store`** — server-side header prevents caching (loses the whole benefit; use for user-specific dynamic images). **(4) TTL tuning** — accept some staleness; refresh every N days. **User avatar upload flow:** upload → get new URL (versioned) → save to DB → UI reads new URL → cache miss = fresh fetch. Interviewers score highly on 'versioned URLs' — the pragmatic answer." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What can go wrong on Flutter Web?**\n\n**A:** **(1) CORS issues.** If the image server doesn't send `Access-Control-Allow-Origin`, the browser blocks canvas taint checks — CanvasKit throws + image fails silently. Fix at the CDN, not in Flutter. **(2) No disk cache** — Web uses browser HTTP cache instead of `flutter_cache_manager`'s file store; TTL is browser-controlled. **(3) HTML renderer vs CanvasKit** — image handling differs; test both. **(4) Large images kill the tab** — WebGL memory limits are stricter than mobile GPU limits. **(5) HTTP/2 push** — reduces per-image RTT; enable at the CDN. **(6) WebP support universal now**; older browsers (IE — not a target since 2022 for most). **(7) `cacheWidth` still important** on Web — canvas decode isn't free." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Feeds** — every social / commerce / news app.\n- **Product galleries** — with progress indicators for hero images.\n- **Avatars** — small memCacheWidth, longish TTL.\n- **NOT ideal for** — user-generated ephemeral images (Cache-Control: no-store); paid CDN-signed URLs with short expiry (evict on rotation)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`CachedNetworkImageProvider`** — for `DecorationImage`, `Ink.image`, `PhotoView`.\n- **`filterQuality`** — Impeller has good defaults; override for hero images.\n- **`useOldImageOnUrlChange`** — smoother URL-swap animations.\n- **`imageBuilder`** — full custom widget with the decoded image (add shadow / mask / clip).\n- **`fadeOutCurve` / `fadeInCurve`** — Cupertino-style feel.\n- **Cache eviction hooks** — `CacheManager.getFileFromCache(url)` for manual read; test if hit.\n- **Progress delta** — some servers don't send `Content-Length`; `progress` will be null.\n- **`errorListener`** — global error tap for logging to Crashlytics.\n- **`httpHeaders`** — attach auth tokens for private images (bearer tokens); careful about token in cache key.\n- **`ExtendedImage`** — feature-richer alternative package.\n- **`OctoImage`** — same author; simpler API + built-in variants (`OctoImage.wrapper`).\n- **Sharing the on-disk cache with other packages** — `DefaultCacheManager` is a singleton; safe to use across `CachedNetworkImage`, `flutter_cache_manager` direct, etc." }
   ],
   "flashcards": [
-    { "front": "Why set memCacheWidth?", "back": "Decodes the image at the display size, avoiding OOM when a huge image ends up in a small widget." },
-    { "front": "How to clear cache on logout?", "back": "`DefaultCacheManager().emptyCache()` (or a custom cache manager for scoped clears)." },
-    { "front": "Why placeholder + errorWidget?", "back": "Keeps list UI stable while loading, and handles broken URLs without blank frames." }
+    { "front": "Why not Image.network in a feed?", "back": "Re-downloads every rebuild; no disk cache; decoded at full res → massive RAM + jank." },
+    { "front": "memCacheWidth?", "back": "Decode at display size × devicePixelRatio; cuts RAM 10-50×." },
+    { "front": "Custom CacheManager?", "back": "Config(key, stalePeriod, maxNrOfCacheObjects) — feature-specific TTL." },
+    { "front": "Preload?", "back": "precacheImage; cap to next 5-10 items; don't storm the network." },
+    { "front": "Invalidate on change?", "back": "Version query param OR removeFile + evictFromCache + imageCache.evict." },
+    { "front": "Logout wipe?", "back": "DefaultCacheManager().emptyCache() + imageCache.clear()." },
+    { "front": "Web caveat?", "back": "CORS headers required at CDN or CanvasKit taints; no disk cache — browser cache." }
   ],
   "quiz": [
-    { "q": "The most impactful setting for memory is…", "options": ["placeholder", "errorWidget", "memCacheWidth/Height", "fit"], "answer": 2, "explain": "Decoding at target size prevents huge bitmaps in small widgets." },
-    { "q": "To clear cached images on logout…", "options": ["Reinstall app", "DefaultCacheManager().emptyCache()", "Nothing", "Restart Flutter"], "answer": 1, "explain": "The cache manager exposes emptyCache." },
-    { "q": "cached_network_image caches to…", "options": ["Memory only", "Memory + disk", "Server only", "Nowhere"], "answer": 1, "explain": "In-memory + persistent disk cache." }
+    { "q": "Feed image best?", "options": ["Image.network", "CachedNetworkImage + memCacheWidth", "AssetImage", "PDF"], "answer": 1, "explain": "Cache + downscale = fast + light." },
+    { "q": "Skip memCacheWidth?", "options": ["OK", "50MB per image in RAM on modern phone", "Better perf", "Nothing"], "answer": 1, "explain": "Full decode blows memory." },
+    { "q": "Cache-bust after upload?", "options": ["Version URL", "Restart app", "Nothing", "Print"], "answer": 0, "explain": "URL is the cache key." },
+    { "q": "Wipe cache on logout?", "options": ["Yes — emptyCache + imageCache.clear", "Never", "Only iOS", "Only Web"], "answer": 0, "explain": "Privacy + storage hygiene." },
+    { "q": "Preload 100 next tiles?", "options": ["Ideal", "Bad — network storm; cap 5-10", "Free", "Recommended"], "answer": 1, "explain": "Bandwidth + battery." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Show a network image with a shimmer placeholder + error icon." },
-    { "level": "Medium", "text": "Add memCacheWidth to a grid of thumbnails; measure memory before/after." },
-    { "level": "Hard", "text": "Force refetch when the server updates an image (bust cache)." },
-    { "level": "Expert", "text": "Use a custom BaseCacheManager scoped to a feature; empty it on feature exit." }
+    { "level": "Easy", "text": "Feed grid with CachedNetworkImage + placeholder + error." },
+    { "level": "Easy", "text": "Add memCacheWidth = display × devicePixelRatio." },
+    { "level": "Medium", "text": "Custom CacheManager for a 7-day / 500-object feed cache." },
+    { "level": "Medium", "text": "Progress builder on hero images." },
+    { "level": "Hard", "text": "Preload next 5 items during scroll." },
+    { "level": "Hard", "text": "Version-URL cache-bust after avatar upload." },
+    { "level": "Expert", "text": "CDN image resizer + WebP delivery; measure bandwidth savings vs baseline." }
   ],
   "interviewQuestions": [
-    "Why cache network images at all?",
-    "How to avoid OOMs from huge images?",
-    "How is the cache stored and evicted?",
-    "How to bust the cache when server updates?",
-    "cached_network_image vs Image.network?"
+    "Why prefer CachedNetworkImage over Image.network?",
+    "What is memCacheWidth + why does it matter?",
+    "How do you configure a custom cache manager?",
+    "Preloading — when + how much?",
+    "How do you handle cache invalidation for changing content?",
+    "What can go wrong on Flutter Web?"
   ],
   "references": [
-    { "label": "cached_network_image", "url": "https://pub.dev/packages/cached_network_image" }
+    { "label": "cached_network_image", "url": "https://pub.dev/packages/cached_network_image" },
+    { "label": "flutter_cache_manager", "url": "https://pub.dev/packages/flutter_cache_manager" }
   ]
 }

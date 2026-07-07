@@ -2,44 +2,101 @@
   "id": "plg.video_player",
   "levelId": 10,
   "title": "video_player",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "xp": 40,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Play network / asset / file videos",
-    "Wrap with Chewie for controls",
-    "Manage buffering, disposal and playback state"
+    "Understand video_player via a real-life analogy",
+    "Configure controllers for network / asset / file / HLS-DASH",
+    "Build custom controls + PiP + fullscreen",
+    "Handle preloading + lifecycle + memory correctly",
+    "Choose between video_player, chewie, better_player, media_kit",
+    "Answer video_player interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "`video_player` (Flutter Team) plays videos via ExoPlayer (Android) and AVPlayer (iOS). It's the primitive; for a full-featured player with controls, wrap it with `chewie` or `better_player`." },
-    { "type": "code", "language": "dart", "code": "final ctrl = VideoPlayerController.networkUrl(Uri.parse(url));\nawait ctrl.initialize();\nctrl.play();\n// UI: AspectRatio + VideoPlayer(ctrl)\n@override void dispose(){ ctrl.dispose(); super.dispose(); }" },
-    { "type": "callout", "variant": "interview", "markdown": "For HLS/DASH streams (adaptive bitrate), plain `video_player` works but has limits — `better_player` exposes more knobs (cache, subtitles, ABR). For scale, use a real video CDN and preheat next-video decoders." },
-    { "type": "callout", "variant": "mistake", "markdown": "Skipping `dispose()` — a huge leak because decoders are heavy. Also: creating a new controller in `build()` — one controller per video, cached." },
-    { "type": "callout", "variant": "tip", "markdown": "Wrap with Chewie for defaults you'd otherwise reimplement (play/pause, scrubbing, fullscreen). Use `visibility_detector` to pause auto-play videos scrolled out of view." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of `video_player` as a bare-metal DVD player + a TV cable.**\n\nA DVD player takes a media source, decodes video/audio, and emits frames on the TV. `video_player` is that player as a Flutter widget:\n\n- **VideoPlayerController** — the DVD player. Load a URL / asset / file / bytes; call `play/pause/seekTo/setVolume/setPlaybackSpeed`.\n- **VideoPlayer widget** — the TV screen. Wraps a `Texture` (Android) / `AVPlayerLayer` (iOS) that Flutter composites via PlatformView / Texture.\n- **VideoProgressIndicator** — the seek bar with buffered + played ranges.\n- **`ChewieController` (chewie package)** — the remote control (play/pause button, seek, fullscreen, subtitles). Because raw video_player has no UI beyond the frame.\n- **HLS / DASH** — video_player supports HLS on iOS natively + on Android via ExoPlayer's HLS extension. For DASH + DRM + subtitles you generally need `better_player` or `media_kit`.\n\n**Why every media-heavy Flutter app uses this or its wrappers:** it's the official Flutter team package; wraps ExoPlayer (Android) + AVPlayer (iOS) — the same engines native apps use. Solid enough for TikTok-style scrolling feeds if you tune preloading. For richer needs (DRM, adaptive quality UI, chapters, advanced subtitles) reach for `better_player` or `media_kit`." },
+    { "type": "callout", "variant": "definition", "markdown": "**`video_player`** (`^2.x`, official Flutter team plugin) wraps ExoPlayer (Android), AVPlayer (iOS), and the browser's `<video>` on Web. **Controllers**: `.network(url)`, `.asset(path)`, `.file(file)`, `.contentUri(uri)`. State exposed via `ValueListenable<VideoPlayerValue>` (position, duration, buffered, isPlaying, aspectRatio, hasError). Provides the frame + basic playback controls; you build the UI. Wrappers: **`chewie`** (Material/Cupertino default controls), **`better_player`** (subtitles + DRM + PiP), **`media_kit`** (libmpv-based, most-capable + heavier)." },
+    { "type": "theory", "markdown": "## Ecosystem choices" },
+    { "type": "table", "headers": ["Package", "Strengths", "Use when"], "rows": [
+      ["`video_player`", "Bare frame + core playback API", "Custom UI, tight control"],
+      ["`chewie`", "Ready-made Material/Cupertino controls", "Standard playback UX"],
+      ["`better_player`", "HLS + DASH + DRM + subtitles + PiP", "Streaming apps, subtitles"],
+      ["`media_kit`", "libmpv, Windows/Linux, ANY codec + subtitles + gapless", "Desktop, exotic codecs, high control"],
+      ["`pod_player`", "TikTok-style feed", "Vertical short-form video"]
+    ]},
+    { "type": "theory", "markdown": "## Full setup — network video with custom controls" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml: video_player: ^2.9.0\nimport 'package:video_player/video_player.dart';\n\nclass Player extends StatefulWidget {\n  const Player({super.key, required this.url});\n  final String url;\n  @override State<Player> createState() => _PlayerState();\n}\n\nclass _PlayerState extends State<Player> with WidgetsBindingObserver {\n  late VideoPlayerController _controller;\n\n  @override\n  void initState() {\n    super.initState();\n    WidgetsBinding.instance.addObserver(this);\n    _controller = VideoPlayerController.networkUrl(\n      Uri.parse(widget.url),\n      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),\n    )..initialize().then((_) {\n      if (!mounted) return;\n      _controller.setLooping(false);\n      _controller.play();\n      setState(() {});\n    })..addListener(_onPlayerState);\n  }\n\n  void _onPlayerState() {\n    if (_controller.value.hasError) {\n      // handle error\n    }\n  }\n\n  @override\n  void didChangeAppLifecycleState(AppLifecycleState state) {\n    // Pause when app is backgrounded — save battery + avoid audio playing over other apps\n    if (state == AppLifecycleState.paused) _controller.pause();\n  }\n\n  @override\n  Widget build(BuildContext context) {\n    if (!_controller.value.isInitialized) return const Center(child: CircularProgressIndicator());\n    return Column(children: [\n      AspectRatio(\n        aspectRatio: _controller.value.aspectRatio,\n        child: VideoPlayer(_controller),\n      ),\n      VideoProgressIndicator(_controller, allowScrubbing: true, colors: const VideoProgressColors(\n        playedColor: Colors.red, backgroundColor: Colors.grey, bufferedColor: Colors.blueGrey,\n      )),\n      Row(children: [\n        IconButton(icon: const Icon(Icons.replay_10), onPressed: () =>\n          _controller.seekTo(_controller.value.position - const Duration(seconds: 10))),\n        IconButton(icon: Icon(_controller.value.isPlaying ? Icons.pause : Icons.play_arrow),\n          onPressed: () => _controller.value.isPlaying ? _controller.pause() : _controller.play()),\n        IconButton(icon: const Icon(Icons.forward_10), onPressed: () =>\n          _controller.seekTo(_controller.value.position + const Duration(seconds: 10))),\n      ]),\n    ]);\n  }\n\n  @override\n  void dispose() {\n    WidgetsBinding.instance.removeObserver(this);\n    _controller.removeListener(_onPlayerState);\n    _controller.dispose();     // REQUIRED — releases native decoder\n    super.dispose();\n  }\n}" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Not disposing controller.** Video decoders hold native memory + surfaces; leaving one alive after screen leaves = memory bloat + audio ghost. Always dispose." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Building `VideoPlayer` widget before `initialize()` completes.** Blank frame + errors. Guard on `controller.value.isInitialized`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Instantiating multiple controllers in a scrollable feed.** Each holds native decoder; 20 controllers = OOM. Reuse one controller + swap sources, or use `pod_player`-style page controllers." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Ignoring lifecycle.** Audio keeps playing when app backgrounds; battery drain. Wire `WidgetsBindingObserver` → pause on paused." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Full-res 4K on cellular.** Bandwidth + battery. Use adaptive streaming (HLS/DASH) with quality tiers." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: No error UI.** Network hiccups + expired signed URLs happen. Listen for `.hasError` + show retry." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Preloading too much.** Preloading 10 videos = huge network + memory. Preload 1-2 next tiles." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Missing manifest / Info.plist entries** for `usesCleartextTraffic` (Android) or `NSAppTransportSecurity` (iOS) when testing HTTP videos in dev." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. `dispose()` in `State.dispose`.** Non-negotiable." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Pause on background.** Wire lifecycle observer." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Adaptive streaming** — serve HLS / DASH; player auto-selects quality." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Preload just-in-time** (1-2 next tiles)." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Error listener** — surface retry UI." },
+    { "type": "callout", "variant": "best", "markdown": "**6. `chewie` for standard UI** — don't reinvent controls." },
+    { "type": "callout", "variant": "best", "markdown": "**7. `better_player` for streaming apps** — DRM, subtitles, adaptive quality UI." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Sound with `mixWithOthers` when appropriate** — avoid interrupting user music." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Network video with play/pause + seek." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Custom controls: seek bar + skip 10 s + speed." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Lifecycle: pause on background + resume on foreground." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Vertical PageView feed with 1-controller reuse across pages." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — HLS stream + adaptive quality via better_player." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Native PiP mode integration + fullscreen support." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What does `video_player` wrap and what are the platform trade-offs?**\n\n**A:** **Android:** ExoPlayer (Google's official player), full HLS + DASH + WebM + progressive downloads. **iOS:** AVPlayer (Apple's native), HLS + progressive; DASH via HLS-only route. **Web:** browser `<video>` element; supports the codecs the browser supports; HLS on Safari only natively (need `hls.js` on Chrome). **Desktop:** limited support; `media_kit` (libmpv) is the desktop-first alternative. **Trade-offs:** consistent Flutter API but format support differs by platform — on iOS you cannot easily play DASH; on Web you must feature-detect. **Latency:** initial load takes 200-800 ms for network sources; assets are fast. **DRM:** not supported in bare video_player; use better_player for Widevine (Android) + FairPlay (iOS)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How do you build a TikTok-style scrolling video feed efficiently?**\n\n**A:** **The trap:** creating one `VideoPlayerController` per page in a PageView.builder = 20+ native decoders alive = OOM crash. **Pattern:** limited controller pool. Options: **(1) 3-controller ring** — current + previous + next; each page uses one; on swipe, evict the oldest, initialize the newer one. **(2) `pod_player`/`chewie`** with a single controller reused; swap source on page change. **(3) Preload thumbnails, not video** — show a poster until the user pauses on a page for > 100 ms, then start playback. **(4) Pause when the tile leaves viewport** — `VisibilityDetector` package fires callbacks. **(5) Reset controller on huge memory pressure** — listen for `MemoryPressureNotification`. **(6) Auto-play + tap-to-mute** — TikTok UX. **Interviewer signal:** knowing the controller pool trick separates candidates who've shipped video feeds from those who've prototyped." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: When would you pick `chewie` / `better_player` / `media_kit` over bare `video_player`?**\n\n**A:** **Bare `video_player`** — custom UX (branded controls, in-video overlays, in-context play buttons); tight control over play/pause via app logic. **`chewie`** — standard Material or Cupertino controls with fullscreen + volume + speed. Zero custom code; ideal for internal / prototype / simple playback screens. **`better_player`** — streaming media apps: adaptive HLS/DASH with quality menus, subtitles (SRT/VTT), DRM (Widevine / FairPlay), PiP mode, Chromecast. Solid for VOD services. **`media_kit`** — libmpv under the hood; supports every codec + subtitle format; best for desktop targets (Windows / Linux) or when you need exotic formats. Larger binary (~15 MB per platform). **Rule:** start with `video_player`; add `chewie` for standard controls; upgrade to `better_player` for streaming apps; `media_kit` for desktop / niche needs." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you handle lifecycle correctly?**\n\n**A:** Video controllers survive `dispose` only if YOU dispose them — otherwise they leak. **(1) `WidgetsBindingObserver.didChangeAppLifecycleState`** — pause on `paused` (screen locked / app backgrounded); resume behavior depends on UX (auto-resume vs stay-paused). **(2) Screen-off / call-received** on Android/iOS also triggers `paused`. **(3) In a list, `VisibilityDetector` listens for scroll-off** — pause. **(4) Route pop with `willPop`** — dispose before the route unmounts. **(5) Background audio** — if you want to keep audio playing (like YouTube), enable `mixWithOthers` + configure the audio session; also declare `audio` in iOS background modes. **(6) On foreground return** — restore position via `controller.value.position` if that matters. **(7) Memory pressure** — dispose off-screen controllers proactively. **Interviewers score highly on candidates who mention audio session + background modes.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you support subtitles + DRM?**\n\n**A:** Bare `video_player` doesn't natively handle either. **Subtitles:** use `better_player` with `subtitles` property (SRT / VTT / TXT); or overlay text yourself via a stream of position events. Native HLS streams can carry subtitles inline (WebVTT tracks) which `AVPlayer` / `ExoPlayer` render automatically. **DRM:** **Widevine** on Android (via ExoPlayer's DrmSessionManager), **FairPlay** on iOS (via AVFoundation content-key session). `better_player` exposes both; setup: license URL + optional headers; DRM tokens usually fetched from your DRM service. **Testing DRM** is a nightmare — production-signed tokens only work on real devices. **Alternative: hosted-player embeds** — some vendors (Mux, Cloudflare Stream) provide their own Flutter SDK with DRM baked in; considerably less work than DIY." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How do you keep video costs under control at consumer scale?**\n\n**A:** **(1) Adaptive streaming (HLS/DASH)** — serve multiple bitrates; player auto-selects based on bandwidth. Users on 3G get 480p; wifi users get 1080p. Saves 5-10× bandwidth. **(2) CDN with regional pops** — Cloudflare Stream, AWS CloudFront, GCP CDN. Latency + cost. **(3) Preload economics** — don't fetch full videos; fetch manifests + first segments. **(4) Cache locally** — HLS segments; short TTL for freshness. **(5) Feed monetization** — pre-roll ads compensate for delivery; measure Ad-View-Through vs bandwidth. **(6) Codec choice** — H.264 (universal) vs H.265 / HEVC (30 % smaller, license fees) vs AV1 (50 % smaller, patent-free but slower encode). **(7) Poster thumbnails** — avoid loading video until user taps. **(8) Analytics on completion rates** — a 10 % completion means most people don't watch; consider shorter forms. **CDN bill is often the #1 line item for video apps; every optimization counts.**" },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Short-form vertical feeds** (TikTok, Instagram Reels clones).\n- **Product demos** (auto-play muted; unmute on tap).\n- **Educational lectures** — speed control, chapters, subtitles.\n- **Live streams** — HLS with < 30 s latency.\n- **NOT ideal for** — real-time video calling (use WebRTC / Agora / Twilio); AR / heavy editing." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`VideoPlayerOptions(mixWithOthers: true)`** — don't stop the user's music.\n- **`setPlaybackSpeed(1.5)`** — variable playback speed.\n- **`ClosedCaptionFile`** — attach a VTT/SRT.\n- **Audio session config on iOS** — `AVAudioSessionCategoryPlayback` for background audio.\n- **PiP** — needs native config + `better_player` provides Dart APIs.\n- **Fullscreen** — flip status bar + orientation via `SystemChrome`; wrap in `RotatedBox` for landscape.\n- **`AudioSession`** package for advanced audio focus handling.\n- **Frame accurate seek** — `seekTo(Duration(microseconds: ...))` — some codecs snap to keyframes.\n- **HLS manifest tuning** — segment length (2-4 s standard), target duration.\n- **Video ads (VAST / VMAP)** — separate SDK (Google IMA).\n- **Screen recording detection** — `flutter_windowmanager` (Android) / `UIScreen.isCaptured` (iOS) — some apps block playback while recording.\n- **Screenshot protection** for DRM content — Android FLAG_SECURE, iOS masking on `UIApplicationWillResignActive`." }
   ],
   "flashcards": [
-    { "front": "video_player runtime engines?", "back": "ExoPlayer on Android, AVPlayer on iOS." },
-    { "front": "Where do you get UI controls?", "back": "Wrap the controller in Chewie (or better_player)." },
-    { "front": "Common mistake?", "back": "Missing dispose() or building the controller inside build()." }
+    { "front": "Under the hood?", "back": "ExoPlayer on Android, AVPlayer on iOS, <video> on Web." },
+    { "front": "TikTok-style feed pattern?", "back": "Limited controller pool (3-ring) + preload 1-2 next + poster before play." },
+    { "front": "Dispose necessity?", "back": "Native decoder + surface = must dispose; else memory + audio leak." },
+    { "front": "Standard controls package?", "back": "chewie for Material/Cupertino out of the box." },
+    { "front": "Streaming + DRM package?", "back": "better_player — HLS/DASH + subtitles + Widevine/FairPlay + PiP." },
+    { "front": "Lifecycle rule?", "back": "Pause on didChangeAppLifecycleState(paused) via WidgetsBindingObserver." },
+    { "front": "Bandwidth economics?", "back": "Adaptive HLS/DASH + CDN regional pops + H.265/AV1 codec for cost efficiency." }
   ],
   "quiz": [
-    { "q": "For controls out of the box…", "options": ["video_player alone", "Chewie / better_player wrapping the controller", "camera plugin", "share_plus"], "answer": 1, "explain": "video_player is the low-level primitive." },
-    { "q": "For adaptive streaming (HLS/DASH) at scale…", "options": ["video_player alone is optimal", "Add better_player / real CDN + tuning", "Base64 videos", "Skip streaming"], "answer": 1, "explain": "Better options for ABR + caching." },
-    { "q": "Skipping dispose() causes…", "options": ["Faster app", "Decoder leaks + battery drain", "Better colors", "Nothing"], "answer": 1, "explain": "Native decoders stay alive." }
+    { "q": "Bare video_player supports DRM?", "options": ["Yes", "No — use better_player", "iOS only", "Free tier only"], "answer": 1, "explain": "DRM needs better_player." },
+    { "q": "10 videos in a PageView + 1 controller each…", "options": ["Fine", "OOM crash — use controller pool", "Slow but OK", "Web-only issue"], "answer": 1, "explain": "Native decoders per controller." },
+    { "q": "Standard controls out of the box?", "options": ["video_player", "chewie", "better_player only", "media_kit"], "answer": 1, "explain": "chewie provides Material/Cupertino controls." },
+    { "q": "Adaptive streaming saves…", "options": ["Nothing", "5-10x bandwidth", "Half a percent", "Only iOS"], "answer": 1, "explain": "Serve multiple bitrates." },
+    { "q": "Missing dispose consequence?", "options": ["Nothing", "Native leak + audio ghost", "Better perf", "Web-only issue"], "answer": 1, "explain": "Video decoder + surface leak." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Play a network URL with default controls (Chewie)." },
-    { "level": "Medium", "text": "Auto-pause when scrolled off-screen via visibility_detector." },
-    { "level": "Hard", "text": "Add subtitles + fullscreen with better_player." },
-    { "level": "Expert", "text": "Prefetch + cache next N clips in a TikTok-style feed." }
+    { "level": "Easy", "text": "Network video + play/pause + seek + progress indicator." },
+    { "level": "Easy", "text": "Custom skip-10s buttons." },
+    { "level": "Medium", "text": "Lifecycle-aware pause on background + resume." },
+    { "level": "Medium", "text": "Vertical PageView feed reusing a controller pool (3-ring)." },
+    { "level": "Hard", "text": "HLS via better_player with quality menu + subtitles." },
+    { "level": "Hard", "text": "Native PiP mode + fullscreen." },
+    { "level": "Expert", "text": "DRM (Widevine + FairPlay) integration end-to-end." }
   ],
   "interviewQuestions": [
-    "video_player vs Chewie vs better_player?",
-    "How do you prevent decoder leaks?",
-    "How do you support HLS?",
-    "How to handle background/foreground?",
-    "How to test playback code?"
+    "What does video_player wrap + platform trade-offs?",
+    "How do you build a TikTok-style scrolling feed efficiently?",
+    "chewie vs better_player vs media_kit — pick when?",
+    "How do you handle lifecycle correctly?",
+    "Subtitles + DRM support?",
+    "How do you control video CDN costs at consumer scale?"
   ],
   "references": [
-    { "label": "video_player", "url": "https://pub.dev/packages/video_player" }
+    { "label": "video_player", "url": "https://pub.dev/packages/video_player" },
+    { "label": "chewie", "url": "https://pub.dev/packages/chewie" },
+    { "label": "better_player", "url": "https://pub.dev/packages/better_player" },
+    { "label": "media_kit", "url": "https://pub.dev/packages/media_kit" }
   ]
 }
