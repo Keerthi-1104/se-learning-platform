@@ -2,44 +2,105 @@
   "id": "plg.riverpod",
   "levelId": 10,
   "title": "flutter_riverpod",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 50,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Wire ProviderScope + ConsumerWidget",
-    "Use ref.watch / ref.read / ref.listen correctly",
-    "Override providers in tests"
+    "Understand Riverpod via a real-life analogy",
+    "Pick the right provider (Provider, StateNotifier, AsyncNotifier, Family, autoDispose)",
+    "Compose providers with ref.watch / ref.read / ref.listen",
+    "Handle async state with AsyncValue elegantly",
+    "Test providers in pure Dart",
+    "Answer Riverpod interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "`flutter_riverpod` is the Flutter binding for Riverpod — compile-safe, context-free DI + state. Wrap the app in `ProviderScope`; widgets extend `ConsumerWidget` (or use `HookConsumer`)." },
-    { "type": "code", "language": "dart", "code": "final counterProvider = StateProvider<int>((ref) => 0);\nclass Home extends ConsumerWidget {\n  Widget build(BuildContext c, WidgetRef ref) {\n    final count = ref.watch(counterProvider);\n    return TextButton(\n      onPressed: () => ref.read(counterProvider.notifier).state++,\n      child: Text('$count'),\n    );\n  }\n}" },
-    { "type": "callout", "variant": "interview", "markdown": "Riverpod fixes Provider's biggest issues: no BuildContext dependency (test-friendly), multiple providers of the same type, and compile-time safety. `ProviderScope.overrides` swaps providers for widget/integration tests without touching widgets." },
-    { "type": "callout", "variant": "mistake", "markdown": "Calling `ref.watch` in an event handler → runtime error. `watch` is for build; use `ref.read` in callbacks, and `ref.listen` for side effects that shouldn't rebuild." },
-    { "type": "callout", "variant": "tip", "markdown": "Use `.autoDispose` for provider lifecycles tied to a screen; use `family` for parameterized providers (e.g. `userProvider(id)`). The codegen (`@riverpod`) removes even more boilerplate." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Riverpod as a global smart cache with automatic garbage collection.**\n\n`provider` was a note board attached to the widget tree — you had to *hang it* somewhere and children below could read. Riverpod moves the note board out of the widget tree entirely: providers live in a **`ProviderContainer`** (mounted at root via `ProviderScope`). Any widget (or another provider, or a plain Dart function) can call `ref.watch(myProvider)` and get the current value.\n\n- **`ref.watch(p)`** — subscribes; the current widget rebuilds (or the current provider recomputes) on change.\n- **`ref.read(p)`** — one-shot, no subscription. Callbacks + `initState`.\n- **`ref.listen(p, cb)`** — side effects on state change (nav, snackbar).\n- **`family`** — parameterized providers: `userProvider(42)` — one provider instance per argument.\n- **`autoDispose`** — provider deletes itself when no widget is watching. Perfect for screen-scoped data.\n- **Compile-time DI** — no more `ProviderNotFoundException` at runtime; the framework knows about every provider at compile time (with `riverpod_generator`).\n\n**Why Riverpod became the new default for new Flutter apps:** it fixes provider's runtime-safety hole (missing scope = crash), removes `BuildContext` dependency (test providers in pure Dart, use them from Dart services / isolates), and gives a beautiful `AsyncValue<T>` type for async state (loading / data / error) that eliminates boilerplate boolean flags. Same author (Remi Rousselet). It's provider v2 with lessons learned." },
+    { "type": "callout", "variant": "definition", "markdown": "**Riverpod** (`flutter_riverpod`, `riverpod`, `riverpod_annotation` + `riverpod_generator`) is a compile-safe, BuildContext-free, cache-based state-management library. **Provider types:** `Provider` (immutable), `StateProvider` (mutable value), `StateNotifierProvider` (mutable notifier — deprecated in favor of Notifier), `NotifierProvider` (v2), `FutureProvider` / `AsyncNotifierProvider` (async data), `StreamProvider`. **Modifiers:** `.family` (parameterized), `.autoDispose` (GC when unused). **Access:** `ref.watch / read / listen`. Runs providers in pure Dart — no widget tree required for tests." },
+    { "type": "theory", "markdown": "## Provider type cheat sheet" },
+    { "type": "table", "headers": ["Provider", "Purpose", "Example"], "rows": [
+      ["`Provider<T>`", "Immutable value / DI", "`final apiProvider = Provider<Api>((r) => Api());`"],
+      ["`StateProvider<T>`", "Simple mutable value", "`final counter = StateProvider<int>((_) => 0);`"],
+      ["`NotifierProvider<N, T>`", "Complex mutable state via Notifier class", "class CartNotifier extends Notifier<Cart>"],
+      ["`FutureProvider<T>`", "One-shot async fetch — emits AsyncValue", "user profile"],
+      ["`AsyncNotifierProvider<N, T>`", "Async state that can also mutate", "chat, feed"],
+      ["`StreamProvider<T>`", "Continuous stream — emits AsyncValue", "Firestore snapshot"],
+      ["`.family`", "Parameterized — one instance per arg", "`userProvider(42)`"],
+      ["`.autoDispose`", "GC when nothing watches", "search results"]
+    ]},
+    { "type": "theory", "markdown": "## Full setup — feed screen with async + family + autoDispose" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml:\n//   flutter_riverpod: ^2.5.0\n//   riverpod_annotation: ^2.3.0\n// dev_dependencies:\n//   riverpod_generator: ^2.4.0\n//   build_runner: ^2.4.8\n\nimport 'package:flutter_riverpod/flutter_riverpod.dart';\nimport 'package:riverpod_annotation/riverpod_annotation.dart';\npart 'feed.g.dart';\n\n// ────── Repository DI ──────\n@Riverpod(keepAlive: true)\nFeedRepository feedRepository(FeedRepositoryRef ref) => FeedRepository(ref.watch(apiProvider));\n\n// ────── Family + autoDispose (screen-scoped) ──────\n@riverpod\nFuture<List<Item>> feed(FeedRef ref, {String query = ''}) async {\n  final repo = ref.watch(feedRepositoryProvider);\n  final cancel = CancelToken();\n  ref.onDispose(cancel.cancel);   // GC → cancel in-flight\n  return repo.search(query, cancel: cancel);\n}\n\n// ────── Mutable AsyncNotifier ──────\n@riverpod\nclass CartController extends _$CartController {\n  @override\n  FutureOr<Cart> build() async {\n    // First read — load initial cart from disk.\n    return ref.watch(cartStorageProvider).load();\n  }\n\n  Future<void> add(Item i) async {\n    state = const AsyncLoading();\n    state = await AsyncValue.guard(() async {\n      final updated = (state.valueOrNull ?? const Cart.empty()).plus(i);\n      await ref.read(cartStorageProvider).save(updated);\n      return updated;\n    });\n  }\n}\n\n// ────── UI ──────\nvoid main() => runApp(const ProviderScope(child: MyApp()));\n\nclass FeedScreen extends ConsumerStatefulWidget {\n  const FeedScreen({super.key});\n  @override ConsumerState<FeedScreen> createState() => _FeedScreenState();\n}\nclass _FeedScreenState extends ConsumerState<FeedScreen> {\n  String _q = '';\n  @override\n  Widget build(BuildContext context) {\n    // AsyncValue<List<Item>> — handles loading/data/error cleanly.\n    final asyncItems = ref.watch(feedProvider(query: _q));\n\n    // React to side effects — logout, error toast.\n    ref.listen(authControllerProvider, (prev, next) {\n      if (next.value?.isLoggedOut == true) context.go('/login');\n    });\n\n    return Scaffold(\n      appBar: AppBar(title: const Text('Feed')),\n      body: Column(children: [\n        TextField(onChanged: (q) => setState(() => _q = q)),\n        Expanded(child: asyncItems.when(\n          data: (items) => ListView(children: items.map(ItemTile.new).toList()),\n          loading: () => const Center(child: CircularProgressIndicator()),\n          error: (e, s) => Center(child: Text('$e')),\n        )),\n      ]),\n    );\n  }\n}\n\n// Regen: dart run build_runner watch --delete-conflicting-outputs" },
+    { "type": "theory", "markdown": "## AsyncValue<T> — the killer feature" },
+    { "type": "code", "language": "dart", "code": "// AsyncValue models loading / data / error in ONE sealed type.\nfinal AsyncValue<User> u = ref.watch(userProvider);\n\n// Pattern-match:\nu.when(\n  data: (user) => Text(user.name),\n  loading: () => const CircularProgressIndicator(),\n  error: (e, st) => Text('Error: $e'),\n);\n\n// Or with switch:\nswitch (u) {\n  AsyncData(:final value) => Text(value.name),\n  AsyncLoading() => const CircularProgressIndicator(),\n  AsyncError(:final error) => Text('$error'),\n  _ => const SizedBox(),\n}\n\n// Composition: derived AsyncValue that combines two sources.\nfinal fullProfile = FutureProvider<FullProfile>((ref) async {\n  final u = await ref.watch(userProvider.future);\n  final s = await ref.watch(settingsProvider.future);\n  return FullProfile(u, s);\n});\n// If EITHER dep is loading, `fullProfile` is loading — no manual flag juggling." },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Forgetting `ProviderScope` at the root.** Nothing watches, providers never build, silent breakage. Wrap `runApp(ProviderScope(child: MyApp()))`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: `ref.watch` in a callback (`onPressed`).** Only allowed in `build` / provider bodies. Use `ref.read` in callbacks." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Missing `autoDispose` on screen-scoped async data.** Provider caches forever → stale search results linger. Add `.autoDispose` or `@riverpod` (defaults to autoDispose)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Not cancelling in `ref.onDispose`.** When a screen leaves + autoDispose kicks in, in-flight requests keep running. Register cancel in `ref.onDispose`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: `ref.watch` on a family with a mutable argument.** New search string → new provider instance every keystroke. Debounce upstream or memoize the arg." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Mixing legacy StateNotifier + new NotifierProvider.** Code splits between styles. Migrate to `Notifier` / `AsyncNotifier` (v2 API)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Ignoring `AsyncValue.guard`.** Manual `try/catch` around emits leaves state in inconsistent AsyncLoading. Use `state = await AsyncValue.guard(() async { ... })`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Testing via widgets when a `ProviderContainer` works.** `container.read(provider)` in pure Dart is faster + more focused." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Use `riverpod_generator` (`@riverpod`)** — codegen removes boilerplate + adds compile-time safety." },
+    { "type": "callout", "variant": "best", "markdown": "**2. `AsyncValue.when` / switch — never manual loading flags.**" },
+    { "type": "callout", "variant": "best", "markdown": "**3. `autoDispose` for screen-scoped data;** `keepAlive: true` for long-lived DI (Repository, ApiClient)." },
+    { "type": "callout", "variant": "best", "markdown": "**4. `family` for parameterized providers** — `userProvider(id)`." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Cancel + free on `ref.onDispose`.**" },
+    { "type": "callout", "variant": "best", "markdown": "**6. `ref.listen` for side effects.**" },
+    { "type": "callout", "variant": "best", "markdown": "**7. Compose via `ref.watch(otherProvider)` inside providers** — derived state." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Test with `ProviderContainer` in pure Dart** — no widget tree." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Counter with `@riverpod class Counter extends _$Counter`; use `ref.watch` in build." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — `FutureProvider` + `AsyncValue.when` for a user profile." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — `family` + `autoDispose` — `feedProvider(query: q)`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — `ref.onDispose` cancels an in-flight Dio request when the screen pops." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Compose two async providers (user + settings) into a derived AsyncValue." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — `ProviderContainer` test that overrides an ApiClient with a fake + asserts state transitions." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What does Riverpod fix from `provider`?**\n\n**A:** **(1) Compile-time DI safety.** In `provider`, forgetting to wrap a widget = runtime `ProviderNotFoundException`. Riverpod's providers are global (not tree-scoped), and with `riverpod_generator` the compiler knows every provider; a missing dep is a compile error. **(2) No `BuildContext` dependency.** `ref.watch(p)` works from providers and pure Dart, so you can compose providers, test them without widgets, and use them from services / isolates. **(3) `AsyncValue<T>`.** Single sealed type for loading / data / error — no boolean-flag soup. **(4) `family` + `autoDispose`.** First-class parameterized + garbage-collected providers. **(5) Reactive composition.** `ref.watch(otherProvider)` inside a provider builds derived state automatically. **Same author** as `provider`; Riverpod is essentially provider v2 with hard-earned lessons. **Cost:** small learning curve; codegen build step." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: Explain `.family` and `.autoDispose` and when to use each.**\n\n**A:** **`.family`** — parameterized providers. Instead of one global `userProvider`, you write `userProvider.family` (or use `@riverpod Future<User> user(UserRef ref, int id)` with the generator). Each unique argument instantiates a separate provider instance, cached by (provider × arg). Use for per-entity data: `userProvider(42)`, `productProvider(sku)`. **`.autoDispose`** — provider deletes itself when nothing watches. Perfect for screen-scoped data (search results, transient forms) that should NOT survive the user leaving the screen. Combine: `feedProvider.family.autoDispose` — one instance per query, gone when the search bar clears. **Trap:** with `.family`, mutable arguments (a search string that changes per keystroke) creates a new provider every keystroke; combine with debounce. **`keepAlive: true`** — the escape hatch to keep an autoDispose provider alive after unwatch (e.g., preload for next screen)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How does `AsyncValue<T>` simplify async state?**\n\n**A:** `AsyncValue<T>` is a sealed type: `AsyncData(value)`, `AsyncLoading()`, `AsyncError(err, st)`. Pattern-match in UI via `.when(data: ..., loading: ..., error: ...)`. **Composition wins:** `ref.watch(providerA.future)` inside `providerB` propagates loading/error automatically — you don't juggle three booleans. **Mutation:** `state = const AsyncLoading()` then `state = await AsyncValue.guard(() async { ... })` — guard converts thrown exceptions to `AsyncError` cleanly. **Refresh:** `ref.invalidate(provider)` triggers rebuild; `ref.refresh(provider)` returns the new future. **Comparison to `flutter_bloc`:** Bloc requires you to model `Loading / Data / Error` states manually via sealed classes; AsyncValue gives it for free. **Trap:** don't ignore `AsyncError` — always show at least a snackbar. `.whenData` skips loading/error paths silently which can hide bugs." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you test Riverpod providers?**\n\n**A:** **`ProviderContainer`** — pure Dart, no widget tree. Construct one, optionally override providers (`overrides: [apiProvider.overrideWithValue(FakeApi())]`), then `container.read(myProvider)` to trigger + assert. **`container.listen(myProvider, cb)`** — subscribe + capture state transitions. **`container.dispose()`** — teardown. **Async testing:** `await container.read(userProvider.future)` waits for the FutureProvider to settle. **Test AsyncValue transitions** — expect `AsyncLoading → AsyncData` or `AsyncLoading → AsyncError`. **Widget tests:** wrap SUT in `ProviderScope(overrides: [...])` for integration checks. **Also:** `riverpod_lint` catches common mistakes (missing autoDispose, ref.watch in callback) statically. **Interview highlight:** 'no BuildContext required for provider tests' — this is the tangible win over provider / flutter_bloc." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How would you cancel an in-flight request when the user leaves a screen?**\n\n**A:** Combine `autoDispose` + `ref.onDispose` + Dio's `CancelToken`. Inside the provider: `final cancel = CancelToken(); ref.onDispose(cancel.cancel); return repo.load(cancel: cancel);`. When the widget stops watching (screen pop, argument change), Riverpod disposes the provider → `ref.onDispose` fires → CancelToken cancels → Dio throws DioException(cancel) → your repo swallows or propagates. **Advantages** over provider's manual dispose: automatic, screen-scoped, no `BuildContext` needed, works for `family` too (each family instance disposed independently). **Also:** `ref.keepAlive()` can be called + released later — useful for preloading; when released, autoDispose kicks in on next unwatch. **Common bug:** forgetting `.autoDispose` — provider caches forever, cancel never fires. `riverpod_generator` defaults to autoDispose which is safer." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: Riverpod vs flutter_bloc vs provider — pick one for a new app and defend.**\n\n**A:** **New app, small-to-mid team, no historic constraints → Riverpod.** Compile-time safety, AsyncValue, ergonomic composition, minimal boilerplate with codegen. **Existing large team with `flutter_bloc` muscle memory → keep flutter_bloc.** Migration cost is high; the architectural benefits are equivalent. **Prototype / learning / very small app → `provider`.** Least learning curve; official Flutter tutorial. **Regulated audit-log requirements → `flutter_bloc`** (explicit event stream is a compliance win). **Wrong answer at interview:** 'Riverpod is objectively best' — nuance matters. **The real signal:** knowing when to STAY on your current stack vs migrate. Migration for its own sake is expensive; migrate only when you're hitting real pain (runtime provider errors, unmaintainable derived state, difficult tests)." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Default for new Flutter apps in 2025-2026** — most YouTube tutorials, indie apps, mid-sized startups.\n- **Composition-heavy screens** — dashboards combining N async sources.\n- **Screen-scoped async with cancel-on-leave** — feed, search, chat.\n- **NOT ideal for** — teams with heavy investment in flutter_bloc / MobX; churn > gain." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`riverpod_generator`** — annotations + codegen; strongly recommended in 2.x.\n- **`riverpod_lint`** — static analysis catching common mistakes.\n- **`ref.invalidate` / `ref.refresh`** — trigger rebuild.\n- **`ProviderObserver`** — global hook for `didAddProvider`, `didUpdateProvider`, `didDisposeProvider`. Wire to Crashlytics.\n- **`ProviderScope` overrides** — inject fakes at test time or feature-flag stages.\n- **`ref.watch(p.select((v) => v.slice))`** — analog to provider's `Selector`; narrow rebuild scope.\n- **`ref.keepAlive()` in provider body** — protect from autoDispose until `link.close()`.\n- **`Family` args must have stable equality** — use `Equatable` or freezed value classes for complex args.\n- **`AsyncValue.guard`** — turns thrown exceptions into AsyncError.\n- **`unmounted` guard** — inside a Notifier, check `ref.mounted` before mutating state after an async gap.\n- **Dependency graph** — Riverpod builds a DAG; cycles throw; `ref.watch` cycles are rare in practice.\n- **Companion**: `hooks_riverpod` adds `flutter_hooks` — `useState`, `useEffect` in Flutter. Popular in Riverpod-heavy codebases." }
   ],
   "flashcards": [
-    { "front": "watch vs read vs listen?", "back": "watch subscribes (build only); read is one-off (callbacks); listen runs side effects on change without rebuilding." },
-    { "front": "Testing a screen with Riverpod?", "back": "Wrap in a ProviderScope with `overrides` mapping providers to fakes." },
-    { "front": "Parameterized providers?", "back": "`family` — e.g. `userProvider = FutureProvider.family<User, String>((ref, id) => ...);`" }
+    { "front": "Why Riverpod over provider?", "back": "Compile-time DI safety, no BuildContext, AsyncValue, family + autoDispose, cleaner composition." },
+    { "front": "AsyncValue?", "back": "Sealed type: AsyncData / AsyncLoading / AsyncError. Use .when or switch." },
+    { "front": "family?", "back": "Parameterized provider — one instance per unique arg." },
+    { "front": "autoDispose?", "back": "Provider GC'd when nothing watches. Perfect for screen-scoped data." },
+    { "front": "Cancel in-flight?", "back": "ref.onDispose(cancelToken.cancel) — fires when autoDispose kicks in." },
+    { "front": "Side effects?", "back": "ref.listen(provider, callback) — outside build phase." },
+    { "front": "Testing?", "back": "ProviderContainer + overrides in pure Dart. No widget tree." }
   ],
   "quiz": [
-    { "q": "In an onPressed callback, use…", "options": ["ref.watch", "ref.read", "ref.listen", "Consumer"], "answer": 1, "explain": "watch is only allowed in build." },
-    { "q": "To override providers in a test…", "options": ["Delete them", "ProviderScope(overrides: [...])", "setState", "Nothing"], "answer": 1, "explain": "Overrides swap providers for fakes." },
-    { "q": "Providers tied to a screen's lifecycle use…", "options": ["Global scope", ".autoDispose", "family without .autoDispose", "context.watch"], "answer": 1, "explain": "autoDispose cleans up when nothing is listening." }
+    { "q": "Which type unifies loading/data/error?", "options": ["Nullable T", "AsyncValue<T>", "Result<T>", "Stream<T>"], "answer": 1, "explain": "Sealed type — pattern-match in UI." },
+    { "q": "Screen-scoped data → cache forever?", "options": ["Yes", "No — use .autoDispose", "Sometimes", "Never possible"], "answer": 1, "explain": "GC when nothing watches." },
+    { "q": "Callback (onPressed) uses…", "options": ["ref.watch", "ref.read", "ref.listen", "ref.select"], "answer": 1, "explain": "One-shot; no subscribe." },
+    { "q": "Cancel-on-leave pattern?", "options": ["Nothing", "ref.onDispose(cancelToken.cancel) + .autoDispose", "runZonedGuarded", "isolate spawn"], "answer": 1, "explain": "Riverpod's cleanest pattern." },
+    { "q": "Root wrapper?", "options": ["MaterialApp", "ProviderScope", "MultiProvider", "Nothing needed"], "answer": 1, "explain": "Mounts the container." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Counter with StateProvider." },
-    { "level": "Medium", "text": "FutureProvider fetching user data and rendering AsyncValue.when." },
-    { "level": "Hard", "text": "NotifierProvider driving a search screen with debounce + cancellation." },
-    { "level": "Expert", "text": "Widget test overriding providers with fakes and asserting rebuild behavior." }
+    { "level": "Easy", "text": "@riverpod Counter with ref.watch." },
+    { "level": "Easy", "text": "FutureProvider + AsyncValue.when." },
+    { "level": "Medium", "text": ".family + .autoDispose feed(query)." },
+    { "level": "Medium", "text": "Compose two async providers into a derived AsyncValue." },
+    { "level": "Hard", "text": "ref.onDispose cancels a Dio request on screen leave." },
+    { "level": "Hard", "text": "ref.listen navigates on auth state change." },
+    { "level": "Expert", "text": "ProviderContainer test with overrides + assertions on state transitions." }
   ],
   "interviewQuestions": [
-    "How does Riverpod improve on Provider?",
-    "watch vs read vs listen?",
-    "autoDispose and family — when use each?",
-    "How do you test with Riverpod?",
-    "Codegen (@riverpod) — pros/cons?"
+    "What does Riverpod fix from provider?",
+    "Explain family + autoDispose + when to use each.",
+    "How does AsyncValue simplify async state?",
+    "How do you test Riverpod providers?",
+    "Cancel-on-leave pattern with Riverpod + Dio?",
+    "Riverpod vs flutter_bloc vs provider — pick one and defend."
   ],
   "references": [
-    { "label": "Riverpod docs", "url": "https://riverpod.dev" }
+    { "label": "riverpod.dev", "url": "https://riverpod.dev" },
+    { "label": "flutter_riverpod package", "url": "https://pub.dev/packages/flutter_riverpod" },
+    { "label": "riverpod_generator", "url": "https://pub.dev/packages/riverpod_generator" }
   ]
 }

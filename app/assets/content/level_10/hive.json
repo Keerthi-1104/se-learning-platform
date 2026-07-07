@@ -2,44 +2,100 @@
   "id": "plg.hive",
   "levelId": 10,
   "title": "hive (plugin)",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "xp": 40,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Initialize Hive + register adapters",
-    "Encrypt sensitive boxes",
-    "Migrate models safely"
+    "Understand Hive via a real-life analogy (plugin-oriented view)",
+    "Open Boxes, register TypeAdapters, read/write typed objects",
+    "Choose Hive vs sembast vs Isar vs Drift for local persistence",
+    "Encrypt boxes safely + evolve schemas",
+    "Test with mock Box + in-memory Hive",
+    "Answer Hive-plugin interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "The `hive` / `hive_flutter` packages provide a pure-Dart NoSQL key-value store. Zero native code, boxes as files on disk, fast get/put; great for settings, small caches, and simple lookups." },
-    { "type": "code", "language": "dart", "code": "await Hive.initFlutter();\nHive.registerAdapter(UserAdapter());   // BEFORE openBox\nfinal box = await Hive.openBox<User>('users');\nawait box.put('me', User(name: 'Ada'));" },
-    { "type": "callout", "variant": "interview", "markdown": "For sensitive data (auth tokens), wrap the box in HiveAesCipher and store the key in flutter_secure_storage. Registering adapters BEFORE openBox is essential — otherwise you get 'unknown typeId' errors on cold start." },
-    { "type": "callout", "variant": "mistake", "markdown": "Renumbering @HiveField ids or removing them — breaks reads of older data. Only ADD new fields with new ids; deprecate old ones with a comment." },
-    { "type": "callout", "variant": "tip", "markdown": "Use lazy boxes for large values (`LazyBox<T>`) so they're not fully loaded into memory. On startup, only open the boxes you need for the first frame." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Hive as a bunch of labeled shoe boxes under your bed.**\n\nEach `Box` is one shoe box: it has a name (`settings`, `cart`, `feed_cache`), it stores keys → values, it's fast to open, and you can peek without unpacking everything else.\n\n- **Fast** — pure Dart NoSQL, no SQLite / native code. Cold open of a Box is ~1-5 ms.\n- **Typed** — register a `TypeAdapter<T>` (usually generated) → put/get typed objects with no manual JSON.\n- **Reactive** — `box.watch(key: 'x')` streams changes, great with `ValueListenableBuilder`.\n- **Cross-platform** — mobile, desktop, web (IndexedDB backend).\n- **Encrypted** — pass an `HiveAesCipher` when opening; box contents are AES-256 encrypted at rest.\n- **Simple** — no schema migrations, no query language; you shape data with plain Dart.\n\n**The catch — no queries beyond linear scan.** Hive is not a database in the SQL sense. You can `box.values.where(...)` but that's O(n) in Dart. If you have millions of rows or complex joins, use Isar or Drift instead.\n\n**Why every second Flutter tutorial uses Hive:** for key-value + cached-object needs (settings, offline snapshots, cart, auth token blob, recent-search list) it's ~2 lines of code and screamingly fast. Overkill for it? No — you never regret keeping it simple." },
+    { "type": "callout", "variant": "definition", "markdown": "**Hive** (`hive` + `hive_flutter`) is a pure-Dart, key-value NoSQL store with typed object support via generated `TypeAdapter`s. Data is stored in named `Box`es (files on IO platforms, IndexedDB on Web). Optional AES-256 encryption. Reactive Streams via `Box.watch`. Currently maintained: **Hive 4** is being phased in; **Hive 2.x** remains widely deployed. Many teams migrate directly to **Isar** (same author, richer query engine) or **Drift** (SQLite-based, SQL power) for anything beyond simple KV cases." },
+    { "type": "theory", "markdown": "## Hive vs the alternatives" },
+    { "type": "table", "headers": ["Store", "Model", "Query", "Best for"], "rows": [
+      ["**shared_preferences**", "String→primitive KV", "None", "Bools + strings + tiny prefs"],
+      ["**Hive**", "Named boxes KV, typed", "Linear scan", "Cached objects, cart, settings, recent-searches, offline snapshots"],
+      ["**Isar**", "Object DB with indexes", "Rich filter/sort/multi-index", "Chat, big lists, offline-first"],
+      ["**Drift (SQLite)**", "Relational", "SQL (full)", "Joins, complex queries, reporting"],
+      ["**sembast**", "NoSQL doc-store", "Finder API", "Structured docs w/o SQL"],
+      ["**flutter_secure_storage**", "Encrypted KV", "None", "Tokens, PIN, small secrets"]
+    ]},
+    { "type": "theory", "markdown": "## Full plugin setup — settings + cart" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml:\n//   hive: ^2.2.3\n//   hive_flutter: ^1.1.0\n// dev_dependencies:\n//   hive_generator: ^2.0.1\n//   build_runner: ^2.4.8\n\nimport 'package:hive_flutter/hive_flutter.dart';\n\n// ────── Model with TypeAdapter (generated) ──────\npart 'cart_item.g.dart';\n@HiveType(typeId: 1)\nclass CartItem {\n  @HiveField(0) final String sku;\n  @HiveField(1) final int qty;\n  @HiveField(2) final DateTime addedAt;\n  const CartItem({required this.sku, required this.qty, required this.addedAt});\n}\n\nFuture<void> initHive() async {\n  await Hive.initFlutter();               // sets path\n  Hive.registerAdapter(CartItemAdapter()); // from codegen\n  await Hive.openBox<CartItem>('cart');\n  await Hive.openBox('settings');          // untyped Box<dynamic>\n}\n\n// ────── Write / read ──────\nfinal cart = Hive.box<CartItem>('cart');\nawait cart.put('SKU-42', CartItem(sku: 'SKU-42', qty: 2, addedAt: DateTime.now()));\nfinal item = cart.get('SKU-42');\n\nfinal settings = Hive.box('settings');\nawait settings.put('theme', 'dark');\nfinal theme = settings.get('theme', defaultValue: 'system');\n\n// ────── Reactive UI (no state-management framework required) ──────\nValueListenableBuilder(\n  valueListenable: cart.listenable(),   // fires on any change\n  builder: (_, Box<CartItem> box, __) => Text('${box.length} items'),\n);\n// Or a Stream:\ncart.watch(key: 'SKU-42').listen((event) => print('sku changed to ${event.value}'));\n\n// ────── Encrypted box (secret key derived from secure_storage) ──────\nfinal keyBytes = await const FlutterSecureStorage().read(key: 'hive_key');\nfinal cipher = HiveAesCipher(base64Decode(keyBytes!));\nawait Hive.openBox<CartItem>('cart_secure', encryptionCipher: cipher);\n\n// Regen: dart run build_runner build --delete-conflicting-outputs" },
+    { "type": "theory", "markdown": "## Common mistakes (plugin-side)" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Registering the same typeId twice.** `HiveError: adapter already registered`. Every `@HiveType` needs a project-unique `typeId`; keep a spreadsheet." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Reordering `@HiveField` numbers.** Old data was serialized against old field IDs; renumbering corrupts existing boxes on user devices. **Only ADD new fields with new numbers; never renumber**." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Storing giant blobs.** Hive rewrites the box on compaction; a 5 MB blob per key thrashes cold-start. Store big binaries as files + only paths in Hive." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Encryption key in code.** Anyone can `strings` your APK. Generate a random key on first launch + store in `flutter_secure_storage` (Keychain / EncryptedSharedPreferences)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Not calling `Hive.close()` before app exit** on desktop / integration tests. Uncompacted log files linger + slow next open." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Using Hive from a Dart isolate.** Isolate boundaries + platform channels don't mix. Hive is main-isolate only unless you re-init in the isolate with a distinct path." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Missing generator regen after model changes.** Compile passes; runtime `HiveError: cannot write ...`. Add `build_runner watch` to dev workflow." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Treating Hive as a queryable DB.** No indexes; linear scan on 100K items = jank. Use Isar or Drift instead." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. `typeId` registry** — a project doc listing every `@HiveType` id + owner." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Only ADD `@HiveField` numbers.** Never renumber; never remove — Hive tolerates missing readers." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Open boxes lazily** for large data with `Hive.openLazyBox<T>` — reads from disk on-demand." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Encrypted boxes use random key from `flutter_secure_storage`.**" },
+    { "type": "callout", "variant": "best", "markdown": "**5. Reactive UI via `box.listenable()` or `box.watch(key:)`.**" },
+    { "type": "callout", "variant": "best", "markdown": "**6. Split boxes by concern** — `settings`, `cart`, `feed_cache`. Easier to `.clear()` or `.deleteFromDisk()` selectively." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Migration helpers** — write a one-time upgrader that reads old-format keys + writes new. Version the box name (`cart_v2`)." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Tests: `Hive.init(tempDir)` in `setUp`; `Hive.deleteFromDisk()` in `tearDown`.**" },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — settings box: theme + locale; UI reads via `.listenable`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — cart box with generated adapter; add/update/remove items." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — encrypted box using key from `flutter_secure_storage`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — LazyBox for a 50 MB offline cache." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — schema-evolution: add a new `@HiveField`, verify old data still reads." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — migrate a cart box from Hive to Isar; measure speed on 100K items." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Hive vs Isar vs Drift — how do you pick?**\n\n**A:** **Hive** — key-value + typed objects, pure Dart, no queries. Best for: settings, cart, offline snapshots, recent-searches. **Isar** — object DB with indexes + rich queries + full-text search. Best for: chat messages, big lists, filter-heavy screens, offline-first apps that need to slice/search their own data. **Drift** — SQLite with type-safe generated Dart API. Best for: relational data with joins, complex reporting queries, teams already comfortable with SQL. **Rule of thumb:** start with Hive; migrate ONE box to Isar or Drift when you hit query performance or relational needs. Don't pre-optimize — Hive covers 80% of cases and switching later is a one-day migration per box." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How does the TypeAdapter work + how do you evolve a schema?**\n\n**A:** `hive_generator` reads `@HiveType(typeId: X)` classes with `@HiveField(N)` fields and emits a `TypeAdapter<T>` — a class that knows how to write/read `T` to/from the box's binary format. **Every field has a stable field number**; on read, unknown numbers are ignored (forward compatibility); on write, all fields are written. **Evolution:** (1) **Add a field** — new `@HiveField(N)`; old data reads with the new field = null/default. Safe. (2) **Rename a field in Dart** — same field number stays; safe. (3) **Change a field's TYPE** — dangerous; old data can't decode. Add a new field with a new number + a getter that reads new-or-old + a migration to backfill. (4) **Remove a field** — leave the number reserved forever (don't reuse); safe. **Golden rule: fields numbers are forever; never renumber, never reuse.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do you securely encrypt a Hive box?**\n\n**A:** `Hive.openBox('secret', encryptionCipher: HiveAesCipher(keyBytes))`. Provide **32 random bytes** as the key. **Where do you store the key?** — NEVER in code (grep of your APK reveals it). **First launch:** generate a `List<int>` via `Hive.generateSecureKey()` → base64 → write to `flutter_secure_storage` (backed by Keychain / EncryptedSharedPreferences with StrongBox where available). Subsequent launches: read the key from secure storage + decode + open. **Cost:** the whole box is encrypted; per-record writes go through AES; ~2-3× slower than plain writes on large boxes. **Alternative:** encrypt only the *sensitive fields* inside the value objects; keep the box unencrypted. **Reality:** for medium-sensitivity (cart, saved addresses), encrypted box + secure_storage key is the right balance." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you make UI react to Hive changes without a state-management framework?**\n\n**A:** Every Box exposes `box.listenable(keys: [...])` — a `ValueListenable<Box>` you can pass to `ValueListenableBuilder`. Any `put/delete/clear` fires the listenable; the builder rebuilds. **For a specific key:** `box.watch(key: 'x').listen(...)` — Stream. **For an untyped Box:** `box.listenable()` fires on any change. **Advantages** over provider/Riverpod for tiny apps: no extra dependency; the DB IS the state. **Cost:** rebuilds fire for any change to the box, not just the slice the UI cares about — you're re-doing the `.select()` pattern manually. **In real apps:** wrap the box behind a Riverpod/Bloc so widgets watch a filtered slice; Hive is the storage layer, not the state layer." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you test Hive-backed code?**\n\n**A:** `setUp`: create a temp directory + `Hive.init(tempDir.path)` (NOT `Hive.initFlutter` — no platform channels in unit tests); register adapters; open the boxes. `tearDown`: `Hive.deleteFromDisk()` + delete temp dir. **Advantage:** tests run in pure Dart (fast, deterministic). **For repository tests**, inject the box: `class CartRepository { CartRepository(this.box); final Box<CartItem> box; ... }` — pass a real Hive box in test setup. **For widget tests:** mock the repository, not the box. **Golden tip:** put every Hive call behind a repository interface + inject; migrating to Isar later is a repo swap, not a codebase-wide rewrite." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: When would you migrate off Hive?**\n\n**A:** **Migrate when:** (1) you need proper queries (filter + sort + composite index) on large N (10K+) — linear scan is too slow. (2) You need full-text search — Isar wins. (3) You need joins across boxes — Drift wins. (4) You need transactional multi-box writes — Isar has transactions; Hive doesn't. (5) You need Hive 4 features while stuck on 2.x (large-file boxes, better compaction). **Migration path:** identify the ONE box that's slow, rewrite behind the same repository interface with Isar/Drift schema, write a one-time importer that copies existing Hive data into the new store on first launch of the new version, delete the old box after successful copy. **Don't rip-and-replace the whole app**; migrate box by box. **When to stay:** small key-value needs, no query pain, team knows Hive well — the pragmatic answer for many apps is 'stay.'" },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Settings + preferences** — every Flutter app.\n- **Offline snapshots** — cache last-fetched feed for offline replay.\n- **Cart / draft data** — persistent between sessions.\n- **Auth token blob** — but usually via `flutter_secure_storage` for higher security.\n- **Recent-searches / history** — small lists.\n- **Not the right tool for** — big queryable datasets (Isar / Drift)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`Hive.openLazyBox`** — reads values from disk on demand; use for large boxes to keep memory small.\n- **Compaction** — Hive rewrites the box file when the log gets big; usually automatic, but `box.compact()` is exposed.\n- **Hive 4 preview** — improvements in binary format + async; Hive 2 remains widely deployed.\n- **Web target** — Hive uses IndexedDB; some APIs (`box.deleteFromDisk`) behave differently.\n- **Isolate init** — call `Hive.init(path)` in each isolate; they don't share Box instances.\n- **`Uint8List` keys** — supported; but string keys are simpler.\n- **`initFlutter(subDir: 'v2')`** — segment storage by app version for clean migrations.\n- **Backup / export** — read all boxes → serialize to JSON → save to Storage → restore inverse.\n- **Corruption recovery** — on `HiveError: file corrupt`, delete + rebuild from source of truth (backend cache).\n- **Encryption limits** — AES-256; but keys must be stored securely; consider FIPS / MDM requirements for enterprise apps.\n- **Testing** — `Hive.init(tempDir.path)` + `Hive.deleteFromDisk` in tearDown.\n- **Package alternative** — `sembast` for doc-oriented, ObjectBox for high-perf indexed KV." }
   ],
   "flashcards": [
-    { "front": "Adapter registration order?", "back": "Register adapters BEFORE openBox — otherwise cold reads fail with unknown typeId." },
-    { "front": "Encrypting a box?", "back": "HiveAesCipher(keyBytes); store the key in flutter_secure_storage." },
-    { "front": "Safe schema evolution?", "back": "Only add new @HiveFields with new ids; never renumber or remove used ones." }
+    { "front": "Hive vs Isar in one line?", "back": "Hive = KV + typed objects, no queries. Isar = object DB + indexes + rich queries." },
+    { "front": "TypeAdapter?", "back": "hive_generator emits it from @HiveType + @HiveField numbers." },
+    { "front": "Field-evolution rules?", "back": "ADD new numbers; NEVER renumber, NEVER reuse a removed number. Reads tolerate unknown fields." },
+    { "front": "Encryption key location?", "back": "Random on first launch → flutter_secure_storage (Keychain / EncryptedSharedPreferences)." },
+    { "front": "Reactive UI?", "back": "box.listenable() → ValueListenableBuilder; or box.watch(key:) → Stream." },
+    { "front": "Isolate friendly?", "back": "Re-init per isolate; boxes not shared across isolates." },
+    { "front": "When to migrate off?", "back": "Complex queries, joins, big-N filter/sort, transactions across boxes." }
   ],
   "quiz": [
-    { "q": "Store an auth token safely?", "options": ["Plain box", "Encrypted box + key in secure storage", "Print to logs", "SharedPreferences"], "answer": 1, "explain": "Combine HiveAesCipher with flutter_secure_storage." },
-    { "q": "Registering an adapter…", "options": ["After openBox", "Before openBox", "In dispose", "Only in tests"], "answer": 1, "explain": "Otherwise Hive can't decode existing objects." },
-    { "q": "Large payloads should live in…", "options": ["A normal Box", "A LazyBox", "SharedPreferences", "main.dart"], "answer": 1, "explain": "LazyBox avoids loading the whole box in memory." }
+    { "q": "Renumbering @HiveField values on existing users…", "options": ["Safe", "Corrupts stored data", "Forces migration", "Only affects new users"], "answer": 1, "explain": "Field numbers are the on-disk contract." },
+    { "q": "Encryption key belongs…", "options": ["In code", "In flutter_secure_storage", "In shared_preferences plain", "Hardcoded"], "answer": 1, "explain": "OS-managed secure storage." },
+    { "q": "React to Box changes via…", "options": ["Polling", "box.listenable() or box.watch()", "InheritedWidget", "print"], "answer": 1, "explain": "Reactive APIs built in." },
+    { "q": "Hive is best for…", "options": ["Complex SQL joins", "KV + typed cached objects", "Full-text search", "Multi-box transactions"], "answer": 1, "explain": "For queries move to Isar / Drift." },
+    { "q": "Field REMOVED — reuse its number later?", "options": ["Yes", "Never — reserve forever", "Only in tests", "After migration"], "answer": 1, "explain": "Reusing = data corruption." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Persist a theme setting with Hive." },
-    { "level": "Medium", "text": "Persist a custom User class with a generated adapter." },
-    { "level": "Hard", "text": "Encrypt a Session box; rotate the AES key." },
-    { "level": "Expert", "text": "Add a v1→v2 model migration for a widely-deployed field change." }
+    { "level": "Easy", "text": "Settings box: theme + locale reactive via ValueListenableBuilder." },
+    { "level": "Easy", "text": "Store recent searches (List<String>) with size cap." },
+    { "level": "Medium", "text": "Cart box with generated CartItem adapter; add / remove / update." },
+    { "level": "Medium", "text": "Encrypted box; key stored in flutter_secure_storage." },
+    { "level": "Hard", "text": "LazyBox for large offline cache; benchmark cold open." },
+    { "level": "Hard", "text": "Schema evolution: add a field; verify old data still reads." },
+    { "level": "Expert", "text": "Migrate one box from Hive to Isar; measure speed + LOC change." }
   ],
   "interviewQuestions": [
-    "When is Hive the right fit?",
-    "How do you encrypt Hive data?",
-    "How do TypeAdapters work?",
-    "How do you evolve the schema safely?",
-    "Lazy box vs Box?"
+    "Hive vs Isar vs Drift — how do you pick?",
+    "How does TypeAdapter work + how do you evolve a schema?",
+    "How do you securely encrypt a Hive box?",
+    "How do you make UI react to Hive changes without a state framework?",
+    "How do you test Hive-backed code?",
+    "When would you migrate off Hive + how?"
   ],
   "references": [
+    { "label": "Hive docs", "url": "https://docs.hivedb.dev" },
     { "label": "hive_flutter", "url": "https://pub.dev/packages/hive_flutter" }
   ]
 }

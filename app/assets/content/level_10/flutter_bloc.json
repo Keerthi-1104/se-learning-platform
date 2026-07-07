@@ -2,44 +2,103 @@
   "id": "plg.flutter_bloc",
   "levelId": 10,
   "title": "flutter_bloc",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 50,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Wire BlocProvider, BlocBuilder, BlocListener",
-    "Use MultiBlocProvider at feature roots",
-    "Test with bloc_test"
+    "Understand flutter_bloc via a real-life analogy",
+    "Differentiate Bloc (event-driven) vs Cubit (method-driven)",
+    "Use BlocProvider / BlocBuilder / BlocListener / BlocConsumer correctly",
+    "Model states as sealed classes for exhaustive UI handling",
+    "Test blocs with `bloc_test`",
+    "Answer flutter_bloc interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "`flutter_bloc` is the Flutter binding for the BLoC library — Blocs/Cubits expose immutable states via streams; widgets subscribe to and rebuild from them. Adds BlocProvider, BlocBuilder, BlocListener, BlocConsumer, RepositoryProvider, and BlocObserver." },
-    { "type": "code", "language": "dart", "code": "BlocProvider(create: (_) => CounterCubit(),\n  child: BlocConsumer<CounterCubit, int>(\n    listenWhen: (o,n) => n < 0,\n    listener: (c, s) => showSnack(c, 'Negative!'),\n    buildWhen: (o,n) => o != n,\n    builder: (c, s) => Text('$s'),\n  ),\n);" },
-    { "type": "callout", "variant": "interview", "markdown": "Use BlocBuilder for UI, BlocListener for side effects (nav, snackbars), BlocConsumer for both. Add a global BlocObserver in main() to log every transition — a huge debugging + auditing win." },
-    { "type": "callout", "variant": "mistake", "markdown": "Sharing a Bloc across the whole app when it should be scoped to a feature. Use MultiBlocProvider at the feature route; the Bloc is disposed when the route pops." },
-    { "type": "callout", "variant": "tip", "markdown": "`buildWhen`/`listenWhen` avoid noisy rebuilds/handlers. Use bloc_test to assert emitted state sequences for a given event input — one of the cleanest test stories in Flutter." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of a Bloc as an assembly-line conveyor.**\n\nEvents (raw materials) roll onto the conveyor. Handlers (workstations) transform them into states (finished products). The UI (the shipping dock) only sees finished products roll off, never the raw materials.\n\n- **Event** — an intent: `LoadFeed`, `AddToCart(item)`, `SearchChanged(q)`.\n- **State** — a snapshot: `FeedLoading`, `FeedLoaded(items)`, `FeedError(msg)`. Immutable.\n- **Handler** — `on<LoadFeed>((event, emit) async { emit(FeedLoading()); ... })`.\n- **Transformer** — the conveyor's speed control: debounce SearchChanged 300ms, drop stale results, sequential vs concurrent.\n- **Observability** — every event and state transition can be logged (`BlocObserver`), replayed, snapshotted.\n\n**Cubit** is the same conveyor without events — you call methods (`cubit.inc()`) that directly emit new states. Simpler when the intents-are-just-methods symmetry is fine (counter, toggle, form field).\n\n**Why flutter_bloc dominates enterprise Flutter:** clear architectural boundary (UI = pure function of state), testable in pure Dart (no widgets required), replayable event history, DevTools integration. Slower onboarding than Riverpod / provider but pays off in large teams where consistency + testability trump conciseness." },
+    { "type": "callout", "variant": "definition", "markdown": "**`flutter_bloc`** is the Flutter binding for the `bloc` package (Felix Angelov). A **Bloc** is a state machine: `Stream<Event> → Stream<State>`. A **Cubit** is a simplified Bloc where you emit states directly via methods (no events). UI subscribes via **`BlocBuilder`** (rebuild on state), **`BlocListener`** (side effect on state — nav, snackbar), or **`BlocConsumer`** (both). DI via **`BlocProvider`** (built on top of `provider`). Testing via **`bloc_test`** with `blocTest<B, S>()`. Widely used in enterprise Flutter (fintech, delivery, banking)." },
+    { "type": "theory", "markdown": "## Bloc vs Cubit — pick one" },
+    { "type": "table", "headers": ["Aspect", "Bloc", "Cubit"], "rows": [
+      ["Trigger", "Event class dispatched via `add()`", "Method call directly"],
+      ["Boilerplate", "Higher — event classes + handlers", "Lower — just methods"],
+      ["Observability", "Event + state in transitions", "State only"],
+      ["Transformers (debounce, drop stale)", "First-class via `EventTransformer`", "Manual in method"],
+      ["Undo / replay", "Straightforward — replay events", "Harder — replay method calls"],
+      ["When to pick", "Complex flows, multi-source events, need replay", "Simple state, forms, counters, toggles"]
+    ]},
+    { "type": "theory", "markdown": "## Full setup — Feed screen with search debounce" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml:\n//   flutter_bloc: ^8.1.4\n//   equatable: ^2.0.5\n//   bloc_concurrency: ^0.2.5   // debounce / droppable / sequential transformers\n// dev_dependencies:\n//   bloc_test: ^9.1.7\n//   mocktail: ^1.0.3\n\nimport 'package:flutter_bloc/flutter_bloc.dart';\nimport 'package:equatable/equatable.dart';\nimport 'package:bloc_concurrency/bloc_concurrency.dart';\nimport 'package:stream_transform/stream_transform.dart';\n\n// ────── Events (sealed) ──────\nsealed class FeedEvent extends Equatable { const FeedEvent(); @override List<Object?> get props => []; }\nclass FeedLoadRequested extends FeedEvent { const FeedLoadRequested(); }\nclass FeedSearchChanged extends FeedEvent {\n  final String q; const FeedSearchChanged(this.q); @override List<Object?> get props => [q];\n}\nclass FeedRefreshed extends FeedEvent { const FeedRefreshed(); }\n\n// ────── States (sealed) ──────\nsealed class FeedState extends Equatable { const FeedState(); @override List<Object?> get props => []; }\nclass FeedInitial extends FeedState { const FeedInitial(); }\nclass FeedLoading extends FeedState { const FeedLoading(); }\nclass FeedLoaded extends FeedState {\n  final List<Item> items; final String query;\n  const FeedLoaded({required this.items, required this.query});\n  @override List<Object?> get props => [items, query];\n}\nclass FeedError extends FeedState {\n  final String message; const FeedError(this.message); @override List<Object?> get props => [message];\n}\n\n// ────── Bloc ──────\nEventTransformer<E> _debounce<E>(Duration d) =>\n    (events, mapper) => events.debounce(d).switchMap(mapper);\n\nclass FeedBloc extends Bloc<FeedEvent, FeedState> {\n  FeedBloc(this._repo) : super(const FeedInitial()) {\n    on<FeedLoadRequested>(_onLoad);\n    // Debounce keystrokes + drop stale results.\n    on<FeedSearchChanged>(_onSearch, transformer: _debounce(const Duration(milliseconds: 300)));\n    on<FeedRefreshed>(_onLoad, transformer: droppable());  // ignore taps while a refresh is running\n  }\n\n  final FeedRepository _repo;\n\n  Future<void> _onLoad(FeedEvent e, Emitter<FeedState> emit) async {\n    emit(const FeedLoading());\n    try {\n      final items = await _repo.list();\n      emit(FeedLoaded(items: items, query: ''));\n    } catch (err) {\n      emit(FeedError('$err'));\n    }\n  }\n\n  Future<void> _onSearch(FeedSearchChanged e, Emitter<FeedState> emit) async {\n    emit(const FeedLoading());\n    final items = await _repo.search(e.q);\n    emit(FeedLoaded(items: items, query: e.q));\n  }\n}\n\n// ────── UI ──────\nclass FeedScreen extends StatelessWidget {\n  const FeedScreen({super.key});\n  @override\n  Widget build(BuildContext context) {\n    return BlocProvider(\n      create: (_) => FeedBloc(context.read())..add(const FeedLoadRequested()),\n      child: Scaffold(\n        appBar: AppBar(title: const Text('Feed')),\n        body: Column(\n          children: [\n            TextField(\n              onChanged: (q) => context.read<FeedBloc>().add(FeedSearchChanged(q)),\n            ),\n            Expanded(\n              child: BlocConsumer<FeedBloc, FeedState>(\n                listenWhen: (p, c) => c is FeedError,\n                listener: (ctx, state) {\n                  if (state is FeedError) ScaffoldMessenger.of(ctx)\n                      .showSnackBar(SnackBar(content: Text(state.message)));\n                },\n                builder: (ctx, state) => switch (state) {\n                  FeedInitial() || FeedLoading() => const Center(child: CircularProgressIndicator()),\n                  FeedLoaded(:final items) => ListView.builder(\n                    itemCount: items.length,\n                    itemBuilder: (_, i) => ItemTile(items[i]),\n                  ),\n                  FeedError() => const Center(child: Text('Something went wrong')),\n                },\n              ),\n            ),\n          ],\n        ),\n      ),\n    );\n  }\n}" },
+    { "type": "theory", "markdown": "## bloc_test — pure Dart tests" },
+    { "type": "code", "language": "dart", "code": "import 'package:bloc_test/bloc_test.dart';\nimport 'package:mocktail/mocktail.dart';\n\nclass _MockRepo extends Mock implements FeedRepository {}\n\nvoid main() {\n  late FeedBloc bloc;\n  late _MockRepo repo;\n\n  setUp(() { repo = _MockRepo(); bloc = FeedBloc(repo); });\n\n  blocTest<FeedBloc, FeedState>(\n    'loads feed',\n    setUp: () => when(() => repo.list()).thenAnswer((_) async => [Item(1)]),\n    build: () => bloc,\n    act: (b) => b.add(const FeedLoadRequested()),\n    expect: () => [const FeedLoading(), FeedLoaded(items: [Item(1)], query: '')],\n  );\n\n  blocTest<FeedBloc, FeedState>(\n    'search debounces 300ms',\n    setUp: () => when(() => repo.search(any())).thenAnswer((_) async => [Item(9)]),\n    build: () => bloc,\n    act: (b) async {\n      b.add(const FeedSearchChanged('a'));\n      b.add(const FeedSearchChanged('ab'));\n      b.add(const FeedSearchChanged('abc'));\n      await Future.delayed(const Duration(milliseconds: 400));\n    },\n    verify: (_) => verify(() => repo.search('abc')).called(1),  // only last one\n  );\n}" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Not making states + events Equatable / value-equal.** Bloc dedups identical states; without `==` they emit as 'different' → useless rebuilds." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Emitting after `close()`.** Bloc throws `StateError`. Guard `if (!emit.isDone && !isClosed)`, or await your futures + return early on cancel." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: One giant `on<AnyEvent>` handler.** Loses transformer benefits + hard to read. Split by event type." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: `BlocBuilder` for side effects (nav, snackbar).** Builders should be pure. Use `BlocListener` for side effects." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Missing transformers on `SearchChanged`.** Default: `concurrent` — all keystrokes run in parallel → race conditions + result stampede. Use `debounce + switchMap` or `restartable`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Business logic in the widget.** Rebuilds recompute logic; hard to test. Move everything into the Bloc; widgets should only add events + read state." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Nested BlocProvider soup.** 5 nested providers hurt readability. Use `MultiBlocProvider`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Ignoring `BlocObserver`.** Skipping the observer means you can't log every event/state to Crashlytics — priceless for debugging prod." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Sealed events + sealed states + Equatable** — exhaustive `switch` in build." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Cubit for simple; Bloc for events / debounce / replay.**" },
+    { "type": "callout", "variant": "best", "markdown": "**3. Transformers for concurrency** — debounce, droppable, restartable, sequential." },
+    { "type": "callout", "variant": "best", "markdown": "**4. `BlocListener` for side effects; `BlocBuilder` for rebuilds.**" },
+    { "type": "callout", "variant": "best", "markdown": "**5. `MultiBlocProvider` at feature-root** — keeps DI clean." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Register a global `BlocObserver`** — log to Crashlytics + Analytics." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Test with `blocTest` in pure Dart** — no widgets, fast, deterministic." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Freezed + json_serializable** — copyWith + equality + typed states." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Cubit counter with `BlocProvider` + `BlocBuilder`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Bloc with sealed events + states + Equatable." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Search feed with debounce transformer + `switchMap`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Refresh with `droppable` transformer; ignore taps mid-flight." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — `BlocListener` for snackbar + nav side effects." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — `blocTest` covering debounce, load, error." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Bloc vs Cubit — how do you decide?**\n\n**A:** **Cubit** is a Bloc without events — you call methods that directly `emit` new states. **Advantages:** less boilerplate, cleaner for simple state (counter, form field, toggle). **Bloc** is Cubit + events + transformers. **Advantages:** first-class debounce/throttle/droppable via `EventTransformer`, replay/undo via event history, cleaner separation of intent from mutation. **Rule:** start with Cubit; graduate to Bloc when you need per-event transformers (search debounce, upload droppable), a replayable event log for undo, or multi-source events (user + WebSocket + timer). **Interview red flag:** claiming 'always Bloc' or 'always Cubit' — pragmatic teams mix." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What are event transformers and when do you use each?**\n\n**A:** `EventTransformer<E>` controls how events of the same handler are scheduled. **Defaults:** `on<Event>` uses **concurrent** — every event fires its handler in parallel; results race. **`bloc_concurrency` provides:** **(1) `sequential`** — one at a time, in order; next waits for previous to complete. Use when order matters (form submission). **(2) `droppable`** — while one is running, drop new ones. Use for refresh buttons (ignore taps). **(3) `restartable`** — cancel the current one, start the new one. Use for search-as-you-type (debounce + switchMap effectively). **(4) Custom debounce** — `events.debounce(300ms).switchMap(mapper)`. **Use case matrix:** search → debounce+switchMap; refresh → droppable; submit → sequential; parallel independent → concurrent." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: BlocBuilder vs BlocListener vs BlocConsumer?**\n\n**A:** **BlocBuilder** — rebuilds the widget subtree whenever state changes (or `buildWhen` filter matches). Pure widget builder; **do NOT do side effects here**. **BlocListener** — subscribes to state; doesn't rebuild the widget; runs a callback on new states. Use for side effects: navigation, snackbar, showing dialogs, analytics. **BlocConsumer** — combines both; useful when the same state change both rebuilds UI + triggers a side effect (loading → show snackbar + spinner). **`buildWhen` / `listenWhen`** — predicates to filter state changes (e.g., only respond to error states). **Common bug:** doing navigation inside `builder` — flutter throws 'Navigator.push during build.' Always route it through `BlocListener`." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you test a Bloc?**\n\n**A:** `bloc_test`'s `blocTest<B, S>()` gives a declarative test: **`build`** — create the bloc; **`setUp`** — configure mocks; **`act`** — dispatch events; **`expect`** — assert the emitted state sequence matches; **`verify`** — assert mock interactions; **`wait`** — for async settle. **Advantages:** pure Dart (no widget tree), fast, deterministic, easy to cover error paths. **Test:** happy path, error path, transformer behavior (debounce collapses N events to 1), edge cases (network offline, empty response). **Also:** register `BlocObserver` in a test to snapshot event/state transitions for regression tests. **Interview red flag:** 'we test the UI' — UI tests are slow, flaky, and duplicate what Bloc tests already cover. The whole architectural point is testability." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you structure app-level DI + navigation with flutter_bloc?**\n\n**A:** **DI:** at the top of the app, `MultiRepositoryProvider` (repositories are stateless; long-lived) wraps `MultiBlocProvider` (blocs; may be shorter-lived). Feature blocs mount via `BlocProvider` at the feature route, so they're disposed on pop. **Navigation:** GoRouter + `BlocListener` on an `AuthBloc` — when state becomes `Unauthenticated`, listener navigates to login. `AppLifecycleObserver` bubbles OS events to a bloc via `add(AppResumed())`. **State restoration:** `HydratedBloc` (companion package) persists state to disk; app restores on cold start. **Feature isolation:** each feature has its own bloc + repository + models; providing at feature root prevents leakage to unrelated features. **Anti-pattern:** one god bloc for the whole app. Split by feature domain." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: When would you pick flutter_bloc over Riverpod?**\n\n**A:** **flutter_bloc wins when:** (1) large team, need architectural rigor + consistency; (2) auditability matters (state transition logs for regulated fintech); (3) event replay / undo required; (4) established codebase muscle memory; (5) explicit event model helps reasoning about intent. **Riverpod wins when:** (1) small team, ergonomics matter; (2) compile-time-checked DI (no `ProviderNotFoundException`); (3) `AsyncValue` handles loading/error/data elegantly; (4) `ref.watch` composition is cleaner than nested consumers; (5) simpler tests without `blocTest` DSL. **Both are excellent** — Flutter's state-management wars ended in polite coexistence. **Wrong answer at interview:** 'X is best' without context. Right answer: 'team preference + codebase conventions + complexity.'" },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Enterprise Flutter** — fintech, banking, healthcare, delivery.\n- **Regulated apps** — event/state audit logs matter.\n- **Event-driven flows** — chat, real-time dashboards, multi-source composition.\n- **Anti-pattern to avoid** — using Bloc for a counter (Cubit or setState is fine).\n- **Combines well with** — freezed, get_it, GoRouter, HydratedBloc." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`HydratedBloc`** — persist state to disk (via `hive` under the hood); auto-restore on cold start.\n- **`ReplayBloc` / `ReplayCubit`** — built-in undo/redo.\n- **`BlocObserver`** — global hook for `onEvent`, `onChange`, `onTransition`, `onError`; wire to Crashlytics + Analytics.\n- **`bloc_concurrency`** package — transformers.\n- **`stream_transform`** — `debounce`, `switchMap` operators.\n- **`freezed` unions for states** — pattern matching + copyWith + equality all generated.\n- **State restoration + deep links** — HydratedBloc + GoRouter's redirect logic + initial state.\n- **Isolate boundaries** — Bloc runs on the main isolate; heavy compute → offload to Isolate, dispatch result as an event.\n- **`BlocSelector`** — narrow rebuilds to a state slice (Bloc analog of provider's `Selector`).\n- **`buildWhen` / `listenWhen`** — predicate filters; use judiciously — often a signal you should split the bloc.\n- **Testing tips** — use `fake_async` for time-dependent transformer tests without real delays.\n- **Migration path from provider** — replace ChangeNotifier with Cubit; move logic + tests come 'free' from `blocTest`." }
   ],
   "flashcards": [
-    { "front": "BlocBuilder vs BlocListener vs BlocConsumer?", "back": "Builder rebuilds UI; Listener runs side effects; Consumer does both." },
-    { "front": "How to log every state transition?", "back": "Register a BlocObserver in main() via Bloc.observer = MyObserver()." },
-    { "front": "How to reduce rebuild noise?", "back": "buildWhen / listenWhen to filter which state changes matter." }
+    { "front": "Bloc vs Cubit?", "back": "Bloc = event-driven with transformers/replay; Cubit = method-driven, simpler." },
+    { "front": "Transformer for search-as-you-type?", "back": "debounce + switchMap (or restartable) — collapses keystrokes + drops stale results." },
+    { "front": "Where do side effects go?", "back": "BlocListener — not BlocBuilder." },
+    { "front": "Testing tool?", "back": "bloc_test's blocTest<B,S>() — declarative, pure Dart, deterministic." },
+    { "front": "State equality?", "back": "Equatable (or freezed) — prevents duplicate emissions of identical state." },
+    { "front": "Global logging hook?", "back": "BlocObserver — wire onEvent/onChange/onTransition/onError to Crashlytics." },
+    { "front": "Persist state to disk?", "back": "HydratedBloc — auto-restore on cold start." }
   ],
   "quiz": [
-    { "q": "For a snackbar reaction to state change, use…", "options": ["BlocBuilder", "BlocListener", "BlocProvider", "Bloc.observer"], "answer": 1, "explain": "Listener is for side effects." },
-    { "q": "To scope a Bloc to a feature route…", "options": ["Provide it globally", "Wrap the feature route with BlocProvider", "Use a global variable", "Ignore scope"], "answer": 1, "explain": "Scoped provision + auto-dispose." },
-    { "q": "To assert state sequences for tests…", "options": ["Print everything", "bloc_test's blocTest()", "setState", "Riverpod overrides"], "answer": 1, "explain": "blocTest asserts emitted states for given events." }
+    { "q": "Side effect (nav / snackbar) belongs in…", "options": ["BlocBuilder", "BlocListener", "onEvent inside build", "setState"], "answer": 1, "explain": "Builder should be pure." },
+    { "q": "Search debounce transformer?", "options": ["sequential", "droppable", "debounce + switchMap (or restartable)", "concurrent"], "answer": 2, "explain": "Collapses + cancels stale." },
+    { "q": "Cubit is best for…", "options": ["Multi-source events with replay", "Simple state (counter, toggle)", "Regulated audit logs", "Chat streams"], "answer": 1, "explain": "Cubit is method-driven and simpler." },
+    { "q": "bloc_test uses…", "options": ["Widget tree", "Pure Dart with declarative expect", "Real network", "reflection"], "answer": 1, "explain": "No widgets required." },
+    { "q": "Global state / transition logging via…", "options": ["Prints", "BlocObserver", "provider", "Analytics only"], "answer": 1, "explain": "Wire to Crashlytics + Analytics." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Counter Cubit driving a BlocBuilder text." },
-    { "level": "Medium", "text": "Login BLoC with loading/error/success states; show snackbar on error." },
-    { "level": "Hard", "text": "Use BlocObserver to log all transitions; hide sensitive fields." },
-    { "level": "Expert", "text": "Write blocTest suites for a search BLoC with debounce transformers." }
+    { "level": "Easy", "text": "Cubit counter with BlocBuilder." },
+    { "level": "Easy", "text": "Sealed event + sealed state with Equatable." },
+    { "level": "Medium", "text": "Debounced search with switchMap transformer." },
+    { "level": "Medium", "text": "Refresh button with droppable transformer." },
+    { "level": "Hard", "text": "BlocListener side effects (nav to login on Unauthenticated)." },
+    { "level": "Hard", "text": "HydratedBloc + verify state restoration after cold start." },
+    { "level": "Expert", "text": "blocTest suite covering happy + error + transformer behavior." }
   ],
   "interviewQuestions": [
-    "Difference between BlocBuilder / Listener / Consumer?",
-    "How does BlocProvider scope a Bloc?",
-    "What is BlocObserver used for?",
+    "Bloc vs Cubit — how do you decide?",
+    "What are event transformers + when to use each?",
+    "BlocBuilder vs BlocListener vs BlocConsumer?",
     "How do you test a Bloc?",
-    "Cubit vs Bloc — when use each?"
+    "How do you structure app-level DI + navigation with flutter_bloc?",
+    "flutter_bloc vs Riverpod — trade-offs?"
   ],
   "references": [
-    { "label": "flutter_bloc", "url": "https://pub.dev/packages/flutter_bloc" }
+    { "label": "flutter_bloc package", "url": "https://pub.dev/packages/flutter_bloc" },
+    { "label": "bloc.dev", "url": "https://bloclibrary.dev" },
+    { "label": "bloc_concurrency", "url": "https://pub.dev/packages/bloc_concurrency" }
   ]
 }

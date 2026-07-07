@@ -2,44 +2,100 @@
   "id": "plg.secure_storage",
   "levelId": 10,
   "title": "flutter_secure_storage",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "xp": 40,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Store secrets in Keychain / Keystore",
-    "Configure encryption + accessibility options",
-    "Handle biometric/hardware-backed keys"
+    "Understand flutter_secure_storage via a real-life analogy",
+    "Store tokens / PINs / keys backed by Keychain + Keystore",
+    "Tune Android options (EncryptedSharedPreferences vs StrongBox)",
+    "Handle biometrics + accessibility scopes on iOS",
+    "Test securely without hitting real Keychain",
+    "Answer flutter_secure_storage interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "`flutter_secure_storage` stores small key-value data (auth tokens, refresh tokens, encryption keys) in the platform's secure enclave — iOS **Keychain**, Android **EncryptedSharedPreferences** (Keystore-backed)." },
-    { "type": "code", "language": "dart", "code": "const s = FlutterSecureStorage(\n  aOptions: AndroidOptions(encryptedSharedPreferences: true),\n  iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),\n);\nawait s.write(key: 'refresh_token', value: token);\nfinal t = await s.read(key: 'refresh_token');" },
-    { "type": "callout", "variant": "interview", "markdown": "Choose iOS accessibility deliberately: `first_unlock` (available after first unlock post-boot; readable in background) vs `when_unlocked` (only while the device is unlocked). Auth flows usually want `first_unlock` so background refreshes work." },
-    { "type": "callout", "variant": "mistake", "markdown": "Reusing the same encryption for a huge blob of data. This plugin is for **small** secrets. For large encrypted local data, put the KEY here and use an encrypted DB (Hive/Isar) for the payload." },
-    { "type": "callout", "variant": "tip", "markdown": "Clear on logout with `deleteAll()`. On Android <21 or misconfigured devices, encryption falls back — test on real devices, not just emulators. Never log the values." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of `flutter_secure_storage` as the hotel safe in your room.**\n\n`shared_preferences` is a napkin on the desk — anyone with a laptop can lift the pillow and read what you scribbled. `flutter_secure_storage` is the bolted-down safe: **iOS Keychain** on Apple hardware, **EncryptedSharedPreferences (Jetpack) + Android Keystore** on Android. The vendor (Apple / Google) holds the master key + the hardware (Secure Enclave / StrongBox TEE) guards it. Even a fully-rooted device can't extract the raw key.\n\n- **What you should put in the safe** — auth tokens (access + refresh), biometric-gated PINs, private keys, encryption keys for Hive boxes.\n- **What you should NOT put in the safe** — big blobs (Keychain APIs get slow > 4 KB), analytics IDs (put in shared_prefs), cached data (put in Hive), image files (put on disk).\n- **Reset behavior varies** — factory reset always wipes; iOS 'restore from backup' by default carries Keychain over (be aware for security-sensitive apps), Android 'app uninstall' behavior differs by API level + backup rules.\n\n**Why every serious Flutter app uses this for tokens:** OS-managed hardware-backed encryption without you writing any crypto. Losing a JWT to a rooted device with `shared_preferences` = full account takeover. Same JWT in Keychain = attacker needs 0-day + hardware access. This is not optional for anything money- or identity-related." },
+    { "type": "callout", "variant": "definition", "markdown": "**`flutter_secure_storage`** (`^9.x`) wraps platform secure storage: **Keychain** (iOS/macOS), **EncryptedSharedPreferences via Android Keystore** (Android), **libsecret / DPAPI** (Linux/Windows), **WebCrypto + localStorage** (Web — best-effort, not equivalent). Async `write / read / delete / readAll / deleteAll` on String → String pairs. Optional `AndroidOptions` (StrongBox, ScopedStorage, keystore aliases), `IOSOptions` (accessibility, groups), `LinuxOptions`, `WebOptions`." },
+    { "type": "theory", "markdown": "## What each platform actually does" },
+    { "type": "table", "headers": ["Platform", "Under the hood", "Hardware backing", "Notes"], "rows": [
+      ["iOS / macOS", "Keychain Services", "Secure Enclave (T2/M-series)", "Accessibility scope controls when readable"],
+      ["Android", "EncryptedSharedPreferences (Jetpack) + Keystore", "StrongBox TEE (Pixel/Titan) or TEE fallback", "May survive OS reinstalls depending on backup rules"],
+      ["Linux", "libsecret via GNOME Keyring / KWallet", "None; encrypted at rest", "Desktop-only user session"],
+      ["Windows", "Data Protection API (DPAPI)", "None; keyed to user login", "Encrypted per-user"],
+      ["Web", "WebCrypto AES + localStorage/IndexedDB", "None — softer guarantees", "Consider server-side session instead"]
+    ]},
+    { "type": "theory", "markdown": "## Complete plugin setup" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml: flutter_secure_storage: ^9.2.2\nimport 'package:flutter_secure_storage/flutter_secure_storage.dart';\n\n// Android — recommend EncryptedSharedPreferences (default in 9.x).\nconst _android = AndroidOptions(\n  encryptedSharedPreferences: true,\n  keyCipherAlgorithm: KeyCipherAlgorithm.RSA_ECB_PKCS1Padding,\n  storageCipherAlgorithm: StorageCipherAlgorithm.AES_GCM_NoPadding,\n  resetOnError: true,   // wipe corrupted entries rather than crash\n);\n\n// iOS — restrict access to 'after first unlock' — safer than 'always'.\nconst _ios = IOSOptions(\n  accessibility: KeychainAccessibility.first_unlock_this_device,\n);\n\nfinal storage = FlutterSecureStorage(aOptions: _android, iOptions: _ios);\n\n// ────── Basic use ──────\nawait storage.write(key: 'access_token', value: token);\nfinal saved = await storage.read(key: 'access_token');\nawait storage.delete(key: 'access_token');\nawait storage.deleteAll();      // signout everything\n\n// ────── Hive AES key stored securely ──────\nFuture<List<int>> hiveKey() async {\n  final existing = await storage.read(key: 'hive_key_b64');\n  if (existing != null) return base64Decode(existing);\n  final fresh = Hive.generateSecureKey();\n  await storage.write(key: 'hive_key_b64', value: base64Encode(fresh));\n  return fresh;\n}\n\n// ────── Token store used by Dio AuthInterceptor ──────\nclass TokenStore {\n  TokenStore(this._storage);\n  final FlutterSecureStorage _storage;\n  String? _access;\n  Future<void> load() async { _access = await _storage.read(key: 'access'); }\n  String? get access => _access;\n  Future<void> save(String access, String refresh) async {\n    _access = access;\n    await _storage.write(key: 'access', value: access);\n    await _storage.write(key: 'refresh', value: refresh);\n  }\n  Future<void> clear() async {\n    _access = null;\n    await _storage.deleteAll();\n  }\n}" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Skipping `encryptedSharedPreferences: true` on Android** — older 8.x default uses a home-grown scheme; the Jetpack one is audited + easier to reason about." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: `accessibility: always` on iOS.** Data is readable even when the device is locked → jailbroken/lost device can extract. Prefer `first_unlock_this_device` or `when_unlocked_this_device`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Storing large blobs.** Keychain / EncryptedSharedPreferences slow down on values > 4 KB. Store only small secrets; big data goes into an encrypted Hive box keyed with a secure-storage-held key." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Ignoring `PlatformException`.** On Android, a corrupted Keystore (OS upgrade, reset) throws; guard with `resetOnError: true` OR catch + fall back to sign-in." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Not clearing on logout.** `deleteAll()` on sign-out; otherwise refresh tokens linger for the next user to use." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Trusting Web parity.** Browser storage isn't hardware-backed; treat Web tokens as ephemeral (session storage or server cookie)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Reading in isolates.** Platform channels only work on the main isolate; pass values in, not the storage instance." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Not scoping Keychain group** for App Extensions (share extension, widget). Extensions need the same access group + entitlement." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Small secrets only** — tokens, PIN hashes, Hive keys." },
+    { "type": "callout", "variant": "best", "markdown": "**2. iOS `accessibility: first_unlock_this_device`** — good default." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Android `encryptedSharedPreferences: true` + `resetOnError: true`.**" },
+    { "type": "callout", "variant": "best", "markdown": "**4. Wrap in a repository (`TokenStore`)** — DI + testability." },
+    { "type": "callout", "variant": "best", "markdown": "**5. `deleteAll()` on logout.**" },
+    { "type": "callout", "variant": "best", "markdown": "**6. Pair with biometrics** via `local_auth` for high-value actions." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Keep values under 4 KB;** encrypt bigger data in Hive/Isar with a key kept here." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Fake in tests** — inject a `Map<String, String>`-backed test double." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Store + read an access token; verify persistence across app restarts." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Implement `TokenStore` behind an interface; inject into Dio AuthInterceptor." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Generate + persist a Hive encryption key via secure storage." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Handle iOS 'first_unlock_this_device' with a locked-device scenario; observe read failure." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Add biometric gate via `local_auth` before reading a high-value key." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — App Group / access group configuration so a Share Extension can read the token." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What's the difference between `shared_preferences` and `flutter_secure_storage`?**\n\n**A:** `shared_preferences` is a **plain-text KV blob on disk** (an XML file in the app sandbox on Android, `NSUserDefaults` on iOS). No encryption. A rooted / jailbroken device or a backup extraction reveals every value. Suitable for **non-sensitive prefs** (theme, locale, boolean flags). `flutter_secure_storage` writes into the **OS-provided secure storage** — Keychain on iOS with Secure Enclave hardware backing, EncryptedSharedPreferences via Android Keystore with StrongBox TEE on supported devices. Values are **hardware-encrypted at rest**; even a full disk dump won't reveal the plaintext without the OS decrypting via its trusted execution environment. **Rule:** tokens, PINs, keys → secure_storage. Prefs → shared_preferences. Cached objects → Hive. **Wrong at interviews:** 'we encrypt shared_preferences ourselves' — where do you store the key? Circular problem — use the OS." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What is `KeychainAccessibility` and which value do you pick?**\n\n**A:** iOS Keychain's accessibility scope controls **when** the value can be read: `always` = readable even when device is locked (worst — jailbroken/lost device can extract). `after_first_unlock` = readable after user unlocks once per boot (survives lock/unlock cycles; backed up by iCloud unless `_this_device` variant). `when_unlocked` = only readable while the device is unlocked. Any `_this_device` variant means **NOT backed up to iCloud** — safer for high-security apps. **Recommended default:** `first_unlock_this_device` — background workers can access after user's first unlock, but a stolen/backed-up device can't leak the value. **For very-high-security (crypto wallets, health apps):** `when_passcode_set_this_device` — requires a passcode on the device + never backed up." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: On Android, what does `encryptedSharedPreferences: true` change?**\n\n**A:** Historically `flutter_secure_storage` on Android used a home-grown scheme wrapping SharedPreferences with AES/RSA via the Android Keystore. It worked but was less audited than Jetpack's `EncryptedSharedPreferences` from the AndroidX Security library. **With `encryptedSharedPreferences: true`**, the plugin delegates to Jetpack — a **well-audited, Google-maintained implementation** using AES-256 GCM for values + AES-256 SIV for keys, Keystore-backed master keys, StrongBox support on supported devices, and backup rules that respect app-level `android:allowBackup`. **Reset behavior:** `resetOnError: true` handles the case where OS upgrades break Keystore state (rare but real) — old entries wiped, user prompted to re-login. **Recommendation:** always enable in 8.x+; it's the default in 9.x." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you combine `flutter_secure_storage` with biometric auth?**\n\n**A:** Two-layer: the SECRET lives in secure storage; a BIOMETRIC prompt gates when it's readable to app code. Pattern: (1) User signs in → server issues tokens → save to secure_storage. (2) High-value actions (transfer money, view PIN) call `local_auth.authenticate(...)`. On success, `secure_storage.read` proceeds; on failure, deny. **Bonus (iOS):** Keychain accessibility can be `biometricCurrentSet` — the Keychain itself refuses reads without biometric evaluation. Enrolling a new fingerprint invalidates the key (attacker adding a fingerprint post-theft = data lost). **Android equivalent:** `BiometricPrompt` with a Keystore key marked `setUserAuthenticationRequired(true)` — OS blocks reads without biometric. **When to use:** anything financial + sensitive medical data + password-manager style apps. **When NOT:** a JWT for a general consumer app — biometric on every startup is friction users hate. Reserve for critical actions." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you test code that uses `flutter_secure_storage`?**\n\n**A:** **Never hit real Keychain in unit tests** — flaky, slow, leaves state. Wrap in an interface: `abstract class SecretsStore { Future<String?> read(String k); ... }`. Production impl: `FlutterSecureStorage`. Test impl: `InMemorySecretsStore` — plain `Map<String, String>`. Inject via DI. Assert behavior at the repo level. **For widget tests** that must exercise the platform channel: `FlutterSecureStorage.setMockInitialValues({'access_token': 'x'})` in `setUp` (via `MethodChannel.setMockMethodCallHandler`), or use `plugin_platform_interface`'s test doubles. **For integration tests on device:** wipe secure storage in `tearDown` via `deleteAll()`. **Interview highlight:** 'we abstract behind an interface' — buys you testability + one-line swap when migrating to a new plugin." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What are the trade-offs on Web?**\n\n**A:** Web's `flutter_secure_storage` uses **WebCrypto AES** + a browser-local key stored in `localStorage` / `IndexedDB`. It's NOT hardware-backed; it protects against 'user opens DevTools + reads localStorage' but a compromised browser or a malicious extension defeats it. **Real-world stance:** treat Web tokens as ephemeral. Prefer **server-side sessions with HttpOnly cookies** — the browser can't read them, XSS can't exfil them. If you must run everything in the browser, keep tokens in memory only (session-length) and rely on refresh flow. Reserve `flutter_secure_storage` on Web for 'better-than-nothing' small secrets, with the honest caveat that it's not equivalent to Keychain / Keystore." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every app with auth** — access + refresh tokens.\n- **Hive encryption key holder** — small secret keeps a big encrypted store.\n- **Password managers, crypto wallets, health data** — with biometric gate.\n- **NOT for** — big blobs, analytics IDs, cached snapshots, images." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`AndroidOptions.resetOnError`** — silent wipe rather than crash on corrupted Keystore.\n- **`iOSOptions.accountName` / `groupId`** — Keychain groups for App Extensions (share, widget).\n- **StrongBox support** — Pixel + Titan; automatically used when available.\n- **`readAll` performance** — iterates entries; keep the store small.\n- **Migration on plugin major upgrades** — Android's storage format changes have happened; `resetOnError` softens the impact.\n- **iCloud Keychain sync** — controlled by iOS accessibility variant + `synchronizable` flag.\n- **Backup rules** — respect `android:allowBackup=false` in AndroidManifest for high-security apps.\n- **Password autofill** — Keychain + `AutofillHints` on the form field + associated domains for iOS AASA.\n- **Biometric-gated Keychain entry** — `KeychainAccessibility.biometricCurrentSet`; invalidates on biometric-set change.\n- **Encryption in transit** — this plugin only handles at-rest; use TLS + HSTS + cert pinning on wire.\n- **FIPS / SOC2 compliance** — check that your OS versions + hardware certs meet regulator requirements.\n- **Alternative packages** — `biometric_storage`, `keychain_manager`; usually not needed." }
   ],
   "flashcards": [
-    { "front": "Where are values stored on iOS / Android?", "back": "iOS Keychain / Android EncryptedSharedPreferences (Keystore-backed)." },
-    { "front": "What's this plugin for?", "back": "Small secrets — tokens, encryption keys. Not bulk data." },
-    { "front": "iOS accessibility for background token refresh?", "back": "first_unlock — readable after first unlock post-boot, works in background." }
+    { "front": "secure_storage vs shared_preferences?", "back": "secure_storage = Keychain/Keystore hardware-backed; shared_preferences = plaintext XML." },
+    { "front": "iOS accessibility default?", "back": "first_unlock_this_device — background reads allowed, not iCloud-backed." },
+    { "front": "Android modern option?", "back": "encryptedSharedPreferences: true — Jetpack-audited AES-256 GCM." },
+    { "front": "What NOT to put here?", "back": "Big blobs (>4KB), cached objects, analytics IDs. Small secrets only." },
+    { "front": "Biometric gate?", "back": "local_auth prompt + secure_storage read; iOS biometricCurrentSet flag for OS-enforced." },
+    { "front": "On sign-out?", "back": "deleteAll() so refresh tokens don't linger." },
+    { "front": "Web caveat?", "back": "WebCrypto + localStorage — not hardware-backed. Prefer HttpOnly cookies." }
   ],
   "quiz": [
-    { "q": "Best use for this plugin?", "options": ["User photos", "Small secrets (tokens)", "Cached HTML", "Video files"], "answer": 1, "explain": "Only small secrets belong in secure storage." },
-    { "q": "For background refresh on iOS, choose…", "options": ["when_unlocked", "first_unlock", "always", "none"], "answer": 1, "explain": "first_unlock allows reads in background after the first unlock." },
-    { "q": "On logout you should…", "options": ["Nothing", "deleteAll() secrets", "Delete the app", "Rotate colors"], "answer": 1, "explain": "Clear all secrets on logout." }
+    { "q": "Refresh token belongs in…", "options": ["shared_preferences", "flutter_secure_storage", "Hive plain", "In-memory only"], "answer": 1, "explain": "Hardware-backed encryption." },
+    { "q": "Recommended iOS accessibility for a background-reading app?", "options": ["always", "first_unlock_this_device", "when_unlocked", "when_passcode_set"], "answer": 1, "explain": "Safe default; not iCloud-backed." },
+    { "q": "Android encryptedSharedPreferences?", "options": ["Optional", "Set true for the audited Jetpack path", "Only for Web", "Deprecated"], "answer": 1, "explain": "Google-audited scheme." },
+    { "q": "Large image files go…", "options": ["Here", "Files + encrypted DB; only key here", "SharedPreferences", "print"], "answer": 1, "explain": "Store tiny secrets; big data via encrypted DB." },
+    { "q": "Web hardware backing?", "options": ["Yes via Secure Enclave", "No — WebCrypto + localStorage", "Only Chrome", "Only on HTTPS"], "answer": 1, "explain": "Weaker guarantees on Web." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Write/read a token; verify persistence across restart." },
-    { "level": "Medium", "text": "Combine secure_storage for AES key + Hive box encrypted with it." },
-    { "level": "Hard", "text": "Handle read failures on a corrupted keychain gracefully with re-auth flow." },
-    { "level": "Expert", "text": "Add biometric-gated reads for a super-sensitive value on Android + iOS." }
+    { "level": "Easy", "text": "Read + write an access token; observe persistence across cold start." },
+    { "level": "Easy", "text": "Wrap in a TokenStore repository interface." },
+    { "level": "Medium", "text": "Persist a Hive AES key + use it to open an encrypted box." },
+    { "level": "Medium", "text": "Force iOS accessibility to first_unlock_this_device + verify behavior." },
+    { "level": "Hard", "text": "Combine local_auth biometric gate before reading a high-value key." },
+    { "level": "Hard", "text": "Android — verify EncryptedSharedPreferences path via `resetOnError` recovery." },
+    { "level": "Expert", "text": "Share a token with an iOS Share Extension via Keychain access group." }
   ],
   "interviewQuestions": [
-    "What does this plugin protect and how?",
-    "iOS accessibility options — trade-offs?",
-    "When would this plugin be the wrong choice?",
-    "Threats it does and doesn't stop?",
-    "How to test secure storage code?"
+    "shared_preferences vs flutter_secure_storage?",
+    "What is KeychainAccessibility + which do you pick?",
+    "What does Android `encryptedSharedPreferences: true` change?",
+    "How do you combine flutter_secure_storage with biometrics?",
+    "How do you test code that uses flutter_secure_storage?",
+    "Web trade-offs?"
   ],
   "references": [
-    { "label": "flutter_secure_storage", "url": "https://pub.dev/packages/flutter_secure_storage" }
+    { "label": "flutter_secure_storage", "url": "https://pub.dev/packages/flutter_secure_storage" },
+    { "label": "AndroidX Security", "url": "https://developer.android.com/topic/security/data" },
+    { "label": "iOS Keychain", "url": "https://developer.apple.com/documentation/security/keychain_services" }
   ]
 }
