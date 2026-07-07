@@ -2,51 +2,110 @@
   "id": "devops.git",
   "levelId": 12,
   "title": "Git & GitHub",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 50,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Collaborate through PRs with clean history",
-    "Use branches, rebase, cherry-pick and reflog fluently",
-    "Enforce quality via GitHub features"
+    "Understand Git via a real-life analogy",
+    "Model repositories, branches, commits, HEAD, remotes",
+    "Handle rebase, merge, cherry-pick, stash, reflog like a senior",
+    "Recover from mistakes safely (never lose work)",
+    "Manage GitHub PRs + reviews + collaboration norms",
+    "Answer Git interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Git is a distributed version-control system tracking snapshots (commits) as an immutable graph. GitHub adds cloud hosting, pull requests, actions, and code review — the standard collaboration platform for most teams." },
-    { "type": "code", "language": "bash", "code": "# Everyday flow\ngit switch -c feat/auth-refresh\n# ...edit code, commit small, often\ngit commit -m \"auth: refresh token before expiry\"\ngit push -u origin feat/auth-refresh\n# open PR on GitHub -> review -> merge (squash)\n\n# Rescue tools\ngit reflog                 # every HEAD move you made\ngit cherry-pick <sha>      # pluck a single commit\ngit revert  <sha>          # undo a commit safely (no history rewrite)" },
-    { "type": "table", "headers": ["GitHub feature", "Purpose"], "rows": [
-      ["Pull Request", "Code review + discussion + CI gate"],
-      ["Branch protection rules", "Require reviews / passing CI / signed commits"],
-      ["CODEOWNERS", "Auto-request review from area owners"],
-      ["Environments + secrets", "Scoped secrets for CI deploys"],
-      ["Dependabot / CodeQL", "Automated deps + security scanning"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Git as a time machine for your project + a photocopier for parallel realities.**\n\nEvery commit is a snapshot of the whole tree (not a diff — a full state, deduplicated via content addressing). Every branch is a movable pointer into that snapshot history. HEAD is 'you are here.' Merging is joining two histories. Rebasing is replaying commits on a different base.\n\n- **Distributed** — every clone has the full history; no single point of failure.\n- **Content-addressed** — every object (blob, tree, commit) has a SHA-1 hash of its content; identical content = identical hash = zero duplication.\n- **Immutable** — you don't 'edit' a commit; you make a new one that supersedes.\n- **Cheap branches** — a branch is just a 40-char file pointing to a commit.\n- **GitHub adds** — hosted remote, PRs, code review UI, Actions CI, issue tracking, releases.\n\n**Why every serious Flutter dev must own Git deeply:** small mistakes compound (rebase gone wrong, force-push over teammate's work); confident senior engineers make the same operations reversible via reflog + stash + backup branches. The devs who ship fast + safely all speak fluent Git." },
+    { "type": "callout", "variant": "definition", "markdown": "**Git** is a distributed version control system by Linus Torvalds (2005). Object model: **blobs** (file contents), **trees** (directory structures), **commits** (tree + parents + author + message), **tags** (named pointers). References: **branches** (movable pointers), **HEAD** (current position), **remotes** (URLs to other repos). GitHub is a hosted remote + collaboration surface — PRs, issues, Actions, releases." },
+    { "type": "theory", "markdown": "## Command essentials" },
+    { "type": "table", "headers": ["Command", "Purpose"], "rows": [
+      ["`git init` / `git clone`", "Start / copy a repo"],
+      ["`git status` / `git diff`", "See what changed"],
+      ["`git add` / `git restore --staged`", "Stage / unstage"],
+      ["`git commit` / `git commit --amend`", "Save / rewrite the tip commit"],
+      ["`git log --oneline --graph --all`", "History"],
+      ["`git branch` / `git checkout -b` / `git switch`", "Branch ops"],
+      ["`git merge` / `git rebase`", "Combine histories"],
+      ["`git cherry-pick`", "Copy a commit onto current branch"],
+      ["`git stash` / `git stash pop`", "Park work in progress"],
+      ["`git reset` / `git restore`", "Undo (soft/mixed/hard)"],
+      ["`git reflog`", "See EVERY HEAD movement (rescue)"],
+      ["`git push` / `git pull` / `git fetch`", "Sync with remote"],
+      ["`git tag -a v1.0` / `git push --tags`", "Releases"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "Senior habits: **small commits with imperative subject lines**, one logical change per PR, squash-merge on default, protect main with 'require passing CI + 1 approval'. Rebase your feature branch to keep the graph linear; never force-push to shared branches." },
-    { "type": "callout", "variant": "mistake", "markdown": "Force-pushing to `main` (or any shared branch) — rewrites teammates' history and can lose work. If you must fix a public branch, use `git revert`. Reserve `push --force-with-lease` for your own feature branches." },
-    { "type": "callout", "variant": "best", "markdown": "Configure the repo: branch protection, CODEOWNERS, PR templates, required CI status checks. Use `gh` CLI for scripted operations. Store secrets in GitHub Actions env/environment, never in git." }
+    { "type": "theory", "markdown": "## Daily flow — feature branch → PR → merge" },
+    { "type": "code", "language": "bash", "code": "# 1. Sync base\ngit switch main\ngit pull\n\n# 2. Branch\ngit switch -c feature/add-scanner\n\n# 3. Work + commit\ngit add lib/scanner.dart\ngit commit -m \"scanner: initial mobile_scanner integration\"\n\n# 4. Push\ngit push -u origin feature/add-scanner\n\n# 5. Open PR on GitHub\ngh pr create --title \"Add barcode scanner\" --body \"…\"\n\n# 6. Address review comments → new commits (don't force-push during review)\n\n# 7. Before merge, rebase onto latest main\ngit fetch origin\ngit rebase origin/main\n# resolve conflicts if any → git add → git rebase --continue\ngit push --force-with-lease\n\n# 8. Merge via GitHub — squash-and-merge is common convention\n\n# 9. Clean up\ngit switch main && git pull\ngit branch -d feature/add-scanner" },
+    { "type": "theory", "markdown": "## Recovery — reflog is your safety net" },
+    { "type": "code", "language": "bash", "code": "# Accidentally reset --hard? Not lost!\ngit reflog                          # every HEAD movement in last 90 days\ngit reset --hard HEAD@{4}            # go back to 4 movements ago\n\n# Force-pushed over teammate's work? Fetch + reset to the pre-push commit.\ngit fetch\ngit log --all --oneline               # find the sha before your force-push\ngit reset --hard <sha>\ngit push --force-with-lease           # ONLY after coordinating\n\n# Untracked / staged changes gone? — those aren't in reflog. Prevent with:\ngit stash push -u -m \"before risky op\"" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: `git push --force` on shared branch.** Overwrites remote history + drops teammates' commits. Use `--force-with-lease` — fails if remote moved." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Rebase after the branch is shared with reviewers.** Reviewers lose their in-progress comments + review UI breaks. Rebase before push OR use fixup commits + squash at merge." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: `git commit --amend` after push.** Local sha diverges from remote; next push fails or needs force. Amend only pre-push." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: `git reset --hard` without stashing.** Uncommitted work is GONE (not in reflog). Stash first, always." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Committing secrets.** API keys, service-account JSON, `.env` in git → grepable forever. Use `.gitignore` + secret scanning + rotate keys immediately if leaked." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Huge binary files.** Git stores them forever; repo becomes 10 GB. Use Git LFS for large assets." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Merge conflicts resolved wrong (keeping only 'ours').** Silent bug intro. Read the conflict carefully + test after resolve." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Not signing commits.** GPG / SSH signing verifies author; SOC 2 / enterprise environments require it." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Small focused commits** — one logical change each." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Commit-message convention** — Conventional Commits: `feat:`, `fix:`, `refactor:`, `chore:`, `test:`. Auto-generates changelogs." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Feature branches + PRs** — never commit directly to main." },
+    { "type": "callout", "variant": "best", "markdown": "**4. `--force-with-lease` never `--force`.**" },
+    { "type": "callout", "variant": "best", "markdown": "**5. Stash before risky ops.**" },
+    { "type": "callout", "variant": "best", "markdown": "**6. Signed commits** (GPG/SSH)." },
+    { "type": "callout", "variant": "best", "markdown": "**7. `.gitignore` early** + secret scanning." },
+    { "type": "callout", "variant": "best", "markdown": "**8. `gh` CLI** for PRs from terminal." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Init a repo + first commit + push to GitHub." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Feature branch → rebase onto main → PR → squash-merge." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Interactive rebase to reorder + squash + edit commits." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Recover from an accidental `git reset --hard` via reflog." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Bisect: find a bug's introducing commit." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Cross-fork PR + reviewer flow via `gh pr` + auto-merge." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Merge vs rebase — trade-offs?**\n\n**A:** **Merge** creates a merge commit joining two histories; preserves the exact chronological + branching structure. **Pros:** truth-preserving, safe (no history rewrite), easy to revert. **Cons:** noisy history with merge commits; `git log --graph` can look tangled. **Rebase** replays your commits ON TOP of the new base, producing a linear history. **Pros:** clean linear log, easier `git bisect`, no merge-commit noise. **Cons:** rewrites history (bad if shared); can lose review context; conflicts must be resolved per commit. **Rule:** rebase BEFORE pushing (private history) → clean; merge AFTER pushing (shared history) → safe. GitHub's **squash-and-merge** is a hybrid: local rebase during dev, single squash-commit into main. Most teams use squash-and-merge as the default. Interviewer signal: knowing when each fits." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: You've `git reset --hard` and lost work — what do you do?**\n\n**A:** **First rule: DON'T PANIC + DON'T do more operations.** Run `git reflog` — every HEAD movement in the last 90 days (config) is logged. Find the sha before the reset (`HEAD@{2}` or similar). Restore: `git reset --hard HEAD@{2}` OR `git branch recovery <sha>` (safer — creates a branch pointing at the lost state). **Caveat:** only tracked + committed work is in reflog. **Untracked** files are gone. **Uncommitted staged/unstaged** changes may still be in `git fsck --lost-found` (dangling blobs) but recovery is painful. **Prevention:** `git stash push -u -m 'safety'` BEFORE any risky op. **The reflog is a superpower** — knowing it exists separates senior from junior devs." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: When would you use cherry-pick vs merge vs rebase?**\n\n**A:** **`git cherry-pick`** — replay ONE specific commit onto the current branch. Use for: hot-fix backport (fix committed to main → cherry-pick onto release/1.0 branch); porting a specific improvement across branches; recovering a lost commit by SHA. **Merge** — combine an ENTIRE history from another branch. Use for: feature-branch → main integration; long-lived branch consolidation. **Rebase** — replay a SEQUENCE of your commits onto a new base. Use for: catching your feature branch up to main; cleaning up local history before push. **Cherry-pick creates duplicates** — the same logical change lives on two branches with different SHAs; be aware for `git log` reads. Interviewer bonus: knowing that `git rebase --onto` is basically a batched cherry-pick." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How does GitHub PR review work + what makes a good PR?**\n\n**A:** **PR anatomy:** source branch + target branch + description + reviewers + status checks (CI, code coverage, security scans). **Reviewer flow:** view diff → leave inline comments → suggest changes → approve / request changes. **Good PR practices:** (1) **Small, focused** — <400 LOC ideal; huge PRs get rubber-stamped. (2) **Clear description** — what, why, how to test, screenshots for UI changes. (3) **Green CI** before requesting review. (4) **Address every comment** with reply or fixup commit. (5) **Rebase onto latest main** before merge. (6) **Follow conventional commit format** for the merge commit. (7) **Update CHANGELOG + docs** if user-facing. (8) **Draft PRs** for early feedback. **Bad PR:** 3K lines + 'refactor' description + no tests → reviewers demoralized. Interviewer signal: 'good PR' is a culture indicator." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you handle secrets that accidentally leaked into git history?**\n\n**A:** **Assume the secret is compromised the moment it lands on GitHub.** Steps: (1) **Rotate the secret IMMEDIATELY** — new API key, new service account, whatever. Old key is dead. (2) **Do NOT try to `git rm` + push** — the leaked commit is still in the remote's git history + accessible via SHA. (3) **Rewrite history** via `git filter-repo` (modern) or `BFG` (older) to remove the secret from all commits; force-push. (4) **Coordinate with team** — everyone must re-clone or reset because their clones still have the leak. (5) **Enable secret scanning** — GitHub built-in, git-secrets, TruffleHog. (6) **Post-mortem** — how did it land in git? add hooks / CI checks to prevent. (7) **Audit access logs** — did anyone besides your team fetch the leak? **Interviewer signal:** knowing rotation-first is the correct instinct." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What are Git hooks + how would you use them?**\n\n**A:** **Git hooks** are shell scripts in `.git/hooks/` that fire on Git events. **Client-side:** `pre-commit` (lint, format check, secret scan), `commit-msg` (enforce commit message format), `pre-push` (run tests). **Server-side:** `pre-receive`, `update`, `post-receive` (enforce policies on the remote). **Tooling:** `pre-commit` framework (Python) or `husky` (Node) manages hooks portably across the team via a config file. **Flutter examples:** pre-commit runs `dart format` + `flutter analyze`; commit-msg enforces Conventional Commits; pre-push runs `flutter test`. **Server-side on GitHub:** GitHub Actions or Branch Protection Rules replace server hooks. **Trap:** hooks live in `.git/` = not versioned; use husky / pre-commit to share via the repo. Interviewer bonus signal." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every professional Flutter project** — feature branches + PRs + squash-merge.\n- **Release branches** — long-lived for hotfixes.\n- **Monorepos** — Melos or Nx to coordinate multi-package repos.\n- **CI integration** — GitHub Actions triggered on PR + push.\n- **NOT ideal for** — massive binary asset repos (Git LFS or artifact storage)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`git worktree`** — multiple branches checked out simultaneously in different directories.\n- **`git bisect`** — binary-search for a bug's introducing commit.\n- **`git blame`** — see who last touched each line.\n- **`git switch` vs `git checkout`** — modern replacement for common checkout tasks.\n- **`git restore`** vs `git reset` — modern granular API.\n- **`git sparse-checkout`** — partial-clone of monorepo.\n- **Signed commits** — GPG or SSH keys; SOC 2 requirement.\n- **`gh` CLI** — GitHub from terminal.\n- **`.gitattributes`** — line-ending + diff behavior per file type.\n- **Submodules vs subtrees** — for embedded dependencies; submodules are fragile.\n- **Git LFS** — external storage for big files.\n- **CODEOWNERS** — auto-assign reviewers.\n- **Branch protection rules** — require checks + reviews before merge.\n- **PR templates + issue templates** — enforce structure.\n- **Squash-merge vs rebase-merge vs merge-commit** — team convention.\n- **`git filter-repo`** — history rewriting (replaces `git filter-branch`)." }
   ],
   "flashcards": [
-    { "front": "How do you recover a lost commit?", "back": "`git reflog` → find the SHA → `git checkout` or `git reset --hard <sha>`." },
-    { "front": "revert vs reset?", "back": "revert creates a new commit undoing changes (safe on shared history); reset moves HEAD (rewrites history)." },
-    { "front": "Force-push safely?", "back": "Use `--force-with-lease` on your own feature branches; never on shared/protected ones." }
+    { "front": "Git object model?", "back": "Blobs (files) + trees (dirs) + commits (tree + parents + meta) + tags. All content-addressed by SHA." },
+    { "front": "Merge vs rebase?", "back": "Merge = preserve history + safe; Rebase = clean linear + private only." },
+    { "front": "Recover reset --hard?", "back": "git reflog → find sha → git reset --hard <sha>. Uncommitted work NOT recoverable." },
+    { "front": "--force-with-lease?", "back": "Force-push that ABORTS if remote moved — protects teammates' work." },
+    { "front": "Leaked secret?", "back": "Rotate FIRST; then rewrite history via git filter-repo; force-push; team re-clones." },
+    { "front": "Conventional Commits?", "back": "feat: / fix: / chore: / refactor: / test: / docs:. Auto-generates changelogs." },
+    { "front": "Good PR?", "back": "Small (<400 LOC) + clear description + tests + green CI + address every comment." }
   ],
   "quiz": [
-    { "q": "Best way to undo a bad commit on `main` after merge?", "options": ["git reset --hard", "git revert <sha>", "Delete the repo", "Force push"], "answer": 1, "explain": "Revert is safe for shared history." },
-    { "q": "Lost commits are typically recoverable via…", "options": ["reflog", "reset", "fetch", "clone"], "answer": 0, "explain": "reflog logs HEAD moves." },
-    { "q": "Protecting `main` should require…", "options": ["Force pushes", "Passing CI + review + signed", "Nothing", "Public admin"], "answer": 1, "explain": "Standard branch protection settings." }
+    { "q": "Force push safely?", "options": ["--force", "--force-with-lease", "--push-anyway", "--override"], "answer": 1, "explain": "Aborts if remote moved." },
+    { "q": "Recover accidental reset --hard?", "options": ["Can't", "git reflog → reset", "GitHub restore", "Local trash"], "answer": 1, "explain": "Reflog has HEAD movements." },
+    { "q": "Leaked API key — first step?", "options": ["Remove from git", "Rotate immediately (assume compromised)", "Ignore", "Rename"], "answer": 1, "explain": "Old key is dead moment it's on GitHub." },
+    { "q": "One-commit-onto-other-branch?", "options": ["rebase", "cherry-pick", "merge", "reset"], "answer": 1, "explain": "cherry-pick replays a single commit." },
+    { "q": "Amend after push?", "options": ["Fine", "Diverges history — needs force-with-lease + coordination", "Impossible", "Only Web"], "answer": 1, "explain": "Amend rewrites the tip." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Open a PR from a feature branch, request review, squash-merge." },
-    { "level": "Medium", "text": "Rewrite messy commits with interactive rebase before opening the PR." },
-    { "level": "Hard", "text": "Recover a lost branch via reflog after a bad `reset --hard`." },
-    { "level": "Expert", "text": "Configure branch protection + CODEOWNERS + a required CI matrix for the repo." }
+    { "level": "Easy", "text": "Init repo + first commit + push to GitHub." },
+    { "level": "Easy", "text": "Feature branch + PR + squash-merge." },
+    { "level": "Medium", "text": "Interactive rebase to reorder + squash + edit." },
+    { "level": "Medium", "text": "Cherry-pick a hotfix from main → release branch." },
+    { "level": "Hard", "text": "Recover from git reset --hard via reflog." },
+    { "level": "Hard", "text": "Bisect to find the commit that introduced a bug." },
+    { "level": "Expert", "text": "Rewrite history via git filter-repo to remove a leaked secret." }
   ],
   "interviewQuestions": [
-    "reset vs revert vs restore?",
-    "How do you recover lost work?",
-    "What is CODEOWNERS?",
-    "Rebase vs merge for feature branches?",
-    "How do you keep a clean PR history?"
+    "Merge vs rebase — trade-offs?",
+    "You've git reset --hard and lost work — what do you do?",
+    "When would you use cherry-pick vs merge vs rebase?",
+    "How does GitHub PR review work + what makes a good PR?",
+    "Handle a secret leaked to git history?",
+    "What are Git hooks + how would you use them?"
   ],
   "references": [
-    { "label": "Pro Git (free)", "url": "https://git-scm.com/book" }
+    { "label": "Pro Git book", "url": "https://git-scm.com/book/en/v2" },
+    { "label": "GitHub docs", "url": "https://docs.github.com" },
+    { "label": "Conventional Commits", "url": "https://www.conventionalcommits.org" }
   ]
 }

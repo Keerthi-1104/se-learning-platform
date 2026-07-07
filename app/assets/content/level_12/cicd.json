@@ -2,51 +2,106 @@
   "id": "devops.cicd",
   "levelId": 12,
   "title": "CI / CD",
-  "xp": 50,
-  "estimatedMinutes": 25,
+  "xp": 60,
+  "estimatedMinutes": 50,
   "objectives": [
-    "Distinguish CI vs CD vs CD (deployment vs delivery)",
-    "Design a mobile pipeline: lint → test → build → sign → distribute",
-    "Add safety: env promotion, approvals, rollback"
+    "Understand CI / CD via a real-life analogy",
+    "Distinguish CI (continuous integration) from CD (delivery vs deployment)",
+    "Design a Flutter pipeline: analyze / test / build / distribute",
+    "Handle signing keys + secrets securely",
+    "Gate promotions with quality metrics",
+    "Answer CI/CD interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "**CI (Continuous Integration)** merges code to main frequently and runs automated tests on every push. **CD** can mean two things: **Continuous Delivery** (build is always production-ready; humans click to deploy) or **Continuous Deployment** (every merged change auto-deploys)." },
-    { "type": "code", "language": "text", "code": "Canonical mobile pipeline:\n  push -> checkout -> deps cache -> analyze / lint\n       -> unit + widget tests\n       -> build (Android AAB / iOS IPA) with per-flavor keys\n       -> sign (upload / distribute) artifacts\n       -> [approval gate]\n       -> promote: internal → beta → production" },
-    { "type": "table", "headers": ["Stage", "Common gates"], "rows": [
-      ["CI", "Green tests + lint + coverage"],
-      ["Build", "Reproducible + versioned"],
-      ["Test-env deploy", "Auto on merge to main"],
-      ["Staging deploy", "Manual approval or nightly"],
-      ["Prod deploy", "Approval + change window + rollback plan"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of CI / CD as the automated factory line for your code.**\n\nEvery commit enters a factory:\n\n- **CI (Continuous Integration)** — assembly line stations: `install deps → format check → analyze → unit test → widget test → integration test → build`. A red light on any station stops the line. Goal: catch defects before they ship.\n- **CD (Continuous Delivery)** — automation to PRODUCE deployable artifacts (APK / AAB / IPA) that are always ready to ship, gated by human approval.\n- **CD (Continuous Deployment)** — automation to actually SHIP those artifacts to users (Firebase App Distribution, Play Internal, Prod) WITHOUT human approval.\n\n**The rule of CI/CD:** the ONLY way code reaches users is through the pipeline. No manual builds; no laptop-uploaded APKs. **Reproducibility** = same commit produces the same artifact regardless of who ran the pipeline.\n\n**Why every serious Flutter team has CI/CD:** without it, releases depend on 'one dev's laptop' + human memory + spreadsheet checklists. With it, every PR gets tested + every merge produces an artifact + every release is auditable. Bugs get caught in minutes, not weeks; hotfixes ship in hours, not days." },
+    { "type": "callout", "variant": "definition", "markdown": "**CI (Continuous Integration)** = automatically build + test every commit + PR; block merges that break the build. **Continuous Delivery** = every green commit produces a deployable artifact; humans approve the actual deploy. **Continuous Deployment** = every green commit is automatically deployed to production. **Pipeline** = a config file (YAML) describing stages, jobs, and gates. **Tools:** GitHub Actions, GitLab CI, CircleCI, Codemagic, Bitrise, Jenkins." },
+    { "type": "theory", "markdown": "## Pipeline anatomy" },
+    { "type": "table", "headers": ["Stage", "Purpose", "Failure = merge blocked?"], "rows": [
+      ["**Format check**", "`dart format --set-exit-if-changed`", "Yes"],
+      ["**Analyze**", "`flutter analyze` (lint)", "Yes"],
+      ["**Unit + widget test**", "`flutter test --coverage`", "Yes"],
+      ["**Integration test**", "`flutter test integration_test/`", "Sometimes (long)"],
+      ["**Build Android**", "`flutter build appbundle --obfuscate --split-debug-info`", "Yes"],
+      ["**Build iOS**", "`flutter build ipa`", "Yes"],
+      ["**Distribute internal**", "Firebase App Distribution / TestFlight", "Post-merge only"],
+      ["**Distribute beta**", "Play Closed / TestFlight External", "Release-branch only"],
+      ["**Promote to prod**", "Manual approval + store submit", "Never auto"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "A mature mobile pipeline has three signals that gate promotion: **tests green, static analysis clean, and a stability floor** (crash-free % from the current shipped version). Regression on any of those blocks promotion — this is what turns 'we ship weekly' into 'we ship safely, weekly'." },
-    { "type": "callout", "variant": "mistake", "markdown": "Baking secrets into pipeline logs. Use masked secrets, never `echo $TOKEN`, and rotate credentials on team member turnover. Also: mutable version tags (`v1`) — pin actions/images by SHA in security-sensitive workflows." },
-    { "type": "callout", "variant": "best", "markdown": "Fast pipelines beat perfect ones — target <10 min from push to signal. Cache dependencies, run tests in parallel, split unit vs integration, run heavier jobs post-merge on main." }
+    { "type": "theory", "markdown": "## Sample GitHub Actions pipeline (Flutter)" },
+    { "type": "code", "language": "yaml", "code": "# .github/workflows/ci.yml\nname: Flutter CI\non:\n  push: {branches: [main, release/**]}\n  pull_request:\n\njobs:\n  ci:\n    runs-on: macos-14   # macOS for iOS + Android via emulator\n    steps:\n      - uses: actions/checkout@v4\n      - uses: subosito/flutter-action@v2\n        with: {flutter-version: '3.24.0', channel: 'stable'}\n\n      - name: pub deps\n        run: flutter pub get\n\n      - name: format check\n        run: dart format --set-exit-if-changed .\n\n      - name: analyze\n        run: flutter analyze\n\n      - name: unit + widget tests\n        run: flutter test --coverage\n\n      - uses: codecov/codecov-action@v4\n        with: {file: coverage/lcov.info}\n\n      - name: build android bundle\n        run: flutter build appbundle --release --obfuscate --split-debug-info=./symbols\n\n      - name: build ios (release, unsigned)\n        run: flutter build ipa --release --no-codesign --obfuscate --split-debug-info=./symbols\n\n      - uses: actions/upload-artifact@v4\n        with: {name: bundles, path: build/app/outputs/bundle/release/*.aab}\n\n  distribute-android-nightly:\n    if: github.ref == 'refs/heads/main'\n    needs: ci\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/download-artifact@v4\n        with: {name: bundles}\n      - uses: wzieba/Firebase-Distribution-Github-Action@v1\n        with:\n          appId: ${{ secrets.FIREBASE_APP_ID_ANDROID }}\n          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SA_JSON }}\n          groups: qa,internal\n          releaseNotes: ${{ github.event.head_commit.message }}\n          file: app-release.aab\n      - name: upload symbols\n        run: |\n          firebase crashlytics:symbols:upload \\\n            --app ${{ secrets.FIREBASE_APP_ID_ANDROID }} ./symbols" },
+    { "type": "theory", "markdown": "## Secret management" },
+    { "type": "code", "language": "bash", "code": "# Never commit secrets. Use CI provider's secret store.\n# GitHub: Settings → Secrets and variables → Actions\n# In workflow: ${{ secrets.MY_KEY }}\n\n# Signing keys — Android:\n#   base64-encode the .jks; store as ANDROID_KEYSTORE_BASE64.\n#   In pipeline: echo $ANDROID_KEYSTORE_BASE64 | base64 -d > /tmp/keystore.jks\n#   Then Gradle uses it via signing config referencing env vars.\n\n# Signing certificates — iOS:\n#   Fastlane's `match` stores certs + provisioning profiles in an encrypted git repo.\n#   Or Apple's new App Store Connect API + Xcode Cloud handles signing.\n\n# Service account (Firebase, Play Store):\n#   Store JSON in GITHUB_TOKEN or provider secret; write to disk at runtime.\n\n# Rotate periodically. Scan repos for leaks (git-secrets, TruffleHog)." },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Building on developer laptops.** No reproducibility; 'works on my machine' bugs; auditors can't verify releases." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Signing keys checked into git.** Anyone can sign fraudulent versions of your app + push to store." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Slow CI (> 20 min).** Devs stop waiting → skip tests locally → red-main storm." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Flaky tests ignored.** Devs re-run until green → tests that don't actually pass." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: No symbol upload.** Crashlytics reports arrive obfuscated + unreadable." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: No caching.** Every build re-downloads pub / gradle / cocoapods — 5× the time." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Same pipeline for PR + main.** PR builds shouldn't distribute to prod; main builds shouldn't gate on human review." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: No branch protection.** Merges bypassing CI." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. All builds in CI** — never on laptops." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Secrets in provider secret store;** rotate + audit." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Cache pub / gradle / pods** for < 10 min CI." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Symbol upload every release build.**" },
+    { "type": "callout", "variant": "best", "markdown": "**5. Separate pipelines per env** (dev / staging / prod)." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Coverage threshold** enforced." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Manual approval for prod deploy.**" },
+    { "type": "callout", "variant": "best", "markdown": "**8. Reproducible builds** — pinned versions + lockfiles." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — GitHub Actions running format + analyze + test on every PR." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Add build for Android AAB with obfuscation + symbol upload." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Cache pub/gradle/pods; measure CI time delta." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Nightly distribution to Firebase App Distribution qa group." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Signed iOS build via Fastlane match on CI." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Multi-flavor + multi-env pipeline with manual prod approval gate." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: CI vs Continuous Delivery vs Continuous Deployment?**\n\n**A:** **CI** = build + test every commit + PR, block bad code from merging to main. Answer: 'is this code correct?' **Continuous Delivery** = every green commit produces a DEPLOYABLE artifact; deploy is a manual button. Answer: 'is this code ready to ship?' **Continuous Deployment** = every green commit is automatically shipped to production, no human in the loop. Answer: 'ship it now.' **Mobile reality:** true Continuous Deployment is impossible for store-gated apps (Play + App Store review); most mobile teams do Continuous Delivery + release-cadence deploys. **Backend / web:** true CD is achievable + common at Google/Meta/Netflix. **Interviewer signal:** knowing the D's are DIFFERENT + why mobile is stuck at Delivery." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How would you keep a Flutter CI pipeline fast?**\n\n**A:** **Targets:** < 10 min from commit to green. **Techniques:** (1) **Cache dependencies** — pub, gradle, cocoapods; ~5-8 min savings. (2) **Parallelize jobs** — Android build || iOS build; unit tests || integration tests. (3) **Skip unaffected tests** — path-based CI filters or Melos filtering. (4) **Fast runners** — macOS M2 in cloud is 2-3× faster than default; extra cost worth it. (5) **Short critical path** — format + analyze + test = block; build + integration test = post-merge async. (6) **Fail fast** — order steps cheapest → most expensive. (7) **`flutter test --concurrency N`** — parallel test execution. (8) **Pre-built base images** — Docker image with Flutter SDK pre-installed for Linux CI. (9) **Skip iOS on non-iOS-touching PRs** (path filter). (10) **Test sharding** for large suites. **CI time is dev experience** — every 5-min saving compounds across hundreds of PRs/week." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do you handle signing keys + certificates securely?**\n\n**A:** **Android:** (1) Generate `.jks` keystore ONCE, backed up in KMS + team password manager. (2) Base64-encode + store in CI secret. (3) In pipeline, decode to disk + reference from Gradle signing config. (4) NEVER commit `.jks` to git. (5) Rotate every 2-3 years. **iOS:** (1) **Fastlane `match`** — stores certs + provisioning profiles in an encrypted git repo (passphrase in CI secret); syncs to CI + local machines. (2) **App Store Connect API key** for Xcode Cloud + auto-signing. (3) NEVER commit `.p12` or `.mobileprovision`. **General:** (1) Least privilege — CI service accounts have only the roles they need. (2) Rotate on team-member departure. (3) Audit access logs. (4) Store Firebase service-account JSONs as secrets, write to disk at runtime. (5) Signing key compromise → immediate rotation + Play Console + Apple Developer notice. **Interview senior signal:** knowing match + rotation policy." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you separate dev / staging / prod pipelines?**\n\n**A:** **(1) Flavors** — Flutter build flavors (`dev`, `staging`, `prod`); each with distinct Firebase project + bundle id + app name. **(2) `--dart-define ENV=dev`** — build-time constants inject env-specific config. **(3) `firebase_options_<env>.dart`** — separate files. **(4) Pipelines per branch** — `main` builds dev + distributes to internal; `release/*` builds staging + distributes to beta; tags build prod + submit to store. **(5) Environment secrets** — dev vs prod secrets in separate GitHub Environments (with approval gates). **(6) Distinct CI runners** — staging + prod may run on protected runners with restricted access. **(7) Distinct signing keys per env** — prod key never touches dev pipeline. **(8) Manual approval for prod** — Environment protection rules + required reviewers. **This is the standard mid-large team pattern; senior interviewers respect it.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What are common CI security concerns?**\n\n**A:** **(1) Secret exposure via logs** — `echo $SECRET` prints it. Use `add-mask` or provider-provided secret redaction. **(2) Malicious PR from a fork** — attacker submits PR that exfiltrates secrets via CI. Use `pull_request_target` cautiously; require review before running privileged jobs. **(3) Third-party actions** — a compromised `uses: some-org/action@v1` runs with your secrets. Pin to a commit SHA, not a tag. **(4) Supply-chain attacks** — dependency compromised. Use `pubspec.lock` + Dependabot + npm audit / dart pub audit. **(5) Insecure runners** — self-hosted runners can be persistent; isolate + rotate. **(6) Excessive permissions** — GITHUB_TOKEN grants write by default; set to read-only unless needed. **(7) Cache poisoning** — a compromised cache serves malicious deps. Namespace + scope caches. **(8) Signing key theft** — the ultimate compromise. Hardware security modules for prod signing where possible. **Interviewer bonus:** knowing the OWASP CI/CD Top 10." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How would you design a release-quality gate?**\n\n**A:** Before promoting `release/1.2.0` to prod: **(1) All CI green** — build + tests + lint + security scan. **(2) Coverage threshold met** (e.g., 75%+). **(3) Distributed to beta** for at least 3 days with < 0.5% crash-free-users regression on the beta cohort. **(4) Firebase Crashlytics velocity** — no new signature spikes. **(5) Firebase Performance** — cold-start p95 not regressing > 15 % vs prior release. **(6) Analytics conversion funnel** — no drops. **(7) Manual QA sign-off** — checklist executed. **(8) Regulatory checks (pharma / medical)** — appropriate audits passed. **(9) Signed off by product + eng lead.** **(10) Release notes drafted** + reviewed. **(11) Rollback plan documented** — Remote Config kill switch prepared. **Only then** does the pipeline promote to prod. **Automate what you can (metrics), require humans for what you can't (QA sign-off).** Interviewer signal: comprehensive multi-signal gate." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every professional Flutter team** — GitHub Actions / Codemagic / Bitrise / CircleCI.\n- **Nightly + weekly + release cadence** distribution.\n- **Multi-flavor** dev / staging / prod.\n- **Quality gates** — coverage + crash-free + perf metrics.\n- **NOT ideal for** — solo hobby projects (overhead > benefit until team > 2)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`workflow_dispatch`** — manually-triggered workflows.\n- **`concurrency`** — cancel in-progress runs on new push.\n- **`environments`** — GitHub environments with protection rules + required reviewers.\n- **`re-usable workflows`** — DRY across repos.\n- **`composite actions`** — encapsulate steps.\n- **Matrix builds** — Android + iOS + Web in one config.\n- **Self-hosted runners** — for macOS at scale, avoid GitHub's per-min charges.\n- **Cache best practices** — key by lockfile hash.\n- **`actions/upload-artifact` + `download-artifact`** — share artifacts between jobs.\n- **Test reporters** — JUnit XML publish for PR annotations.\n- **Code coverage** — Codecov / Coveralls / built-in.\n- **Security scans** — CodeQL, Snyk, dart pub audit.\n- **Renovate / Dependabot** — auto-PRs for dependency updates.\n- **Merge queue** — batches PR merges for high-volume repos.\n- **Xcode Cloud** — Apple's CI for iOS; integrates with App Store Connect.\n- **Codemagic + Bitrise** — Flutter-first CI providers." }
   ],
   "flashcards": [
-    { "front": "Continuous Delivery vs Deployment?", "back": "Delivery = always production-ready; humans click to deploy. Deployment = every merged change auto-deploys." },
-    { "front": "Three signals gating mobile promotion?", "back": "Tests green + static analysis clean + crash-free % stable." },
-    { "front": "Why pin actions/images by SHA?", "back": "Mutable tags (like v1) can silently change, injecting new/malicious code." }
+    { "front": "CI vs CD vs CD?", "back": "CI = automated build+test on every commit; Continuous Delivery = deployable artifact ready; Continuous Deployment = auto-shipped to prod." },
+    { "front": "Mobile CD reality?", "back": "Continuous Delivery is the norm; store review breaks Continuous Deployment." },
+    { "front": "Signing key storage?", "back": "Base64 in CI secret (Android); Fastlane match encrypted git repo (iOS). NEVER in code." },
+    { "front": "Pipeline cache targets?", "back": "pub / gradle / cocoapods — cuts CI 5-8 min." },
+    { "front": "Third-party actions?", "back": "Pin to a commit SHA, not a tag, to prevent supply-chain attacks." },
+    { "front": "Prod deploy?", "back": "Manual approval + GitHub Environment protection rules + required reviewers." },
+    { "front": "CI time target?", "back": "< 10 min from commit to green. Longer = dev experience degrades." }
   ],
   "quiz": [
-    { "q": "Under Continuous Deployment…", "options": ["Every merged change auto-deploys", "Only Fridays", "Humans deploy weekly", "Never"], "answer": 0, "explain": "Fully automated all the way to prod." },
-    { "q": "Target CI feedback time for mobile is…", "options": ["Hours", "<10 minutes", "Days", "None"], "answer": 1, "explain": "Fast feedback maintains flow." },
-    { "q": "Best pipeline-secrets practice?", "options": ["Echo in logs", "Masked secrets + rotation + never log", "Store in git", "Share via chat"], "answer": 1, "explain": "Masking + rotation is table stakes." }
+    { "q": "Signing key in git?", "options": ["Convenient", "Never — compromised the moment it lands", "Only iOS", "Only Android"], "answer": 1, "explain": "Rotate immediately if leaked." },
+    { "q": "Third-party action pinning?", "options": ["Version tag @v1", "Commit SHA", "Latest", "No pinning"], "answer": 1, "explain": "Prevents supply-chain compromise." },
+    { "q": "Mobile continuous deployment?", "options": ["Standard", "Impossible due to store review", "Only iOS", "Free tier"], "answer": 1, "explain": "Delivery is achievable; Deployment isn't." },
+    { "q": "PR fork secrets?", "options": ["Full access", "Restricted — use pull_request_target cautiously", "iOS only", "Always safe"], "answer": 1, "explain": "Forks can exfiltrate secrets." },
+    { "q": "Slow CI consequence?", "options": ["Nothing", "Devs skip tests + red main storms", "Free tier hit", "Web-only issue"], "answer": 1, "explain": "Speed = dev experience." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Add a CI job that runs `flutter analyze` and unit tests on every PR." },
-    { "level": "Medium", "text": "Add a nightly build job that produces signed AAB + IPA artifacts." },
-    { "level": "Hard", "text": "Add promotion pipeline: main → App Distribution nightly → Play Internal weekly → Prod on tag." },
-    { "level": "Expert", "text": "Add crash-free % gate that blocks production promotion." }
+    { "level": "Easy", "text": "GitHub Actions: format + analyze + test on every PR." },
+    { "level": "Easy", "text": "Cache pub / gradle / pods; measure delta." },
+    { "level": "Medium", "text": "Android AAB build with obfuscation + Crashlytics symbol upload." },
+    { "level": "Medium", "text": "Nightly Firebase App Distribution to qa group." },
+    { "level": "Hard", "text": "iOS signed build via Fastlane match on CI." },
+    { "level": "Hard", "text": "Multi-env: dev / staging / prod with distinct secrets + Environment approvals." },
+    { "level": "Expert", "text": "Release-quality gate: coverage + Crashlytics + Perf + Analytics before prod promotion." }
   ],
   "interviewQuestions": [
-    "CI vs CD (both meanings)?",
-    "How would you design a mobile CI/CD pipeline?",
-    "How do you speed up a slow pipeline?",
-    "How do you gate production promotion?",
-    "How do you handle rollback?"
+    "CI vs Continuous Delivery vs Continuous Deployment?",
+    "How would you keep a Flutter CI pipeline fast?",
+    "Signing keys + certificates securely?",
+    "Separate dev / staging / prod pipelines?",
+    "Common CI security concerns?",
+    "Design a release-quality gate?"
   ],
   "references": [
-    { "label": "DORA — DevOps Research", "url": "https://dora.dev" }
+    { "label": "GitHub Actions docs", "url": "https://docs.github.com/en/actions" },
+    { "label": "OWASP CI/CD Top 10", "url": "https://owasp.org/www-project-top-10-ci-cd-security-risks/" },
+    { "label": "Fastlane match", "url": "https://docs.fastlane.tools/actions/match/" }
   ]
 }

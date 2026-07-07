@@ -2,51 +2,94 @@
   "id": "devops.github_actions",
   "levelId": 12,
   "title": "GitHub Actions",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 50,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Write a workflow with jobs + steps + matrices",
-    "Cache dependencies and reuse composite actions",
-    "Use environments + secrets safely"
+    "Understand GitHub Actions via a real-life analogy",
+    "Master workflows, jobs, steps, matrix, reusable + composite actions",
+    "Configure runners + caching + concurrency for speed",
+    "Handle secrets + environments + approvals",
+    "Debug pipelines + write custom actions",
+    "Answer Actions interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "**GitHub Actions** is GitHub's built-in CI/CD: YAML workflows in `.github/workflows/` triggered by events (push, PR, schedule, manual). Jobs run in parallel on hosted or self-hosted runners; steps use reusable **actions** from the marketplace or your own repos." },
-    { "type": "code", "language": "yaml", "code": "name: Flutter CI\non: { push: { branches: [main] }, pull_request: {} }\njobs:\n  test:\n    runs-on: ubuntu-latest\n    strategy: { matrix: { channel: [stable] } }\n    steps:\n      - uses: actions/checkout@v4\n      - uses: subosito/flutter-action@v2\n        with: { channel: ${{ matrix.channel }} }\n      - run: flutter pub get\n      - run: flutter analyze\n      - run: flutter test --coverage" },
-    { "type": "table", "headers": ["Feature", "Why"], "rows": [
-      ["Reusable workflows", "DRY across many repos"],
-      ["Composite actions", "Bundle steps into a reusable action"],
-      ["Matrix builds", "Test across versions/OS/flavors"],
-      ["Environments", "Scoped secrets + required reviewers"],
-      ["Concurrency", "Cancel superseded runs on the same branch"]
-    ]},
-    { "type": "callout", "variant": "interview", "markdown": "The senior touches: **cache Flutter/Gradle/Pods** (huge speedup), **concurrency: cancel-in-progress** to save minutes on PR churn, **environments with required reviewers** for prod deploys, and **OIDC-based cloud auth** (no long-lived cloud keys in secrets)." },
-    { "type": "callout", "variant": "mistake", "markdown": "Referencing third-party actions by `@main` or `@v1` — a tag maintainer can push a compromised commit. Pin by **commit SHA** for security-sensitive workflows (`uses: some/action@abc123…`)." },
-    { "type": "callout", "variant": "best", "markdown": "Use `env` for non-secret config; **secrets** for credentials (masked automatically); Environments for gated deploys. Add `permissions:` at workflow level to grant only what's needed." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of GitHub Actions as GitHub's built-in factory-line automation.**\n\nEvent (push, PR, schedule, manual, webhook) triggers a **workflow** (YAML file in `.github/workflows/`). Workflow consists of **jobs** running on **runners** (VMs — Ubuntu, macOS, Windows, or self-hosted). Each job runs a sequence of **steps** — reusable **actions** (from marketplace) or shell commands.\n\n- **Free tier is generous** for public repos + startups.\n- **Marketplace of 20K+ actions** — pre-built steps for everything (build Flutter, deploy Firebase, upload to Play).\n- **Multi-OS matrix** — same workflow across Ubuntu + macOS + Windows.\n- **Secrets + Environments** — safe secret injection + manual approval gates.\n- **Concurrency + reusable workflows** — control cost + DRY.\n\n**Why every Flutter team on GitHub uses Actions:** zero infra setup (no Jenkins server); tight integration with PRs + code review; huge marketplace covers Flutter, Fastlane, Firebase; free minutes for public repos + reasonable paid pricing for private. Codemagic + Bitrise offer Flutter-tuned alternatives — pick based on team preference." },
+    { "type": "callout", "variant": "definition", "markdown": "**GitHub Actions** is GitHub's integrated CI/CD service. **Workflow** = YAML file describing automation. **Trigger events** — push, PR, schedule (cron), workflow_dispatch (manual), repository_dispatch (webhook). **Jobs** run in parallel by default; can depend via `needs`. **Runners** — GitHub-hosted (Ubuntu / macOS / Windows) or self-hosted. **Steps** = actions (reusable modules) or shell commands. **Secrets + Environments** — safe secret storage + protection rules." },
+    { "type": "theory", "markdown": "## Anatomy of a workflow" },
+    { "type": "code", "language": "yaml", "code": "# .github/workflows/ci.yml\nname: Flutter CI            # human-readable\n\non:                          # triggers\n  push:\n    branches: [main]\n  pull_request:\n  workflow_dispatch:         # manual trigger\n  schedule:\n    - cron: '0 3 * * *'      # nightly at 03:00 UTC\n\nconcurrency:                 # cancel prior runs on new push\n  group: ${{ github.workflow }}-${{ github.ref }}\n  cancel-in-progress: true\n\nenv:\n  FLUTTER_VERSION: '3.24.0'\n\njobs:\n  ci:\n    runs-on: macos-14        # runner OS\n    strategy:\n      matrix:                # matrix of target platforms\n        target: [android, ios]\n    steps:\n      - uses: actions/checkout@v4\n\n      - uses: subosito/flutter-action@v2\n        with:\n          flutter-version: ${{ env.FLUTTER_VERSION }}\n          cache: true         # cache Flutter SDK + pub\n\n      - name: pub get\n        run: flutter pub get\n\n      - name: analyze\n        run: flutter analyze\n\n      - name: test\n        run: flutter test --coverage\n\n      - name: build android\n        if: matrix.target == 'android'\n        run: flutter build appbundle --release --obfuscate --split-debug-info=./symbols\n\n      - name: build ios\n        if: matrix.target == 'ios'\n        run: flutter build ipa --release --no-codesign --obfuscate --split-debug-info=./symbols\n\n      - uses: actions/upload-artifact@v4\n        with:\n          name: bundle-${{ matrix.target }}\n          path: build/**/output/*\n\n  distribute:\n    needs: ci\n    if: github.ref == 'refs/heads/main'\n    runs-on: ubuntu-latest\n    environment: internal     # env with approvals + separate secrets\n    steps:\n      - uses: actions/download-artifact@v4\n      - uses: wzieba/Firebase-Distribution-Github-Action@v1\n        with:\n          appId: ${{ secrets.FIREBASE_APP_ID }}\n          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SA_JSON }}\n          groups: qa\n          file: bundle-android/app-release.aab" },
+    { "type": "theory", "markdown": "## Reusable + composite actions" },
+    { "type": "code", "language": "yaml", "code": "# .github/workflows/build-flutter.yml — REUSABLE workflow\nname: Reusable Flutter Build\non:\n  workflow_call:\n    inputs:\n      flutter-version: {type: string, required: true}\n      flavor: {type: string, default: 'dev'}\n    secrets:\n      FIREBASE_SA_JSON: {required: true}\n\njobs:\n  build:\n    runs-on: macos-14\n    steps:\n      - uses: actions/checkout@v4\n      - uses: subosito/flutter-action@v2\n        with: {flutter-version: ${{ inputs.flutter-version }}}\n      - run: flutter build appbundle --flavor ${{ inputs.flavor }}\n\n# Call it from another workflow:\n#   uses: ./.github/workflows/build-flutter.yml\n#   with: {flutter-version: '3.24.0', flavor: 'prod'}\n#   secrets: {FIREBASE_SA_JSON: ${{ secrets.FIREBASE_SA_JSON }}}\n\n# ────── Composite action — a group of steps ──────\n# .github/actions/setup-flutter/action.yml\nname: Setup Flutter\ndescription: 'Install Flutter + pub get + cache'\ninputs:\n  version: {default: '3.24.0'}\nruns:\n  using: composite\n  steps:\n    - uses: subosito/flutter-action@v2\n      with: {flutter-version: ${{ inputs.version }}, cache: true}\n    - run: flutter pub get\n      shell: bash\n\n# In another workflow:\n#   - uses: ./.github/actions/setup-flutter\n#     with: {version: '3.24.0'}" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Third-party actions pinned to a tag.** `@v1` can be moved by the maintainer; a compromised action steals your secrets. Pin to a full commit SHA." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: `pull_request_target` misused.** Runs with repo secrets on forked PRs; attackers exfiltrate. Restrict to specific actions." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Secrets echoed to logs.** `echo $SECRET` prints even with masking. Never echo raw secrets." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Broad `GITHUB_TOKEN` permissions.** Default is read-write; set `permissions: read-all` unless job needs more." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: No caching.** Every run re-downloads dependencies; 5-10 min wasted." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Sequential when parallel possible.** Android + iOS builds should run in parallel via matrix." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: macOS runners for everything.** macOS costs 10× more minutes than Ubuntu; use Ubuntu for Android + tests where possible." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: No concurrency control.** Old runs keep going when new push arrives; wasted minutes." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Pin third-party actions to a SHA.**" },
+    { "type": "callout", "variant": "best", "markdown": "**2. Least-privilege `permissions:`** — read-only default." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Cache Flutter SDK + pub + gradle + pods.**" },
+    { "type": "callout", "variant": "best", "markdown": "**4. Matrix builds** for cross-platform." },
+    { "type": "callout", "variant": "best", "markdown": "**5. `concurrency: cancel-in-progress: true`** to skip stale runs." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Environments with approvals for prod.**" },
+    { "type": "callout", "variant": "best", "markdown": "**7. Reusable workflows + composite actions** — DRY across repos." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Ubuntu > macOS > Windows** cost order — pick minimum needed." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Workflow triggering on PR that runs format + analyze + test." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Matrix: Android + iOS build in parallel." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Cache pub / gradle / pods; measure delta." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Reusable workflow used by 3 caller workflows." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Environment with required reviewers for prod deploy." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Custom composite action encapsulating Flutter setup + cache." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Actions vs reusable workflows vs composite actions?**\n\n**A:** **Action** — a self-contained module in the marketplace (`uses: actions/checkout@v4`). Can be JavaScript, Docker, or composite. **Reusable workflow** — a WHOLE workflow file called from another workflow via `uses: ./.github/workflows/build.yml`. Full workflow features (matrix, env, jobs). Great for cross-repo automation. **Composite action** — a group of steps packaged as an action in a directory (`.github/actions/setup-flutter/action.yml`). Can accept inputs; can use other actions. Great for local DRY. **Rule:** use marketplace actions for common tasks; composite actions to DRY steps within a repo; reusable workflows to DRY entire pipelines across teams. Interviewer bonus: knowing the trade-off." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How do Environments work + when do you use them?**\n\n**A:** **Environments** = named deployment targets (`internal`, `staging`, `prod`) with per-env: **(1) Secrets** — env-specific credentials (prod secrets never leak to dev pipeline). **(2) Protection rules** — required reviewers, wait timer, allowed branches (only `main` deploys to prod). **(3) Deployment history** — visible in repo UI. **(4) Environment-scoped variables** — env-specific config. **Use:** attach `environment: prod` to a job; before it runs, GitHub pauses + notifies reviewers; only proceeds after approval. **Real-world:** prod releases gated by 2 reviewers; staging auto-approves; dev unrestricted. **Combines with:** OIDC for secretless cloud auth (no static AWS keys — fetch temporary creds per run). Interviewer signal: comprehensive answer including OIDC bonus." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How would you speed up a slow Actions pipeline?**\n\n**A:** **Profile first** — go to Actions tab, click a run, see time-per-step. **Then:** (1) **Cache** pub / gradle / pods via `actions/cache` keyed by lockfile hash. (2) **Parallel matrix** — Android || iOS. (3) **Path filters** — skip iOS build if only android code changed. (4) **`concurrency: cancel-in-progress: true`** — avoid stale runs. (5) **Faster runner** — `macos-14` M2 chips are 2-3× faster than Intel. (6) **Reduce steps** — combine `pub get` + `dart pub upgrade` into fewer commands. (7) **Split tests** — `--concurrency N` inside `flutter test`; or shard across matrix jobs. (8) **Pre-built base images** for Linux Flutter. (9) **Self-hosted runners** at scale (macOS especially). (10) **Fail fast** — `strategy: fail-fast: true` cancels sibling matrix jobs on first failure. **Measure delta** — the savings compound across hundreds of runs/week." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you keep the Actions supply chain secure?**\n\n**A:** **(1) Pin third-party actions to a full commit SHA** — not `@v1` tags (mutable). Dependabot can bump these safely. **(2) Least-privilege `permissions:`** — start read-only; grant per-job. **(3) Restrict `GITHUB_TOKEN`** by default. **(4) OIDC for cloud auth** — no static AWS/GCP keys; fetch short-lived creds per run. **(5) `pull_request_target` cautiously** — grants secrets to forked PR code; use only for trusted actions. **(6) Review action source** before adding — some 'popular' actions have supply-chain history. **(7) Cache scoping** — a compromised cache serves malicious deps; namespace + scope. **(8) Secret scanning** on the repo. **(9) Audit workflow runs** — unusual patterns. **(10) Codeowners on `.github/`** — require review for workflow changes. **(11) Branch protection includes workflow files.** Interviewer bonus signal: comprehensive layered defense." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: When would you use self-hosted runners?**\n\n**A:** **Reasons:** (1) **Cost** — heavy macOS build minutes get expensive on GitHub-hosted; self-hosted Mac Studio pays off at scale. (2) **Special hardware** — GPU, custom devices. (3) **Local network access** — VPN, internal services. (4) **Compliance** — regulated environments requiring on-premise. (5) **Persistent state** — pre-warmed caches, big Docker layers. **Costs:** (1) **Maintenance** — patches, updates, cleanup between runs. (2) **Security** — self-hosted runners are persistent; a compromised job can persist secrets or malicious code. (3) **Scaling** — need to manage runner pool. **Best practices:** (a) ephemeral runners (spun up per job, torn down after). (b) never expose to public PRs. (c) least-privilege network + service account. (d) monitor + patch aggressively. **GitHub's ARC (Actions Runner Controller)** for Kubernetes-managed autoscaling. Interviewer signal: knowing the trade-offs." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How do you debug a failing workflow?**\n\n**A:** **(1) Read the run log** — GitHub UI shows step-by-step; expand the failing step. **(2) Enable debug logging** — set repo secrets `ACTIONS_STEP_DEBUG=true` + `ACTIONS_RUNNER_DEBUG=true` → verbose logs. **(3) `tmate` action** — SSH into the runner mid-workflow to poke around. **(4) Print environment** — a temporary step `env | sort` shows what's set. **(5) Re-run failed jobs** — GitHub retries individual jobs. **(6) `act` locally** — run workflows on your laptop via Docker for fast iteration. **(7) Print action versions** — `github.action_ref` + `github.workflow_ref` for reproducibility. **(8) Isolate — comment out unrelated steps to bisect. **(9) Check quota/rate limits** — 'API rate limit exceeded' happens with over-actioning. **(10) File a workflow-dispatch button** for one-off manual runs to test hypotheses. Interviewer bonus: knowing act + tmate." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Flutter CI/CD** — the default choice for GitHub repos.\n- **Nightly + release cadence** distribution.\n- **PR checks** — format + analyze + test + coverage on every PR.\n- **Dependency automation** — Dependabot / Renovate.\n- **Release automation** — semantic-release + auto-tag + auto-changelog.\n- **NOT ideal for** — Bitbucket / GitLab (their native tools better)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`workflow_dispatch` inputs** — user-provided params.\n- **`repository_dispatch`** — external systems trigger workflows via API.\n- **`schedule`** — cron-based runs.\n- **Reusable workflow `outputs:`** — pass data between workflows.\n- **`actions/cache`** — key by lockfile hash.\n- **OIDC** — GitHub → AWS / GCP / Vault; short-lived creds; no long-lived secrets.\n- **`jobs.<id>.outputs`** — pass between jobs.\n- **`if:`** conditions — branch, event, matrix values, prior step status.\n- **`continue-on-error`** — don't fail whole job on this step.\n- **`timeout-minutes`** — safety cap.\n- **Custom action authoring** — TypeScript with `@actions/toolkit`.\n- **Marketplace publishing** — versioned actions for teams.\n- **`gh` CLI** — trigger workflows + query runs from terminal.\n- **API** — GitHub REST + GraphQL for workflow automation.\n- **Job summaries** — `$GITHUB_STEP_SUMMARY` markdown for build reports.\n- **Annotations** — inline PR comments via workflow errors." }
   ],
   "flashcards": [
-    { "front": "Where do workflows live?", "back": ".github/workflows/*.yml — YAML files triggered by events." },
-    { "front": "How to pin an action safely?", "back": "By commit SHA (`uses: some/action@abc123…`), not by mutable tag/branch." },
-    { "front": "How to speed up mobile CI?", "back": "Cache pub/Gradle/Pods, run tests in parallel, cancel superseded PR runs via `concurrency`." }
+    { "front": "Workflow structure?", "back": "on (trigger) → jobs (parallel by default) → steps (actions or shell)." },
+    { "front": "Action pinning?", "back": "Full commit SHA — not @v1 tags; prevents supply-chain compromise." },
+    { "front": "Environments?", "back": "Named deploy targets with per-env secrets + protection rules (approvals, wait timer)." },
+    { "front": "OIDC?", "back": "GitHub → cloud; short-lived tokens; no long-lived AWS/GCP secrets." },
+    { "front": "Speed levers?", "back": "Cache + matrix + fast runner + path filters + concurrency cancel." },
+    { "front": "Self-hosted?", "back": "Cost + hardware + compliance wins; maintenance + security costs. Use ephemeral + isolated." },
+    { "front": "Debug?", "back": "ACTIONS_STEP_DEBUG=true + tmate SSH + act local + re-run failed jobs." }
   ],
   "quiz": [
-    { "q": "Matrix builds are for…", "options": ["Deleting jobs", "Running across versions/OS/flavors in parallel", "Debug logs only", "Encrypting"], "answer": 1, "explain": "Test/build across multiple axes." },
-    { "q": "For safe cloud auth in Actions use…", "options": ["Long-lived cloud keys in secrets", "OIDC federation (no long-lived keys)", "Nothing", "Public URLs"], "answer": 1, "explain": "OIDC federates GitHub identity to cloud IAM." },
-    { "q": "To auto-cancel superseded PR runs use…", "options": ["`concurrency: cancel-in-progress`", "delete workflow", "manual cancel", "no CI"], "answer": 0, "explain": "The concurrency key handles it." }
+    { "q": "Cheapest runner?", "options": ["macOS", "Ubuntu", "Windows", "Same cost"], "answer": 1, "explain": "Ubuntu 10× cheaper than macOS." },
+    { "q": "Pin action to?", "options": ["@v1 tag", "Commit SHA", "@main", "@latest"], "answer": 1, "explain": "Supply-chain security." },
+    { "q": "Prod deploy gate?", "options": ["Nothing", "Environment with required reviewers", "iOS only", "Free"], "answer": 1, "explain": "Approval before job runs." },
+    { "q": "OIDC benefit?", "options": ["Nothing", "Short-lived cloud tokens — no static secrets", "iOS only", "Free"], "answer": 1, "explain": "Secretless cloud auth." },
+    { "q": "Cancel stale runs on push?", "options": ["Not possible", "concurrency: cancel-in-progress: true", "Cron", "Web-only"], "answer": 1, "explain": "Saves minutes." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Write a workflow that runs `flutter analyze` and tests on PR + push." },
-    { "level": "Medium", "text": "Cache pub/Gradle; measure job time before/after." },
-    { "level": "Hard", "text": "Add a release workflow that builds signed AAB + IPA on tag." },
-    { "level": "Expert", "text": "OIDC-federate GitHub → GCP; upload artifacts without long-lived keys." }
+    { "level": "Easy", "text": "Workflow: format + analyze + test on every PR." },
+    { "level": "Easy", "text": "Cache pub / gradle / pods; measure time delta." },
+    { "level": "Medium", "text": "Matrix: Android + iOS build in parallel." },
+    { "level": "Medium", "text": "Path filters skip iOS build when only android/ files changed." },
+    { "level": "Hard", "text": "Reusable workflow called by 3 other workflows." },
+    { "level": "Hard", "text": "Environment with required reviewers for prod deploy." },
+    { "level": "Expert", "text": "OIDC to authenticate to GCP without static service-account keys." }
   ],
   "interviewQuestions": [
-    "How does GitHub Actions structure workflows?",
-    "How do you speed up CI jobs?",
-    "How do you handle secrets safely?",
-    "Reusable workflow vs composite action?",
-    "Why pin actions by SHA?"
+    "Actions vs reusable workflows vs composite actions?",
+    "How do Environments work?",
+    "Speed up a slow Actions pipeline?",
+    "How do you keep the Actions supply chain secure?",
+    "When would you use self-hosted runners?",
+    "How do you debug a failing workflow?"
   ],
   "references": [
-    { "label": "GitHub Actions docs", "url": "https://docs.github.com/en/actions" }
+    { "label": "GitHub Actions docs", "url": "https://docs.github.com/en/actions" },
+    { "label": "subosito/flutter-action", "url": "https://github.com/subosito/flutter-action" },
+    { "label": "OIDC with GitHub Actions", "url": "https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect" }
   ]
 }

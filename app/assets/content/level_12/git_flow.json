@@ -1,51 +1,99 @@
 {
   "id": "devops.git_flow",
   "levelId": 12,
-  "title": "Git Flow (& alternatives)",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "title": "Git Flow (branching strategies)",
+  "xp": 40,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Explain classic Git Flow branches",
-    "Compare with Trunk-Based and GitHub Flow",
-    "Choose a branching strategy for your team"
+    "Understand branching strategies via a real-life analogy",
+    "Distinguish Git Flow, GitHub Flow, GitLab Flow, Trunk-Based",
+    "Pick a strategy per team size + release cadence",
+    "Handle hot-fixes, release branches, and long-lived branches",
+    "Manage feature flags with trunk-based development",
+    "Answer branching-strategy interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "A **branching strategy** defines how teams manage feature work, releases and hotfixes in git. Classic **Git Flow** uses long-lived develop + release branches; **GitHub Flow** and **Trunk-Based Development** favor short-lived branches merging to a single main." },
-    { "type": "table", "headers": ["Strategy", "Branches", "Best for"], "rows": [
-      ["Git Flow", "main, develop, feature/*, release/*, hotfix/*", "Scheduled releases (versioned SDKs)"],
-      ["GitHub Flow", "main + feature/*", "Web apps with continuous deploy"],
-      ["Trunk-Based", "main only + short-lived feature branches", "High-velocity CD teams"],
-      ["Release branches", "main + release/x.y", "Mobile apps (versioned releases)"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of branching strategies as different orchestral scores for the same instruments.**\n\nEvery team has git branches; how they're structured determines the collaboration rhythm.\n\n- **Git Flow (Vincent Driessen, 2010)** — classical + heavy: `main`, `develop`, `feature/*`, `release/*`, `hotfix/*`. Great for scheduled releases (mobile apps historically); slow when you deploy daily.\n- **GitHub Flow** — minimalist: `main` + short-lived feature branches; deploy from main. Great for web apps that ship continuously.\n- **GitLab Flow** — GitHub Flow + environment branches (`main` → `staging` → `production`).\n- **Trunk-based (Google-style)** — everyone commits to main; features hidden behind flags; deploys many times a day. Requires strong test discipline.\n\n**Why picking the right strategy matters for Flutter apps:** mobile has store-approval delays (Play + App Store take hours), which biases toward release-branch strategies. But heavy strategies (Git Flow's `develop` branch) create merge headaches. Modern Flutter teams often use **simplified GitHub Flow with release branches**: main is always releasable, release branches cut on schedule, hotfixes cherry-picked." },
+    { "type": "callout", "variant": "definition", "markdown": "**Branching strategy** = the team's conventions for how branches map to work-in-progress, releases, and environments. Popular models: **Git Flow** (main + develop + release + hotfix + feature; scheduled releases), **GitHub Flow** (main + short feature branches; continuous deploy), **GitLab Flow** (adds environment branches), **Trunk-Based Development** (single main + short-lived branches or direct commits; feature flags gate incomplete work). Choice driven by release cadence + team size + risk tolerance." },
+    { "type": "theory", "markdown": "## Strategies compared" },
+    { "type": "table", "headers": ["Strategy", "Best for", "Cadence"], "rows": [
+      ["**Git Flow**", "Scheduled releases, multiple parallel versions", "Weekly/monthly"],
+      ["**GitHub Flow**", "Continuous deploy web apps", "Multiple/day"],
+      ["**GitLab Flow**", "Env-promotion pipelines (dev→staging→prod)", "Multiple/day"],
+      ["**Trunk-based**", "High-frequency deploys + strong test + feature flags", "Multiple/hour"],
+      ["**Release-branch (mobile-common)**", "Store-gated releases + hotfix flexibility", "Weekly/biweekly"]
     ]},
-    { "type": "code", "language": "text", "code": "Mobile-friendly Trunk-Based + release branches:\n  main                (always deployable)\n   ├── feat/x         (short-lived, days)\n   ├── feat/y         (short-lived, days)\n   └── release/8.1    (cut from main; only fixes cherry-picked back)\n\n  Feature flags gate incomplete work in main." },
-    { "type": "callout", "variant": "interview", "markdown": "Modern high-velocity teams don't use Git Flow — the long-lived `develop` branch adds friction. They use Trunk-Based with **feature flags** to hide unfinished work + short-lived branches merged within a day. Git Flow still fits SDK/versioned-library or on-prem-release cycles." },
-    { "type": "callout", "variant": "mistake", "markdown": "Long-lived feature branches → nightmare merges. If a branch lives >1 week, break it up. If features aren't ready, gate them behind flags in main." },
-    { "type": "callout", "variant": "tip", "markdown": "For mobile apps: main (deployable) + short-lived feature branches + a release/x.y branch cut per release. Cherry-pick hotfixes to the release branch, tag store submissions, keep main moving." }
+    { "type": "theory", "markdown": "## Modern mobile branching (recommended default)" },
+    { "type": "code", "language": "text", "code": "main            ─A─B─C─D─E─F─G─H  (always releasable)\n                    │       │\nfeature/scanner     └──1─2─3┘  (short-lived; PR back into main)\n                            │\nrelease/1.2.0               └──I─J─K  (cut for a specific store release)\n                                   │\nhotfix/1.2.1                       └──L  (patched onto release; cherry-picked to main)\n\n// Rules:\n// - main is always green + releasable.\n// - feature branches live < 3 days.\n// - release branches cut at code freeze; only bugfixes go in.\n// - hotfix branches for prod issues; cherry-pick to main.\n// - tag every store release (v1.2.0, v1.2.1)." },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Long-lived feature branches.** Rebased daily onto main = merge hell + drift; ship earlier + flag it." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: `develop` branch (Git Flow) without release discipline.** Becomes a mirror of main + no benefit." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Direct commits to main.** Skips PR review + CI checks." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Skipping hotfix branches.** Fixing on main + shipping directly = risky." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Hotfix not backported to main.** Same bug reappears in next release." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: No branch protection rules.** Anyone can force-push to main." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Trunk-based without feature flags.** Incomplete work in main = broken UI in prod." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Copy-paste Git Flow with no team need.** Overhead > benefit for small teams." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Pick the simplest strategy that fits your cadence.**" },
+    { "type": "callout", "variant": "best", "markdown": "**2. Main always releasable** (green + shippable)." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Short-lived feature branches** (< 3 days)." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Branch protection rules** — required reviews + green CI + linear history." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Feature flags for incomplete work** — Remote Config / launch darkly." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Release branches** for store cadence." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Hotfix branch + backport to main.**" },
+    { "type": "callout", "variant": "best", "markdown": "**8. Tag every release** with semver." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — GitHub Flow: feature branch + PR + merge." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Release branch cut + hotfix + backport." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Branch protection rules on main." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Trunk-based dev with Remote Config feature flag." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert)** — Migrate a Git Flow repo to release-branch model + document." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Git Flow vs GitHub Flow — pick when?**\n\n**A:** **Git Flow** was designed for scheduled releases with multiple parallel versions in production (banks maintaining 3 concurrent app versions). The `develop` + `release` + `hotfix` branches provide isolation. **Cost:** heavyweight; merging back-and-forth generates conflicts; onboarding slow. **GitHub Flow** — `main` + short feature branches; deploy from main. Optimized for continuous-deployment web apps. **For Flutter apps in 2026:** most teams use a hybrid — `main` + feature branches (GitHub Flow) + release branches for store submissions (small piece of Git Flow). Pure Git Flow is overkill for most modern teams; pure GitHub Flow doesn't fit store-approval delays. **Interview signal:** knowing the trade-offs + not being dogmatic." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What is trunk-based development + when does it work?**\n\n**A:** **Trunk-based** = everyone commits to `main` (the trunk) directly or via very short-lived branches; deploys happen from main many times a day. **Requires:** (1) fast automated tests (< 10 min from commit to green build); (2) strong CI (blocks broken builds); (3) feature flags to hide incomplete work; (4) code review discipline (PRs merged within hours). **Wins when:** high-velocity teams (Google, Meta, Netflix), continuous deployment web/backend, tight test coverage. **Fails when:** slow CI, weak tests, no feature-flag infrastructure. **Mobile challenge:** store-approval delays make 'many deploys a day' impossible; but you can still trunk-develop + batch releases from main. **Interviewer signal:** understanding the DISCIPLINE it requires + why some teams don't do it." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do you handle a hot-fix mid-release?**\n\n**A:** **Scenario:** v1.2.0 is in production; a critical bug is reported. Main has moved on to v1.3.0 features. **Steps:** (1) **Branch from the release tag** — `git switch -c hotfix/1.2.1 v1.2.0`. (2) **Fix + commit** — minimal, targeted change; add a regression test. (3) **CI on hotfix branch** — full suite must pass. (4) **PR + review** — expedited but still reviewed. (5) **Tag** `v1.2.1` + build store artifacts + submit. (6) **Backport to main** — `git switch main; git cherry-pick <hotfix-sha>` OR merge the hotfix branch into main. (7) **Also backport to any other active release branches.** (8) **Post-mortem** — how did the bug escape tests? add coverage. **Regulator/pharma apps:** hotfix may skip normal review due to safety. **Interviewer signal:** knowing hotfixes are branched FROM the release tag, not from main." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What role do feature flags play in branching strategies?**\n\n**A:** **Feature flags decouple deployment from release.** Code lands in main + is deployed but hidden behind a flag; UI only enables when flag flips (Remote Config, LaunchDarkly). **Enables:** (1) **Trunk-based development** — incomplete work merges + hides. (2) **Gradual rollouts** — 1% → 10% → 100%. (3) **Kill switches** — instant off for a bad feature without redeploy. (4) **A/B tests** — variant A + variant B in the same build. (5) **Environment differences** — dev sees experimental features, prod doesn't. **Cost:** flag debt — old flags left in code become tangled; sunset flags after 100% rollout. **In Flutter mobile:** Firebase Remote Config is the common infrastructure; LaunchDarkly for enterprise. **Interviewer signal:** understanding branching + flagging as complementary tools." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How would you set up branch protection rules on GitHub?**\n\n**A:** On `main` (and release branches): **(1) Require pull request** before merging. **(2) Require approvals** — 1-2 reviewers minimum. **(3) Require status checks to pass** — CI (build + test + lint) + code coverage threshold + security scan. **(4) Require branches up to date** — merge only if the PR is rebased/merged with latest main. **(5) Require signed commits** — GPG/SSH signatures (SOC 2). **(6) Require linear history** — no merge commits (forces squash-merge or rebase-merge). **(7) Restrict who can push** — bots + release automation only for main. **(8) Restrict force pushes + deletions.** **(9) Require conversation resolution** — all PR comments addressed. **(10) Include administrators** — even the CEO follows the rules. **(11) CODEOWNERS** — auto-request reviews from domain experts. Interviewer signal: comprehensive setup + rationale." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How do you handle branching in a monorepo?**\n\n**A:** **Monorepo challenges:** thousands of PRs touching different packages; slow CI unless you skip unaffected tests. **Strategies:** (1) **Path-based CI filters** — GitHub Actions `paths:` filter runs only jobs affected by changed files. (2) **Bazel / Nx / Turborepo** — compute affected packages and their downstream deps. (3) **Trunk-based** — long-lived branches are impossible; small commits + fast merge. (4) **Melos (Flutter)** — coordinated versioning across packages. (5) **CODEOWNERS by directory** — right reviewers auto-assigned. (6) **PR templates** — 'which package(s) changed?' checkbox. (7) **Merge queue** — batches PRs to avoid main-conflict rebases. **Google's monorepo (Piper)** uses trunk-based + massive CI + strict code review + very few branches — the extreme example. **Interviewer bonus:** knowing monorepos favor trunk-based." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Small-to-mid Flutter apps** — GitHub Flow + release branches.\n- **Enterprise banking apps** — modified Git Flow with parallel versions.\n- **Startups** — trunk-based with feature flags.\n- **Monorepos** — trunk-based + Melos/Nx." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Merge queue (GitHub)** — batches + serializes PR merges; avoids race conditions.\n- **Semantic-release** — automated version bump + changelog based on commit messages.\n- **`main` vs `master`** — GitHub defaults to `main` since 2020.\n- **Release cadence signals** — daily = trunk-based; weekly = GitHub Flow + release branches; monthly = release branches or Git Flow.\n- **Long-lived feature flags** = tech debt; sunset ceremony.\n- **Melos + monorepo Flutter** — coordinated pubspec versioning.\n- **Hotfix from production tag** — always branch from the exact deployed sha.\n- **Auto-merge** — PR merges when checks pass; useful for dependency-bump PRs.\n- **Draft PRs** — early feedback without CI cost.\n- **CODEOWNERS** — required reviewers per directory.\n- **`Renovate` / `Dependabot`** — auto-PRs for dependency updates." }
   ],
   "flashcards": [
-    { "front": "What is Trunk-Based Development?", "back": "All work integrates to main via short-lived branches (usually < 1 day)." },
-    { "front": "Why avoid long-lived feature branches?", "back": "Painful merges and integration risk — gate incomplete features with flags instead." },
-    { "front": "Best strategy for mobile releases?", "back": "Trunk-based + a release/x.y branch cut per store submission; cherry-pick hotfixes." }
+    { "front": "Git Flow branches?", "back": "main + develop + feature/* + release/* + hotfix/*. Heavy — scheduled releases." },
+    { "front": "GitHub Flow?", "back": "main + short-lived feature branches; continuous deploy." },
+    { "front": "Trunk-based?", "back": "Everyone commits to main; incomplete work behind feature flags; many deploys/day." },
+    { "front": "Mobile default?", "back": "GitHub Flow + release branches for store submissions + hotfix branches." },
+    { "front": "Hotfix flow?", "back": "Branch from the release tag; fix + tag + backport to main." },
+    { "front": "Trunk-based enabler?", "back": "Fast CI + strong tests + feature flags." },
+    { "front": "Branch protection minimum?", "back": "Require PR + reviews + green CI + linear history + no force push." }
   ],
   "quiz": [
-    { "q": "Which is favored by modern high-velocity teams?", "options": ["Git Flow", "Trunk-Based + feature flags", "One giant branch", "Multiple develops"], "answer": 1, "explain": "Short-lived branches + flags scale better with CD." },
-    { "q": "Long-lived feature branches lead to…", "options": ["Faster releases", "Painful merges and integration risk", "Better isolation", "Nothing bad"], "answer": 1, "explain": "Divergence compounds; use flags." },
-    { "q": "Mobile release cadence typically uses…", "options": ["Only main", "main + release/x.y branches for store cuts", "10 develop branches", "No branching"], "answer": 1, "explain": "Cut a release branch to stabilize while main keeps moving." }
+    { "q": "Continuous-deploy web app strategy?", "options": ["Git Flow", "GitHub Flow", "Trunk-based (with strong test)", "B or C"], "answer": 3, "explain": "Both fit continuous cadence." },
+    { "q": "Hotfix branches FROM…", "options": ["main", "the release tag / branch", "develop", "any"], "answer": 1, "explain": "Exact deployed state." },
+    { "q": "Feature flag purpose?", "options": ["Marketing", "Decouple deploy from release + hide incomplete work", "Analytics", "Nothing"], "answer": 1, "explain": "Trunk-based enabler." },
+    { "q": "Long-lived feature branch?", "options": ["Ideal", "Merge hell — ship + flag", "Only in Git Flow", "Web-only"], "answer": 1, "explain": "Drift + conflicts." },
+    { "q": "Branch protection basics?", "options": ["Nothing", "Require PR + reviews + green CI + linear history", "Only iOS", "Only for main"], "answer": 1, "explain": "SOC 2 + code quality." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Set up a mobile-friendly branching model: main + release/x.y." },
-    { "level": "Medium", "text": "Cherry-pick a hotfix from main into an active release branch." },
-    { "level": "Hard", "text": "Introduce feature flags to hide an incomplete refactor in main." },
-    { "level": "Expert", "text": "Migrate a Git Flow repo to Trunk-Based without a re-history." }
+    { "level": "Easy", "text": "GitHub Flow: feature branch + PR + merge." },
+    { "level": "Medium", "text": "Release branch cut + hotfix + backport." },
+    { "level": "Medium", "text": "Branch protection rules on main." },
+    { "level": "Hard", "text": "Trunk-based dev with Firebase Remote Config feature flag." },
+    { "level": "Hard", "text": "Merge queue setup on GitHub for high-volume PRs." },
+    { "level": "Expert", "text": "Migrate Git Flow repo to release-branch model + document team playbook." }
   ],
   "interviewQuestions": [
-    "Git Flow vs GitHub Flow vs Trunk-Based?",
-    "When does Git Flow still make sense?",
-    "How do feature flags relate to branching?",
-    "How do you manage mobile release branches?",
-    "How do you avoid painful merges?"
+    "Git Flow vs GitHub Flow — pick when?",
+    "What is trunk-based dev + when does it work?",
+    "Handle a hot-fix mid-release?",
+    "What role do feature flags play?",
+    "Set up branch protection rules on GitHub?",
+    "Branching in a monorepo?"
   ],
   "references": [
-    { "label": "Trunk-Based Development", "url": "https://trunkbaseddevelopment.com" }
+    { "label": "Vincent Driessen — original Git Flow", "url": "https://nvie.com/posts/a-successful-git-branching-model/" },
+    { "label": "GitHub Flow", "url": "https://docs.github.com/en/get-started/using-github/github-flow" },
+    { "label": "Trunk-based development", "url": "https://trunkbaseddevelopment.com" }
   ]
 }
