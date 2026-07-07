@@ -2,50 +2,100 @@
   "id": "devops.app_store_connect",
   "levelId": 12,
   "title": "App Store Connect",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "xp": 50,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Ship an IPA through App Store Connect",
-    "Automate with the App Store Connect API",
-    "Comply with privacy nutrition + review guidelines"
+    "Understand App Store Connect via a real-life analogy",
+    "Navigate certificates, identifiers, provisioning + Xcode signing",
+    "Use App Store Connect API for CI automation",
+    "Submit for review + phased release + Testflight promotion",
+    "Handle App Review rejections + resubmission",
+    "Answer App Store Connect interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "**App Store Connect** is Apple's dashboard for iOS/iPadOS/macOS submissions: metadata, screenshots, IAP config, TestFlight, phased rollout, App Review, and analytics." },
-    { "type": "table", "headers": ["Concept", "Purpose"], "rows": [
-      ["Bundle ID + identifier", "Uniquely identifies the app"],
-      ["Certificates + provisioning profiles", "Signing"],
-      ["App Store Connect API key", "Automation without user password"],
-      ["Privacy nutrition labels", "Declared per data category"],
-      ["Phased release", "Auto-ramp production release over 7 days"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of App Store Connect as Apple's version of Play Console — but with stricter customs officials at the border.**\n\nApple's iOS gate-keeper. Every iOS app + iOS release passes through App Store Connect: identity (bundle ID), certificates (developer + distribution), provisioning profiles, metadata, screenshots, TestFlight, review submission, phased release, in-app purchase, subscriptions, revenue reports, ratings, App Analytics.\n\n- **Certificates + provisioning profiles** — the iOS pain point.\n- **TestFlight** — internal + external beta (up to 10K).\n- **App Review** — human reviewers vet every release (~24-48h).\n- **Phased Release** — Apple's staged rollout (7-day auto-progression).\n- **App Store Connect API** — modern automation via API key (bypasses password + 2FA).\n- **App Review Guidelines** — a book of rules; every rejection cites a specific section.\n\n**Why Apple's review process shapes iOS DevOps:** every release cycle is 1-3 days for review; rejections push you back to zero; you can't 'staged rollout' like Play (Apple has phased release but it's simpler). Compensate with heavy TestFlight beta + aggressive Xcode Cloud CI + Fastlane pilot automation." },
+    { "type": "callout", "variant": "definition", "markdown": "**App Store Connect** is Apple's iOS + macOS + tvOS + visionOS app portal. Handles: certificates + identifiers + profiles (via Apple Developer Portal), TestFlight (internal + external beta), App Review submission, metadata + screenshots, in-app purchases + subscriptions, phased release, app analytics, sales + trends. **Automation:** App Store Connect API (JWT with .p8 key), Fastlane (`pilot`, `deliver`, `spaceship`), Xcode Cloud." },
+    { "type": "theory", "markdown": "## iOS release rings" },
+    { "type": "table", "headers": ["Ring", "Distribution", "Review time", "Tester cap"], "rows": [
+      ["**Firebase App Distribution**", "Ad-hoc IPA", "None", "Unlimited (email invite)"],
+      ["**TestFlight Internal**", "Same IPA", "None", "100 (App Store Connect roles)"],
+      ["**TestFlight External**", "Same IPA", "~1 day (first submission)", "10,000 (email or public link)"],
+      ["**App Store Prod**", "Same IPA", "~1-3 days", "All users (phased release)"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "The senior touches: **use the App Store Connect API key** (not user credentials) for automation, wire it into Fastlane / Codemagic; declare **privacy nutrition** honestly (Apple checks); use **phased release** for stability signals. **App Review** cares about: crashes on submit build, sign-in-with-Apple parity when using other social logins, and clarity of purpose." },
-    { "type": "callout", "variant": "mistake", "markdown": "Ignoring the current **iOS minimum deployment target** required by Apple (usually latest N-1 or N-2). Also: submitting an IPA that crashes on Apple's reviewer's device — always test the archive build, not just debug." },
-    { "type": "callout", "variant": "best", "markdown": "Automate: Codemagic / Fastlane submits to TestFlight → wait for processing → move to internal TestFlight testers → after N days promote to App Store submission. Store metadata (screenshots, description) in a `deliver` metadata folder in git — reviewable + versioned." }
+    { "type": "theory", "markdown": "## App Store Connect API auth" },
+    { "type": "code", "language": "text", "code": "// App Store Connect → Users and Access → Integrations → API Keys\n// Create a key (name, access role) → download .p8 file (SAVE — can't re-download)\n// Note: KEY_ID (10 chars), ISSUER_ID (UUID).\n\n// Store as CI secrets:\n//   ASC_API_KEY_ID       = ABC123DEF4\n//   ASC_API_ISSUER_ID    = 00000000-0000-0000-0000-000000000000\n//   ASC_API_KEY_CONTENT  = base64-encoded .p8\n\n// In Fastfile:\napp_store_connect_api_key(\n  key_id: ENV['ASC_API_KEY_ID'],\n  issuer_id: ENV['ASC_API_ISSUER_ID'],\n  key_content: ENV['ASC_API_KEY_CONTENT'],\n  is_key_content_base64: true,\n)\n\n// Now pilot, deliver, match all use the API key — no Apple ID prompts + no 2FA." },
+    { "type": "theory", "markdown": "## Fastlane pilot (TestFlight) + deliver (App Store)" },
+    { "type": "code", "language": "ruby", "code": "platform :ios do\n  lane :beta do\n    api_key = app_store_connect_api_key(\n      key_id: ENV['ASC_API_KEY_ID'],\n      issuer_id: ENV['ASC_API_ISSUER_ID'],\n      key_content: ENV['ASC_API_KEY_CONTENT'],\n      is_key_content_base64: true,\n    )\n\n    match(type: 'appstore', readonly: true)\n    build_app(scheme: 'Runner', export_method: 'app-store')\n\n    pilot(\n      api_key: api_key,\n      distribute_external: true,\n      groups: ['beta-testers'],\n      changelog: File.read('../CHANGELOG.md')[0..3999],\n      demo_account_required: false,\n      beta_app_review_info: {\n        contact_email: 'release@example.com',\n        demo_account_name: 'demo@example.com',\n        demo_account_password: 'demo123',\n        notes: 'Test all screens via demo account.',\n      },\n    )\n\n    upload_symbols_to_crashlytics(dsym_path: '../build/ios/ipa/Runner.app.dSYM.zip')\n  end\n\n  lane :release do\n    # Similar; use `deliver` with submit_for_review: true\n  end\nend" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Password + 2FA CI setup.** SMS 2FA breaks automation. Migrate to App Store Connect API key." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Certificates + profiles managed manually.** Chaos + expiration surprises. Fastlane `match`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Wrong build_configuration / export_method.** IPA won't upload; App Store rejects." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Version + build number NOT bumped.** Apple rejects duplicate build numbers." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Missing App Privacy details.** Apple hard-rejects." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Skipping dSYM upload.** Crashlytics reports unreadable." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Force-touching a rejected build.** Read the rejection carefully + address specifically." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: No `demo_account` for review.** Reviewer can't sign in → auto-reject." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. App Store Connect API key** — no passwords in CI." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Fastlane match** for certs + profiles." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Auto-bump build number per push** — never manual." },
+    { "type": "callout", "variant": "best", "markdown": "**4. dSYM upload to Crashlytics.**" },
+    { "type": "callout", "variant": "best", "markdown": "**5. Demo account credentials** in review notes." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Precheck metadata** via `precheck` action before submission." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Phased Release** for prod." },
+    { "type": "callout", "variant": "best", "markdown": "**8. TestFlight external** as quality gate before App Store." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Create App Store Connect API key + test in Fastlane." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Fastlane match setup for App Store distribution cert." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — TestFlight upload via pilot with changelog + Slack." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Submit for App Store review with demo account + notes." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Phased Release rollout monitoring." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Rejection response playbook: automated rollback + hotfix submission." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Why is the App Store Connect API key the modern way to authenticate CI?**\n\n**A:** **Legacy:** Apple ID + password + application-specific password + 2FA. SMS 2FA breaks CI — CI can't receive SMS; 2FA prompts on every login require human intervention. Painful. **API key:** create in ASC → download `.p8` file + note key ID + issuer ID. In CI, JWT-signed with the .p8 authenticates every Apple call. **No passwords, no 2FA, no Apple ID at all** for CI automation. **Fine-grained scope** — key can be limited to specific access (upload only, no delete, no user management). **Rotate periodically** — quarterly recommended. **Revoke immediately** on team-member departure. **Fastlane action** — `app_store_connect_api_key` returns an object that pilot/deliver/match/precheck all accept. **Also supports:** pilot public link generation, TestFlight rollout, in-app purchase management, subscription status. **Interviewer signal:** knowing this is the 2024+ standard + not stuck on legacy." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: Walk through the App Review process + rejections.**\n\n**A:** **Submission:** upload IPA via Fastlane / Xcode / Transporter → fill in metadata + screenshots + review notes → submit for review via App Store Connect. **Review:** human reviewer receives the build + notes → tests via provided demo account → reads guidelines + evaluates. **Timing:** 24-48 hours typical; can be 4+ days at peak (WWDC, holidays). **Outcomes:** approve + release / approve + hold for release / reject with specific guideline citation. **Rejection response:** read the citation carefully; fix the specific issue; reply to reviewer via ASC (some issues can be resolved in comments without a new build); resubmit new build if code change needed. **Common rejections:** (1) missing App Privacy details, (2) UI clarity ('what does this button do?'), (3) crashes reviewer encountered, (4) IAP / subscription violations, (5) forbidden content, (6) misleading marketing. **Best defense:** thorough testing on real devices + clear demo account + comprehensive review notes. **Interviewer signal:** calm process + specific guideline references." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How does Phased Release work?**\n\n**A:** **Phased Release:** Apple's auto-progression rollout for App Store releases. After approval, release goes to a small % of users; progresses over **7 days** to 100%: **Day 1** — 1%, **Day 2** — 2%, **Day 3** — 5%, **Day 4** — 10%, **Day 5** — 20%, **Day 6** — 50%, **Day 7** — 100%. **You can pause** at any point via ASC + resume later. **You cannot custom-target** — no by-country / by-device staging (Play Console has that). **You can release manually to 100%** at any point during phased release. **After 100%,** it's the standard release. **Compared to Play:** simpler + safer default (auto-progression); less granular. **Best practice:** enable Phased Release for every prod release + monitor Crashlytics / Analytics between days. **Halt trigger:** > 0.5 pp crash-free-users regression or measurable conversion drop. **Interviewer signal:** knowing Phased Release exists + when to pause." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you handle certificates + provisioning profiles for a large team?**\n\n**A:** **Fastlane `match`** is the answer. **Setup:** private git repo (only DevOps + release-eng access) + strong MATCH_PASSWORD env var. **Flow:** `fastlane match appstore` (first time) generates + encrypts + commits dist cert + prov profile. Team + CI run `fastlane match appstore --readonly` — pulls + decrypts + installs. **Advantages:** (1) one source of truth. (2) new team member productive in minutes. (3) CI just works. (4) cert rotation is one command. (5) prov-profile UDID additions handled centrally. **App Store Connect API key** now allows match to auto-manage certs on Apple's side. **Alternative:** Xcode Cloud auto-signs (Apple's Xcode Cloud handles signing automatically). **Trade-off:** Xcode Cloud locks you into Xcode/Apple ecosystem. **Interviewer signal:** knowing match is table-stakes + not fighting Xcode Cloud is another valid path." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What are the most common App Review guidelines to watch for?**\n\n**A:** **Top rejection reasons:** **(1) 2.1 (Performance)** — crashes reviewer encountered. Test on real devices; upload dSYMs. **(2) 2.3 (Accurate Metadata)** — misleading marketing, wrong screenshots. **(3) 3.1.1 (In-App Purchase)** — using non-Apple payment for digital goods → auto-reject. **(4) 4.0 (Design)** — 'button unclear' judgment calls. **(5) 5.1 (Privacy)** — data collection not disclosed in App Privacy details. **(6) 5.1.1(v) (Location Data)** — collecting location without clear purpose. **(7) 4.3 (Spam)** — obviously derivative of existing apps. **(8) 4.7 (HTML5 Games / Bots / Steaming)** — restrictions on downloaded code. **(9) 5.2 (Intellectual Property)** — using someone else's brand. **(10) 5.3 (Gaming, Gambling, Lotteries)** — specific rules. **Defensive:** review Guidelines pre-submission + use `precheck` in Fastlane + demo account in review notes. **Interviewer signal:** knowing specific sections + not just 'read the guidelines.'" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How would you architect an iOS CI/CD pipeline?**\n\n**A:** **(1)** GitHub Actions on macOS runner (or Codemagic / Bitrise / Xcode Cloud). **(2)** Fastlane setup with match + App Store Connect API key + pilot + deliver + precheck. **(3)** Every push to `main` → build → distribute to Firebase App Distribution `qa`. **(4)** Nightly → distribute to `internal` (whole company). **(5)** Weekly Friday → TestFlight External beta. **(6)** Tag `v*-rc*` → TestFlight Internal + Internal Play Testing (release candidate). **(7)** Tag `v*` → App Store submit + Play Prod staged rollout. **(8)** dSYM upload to Crashlytics on every build. **(9)** Slack notifications on submission + approval + rejection. **(10)** Auto-bump `CFBundleVersion` per build (never manual). **(11)** MATCH_PASSWORD + ASC API key rotated quarterly. **(12)** Precheck metadata before submission. **(13)** Rejection playbook — automated rollback + hotfix flow. **Interviewer signal:** comprehensive automation + rings + resilience." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every iOS release.**\n- **In-app subscriptions + purchases setup.**\n- **App analytics dashboards.**\n- **Ratings + reviews responses.**\n- **NOT for** Enterprise iOS distribution (Apple Enterprise Program has its own portal)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Xcode Cloud** — Apple's CI; deep ASC integration.\n- **App Store Connect API** — REST/JWT for full automation.\n- **App Analytics** — install + retention + user location.\n- **App Privacy details** — self-declared data collection.\n- **Subscription groups** — auto-renewable IAP.\n- **StoreKit 2** — new IAP framework.\n- **In-app Review API** — prompt users for App Store rating.\n- **App Store Server API** — validate purchases server-side.\n- **App-Specific Passwords** — legacy 2FA workaround; migrate to API key.\n- **Sandbox testers** — for IAP testing.\n- **App Attest** — device attestation (like Play Integrity).\n- **`altool` (deprecated)** vs `xcrun altool` vs Fastlane pilot — modern uses Fastlane.\n- **TestFlight public links** — invite via URL.\n- **App Store Marketing** — screenshots + descriptions + keywords.\n- **App Store Optimization (ASO)** — keyword ranking discipline." }
   ],
   "flashcards": [
-    { "front": "Best auth for App Store Connect automation?", "back": "App Store Connect API key (not user account credentials)." },
-    { "front": "Phased release duration?", "back": "7 days, auto-ramping. Can be paused." },
-    { "front": "Common review rejection reasons?", "back": "Crashes on reviewer device, missing Sign in with Apple parity, purpose unclear, IAP not implemented per rules." }
+    { "front": "ASC API key auth?", "back": ".p8 file + key ID + issuer ID; JWT-signed calls. Bypasses password + 2FA." },
+    { "front": "Certs + profiles?", "back": "Fastlane match — encrypted git repo; readonly on CI." },
+    { "front": "Phased Release?", "back": "Auto-progression over 7 days: 1% → 100%. Pause + resume anytime." },
+    { "front": "App Review time?", "back": "~24-48h typical; up to 4+ days at peak; humans review." },
+    { "front": "Common rejection?", "back": "2.1 (crashes), 5.1 (privacy), 3.1.1 (non-Apple payments)." },
+    { "front": "Rings?", "back": "Firebase App Dist → TestFlight Internal → TestFlight External → App Store Prod." },
+    { "front": "Rejection response?", "back": "Read citation → fix specific issue → resubmit; can also reply in ASC comments for some issues." }
   ],
   "quiz": [
-    { "q": "For CI automation prefer…", "options": ["User password", "App Store Connect API key", "SSH", "Nothing"], "answer": 1, "explain": "API key is stable + rotatable." },
-    { "q": "Phased release ramps up over…", "options": ["1 hour", "7 days", "30 days", "Never"], "answer": 1, "explain": "Automatic 7-day ramp." },
-    { "q": "Store metadata (screenshots/desc) is best kept…", "options": ["Only in the web UI", "In a git-versioned deliver folder", "In your Slack", "None"], "answer": 1, "explain": "Versioned + reviewable via Fastlane deliver." }
+    { "q": "Modern CI auth?", "options": ["Password + SMS 2FA", "App Store Connect API key (.p8)", "OAuth", "iCloud"], "answer": 1, "explain": "Bypasses 2FA interruptions." },
+    { "q": "iOS certs manager?", "options": ["Manual", "Fastlane match (encrypted git)", "Xcode manual", "Nothing"], "answer": 1, "explain": "Central source of truth." },
+    { "q": "Phased Release duration?", "options": ["Instant", "7 days auto-progression", "1 hour", "1 month"], "answer": 1, "explain": "Apple's rollout ramp." },
+    { "q": "In-app-purchase rules?", "options": ["Any payment", "Apple IAP for digital goods; 3.1.1 rejection otherwise", "Any credit card", "PayPal"], "answer": 1, "explain": "Apple's rules." },
+    { "q": "App Review time?", "options": ["Instant", "~24-48h typical", "1 week", "1 month"], "answer": 1, "explain": "Human reviewers." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Upload a manually-built IPA via Transporter." },
-    { "level": "Medium", "text": "Automate submission via Fastlane + App Store Connect API key." },
-    { "level": "Hard", "text": "Configure phased release + monitor stability signals." },
-    { "level": "Expert", "text": "Automate metadata + screenshots + submission fully from CI." }
+    { "level": "Easy", "text": "ASC API key + test in Fastlane." },
+    { "level": "Medium", "text": "Match setup for App Store cert." },
+    { "level": "Medium", "text": "TestFlight upload via pilot + changelog + Slack." },
+    { "level": "Hard", "text": "Submit for review with demo account + notes." },
+    { "level": "Hard", "text": "Phased Release monitoring dashboard." },
+    { "level": "Expert", "text": "Rejection response playbook + automated hotfix + resubmission." }
   ],
   "interviewQuestions": [
-    "How do you automate App Store submissions?",
-    "What is phased release?",
-    "How do you handle privacy labels?",
-    "Most common review rejections?",
-    "How do you manage signing across a team?"
+    "Why is ASC API key the modern CI auth?",
+    "Walk through App Review + rejections.",
+    "How does Phased Release work?",
+    "Certificates + provisioning for a large team?",
+    "Common App Review guidelines to watch?",
+    "Architect an iOS CI/CD pipeline?"
   ],
   "references": [
-    { "label": "App Store Connect Help", "url": "https://developer.apple.com/help/app-store-connect/" }
+    { "label": "App Store Connect", "url": "https://appstoreconnect.apple.com" },
+    { "label": "ASC API", "url": "https://developer.apple.com/documentation/appstoreconnectapi" },
+    { "label": "App Review Guidelines", "url": "https://developer.apple.com/app-store/review/guidelines/" }
   ]
 }

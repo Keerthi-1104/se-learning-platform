@@ -2,48 +2,100 @@
   "id": "devops.testflight",
   "levelId": 12,
   "title": "TestFlight",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "xp": 40,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Distribute iOS beta builds via TestFlight",
-    "Manage internal + external testers",
-    "Automate uploads via Fastlane pilot / Codemagic"
+    "Understand TestFlight via a real-life analogy",
+    "Distinguish Internal vs External testers",
+    "Automate uploads + tester invites via API + Fastlane pilot",
+    "Manage build expiration + beta app review",
+    "Fit TestFlight into a mobile release pipeline",
+    "Answer TestFlight interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "**TestFlight** is Apple's official beta distribution for iOS/iPadOS/macOS. Internal (up to 100 users, instant) or external (up to 10,000 users, requires a light beta app review) — with expiry (typically 90 days), feedback collection, and crash logs." },
-    { "type": "table", "headers": ["Tier", "Users", "Review?", "Turnaround"], "rows": [
-      ["Internal testers", "up to 100 team members", "None", "Instant after processing"],
-      ["External testers (individual)", "up to 10,000", "Yes (beta review)", "Hours to a day"],
-      ["Public link", "Anyone with link (up to 10k)", "Yes", "Same as external"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of TestFlight as Apple's built-in beta-tester delivery system — the iOS equivalent of Play Closed / Open testing.**\n\nUnlike Firebase App Distribution (ad-hoc IPA + email invite), TestFlight is Apple-hosted, uses the same App Store install mechanism, supports auto-updates, and reaches up to 10K external testers per app.\n\n- **Internal testers** — up to 100 App Store Connect users with team roles. No review; instant delivery.\n- **External testers** — up to 10K by email or public link. First submission needs Beta App Review (~1 day); subsequent updates are auto-approved unless major changes.\n- **Build expires after 90 days** — testers can't install after; you must re-upload.\n- **iOS + iPadOS + macOS + tvOS + watchOS + visionOS** — TestFlight covers all Apple platforms.\n- **Tester feedback + crash reports** — TestFlight app collects them.\n- **Automatic updates** — testers get new builds automatically if opted in.\n\n**From a DevOps view:** TestFlight replaces Firebase App Distribution for iOS external beta. TF External is the wide-beta ring; TF Internal + Firebase App Distribution split internal duties. Automation via Fastlane pilot + App Store Connect API is smooth." },
+    { "type": "callout", "variant": "definition", "markdown": "**TestFlight** is Apple's beta distribution service integrated with App Store Connect. Supports **Internal Testing** (up to 100 App Store Connect team members, no review, instant) + **External Testing** (up to 10K by email/link, ~1-day Beta App Review on first submission, auto-approved thereafter). Builds expire after 90 days. Delivered via native TestFlight iOS/iPadOS/macOS app. Cross-platform for all Apple ecosystems." },
+    { "type": "theory", "markdown": "## Internal vs External" },
+    { "type": "table", "headers": ["Aspect", "Internal", "External"], "rows": [
+      ["Tester cap", "100 (App Store Connect roles)", "10,000"],
+      ["Beta App Review", "None", "~1 day (first build only)"],
+      ["Invite method", "Email (must be team member)", "Email or public link"],
+      ["Best for", "Dev + designers + close QA", "External beta users, customers"],
+      ["Build turn-around", "Instant", "Same-day after review clearance"],
+      ["Feedback capture", "Yes", "Yes"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "TestFlight's edge: real App Store install experience, real crash logs to Xcode + Crashlytics, and a **feedback surface built into iOS**. Combined with Fastlane's `pilot` you get one-command uploads: `fastlane pilot upload`." },
-    { "type": "callout", "variant": "mistake", "markdown": "Not filling in beta app review info (test account, contact) — Apple rejects external builds for missing info faster than for real issues. Also: 90-day expiry surprises testers — plan renewal builds." },
-    { "type": "callout", "variant": "tip", "markdown": "Segment testers into groups (QA, marketing, VIP customers) and target releases per group. Auto-notify testers of new builds. Ask for feedback in-app for high-signal input." }
+    { "type": "theory", "markdown": "## Fastlane pilot — full lane" },
+    { "type": "code", "language": "ruby", "code": "platform :ios do\n  lane :testflight do\n    api_key = app_store_connect_api_key(\n      key_id: ENV['ASC_API_KEY_ID'],\n      issuer_id: ENV['ASC_API_ISSUER_ID'],\n      key_content: ENV['ASC_API_KEY_CONTENT'],\n      is_key_content_base64: true,\n    )\n\n    match(type: 'appstore', readonly: true)\n\n    Dir.chdir('../..') do\n      sh('flutter build ipa --release --obfuscate --split-debug-info=./symbols')\n    end\n\n    pilot(\n      api_key: api_key,\n      ipa: '../build/ios/ipa/Runner.ipa',\n      # Distribute externally:\n      distribute_external: true,\n      groups: ['beta-testers', 'partners'],\n      # Beta App Review info (only on first submission or major changes):\n      beta_app_review_info: {\n        contact_email: 'release@example.com',\n        demo_account_name: ENV['DEMO_ACCOUNT'],\n        demo_account_password: ENV['DEMO_PASSWORD'],\n        notes: 'Sign in with demo account for full feature access.',\n      },\n      changelog: changelog_from_git_commits(pretty: '- %s', number_of_commits: 20),\n      # Skip waiting — pilot returns immediately after upload; review happens async:\n      skip_waiting_for_build_processing: true,\n      # Optional: prompt reviewers about specific new content\n      beta_app_feedback_email: 'feedback@example.com',\n    )\n\n    upload_symbols_to_crashlytics(dsym_path: '../build/ios/ipa/Runner.app.dSYM.zip')\n    slack(message: 'iOS TestFlight build shipped 🚀', channel: '#releases')\n  end\nend" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Reusing build numbers.** Apple rejects duplicate `CFBundleVersion` on upload." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: 90-day expiry surprise.** Old builds expire → testers can't install. Re-upload regularly." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: External submission without demo account.** Reviewer can't test → rejected." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Encryption compliance skipped.** Apple asks about encryption; wrong answer → review delay." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Broad External group as 'internal'.** External requires Beta App Review; use Internal for team." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: No changelog.** Testers ignore anonymous builds; use `changelog_from_git_commits`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Ad-hoc IPA via App Distribution when TestFlight is available.** TF has better UX + auto-updates + wider reach." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Signing / provisioning-profile mismatch.** IPA fails upload validation." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Auto-bump build number per push.**" },
+    { "type": "callout", "variant": "best", "markdown": "**2. Auto-generate changelog from git.**" },
+    { "type": "callout", "variant": "best", "markdown": "**3. Demo account credentials in review notes.**" },
+    { "type": "callout", "variant": "best", "markdown": "**4. Encryption compliance answered.**" },
+    { "type": "callout", "variant": "best", "markdown": "**5. dSYM upload to Crashlytics.**" },
+    { "type": "callout", "variant": "best", "markdown": "**6. Re-upload before 90-day expiry.**" },
+    { "type": "callout", "variant": "best", "markdown": "**7. Internal for dev team; External for beta.**" },
+    { "type": "callout", "variant": "best", "markdown": "**8. Public link for open beta programs.**" },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Upload IPA to TestFlight Internal via Fastlane pilot." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — External group + Beta App Review notes." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Changelog + Slack notification on upload." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Public beta link for open-testing program." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Automated re-upload before 90-day expiry via Cron." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Multi-platform TestFlight (iOS + macOS + tvOS) release pipeline." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Internal vs External TestFlight testers — differences?**\n\n**A:** **Internal testers** — must be added as App Store Connect users with a role (Admin, App Manager, Developer, Marketing, Sales). Up to 100 per app. Any build uploaded → available instantly to Internal testers (no Beta App Review). Great for dev team + close QA. **External testers** — up to 10K by email or public URL. First submission requires **Beta App Review** (~1 day, human reviewer at Apple checks the build meets guidelines-lite). Subsequent updates auto-approved unless major changes. Great for beta cohorts + external partners. **Groups:** you can split External testers into groups + distribute specific builds to specific groups. **Public link:** generate a URL; anyone can join (up to 10K cap). **Interviewer signal:** knowing the 100 vs 10K + review-vs-no-review distinction." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What does Beta App Review check + how do you avoid rejections?**\n\n**A:** **Beta App Review** is lighter than App Store review but still checks: (1) **Crashes / stability** — build must not crash on first launch or in obvious flows. (2) **App Store Guidelines Lite** — no obvious violations (fraud, spam, IP violations). (3) **Demo account works** — reviewer must be able to reach main features. (4) **Encryption compliance** — properly declared. (5) **No obvious placeholders** — 'Lorem ipsum' or 'coming soon' screens. **Avoid rejections by:** (1) Testing on real device before submission. (2) Providing demo account credentials + comprehensive notes. (3) Answering encryption compliance question correctly. (4) Auto-bumping build number. (5) Uploading dSYMs. **Only the FIRST external submission per version is reviewed** — updates are auto-approved unless major changes (new features requiring re-review). Interviewer signal: knowing it's lighter + how to sail through." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What's the 90-day build expiry + how do you handle it?**\n\n**A:** TestFlight builds expire **90 days after upload**. Testers can't install expired builds; existing installs continue to work but users can't re-download. **Handle:** re-upload every 60-70 days OR every push to your `main` branch (frequent uploads inherently avoid expiry). **Automation:** CI cron job that checks expiry via App Store Connect API + triggers a re-upload if the current TestFlight build is within N days of expiring. **Alternative:** always deliver from tags — every release tag builds + uploads → constant refresh. **Notification:** ASC emails you 7 days before expiry. **Trap:** vacation / holiday → expiry hits → external testers can't install → user complaints. **Interview red flag:** not knowing about the 90-day rule at all." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: TestFlight vs Firebase App Distribution — when do you use each?**\n\n**A:** **TestFlight strengths:** (1) Apple-hosted; official channel. (2) Up to 10K external testers with public link. (3) Auto-updates for opted-in testers. (4) Better UX (native TestFlight app; users know it). (5) Cross-platform (iOS + iPadOS + macOS + tvOS + watchOS + visionOS). (6) Same install path as App Store. **Firebase App Distribution strengths:** (1) No review at all. (2) Faster upload → install (no processing wait). (3) Cross-Firebase project ecosystem. (4) Ad-hoc distribution outside Apple's review. **Best pattern:** use BOTH. Firebase App Distribution for the innermost ring (every push → QA); TestFlight Internal for the dev team's next ring; TestFlight External for wider external beta. Interviewer signal: knowing both fit different rings, not either/or." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How would you architect an iOS release pipeline using TestFlight?**\n\n**A:** **(1) Every push to `main`:** CI builds → uploads dSYMs → distributes to Firebase App Distribution qa. **(2) Nightly:** builds → uploads to TestFlight Internal (whole dev team). **(3) Weekly (Friday):** builds → uploads to TestFlight External beta group (invited beta users). **(4) Release candidate (tag `v*-rc*`):** uploads to TestFlight Internal for last-mile QA + TestFlight External for release-eng smoke test. **(5) Production (tag `v*`):** uploads to TestFlight External (mirror for support debugging) + submits for App Store review + phased release on approval. **(6) All builds:** dSYM upload + Slack notify. **(7) Auto-bump build number per upload.** **(8) `changelog_from_git_commits`** in every submission. **(9) Every 60 days:** cron re-uploads latest build to prevent expiry. **(10) Match + ASC API key + rotate quarterly.** Interviewer signal: end-to-end rings + automation." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How do you handle TestFlight for enterprise / regulated apps?**\n\n**A:** **Enterprise:** Apple Enterprise Program (paid $299/year) lets you distribute IN-HOUSE outside TestFlight/App Store — but strictly employee-only. Misuse (distributing to non-employees) = revocation. TestFlight better for most cases. **Regulated (pharma, banking, health):** (1) Auditable release process — GitHub Actions + protected branches + code review. (2) Regulator-approved change log (auto-generated + reviewer-attested). (3) Signed commits via GPG + protected release branches. (4) External beta needs additional consent flow for regulated data. (5) Retention of every build + audit logs. (6) Compliance-specific certifications (SOC 2, HIPAA) require documented CI/CD process. **Multi-region:** iOS App Store rules differ by country (e.g., China needs a Chinese-territory MOU); test-flight allows beta before submission. **Interviewer signal:** knowing enterprise vs regulated compliance nuance." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every iOS beta program.**\n- **Public beta of consumer apps.**\n- **Feature validation with real users.**\n- **Cross-platform Apple (visionOS, macOS, tvOS).**\n- **NOT for** — ultra-private enterprise (Apple Enterprise Program)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Public link** — invite anyone up to the 10K cap.\n- **`pilot` action** — Fastlane's TestFlight uploader.\n- **`change_notes` in ASC API** — auto-populated changelog.\n- **Bugsnag / Instabug** — richer feedback than TestFlight's built-in.\n- **Tester feedback** — screenshots + text via TestFlight app.\n- **In-app feedback prompts** — TestFlight surfaces them.\n- **Crash reports in TestFlight** — mirror Crashlytics.\n- **Public URL cap** — 10K per public group.\n- **Sub-groups** — organize testers by cohort.\n- **App Store Connect API TestFlight endpoints** — full automation.\n- **Xcode Cloud + TestFlight** — deep integration.\n- **App-Specific Passwords (legacy)** — 2FA workaround; deprecated in favor of API keys." }
   ],
   "flashcards": [
-    { "front": "Internal vs external TestFlight?", "back": "Internal: ≤100 team members, no review. External: ≤10,000 users, requires beta review." },
-    { "front": "TestFlight expiry?", "back": "Typically 90 days from build upload — plan renewal builds." },
-    { "front": "Automation?", "back": "fastlane pilot upload / Codemagic / GitHub Actions actions." }
+    { "front": "Internal cap?", "back": "100 App Store Connect team members; no review; instant." },
+    { "front": "External cap?", "back": "10K email/link; first submission needs Beta App Review (~1 day); auto-approved after." },
+    { "front": "Build expiry?", "back": "90 days after upload; re-upload every 60-70 days to avoid." },
+    { "front": "Automation?", "back": "Fastlane pilot + App Store Connect API key (.p8)." },
+    { "front": "Beta review avoid rejection?", "back": "Demo account + notes + no crashes + build number bumped + encryption declared." },
+    { "front": "TF vs Firebase App Distribution?", "back": "Both used; TF for external beta (wider + auto-updates); App Dist for innermost QA (no review)." },
+    { "front": "Cross-platform?", "back": "iOS + iPadOS + macOS + tvOS + watchOS + visionOS." }
   ],
   "quiz": [
-    { "q": "External TestFlight requires…", "options": ["Nothing", "A light beta app review", "Full App Store review", "Root access"], "answer": 1, "explain": "Apple reviews beta builds too, faster." },
-    { "q": "TestFlight builds expire in about…", "options": ["1 day", "90 days", "1 year", "Never"], "answer": 1, "explain": "Roughly 90 days." },
-    { "q": "For automation use…", "options": ["Copy-paste IPAs manually", "fastlane pilot / codemagic / gh-actions", "USB stick", "Nothing"], "answer": 1, "explain": "Automated uploads are standard." }
+    { "q": "External tester cap?", "options": ["100", "1K", "10K", "Unlimited"], "answer": 2, "explain": "Up to 10,000." },
+    { "q": "Build expiry?", "options": ["30 days", "90 days", "Forever", "1 year"], "answer": 1, "explain": "Re-upload periodically." },
+    { "q": "External first-submission review?", "options": ["None", "~1 day Beta App Review", "1 week", "1 month"], "answer": 1, "explain": "Lighter than App Store review." },
+    { "q": "Automation Fastlane action?", "options": ["deliver", "pilot", "supply", "scan"], "answer": 1, "explain": "pilot = TestFlight." },
+    { "q": "TF replaces Firebase App Distribution?", "options": ["Fully", "No — different rings", "iOS only fully", "Free tier only"], "answer": 1, "explain": "Complementary rings." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Upload a build to TestFlight via App Store Connect." },
-    { "level": "Medium", "text": "Segment testers into 'qa' + 'beta'; target a release to one group." },
-    { "level": "Hard", "text": "Automate uploads via Fastlane pilot in CI." },
-    { "level": "Expert", "text": "Auto-promote a nightly TestFlight build to external testers after N days of clean stability." }
+    { "level": "Easy", "text": "Upload IPA to TestFlight Internal via Fastlane pilot." },
+    { "level": "Medium", "text": "External group + Beta App Review notes + demo account." },
+    { "level": "Medium", "text": "Changelog + Slack + dSYM upload." },
+    { "level": "Hard", "text": "Public beta link with cap enforcement." },
+    { "level": "Hard", "text": "Cron re-upload before 90-day expiry." },
+    { "level": "Expert", "text": "Multi-platform (iOS + macOS + tvOS) TestFlight pipeline." }
   ],
   "interviewQuestions": [
-    "TestFlight internal vs external?",
-    "How do you automate TestFlight uploads?",
-    "How do you gather beta feedback?",
-    "Expiry handling?",
-    "Play Internal vs TestFlight?"
+    "Internal vs External testers?",
+    "Beta App Review + how to avoid rejections?",
+    "90-day expiry handling?",
+    "TestFlight vs Firebase App Distribution?",
+    "iOS release pipeline using TestFlight?",
+    "Enterprise / regulated app considerations?"
   ],
   "references": [
-    { "label": "TestFlight", "url": "https://developer.apple.com/testflight/" }
+    { "label": "TestFlight docs", "url": "https://developer.apple.com/testflight/" },
+    { "label": "Fastlane pilot", "url": "https://docs.fastlane.tools/actions/pilot/" },
+    { "label": "App Store Connect API — Builds", "url": "https://developer.apple.com/documentation/appstoreconnectapi/builds" }
   ]
 }

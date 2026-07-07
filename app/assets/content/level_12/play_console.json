@@ -2,49 +2,100 @@
   "id": "devops.play_console",
   "levelId": 12,
   "title": "Google Play Console",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "xp": 50,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Ship an AAB via internal → closed → open → production tracks",
-    "Use staged rollouts + Play App Signing",
-    "Automate uploads via the Play Publisher API"
+    "Understand Play Console via a real-life analogy",
+    "Navigate testing tracks (Internal / Closed / Open / Prod)",
+    "Configure Play App Signing + AAB",
+    "Automate uploads with `supply` / Play Developer API",
+    "Manage staged rollouts + hotfix flow",
+    "Answer Play Console interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "The **Google Play Console** is the operator dashboard for Android apps: submissions, tracks (internal/closed/open/production), staged rollouts, Play App Signing, crash + ANR reports, and Play policies." },
-    { "type": "table", "headers": ["Track", "Audience", "Typical use"], "rows": [
-      ["Internal", "≤100 testers, instant", "Daily builds for QA"],
-      ["Closed", "Selected users", "Beta with specific groups"],
-      ["Open", "Anyone opting in", "Public beta"],
-      ["Production", "Everyone", "Live release (staged rollout)"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Google Play Console as the airport control tower for your Android app.**\n\nEverything about your Android app's lifecycle — releases, versions, testers, ratings, revenue, crashes, reviews, ads compliance — goes through the Play Console tower. Google requires you to file each release; each release goes through a review + release cycle; the tower gates promotion between test tracks + prod.\n\n- **AAB (Android App Bundle)** is the new format (required since 2021); Google generates split APKs per device.\n- **Play App Signing** — Google holds the master signing key; you upload with an upload key. Rotation-friendly, backup-safe.\n- **Testing tracks:** Internal Test → Closed Test → Open Test → Production. Each is a separate 'shelf' in the store.\n- **Staged rollouts** — release to 1% → 10% → 100% of users; halt on regression.\n- **Play Integrity API** — device attestation for anti-abuse.\n- **Console Notifications** — policy violations + review escalations.\n\n**Why every Android release goes through Play Console:** it's Google's gate-keeper + rich analytics + revenue management. **DevOps automation:** `supply` (Fastlane) + Play Developer API + service-account keys let CI ship without human clicks (mostly)." },
+    { "type": "callout", "variant": "definition", "markdown": "**Google Play Console** is Google's Android app management portal. Handles releases (Internal / Closed / Open testing + Production), Play App Signing, staged rollouts, ratings + reviews, in-app products, subscriptions, Play Integrity API, Android Vitals (crash + ANR rates), Play Games Services. **DevOps automation:** Play Developer API + service accounts + Fastlane `supply` action + gradle-play-publisher plugin." },
+    { "type": "theory", "markdown": "## Testing tracks" },
+    { "type": "table", "headers": ["Track", "Review time", "Tester cap", "Best for"], "rows": [
+      ["**Internal**", "~2 hours", "100 (email opt-in)", "Internal QA + AAB signing verification"],
+      ["**Closed**", "~1 day", "Multiple lists, up to 10K+", "External beta by invite / opt-in URL"],
+      ["**Open**", "~1 day", "Anyone on Play Store", "Public beta / early access"],
+      ["**Production**", "~1 day", "All users, staged rollout", "Real release"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "Two Play essentials: **AAB only** (APKs no longer accepted since Aug 2021) and **Play App Signing** (Google holds the signing key; you upload with an upload key). AAB + Play delivers per-device optimized APKs (smaller downloads) automatically." },
-    { "type": "callout", "variant": "mistake", "markdown": "Missing target-API-level updates. Google raises the required target SDK yearly; apps not on the current bar can't ship updates. Also: bumping versionCode by inconsistent amounts across CI runs — always monotonically increasing." },
-    { "type": "callout", "variant": "best", "markdown": "Always use staged rollout (5% → 20% → 50% → 100%) with Play Vitals + Crashlytics monitoring. Automate uploads via the Play Publisher API (Fastlane's `supply` or Codemagic's built-in publishing)." }
+    { "type": "theory", "markdown": "## Play App Signing" },
+    { "type": "code", "language": "text", "code": "// You have TWO keys:\n//   1. UPLOAD KEY — you keep, use to sign the AAB you upload to Play\n//   2. APP SIGNING KEY — Google keeps, signs the split APKs delivered to users\n\n// Benefits:\n//   - Losing your upload key is recoverable (Google resets after verification)\n//   - Losing the signing key is NOT recoverable — but Google keeps it safe\n//   - Rotate upload key freely; app signing key stays stable\n//   - Enroll new apps automatically\n\n// Enroll: Play Console → App integrity → Play App Signing → Enroll." },
+    { "type": "theory", "markdown": "## CI automation via Fastlane supply" },
+    { "type": "code", "language": "ruby", "code": "# fastlane/Fastfile\nplatform :android do\n  desc 'Upload to Play Internal Testing'\n  lane :internal do\n    upload_to_play_store(\n      track: 'internal',\n      aab: '../build/app/outputs/bundle/release/app-release.aab',\n      json_key: ENV['PLAY_JSON_KEY_PATH'],\n      release_status: 'draft',\n      skip_upload_metadata: true,\n      skip_upload_images: true,\n      skip_upload_screenshots: true,\n    )\n  end\n\n  desc 'Promote from internal to closed beta'\n  lane :beta do\n    upload_to_play_store(\n      track: 'beta',\n      track_promote_to: 'beta',\n      json_key: ENV['PLAY_JSON_KEY_PATH'],\n    )\n  end\n\n  desc 'Staged rollout to prod (10%)'\n  lane :release do\n    upload_to_play_store(\n      track: 'production',\n      aab: '../build/app/outputs/bundle/release/app-release.aab',\n      json_key: ENV['PLAY_JSON_KEY_PATH'],\n      rollout: '0.1',\n      release_status: 'inProgress',\n    )\n  end\nend" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Uploading APK instead of AAB.** Play requires AAB since 2021. AAB is smaller + generates split APKs per device." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Missing obfuscation + symbols.** Crashlytics shows meaningless traces. Build with `--obfuscate --split-debug-info` + upload to Crashlytics." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Not enrolling in Play App Signing.** Upload key loss = new app needed. Enroll = Google backs up the signing key." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: 100% rollout for a big release.** Staged rollouts + Android Vitals catch regressions cheaply. Start 1-10%." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Ignoring Play policy violations.** Console shows warnings + can suspend the app; respond fast." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Data safety incorrectly declared.** Play requires accurate disclosure of data collection; wrong = policy strike." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Version-code decrements.** Play REQUIRES `versionCode` monotonic increase per track." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Manual upload from a laptop.** No audit trail; forgets happen. CI-only." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Enroll in Play App Signing.**" },
+    { "type": "callout", "variant": "best", "markdown": "**2. AAB with obfuscation + symbol upload.**" },
+    { "type": "callout", "variant": "best", "markdown": "**3. Staged rollouts — 10% → 50% → 100%.**" },
+    { "type": "callout", "variant": "best", "markdown": "**4. Halt criteria** — Android Vitals crash-free-users regression > 0.2 pp = pause + investigate." },
+    { "type": "callout", "variant": "best", "markdown": "**5. CI-only uploads via Fastlane / GitHub Actions.**" },
+    { "type": "callout", "variant": "best", "markdown": "**6. Version code = monotonic build number.**" },
+    { "type": "callout", "variant": "best", "markdown": "**7. Data-safety declaration** matches app behavior." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Play Integrity API** enabled for anti-abuse." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Enroll in Play App Signing; upload first AAB to Internal Test." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Fastlane `supply` upload to Closed Beta." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Staged rollout at 10%; observe Android Vitals." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Track promotion (Internal → Closed → Open → Prod) via CI." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Play Integrity API integration for high-value action gate." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Hotfix flow: bump versionCode + emergency rollout + halt of prior release." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What's the difference between upload key + signing key in Play App Signing?**\n\n**A:** **Upload key** — YOU keep it; use to sign the AAB you upload to Play. If you lose it, Google can reset (after identity verification) — RECOVERABLE. **App signing key** — GOOGLE keeps it; signs the split APKs delivered to users. If you lose YOUR copy (backup), Google STILL HAS IT — so it's not really 'lost.' The old world required you to safeguard the app-signing key forever; loss = new app + lost user base + no update path. Play App Signing eliminates that risk. **Downside:** you trust Google with the signing key. **For most teams**, that's fine + preferred. **Rotation:** upload key can be rotated any time. **Enroll:** Play Console → App integrity → Play App Signing → Enroll. **Interviewer signal:** knowing the two-key model + why it's an improvement." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: Why does Play require AAB now instead of APK?**\n\n**A:** **AAB (Android App Bundle)** is a single upload that Play splits into multiple APKs delivered per-device — separating architecture (arm64-v8a, x86_64), screen density (hdpi, xhdpi, xxhdpi), language resources. Users download only what applies → smaller downloads (30-50% average savings). **You still get a single build in CI + one upload flow.** Play manages the splits. **Requires enrollment in Play App Signing** because Google needs to sign the split APKs. **Migration:** existing APK-signed apps upload the certificate to Play; Google signs future splits with your existing cert. **APKs still work for:** internal test uploads to Firebase App Distribution, direct sideloading, Amazon Appstore. **Store submissions:** AAB only. **Interviewer signal:** knowing WHY (user experience + size) + the App Signing dependency." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: Walk through a staged rollout + halt-on-regression.**\n\n**A:** **(1) Upload AAB to prod track** with `rollout: 0.1` (10%). **(2) Play randomly assigns users to receive the new version.** **(3) Monitor Android Vitals** — crash-free-users %, ANR rate, page-load p95. **(4) Compare with prior release** — regression > 0.2 pp on crash-free-users = concerning. **(5) If good, increase to 50% via API or console button.** **(6) If bad, HALT** — Play Console button; users on new version stay, new users get old. **(7) Root-cause the regression** — Crashlytics + Perf data. **(8) Hotfix:** new build, new versionCode, staged rollout again 10% → 100%. **Automation:** Cloud Function watches Crashlytics velocity + calls Play Developer API to halt on threshold breach. **The halt button is user-facing insurance** — every prod release should stage. **Interviewer signal:** end-to-end + automation." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How does CI automate Play Console uploads?**\n\n**A:** **(1) Create a service account** in Google Cloud IAM. **(2) Grant it Play Console access** — Play Console → Users → Invite → link to service account email → grant 'Release manager' role. **(3) Generate JSON key** — store in CI secret. **(4) In pipeline** — Fastlane `upload_to_play_store` or `r0adkll/upload-google-play` Action reads the JSON + uploads via Play Developer API. **(5) Distinct service accounts per env** — dev / staging / prod separate; least privilege. **(6) Rotate JSON keys periodically** — quarterly. **Automation capabilities:** create draft release, upload AAB, upload metadata + screenshots, promote between tracks, staged rollout percent, halt rollout. **Limits:** creating the app itself + Play Console user roles still manual (Google forbids that programmatically). **Interviewer bonus:** knowing that Data Safety + Content Ratings still require manual clicks first time." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What's Play Integrity API + when do you use it?**\n\n**A:** **Play Integrity API** is Google's device attestation service — replaces the deprecated SafetyNet. Your app requests an **integrity verdict** from Google; the verdict includes: (1) **App integrity** — is this the genuine app from Play (not a modified APK)? (2) **Device integrity** — is the device genuine (not emulated, not rooted, has Play Services)? (3) **Account details** — is the user's Play account in good standing? Verdict comes as a JWT you verify server-side. **Use cases:** anti-abuse (block scrapers + counterfeit clients), anti-fraud (payments, high-value actions), anti-cheat (games), attesting the request came from your genuine app before high-trust operations. **Integrates with:** Firebase App Check on top for even simpler API. **Costs:** free quota; enterprise paid tier. **Interviewer signal:** knowing SafetyNet is deprecated + Integrity is the successor + free-quota reality." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How do you handle a Play policy violation notification?**\n\n**A:** **(1) DON'T PANIC.** Read the notification carefully — Play Console → Policy status. **(2) Understand the violation** — Google usually cites the exact policy + which listing / build / permission triggered it. **(3) Assess severity** — 'warning' (fix by deadline) vs. 'suspended' (immediate action) vs. 'removed' (appeal). **(4) Fix the cause** — remove offending code / permission / claim. **(5) Prepare a new release** WITH the fix + REVIEWED metadata + accurate data-safety declaration. **(6) Submit + wait for review.** **(7) If suspended / removed** — file an appeal via Play Console; provide evidence of fix + explanation. **(8) Common violations:** unnecessary permissions (background location, SMS, contacts), misleading claims, undeclared user-generated content moderation, sensitive data misuse. **(9) Prevent:** review PP + data safety with every release; automated Play policy scanner. **Timing:** most violations have 7-day fix deadlines; suspended = immediate appeal. **Interviewer signal:** calm process + specific example." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every Android release.**\n- **A/B testing via console** — split traffic to a variant.\n- **In-app updates SDK** — force-update UX.\n- **Android Vitals** — regression detection.\n- **Play Games Services** — leaderboards + achievements.\n- **NOT for** — non-Google Android stores (Amazon, Huawei have their own portals)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`supply`** — Fastlane action.\n- **`gradle-play-publisher`** — Gradle plugin for uploads.\n- **`r0adkll/upload-google-play`** — GitHub Action.\n- **Play Developer API** — REST for full automation.\n- **`internalappsharing`** — quick shareable link for one-off builds.\n- **App Bundle Explorer** — inspect AAB before upload.\n- **Pre-launch reports** — Play runs your app on real devices + returns crashes + screenshots.\n- **Wear OS + TV + Automotive** — tracks per form-factor.\n- **In-app Review API + In-app Update API** — user-facing UX.\n- **Rating breakdown** — 1-5 star distribution + text-analysis.\n- **Content ratings + IARC** — regulatory disclosure.\n- **US / EU / India tax + payments** — legal setup.\n- **App bundle explorer** — verify split APK sizes.\n- **Android Vitals** — bad-behavior thresholds.\n- **Play Console API for release tracks** — automated promotion." }
   ],
   "flashcards": [
-    { "front": "Track promotion order?", "back": "Internal → Closed → Open → Production." },
-    { "front": "AAB vs APK?", "back": "Google Play accepts AAB only (since Aug 2021); it generates optimized per-device APKs automatically." },
-    { "front": "Play App Signing?", "back": "Google holds the app signing key; you upload with an upload key; key rotation + recovery are managed." }
+    { "front": "Format required?", "back": "AAB (Android App Bundle); Play splits per-device." },
+    { "front": "Play App Signing?", "back": "Upload key (you) + App signing key (Google). Loss-safe + rotation-friendly." },
+    { "front": "Tracks?", "back": "Internal → Closed → Open → Production; each with review + tester caps." },
+    { "front": "Staged rollout?", "back": "1% → 10% → 50% → 100%; halt on Android Vitals regression." },
+    { "front": "CI upload?", "back": "Service account + Fastlane supply (or gradle-play-publisher or Actions)." },
+    { "front": "Play Integrity API?", "back": "Attestation successor to SafetyNet — app + device + account integrity verdicts." },
+    { "front": "Version code?", "back": "Monotonic increase required per track." }
   ],
   "quiz": [
-    { "q": "Google Play accepts…", "options": ["APK only", "AAB only", "Both interchangeably", "ZIP"], "answer": 1, "explain": "AAB has been mandatory since Aug 2021." },
-    { "q": "For a safe production release use…", "options": ["Full rollout instantly", "Staged rollout with monitoring", "No monitoring", "Manual copy to devices"], "answer": 1, "explain": "5→20→50→100% with Vitals + Crashlytics." },
-    { "q": "Play App Signing means…", "options": ["Google holds signing key + you upload with upload key", "You share your keystore publicly", "No signing needed", "Play removes signing"], "answer": 0, "explain": "Google-managed signing key + your upload key." }
+    { "q": "Store submission format?", "options": ["APK", "AAB (Android App Bundle)", "DEX", "ZIP"], "answer": 1, "explain": "AAB required since 2021." },
+    { "q": "Play App Signing purpose?", "options": ["Nothing", "Google holds signing key; loss-safe + rotation", "iOS only", "Free tier"], "answer": 1, "explain": "Two-key model." },
+    { "q": "Staged rollout start?", "options": ["100%", "1-10%", "50%", "Never staged"], "answer": 1, "explain": "Halt cheaply on regression." },
+    { "q": "SafetyNet successor?", "options": ["Deprecated forever", "Play Integrity API", "iOS only", "Not needed"], "answer": 1, "explain": "Attestation replacement." },
+    { "q": "CI upload auth?", "options": ["Password", "Service account + Play Developer API", "OAuth per user", "Nothing"], "answer": 1, "explain": "Least-privilege JSON key." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Upload an AAB to the Internal track via the console." },
-    { "level": "Medium", "text": "Automate uploads via Fastlane supply + a service account JSON." },
-    { "level": "Hard", "text": "Configure staged rollout at 5% + halt/resume based on Vitals." },
-    { "level": "Expert", "text": "Migrate an app onto Play App Signing without losing upload continuity." }
+    { "level": "Easy", "text": "Enroll in Play App Signing; upload first AAB to Internal." },
+    { "level": "Medium", "text": "Fastlane supply upload to Closed Beta." },
+    { "level": "Medium", "text": "Staged rollout at 10% + observe Vitals." },
+    { "level": "Hard", "text": "CI track promotion (Internal → Closed → Open → Prod)." },
+    { "level": "Hard", "text": "Play Integrity API integration on a high-value action." },
+    { "level": "Expert", "text": "Hotfix flow: emergency rollout + halt of prior release." }
   ],
   "interviewQuestions": [
-    "Track promotion order + audiences?",
-    "AAB vs APK — why AAB now?",
-    "Play App Signing — how does it work?",
-    "How do you automate uploads?",
-    "Staged rollout best practices?"
+    "Upload key vs signing key in Play App Signing?",
+    "Why does Play require AAB?",
+    "Walk through a staged rollout + halt-on-regression.",
+    "How does CI automate Play Console uploads?",
+    "What's Play Integrity API + when do you use it?",
+    "Handle a Play policy violation?"
   ],
   "references": [
-    { "label": "Play Console Help", "url": "https://support.google.com/googleplay/android-developer" }
+    { "label": "Play Console docs", "url": "https://support.google.com/googleplay/android-developer/" },
+    { "label": "Play Developer API", "url": "https://developers.google.com/android-publisher" },
+    { "label": "Play Integrity API", "url": "https://developer.android.com/google/play/integrity" }
   ]
 }
