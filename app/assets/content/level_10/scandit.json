@@ -2,44 +2,103 @@
   "id": "plg.scandit",
   "levelId": 10,
   "title": "Scandit SDK",
-  "xp": 50,
-  "estimatedMinutes": 25,
+  "xp": 60,
+  "estimatedMinutes": 50,
   "objectives": [
-    "Understand Scandit's enterprise scanning edge",
-    "Configure Data Capture Context + BarcodeCapture",
-    "Handle licensing + performance"
+    "Understand Scandit vs open-source scanners via a real-life analogy",
+    "Set up scandit_flutter_datacapture with a license",
+    "Configure Barcode Capture / MatrixScan / ID Capture",
+    "Handle multi-code scanning + text recognition",
+    "Fit Scandit into a warehouse / retail app economically",
+    "Answer Scandit interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Scandit is a commercial, enterprise-grade barcode + document scanning SDK. Tuned for tough real-world conditions — damaged codes, glare, motion blur, tiny prints — and multi-code batch scanning. Requires a license key." },
-    { "type": "code", "language": "dart", "code": "final ctx = DataCaptureContext.forLicenseKey(kScanditKey);\nfinal cam = Camera.defaultCamera!;\nawait cam.applySettings(BarcodeCapture.recommendedCameraSettings);\nctx.setFrameSource(cam);\nfinal capture = BarcodeCapture(ctx, BarcodeCaptureSettings()\n  ..enableSymbologies({Symbology.ean13, Symbology.qr}));\ncapture.addListener(...);   // frames of decoded barcodes\ncam.switchToDesiredState(FrameSourceState.on);" },
-    { "type": "callout", "variant": "interview", "markdown": "Scandit outperforms ML Kit on **hostile scanning conditions** — critical for retail POS, warehouse, and GS1 workflows where scan speed × accuracy directly impacts throughput. It's the reason enterprises pay: 2–3× faster scans and near-100% accuracy on damaged codes." },
-    { "type": "callout", "variant": "mistake", "markdown": "Enabling every symbology + auto-focus tricks 'just in case.' Each extra symbology costs decoder cycles. Enable only what you actually scan (e.g., GS1: EAN-13, GS1-128, DataMatrix)." },
-    { "type": "callout", "variant": "tip", "markdown": "Manage lifecycle: switch camera OFF between scans, ON only when the scanner is visible. Preload the DataCaptureContext once at app start; instantiating it per screen is slow. Bundle license keys per flavor (dev/prod)." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Scandit as the industrial-grade, paid-tier scanner used by real warehouses.**\n\n`mobile_scanner` is the free / open-source option — great for QR + basic retail. Scandit is what UPS drivers, Amazon warehouse pickers, and pharmaceutical logistics use. Its CV models handle:\n\n- **Damaged codes** — creased, scratched, faded 1D codes that ML Kit fails on.\n- **Small codes at distance** — reading a Code 128 label 2 meters away.\n- **Multi-code capture (MatrixScan)** — scan 10 codes on a shelf simultaneously with AR-style overlay.\n- **Text + barcode combined** — read a VIN + barcode, or price tag OCR + barcode in one frame.\n- **Extreme lighting** — direct sunlight, shadows, glare on packaging.\n\nBoth technical advantage AND commercial support — SLA-backed license, guaranteed accuracy on damaged codes tested at customer sites.\n\n**Why enterprises pay for it:** in a warehouse where a scan retry costs $0.05 (worker time), a 5-point accuracy improvement at scale pays for the license. Free scanners work fine for consumer QR; Scandit shines when scanning is the primary business flow." },
+    { "type": "callout", "variant": "definition", "markdown": "**Scandit SDK** is a commercial computer-vision SDK specializing in barcode + text + ID capture. **Products** include: **Barcode Capture** (single/multi barcode), **MatrixScan** (AR overlay + multi-code), **ID Capture** (drivers licenses, passports), **Label Capture** (text + barcode combos), **SparkScan** (in-app scan button). Flutter access via `scandit_flutter_datacapture_barcode`, `_id`, `_label`, `_core` packages. Requires a license key (per-app + per-feature); free trial + community license for < 25 devices." },
+    { "type": "theory", "markdown": "## Scandit vs mobile_scanner vs raw ML Kit" },
+    { "type": "table", "headers": ["Aspect", "mobile_scanner", "ML Kit direct", "Scandit"], "rows": [
+      ["Cost", "Free", "Free", "Paid (~$5-20/device/year enterprise; free < 25 devices)"],
+      ["Accuracy on damaged codes", "Low-medium", "Medium", "High"],
+      ["Multi-code (MatrixScan)", "❌", "❌ (roll your own)", "✅ AR overlay"],
+      ["Text + barcode combined", "❌", "manual", "✅ Label Capture"],
+      ["ID capture (passports)", "❌", "❌", "✅ dedicated flow"],
+      ["APK size", "Small", "Small", "~10-20 MB per Scandit product"],
+      ["Setup", "Simple", "Simple", "License activation required"],
+      ["Support", "Community", "Community", "Commercial SLA"]
+    ]},
+    { "type": "theory", "markdown": "## Setup + license activation" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml:\n//   scandit_flutter_datacapture_core: ^7.0.0\n//   scandit_flutter_datacapture_barcode: ^7.0.0\nimport 'package:scandit_flutter_datacapture_core/scandit_flutter_datacapture_core.dart';\nimport 'package:scandit_flutter_datacapture_barcode/scandit_flutter_datacapture_barcode.dart';\n\nclass ScanScreen extends StatefulWidget {\n  const ScanScreen({super.key});\n  @override State<ScanScreen> createState() => _ScanScreenState();\n}\n\nclass _ScanScreenState extends State<ScanScreen> implements BarcodeCaptureListener {\n  late DataCaptureContext _ctx;\n  late Camera _camera;\n  late BarcodeCapture _capture;\n\n  @override\n  void initState() {\n    super.initState();\n    // 1. Context with license key (obtain from Scandit dashboard)\n    _ctx = DataCaptureContext.forLicenseKey('YOUR_LICENSE_KEY');\n\n    // 2. Camera (Scandit-managed; sets its own resolution optimally)\n    _camera = Camera.defaultCamera!;\n    _camera.applySettings(BarcodeCapture.recommendedCameraSettings);\n    _ctx.setFrameSource(_camera);\n\n    // 3. Barcode capture with settings\n    final settings = BarcodeCaptureSettings()\n      ..enableSymbologies({Symbology.qr, Symbology.ean13, Symbology.dataMatrix, Symbology.code128})\n      ..codeDuplicateFilter = const Duration(milliseconds: 1500);\n    _capture = BarcodeCapture.forContext(_ctx, settings);\n    _capture.addListener(this);\n\n    _camera.switchToDesiredState(FrameSourceState.on);\n  }\n\n  @override\n  Future<void> didScan(BarcodeCapture mode, BarcodeCaptureSession session) async {\n    final code = session.newlyRecognizedBarcodes.first;\n    HapticFeedback.mediumImpact();\n    if (mounted) Navigator.of(context).pop({'code': code.data, 'symbology': code.symbology.name});\n  }\n\n  @override\n  Future<void> didUpdateSession(BarcodeCapture mode, BarcodeCaptureSession session) async {}\n\n  @override\n  Widget build(BuildContext context) {\n    return Scaffold(\n      appBar: AppBar(title: const Text('Scan')),\n      body: Stack(children: [\n        DataCaptureView.forContext(_ctx)!,\n        BarcodeCaptureOverlay.withBarcodeCapture(_capture),\n      ]),\n    );\n  }\n\n  @override\n  void dispose() {\n    _capture.removeListener(this);\n    _camera.switchToDesiredState(FrameSourceState.off);\n    super.dispose();\n  }\n}" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Hardcoded license in source.** Someone grabs it from the APK + your license usage explodes. Store in a build-time config; rotate periodically; per-env keys." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Enabling every symbology.** Slower detection + more CPU. Restrict to what you actually scan (e.g., Code 128 + EAN for retail)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Ignoring `codeDuplicateFilter`.** Same code fires repeatedly in continuous mode; Scandit's filter prevents this." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Not disposing camera / context.** Native memory leak. Switch camera off + release." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Ignoring license expiry.** Trial licenses expire; production apps hard-fail. Wire monitoring." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Testing only on Pixel + iPhone Pro.** Cheap Android hardware behaves differently; test on Redmi / Realme / entry-level iOS." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: MatrixScan without dedup logic.** Multi-code capture returns codes many times per frame; app-level Set-based dedup by (code + session) needed." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: No offline fallback.** License activation on first launch checks Scandit servers; if offline + license unactivated, scanner won't start. Cache activation." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. License in secure build config** — never in git." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Narrow symbology list.**" },
+    { "type": "callout", "variant": "best", "markdown": "**3. `codeDuplicateFilter`** for continuous mode." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Test on entry-level hardware.**" },
+    { "type": "callout", "variant": "best", "markdown": "**5. MatrixScan for warehouse — dedup via Set.**" },
+    { "type": "callout", "variant": "best", "markdown": "**6. Label Capture for text + barcode** — cleaner than roll-your-own." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Monitor license usage** in Scandit dashboard." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Fallback to mobile_scanner** for QA / dev builds without Scandit license." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Basic single-scan with community license (<25 devices)." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Multi-format scan + haptic + de-dup filter." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — MatrixScan overlay showing multiple detected codes at once." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Label Capture: scan price tag showing text + barcode together." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Warehouse app: session-based inventory list with Wi-Fi outbox sync." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Feature-flag Scandit vs mobile_scanner at runtime; measure accuracy delta on 50 damaged codes." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Why would a company pay for Scandit when free options exist?**\n\n**A:** **Accuracy delta on damaged / low-light / distant codes.** In a warehouse where each scan retry costs 3-5 seconds of worker time × millions of scans per year, a 5-10 % accuracy improvement pays the license fee 10-fold. **Also:** MatrixScan (10 codes simultaneously with AR overlay — impossible with mobile_scanner); Label Capture (text + barcode combined — clean SDK vs roll-your-own); ID Capture (parse driver's licenses / passports — regulatory sensitive); enterprise SLA + support; on-device training data curated by Scandit's team. **When free is fine:** consumer QR scanning, occasional retail lookup — free options suffice. **Trade-offs:** cost (~$5-20 per device / year at scale), APK bloat (~10-20 MB per Scandit product), license lifecycle (rotation, monitoring). Interviewer signal: pragmatic 'pay when the ROI justifies it.'" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How does Scandit handle multi-code capture (MatrixScan) that mobile_scanner cannot?**\n\n**A:** MatrixScan continuously runs Scandit's CV pipeline on every camera frame + emits ALL detected codes with their bounding boxes + tracking IDs. UI overlays a colored rectangle around each detected code + tracks them across frames (like an AR game). **Use case:** scanning 20 items on a shelf simultaneously — user hovers the phone; UI shows each item highlighted; tap to confirm add-to-inventory. **Under the hood:** proprietary tracking algorithm + dedup filter + optimized detection cascade that returns multiple codes per frame. **Free scanners can't do this well** because ML Kit returns detections per frame without tracking; you'd have to hand-roll persistence + dedup + overlay. **Business value:** a warehouse picker scans 30 % faster with MatrixScan vs one-at-a-time. Retail scanners in stock rooms use it for shelf audits." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do you manage the license lifecycle?**\n\n**A:** **(1) Never in git.** Store in a build-time config (`--dart-define`); different keys per env (dev, staging, prod). **(2) Rotate periodically** — quarterly at least; if a leak is suspected, immediately. **(3) Scandit dashboard shows usage** — # devices, activated features, per-day scans. Alert on anomalies (leaked key = spike in unfamiliar device IDs). **(4) License expiry monitoring** — trial keys have deadlines; enterprise keys renew annually. Wire alerts. **(5) Feature-flag** — some Scandit products (ID Capture, MatrixScan) require separate license entitlements. Ensure your license covers the features your app uses. **(6) Offline behavior** — first-launch activation contacts Scandit servers; if offline + never activated, scan fails. Cache activation after first success; test in airplane mode. **(7) Cost tracking** — Scandit bills per device-year at scale; budget accordingly." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How would you architect a warehouse app using Scandit?**\n\n**A:** **(1) Session state** — one session = one warehouse task (e.g., picking a specific order). Persist in Hive / drift so a crash mid-shift doesn't lose scans. **(2) Symbology restriction** — Code 128 + Code 39 + EAN-13 depending on the warehouse standard; skip QR. **(3) MatrixScan for shelf audits** — AR overlay + tap-to-confirm. **(4) SparkScan for hands-free continuous scan** — floating scan button that stays on top even while browsing the picking list. **(5) Offline outbox** — every scan writes to local DB + queues for upload via Workmanager. **(6) Audio + haptic feedback** — user's eyes are on the item, not the phone. **(7) Bar-code-to-item catalog** locally so instant lookup even offline. **(8) Analytics on retry rate** — track scan-fail per code type + measure Scandit vs baseline. This is the textbook enterprise warehouse architecture." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: When would you NOT use Scandit?**\n\n**A:** **(1) Consumer QR-only app** — mobile_scanner is fine + free. **(2) Small pilot / prototype** — trial license OK but avoid infrastructure commitment. **(3) Free tier < 25 devices** — Scandit's community license covers it; still evaluate free options first. **(4) Simple retail POS with lots of well-printed codes** — accuracy delta doesn't justify cost. **(5) Regulated pharma or medical apps requiring specific certifications** — verify Scandit's compliance matches; sometimes specialty SDKs win. **(6) When APK size is tight** — Scandit adds 10-20 MB per product; consumer app budget may not allow. **(7) When ML Kit + custom-tuning suffices** — some teams squeeze accuracy from free options with camera-controlled lighting + overlays. **Interview red flag:** 'always Scandit for scanning' — nuance matters." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How do you test Scandit-backed code?**\n\n**A:** **Unit tests** — abstract behind a `ScannerService` interface; production impl = Scandit; test impl = fakes. Assert on business logic (dedup, session, outbox), not on Scandit internals. **Integration tests** on real hardware — Scandit provides sample PDFs of damaged codes for regression testing; print + scan periodically. **CI:** don't test the SDK in cloud CI (no camera); test business layer. **Manual regression** on new Flutter or SDK version — Scandit updates the CV models regularly; run through your damaged-code test set. **A/B compare** — feature flag Scandit vs baseline scanner in beta; measure retry rate + user complaints. **Load / stress** — MatrixScan on a shelf of 30 codes; verify frame-rate holds + no memory leak. Interviewers respect the 'business layer over SDK internals' answer." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Enterprise warehouses** — UPS, DHL, Amazon.\n- **Retail** — inventory audits + POS.\n- **Pharmaceutical** — GS1 DataMatrix with damaged / small codes.\n- **Airline / hospitality** — boarding passes + ID capture at check-in.\n- **Field service** — asset tags + serial number capture in dim environments.\n- **NOT ideal for** — consumer QR-only apps; sub-25-device deployments (community license fine but why bother if not enterprise features)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **SparkScan** — pre-built in-app scan button; drop-in scanning UX.\n- **ID Capture** — parses MRZ + PDF417 on driver's licenses + passports.\n- **Label Capture** — combines OCR + barcode; e.g., price tag showing SKU + name + price.\n- **Feedback Bindings** — sound + vibration + LED customization per event.\n- **Camera zoom + focus** — Scandit auto-controls; can override.\n- **Custom UI overlays** — draw your own bounding boxes via BarcodeCaptureOverlay customization.\n- **Progressive licensing** — start with Barcode Capture; upgrade to Matrix + ID as needs grow.\n- **Text Capture** — pure OCR for VINs, price tags, IBAN numbers.\n- **Scandit Cloud (enterprise)** — usage analytics, license portal, remote config for scanner settings.\n- **iOS + Android parity** — well-tested but occasional platform-specific bugs; report to Scandit support.\n- **Version bumps** — SDK updates often need re-license activation; test upgrade path.\n- **Deprecation cycle** — Scandit deprecates OS versions over time; check minimum iOS + Android targets." }
   ],
   "flashcards": [
-    { "front": "When choose Scandit over ML Kit?", "back": "Enterprise / GS1 / retail throughput where accuracy on damaged codes and scan speed matter." },
-    { "front": "Perf trap?", "back": "Enabling too many symbologies. Enable only what you need." },
-    { "front": "Camera lifecycle?", "back": "Switch OFF between screens; ON when scanner is visible." }
+    { "front": "When Scandit vs free?", "back": "Damaged/small/distant codes, MatrixScan, ID/Label capture, enterprise SLA — pays via retry-cost savings." },
+    { "front": "License handling?", "back": "Build-time config, per-env, rotate, dashboard monitoring, offline cache activation." },
+    { "front": "MatrixScan?", "back": "AR-overlay multi-code capture with tracking IDs; unique to Scandit at this quality." },
+    { "front": "Warehouse arch?", "back": "Session state + narrow symbologies + MatrixScan + SparkScan + offline outbox + local catalog." },
+    { "front": "Free-tier ceiling?", "back": "Community license < 25 devices; enterprise beyond." },
+    { "front": "Test approach?", "back": "Abstract behind ScannerService interface; test business logic; regression on printed damaged-code set." },
+    { "front": "APK cost?", "back": "~10-20 MB per Scandit product; budget accordingly." }
   ],
   "quiz": [
-    { "q": "Scandit's edge is…", "options": ["Free tier", "Enterprise accuracy + speed on hostile scans", "GraphQL support", "Analytics"], "answer": 1, "explain": "Optimized for tough real-world scanning." },
-    { "q": "For fewer decoder cycles…", "options": ["All symbologies always", "Enable only what you scan", "Disable the camera", "Random"], "answer": 1, "explain": "Restrict enabled symbologies." },
-    { "q": "License key belongs…", "options": ["In README", "Bundled per flavor via build config", "In printf", "On the server only"], "answer": 1, "explain": "Inject per-flavor at build; keep out of git." }
+    { "q": "MatrixScan uniquely enables…", "options": ["Faster single-code", "Multi-code AR overlay with tracking", "Cheaper builds", "Cloud detection"], "answer": 1, "explain": "Continuous multi-detect + track." },
+    { "q": "License in source code…", "options": ["Safe", "Extractable from APK — insecure", "Only iOS risk", "Web-only issue"], "answer": 1, "explain": "Rotate + store in build config." },
+    { "q": "First-scan offline without prior activation?", "options": ["Fine", "Fails until activation completes online", "Auto-activates", "Free"], "answer": 1, "explain": "Cache activation after first success." },
+    { "q": "Enterprise scale ROI logic?", "options": ["Nothing", "Retry cost × scans/year vs license fee", "Only iOS", "Speed only"], "answer": 1, "explain": "Accuracy delta at scale." },
+    { "q": "Consumer QR-only app?", "options": ["Scandit", "mobile_scanner free suffices", "ML Kit only", "Cloud"], "answer": 1, "explain": "Free tier is enough." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Set up a BarcodeCapture with EAN-13 + QR and log reads." },
-    { "level": "Medium", "text": "Add MatrixScan-style batch scanning of multiple codes at once." },
-    { "level": "Hard", "text": "Optimize scan time for damaged GS1-128 labels." },
-    { "level": "Expert", "text": "A/B compare Scandit vs mobile_scanner on a real dataset; report scans/sec + accuracy." }
+    { "level": "Easy", "text": "Basic single-scan with community license." },
+    { "level": "Easy", "text": "Enable a narrow symbology set; verify perf." },
+    { "level": "Medium", "text": "codeDuplicateFilter + haptic feedback." },
+    { "level": "Medium", "text": "MatrixScan multi-code with AR overlay." },
+    { "level": "Hard", "text": "Label Capture for price tag: barcode + text." },
+    { "level": "Hard", "text": "Warehouse app arch: session + offline outbox + local catalog." },
+    { "level": "Expert", "text": "A/B: Scandit vs mobile_scanner on 50 damaged codes; report accuracy delta." }
   ],
   "interviewQuestions": [
-    "Scandit vs ML Kit — when justify Scandit's license cost?",
-    "How to configure symbologies for a workflow?",
-    "How do you manage camera lifecycle?",
-    "How would you evaluate Scandit for a client?",
-    "How to handle license rotation?"
+    "Why pay for Scandit when free options exist?",
+    "How does MatrixScan differ from what mobile_scanner offers?",
+    "How do you manage the license lifecycle?",
+    "How would you architect a warehouse app using Scandit?",
+    "When would you NOT use Scandit?",
+    "How do you test Scandit-backed code?"
   ],
   "references": [
-    { "label": "Scandit — docs", "url": "https://docs.scandit.com" }
+    { "label": "Scandit Flutter SDK", "url": "https://docs.scandit.com/data-capture-sdk/flutter/" },
+    { "label": "Scandit pricing / license", "url": "https://www.scandit.com" },
+    { "label": "MatrixScan overview", "url": "https://docs.scandit.com/data-capture-sdk/flutter/matrixscan/introduction.html" }
   ]
 }

@@ -2,44 +2,106 @@
   "id": "plg.ml_kit",
   "levelId": 10,
   "title": "Google ML Kit",
-  "xp": 50,
-  "estimatedMinutes": 25,
+  "xp": 60,
+  "estimatedMinutes": 50,
   "objectives": [
-    "Run on-device ML for text/face/barcode/pose",
-    "Feed camera frames into detectors efficiently",
-    "Choose bundled vs Play-services models"
+    "Understand Google ML Kit for Flutter via a real-life analogy",
+    "Pick the right sub-package: barcode / text / face / label / pose / translate / entity-extraction",
+    "Feed camera image streams to ML Kit efficiently",
+    "Manage on-device models + cold-start size",
+    "Fall back gracefully when service is unavailable",
+    "Answer ML Kit interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Google ML Kit provides on-device ML primitives via Flutter packages (`google_mlkit_text_recognition`, `_face_detection`, `_barcode_scanning`, `_pose_detection`, `_translate`, and more) — no server calls, works offline." },
-    { "type": "code", "language": "dart", "code": "final recognizer = TextRecognizer(script: TextRecognitionScript.latin);\nfinal input = InputImage.fromFilePath(image.path);\nfinal text = await recognizer.processImage(input);\n// dispose when done:\nawait recognizer.close();" },
-    { "type": "callout", "variant": "interview", "markdown": "On-device ML wins on privacy (data never leaves the phone), latency (no round trip), and cost (no server bills). For custom models use ML Kit's custom-model support with a TensorFlow Lite file bundled or hosted via Firebase ML." },
-    { "type": "callout", "variant": "mistake", "markdown": "Running ML on every camera frame → dropped frames + heat. Throttle to N frames/sec, downscale input, and reuse the detector instance (don't create per-frame)." },
-    { "type": "callout", "variant": "tip", "markdown": "Bundled models increase APK size but work first-launch offline; Play-services models are smaller but need a one-time download. Pick per user experience. Always `close()` detectors to free native memory." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Google ML Kit as a bag of pre-trained micro-models Google ships to your phone.**\n\nRun on-device, no server call, low latency, free. Each model is scoped to one task:\n\n- **Barcode Scanning** — QR, DataMatrix, EAN, etc.\n- **Text Recognition (OCR)** — printed + handwritten text; multiple scripts.\n- **Face Detection** — bounding boxes, landmarks, contours, expressions, tracking.\n- **Image Labeling** — 400+ common object labels.\n- **Object Detection & Tracking** — bounding boxes for objects in a stream.\n- **Pose Detection** — 33 body landmarks in real-time (fitness apps).\n- **Language ID + Translation** — 100+ languages, on-device.\n- **Entity Extraction** — dates, emails, addresses from text.\n- **Smart Reply** — 3 short reply suggestions for chats.\n- **Digital Ink Recognition** — handwritten strokes → text.\n- **Selfie Segmentation** — mask around a person for background effects.\n\nEach ships as a separate Flutter plugin under **`google_mlkit_*`** — smaller APK, faster init.\n\n**Why every camera-heavy Flutter app leans on it:** you get Google-quality on-device CV without training a model, uploading images, or paying per-call. Vertex AI + Vision API charge per request; ML Kit is FREE. Cost is APK size (~5-40 MB per model) + accuracy that varies by task." },
+    { "type": "callout", "variant": "definition", "markdown": "**Google ML Kit** is a set of on-device machine-learning APIs from Google. Flutter access via **`google_mlkit_*`** packages (one per task) or aggregate **`google_ml_kit`**. Uses **Google Play Services** on Android when available (small dynamic-download model), NNAPI + Core ML on iOS. Free at any volume. Complements **`mobile_scanner`** (specialized barcode) and heavier alternatives (**TFLite**, **MediaPipe**, **Vertex AI on-device / cloud**)." },
+    { "type": "theory", "markdown": "## Package cheat sheet" },
+    { "type": "table", "headers": ["Task", "Package", "APK cost", "Notes"], "rows": [
+      ["Barcode Scanning", "google_mlkit_barcode_scanning", "~4 MB (Play Services)", "1D + 2D + GS1"],
+      ["Text Recognition", "google_mlkit_text_recognition", "~5-10 MB per script", "Latin / Devanagari / CJK / Arabic"],
+      ["Face Detection", "google_mlkit_face_detection", "~10 MB", "Landmarks, expressions, tracking"],
+      ["Image Labeling", "google_mlkit_image_labeling", "~15 MB", "400+ generic labels"],
+      ["Object Detection", "google_mlkit_object_detection", "~15 MB", "Real-time tracking"],
+      ["Pose Detection", "google_mlkit_pose_detection", "~15 MB", "33 body landmarks; fitness"],
+      ["Language ID", "google_mlkit_language_id", "~2 MB", "100+ languages"],
+      ["Translation", "google_mlkit_translation", "~20 MB per language pair", "On-device downloads"],
+      ["Entity Extraction", "google_mlkit_entity_extraction", "~5 MB", "Dates, addresses, phones"],
+      ["Digital Ink", "google_mlkit_digital_ink_recognition", "~5-10 MB per script", "Stylus / finger writing"],
+      ["Selfie Segmentation", "google_mlkit_selfie_segmentation", "~10 MB", "Background effects"]
+    ]},
+    { "type": "theory", "markdown": "## Full setup — text recognition (OCR) on camera stream" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml:\n//   camera: ^0.10.5+9\n//   google_mlkit_text_recognition: ^0.13.0\nimport 'package:camera/camera.dart';\nimport 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';\n\nclass OCRScreen extends StatefulWidget {\n  const OCRScreen({super.key});\n  @override State<OCRScreen> createState() => _OCRScreenState();\n}\n\nclass _OCRScreenState extends State<OCRScreen> {\n  CameraController? _cam;\n  final _ocr = TextRecognizer(script: TextRecognitionScript.latin);\n  bool _busy = false;\n  String _last = '';\n\n  @override\n  void initState() { super.initState(); _boot(); }\n\n  Future<void> _boot() async {\n    final cams = await availableCameras();\n    _cam = CameraController(\n      cams.firstWhere((c) => c.lensDirection == CameraLensDirection.back),\n      ResolutionPreset.high, enableAudio: false,\n      imageFormatGroup: Platform.isAndroid ? ImageFormatGroup.nv21 : ImageFormatGroup.bgra8888,\n    );\n    await _cam!.initialize();\n    setState(() {});\n    await _cam!.startImageStream(_onFrame);\n  }\n\n  Future<void> _onFrame(CameraImage img) async {\n    if (_busy) return;   // drop frames while busy\n    _busy = true;\n    try {\n      final input = InputImage.fromBytes(\n        bytes: _concatenatePlanes(img.planes),\n        metadata: InputImageMetadata(\n          size: Size(img.width.toDouble(), img.height.toDouble()),\n          rotation: InputImageRotation.rotation0deg,\n          format: Platform.isAndroid ? InputImageFormat.nv21 : InputImageFormat.bgra8888,\n          bytesPerRow: img.planes.first.bytesPerRow,\n        ),\n      );\n      final result = await _ocr.processImage(input);\n      if (result.text != _last) {\n        _last = result.text;\n        if (mounted) setState(() {});\n      }\n    } finally {\n      _busy = false;\n    }\n  }\n\n  Uint8List _concatenatePlanes(List<Plane> planes) {\n    final all = <int>[];\n    for (final p in planes) all.addAll(p.bytes);\n    return Uint8List.fromList(all);\n  }\n\n  @override\n  void dispose() {\n    _cam?.stopImageStream().then((_) => _cam?.dispose());\n    _ocr.close();\n    super.dispose();\n  }\n\n  @override\n  Widget build(BuildContext context) {\n    if (_cam == null || !_cam!.value.isInitialized) return const CircularProgressIndicator();\n    return Column(children: [\n      Expanded(child: CameraPreview(_cam!)),\n      Container(padding: const EdgeInsets.all(12), child: Text(_last)),\n    ]);\n  }\n}" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Wrong image format.** ML Kit expects NV21 / YUV_420_888 on Android and BGRA8888 on iOS. Wrong = garbage or crash." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: No busy flag on frame handler.** Backlog fills up, memory spikes, UI jank." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Not `close()`-ing the recognizer.** Native resource leak." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Every model in one build.** Face + Text + Label + Translation = 60 MB APK bloat + slow install. Only install packages you actually use." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Google Play Services unavailable.** Non-GMS Android (Huawei / Amazon / offline emulators) may lack the ML modules; catch + fallback." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Doing heavy work on main isolate.** For batch OCR / big pipelines, offload to `Isolate.run`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Rotation not set.** Portrait phone lens is rotated; without correct `InputImageRotation`, OCR fails." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Downloading translation model on cellular.** Translation pairs are 20 MB each; user may not want that on data. Add a Wi-Fi check." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. One package per task.** Don't bloat APK with modules you don't use." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Correct `imageFormatGroup` + `InputImageRotation`.**" },
+    { "type": "callout", "variant": "best", "markdown": "**3. Busy flag + throttle** on camera stream." },
+    { "type": "callout", "variant": "best", "markdown": "**4. `close()` recognizers in `dispose`.**" },
+    { "type": "callout", "variant": "best", "markdown": "**5. Downloadable models on Wi-Fi** — check network status; explain data cost." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Fallback UX** — 'ML Kit unavailable, tap to capture manually.'" },
+    { "type": "callout", "variant": "best", "markdown": "**7. `Isolate.run` for batch / heavy pipelines.**" },
+    { "type": "callout", "variant": "best", "markdown": "**8. Measure real device perf** — Pixel 7 vs entry-level Android differ 5-10× on inference latency." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Barcode scan via `google_mlkit_barcode_scanning` on a still image." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — OCR camera stream with busy-flag throttle." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Face detection with landmarks; overlay ovals + eyes." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — On-device translation en → hi with model download + Wi-Fi check." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Pose detection + fitness rep counter (squats)." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Multi-task pipeline: OCR + Entity Extraction → auto-fill a form with detected date, phone, email." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: When would you pick Google ML Kit over cloud vision APIs?**\n\n**A:** **ML Kit wins when:** (1) latency matters — sub-100 ms inference; (2) offline required; (3) cost — free vs per-request billing on Vertex AI / Vision; (4) privacy — data never leaves the device (compliance + trust); (5) API rate limits don't apply. **Cloud (Vertex / Vision) wins when:** (1) accuracy for exotic cases (rare languages, complex diagrams); (2) custom domain-trained models; (3) OCR with layout preservation (Document AI); (4) large-batch offline processing on server. **Rule:** default to ML Kit; escalate to cloud only when accuracy demands it. Interviewer bonus: know that **Firebase ML (deprecated)** was the old story; migrate to standalone ML Kit + Vertex AI." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How do you feed camera frames to ML Kit without jank?**\n\n**A:** **(1) Choose the right imageFormatGroup on the CameraController** — NV21 (Android) / BGRA8888 (iOS). **(2) Busy flag** — `bool _busy = false;` skip frames while inference is running (drop-instead-of-queue). **(3) Throttle** — process 1 in N frames for less-critical tasks. **(4) `InputImage.fromBytes`** with correct rotation. **(5) Offload heavy pipelines to `Isolate.run`** — copies bytes to isolate, runs ML there. **(6) Native texture direct-access** on newer versions — some ML Kit APIs accept a native texture without copying bytes. **(7) `stopImageStream + startImageStream` toggling** — stop stream once you have your answer to save CPU. **(8) Measure with DevTools + real-device profile** — inference latency varies 5-10× across devices." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do you handle the APK size cost?**\n\n**A:** ML Kit modules add real APK bloat: face detection ~10 MB, OCR per script 5-10 MB, translation per language pair 20 MB, pose 15 MB. **Options:** **(1) Only depend on packages you use** — a Flutter build with all ML Kit modules can approach 100 MB, hurting install rate. **(2) Play Services runtime downloads** — Android ML Kit downloads models via Play Services on first use (small initial APK, larger runtime). Called 'unbundled' models; recommended for size. **(3) Dynamic Delivery (Play Feature Delivery)** — install-on-demand for iOS+Android. **(4) Translation on-demand** — user must actively download language pairs; UX confirms Wi-Fi. **(5) Avoid iOS bundled models** — Play Services isn't there; iOS uses Core ML — bundled at build time. **(6) Post-install measurement** — Firebase Distribution + track APK size regression per release." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What's the difference between ML Kit and TFLite / MediaPipe?**\n\n**A:** **ML Kit** — pre-trained Google models via easy APIs; no ML knowledge needed. Fixed tasks (face detection, OCR). **TFLite** — deploy YOUR OWN trained models; full control, more setup. Use when Google's models don't fit (custom object detection, domain-specific classification). **MediaPipe** — Google's open-source multimodal ML pipeline framework; includes pose, hands, face mesh — sometimes overlaps with ML Kit but more customizable. **Vertex AI on-device** — deploy custom cloud-trained models to device via TFLite runtime. **When to graduate from ML Kit:** you need a task ML Kit doesn't cover, OR you need custom accuracy for a niche vertical (medical imaging, industrial inspection). Interviewer signal: knowing 'ML Kit is the easy default; TFLite is the escape hatch.'" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How does on-device translation work + when do you use it?**\n\n**A:** **`google_mlkit_translation`** downloads language-pair models (~20 MB each) on demand + runs neural machine translation on-device. **Setup:** (1) Check if models are downloaded via `OnDeviceTranslatorModelManager`. (2) Download on user opt-in (with Wi-Fi warning). (3) Instantiate `OnDeviceTranslator(sourceLanguage: en, targetLanguage: hi)`. (4) `translator.translateText('Hello')`. (5) `close()` when done. **When on-device wins:** offline apps (travel, hospitality, medical translations without cellular), privacy (patient records), low latency (real-time subtitle overlay). **When cloud wins:** rare language pairs, better accuracy for context-heavy text, batch server-side workflows. **Cost:** free on-device; per-char cloud. **Interviewer bonus:** knowing on-device quality has closed the gap with cloud since ~2023; edge translation is production-ready for most consumer apps." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How do you fall back gracefully when ML Kit is unavailable?**\n\n**A:** Failure modes: (1) **Google Play Services missing** on Huawei / Amazon / OS-modified Android — Play-Services-based modules unavailable. (2) **Model download failed** (network / disk). (3) **Region restrictions** — some models are geo-limited. (4) **Runtime crash on old devices**. **Pattern:** (1) Wrap all ML Kit calls in try/catch; specific error codes exposed via `MLKitException`. (2) Feature-flag the ML-driven feature; on failure, degrade to manual entry / server-side call. (3) Detect Play Services availability at boot via `PlayServicesAvailability` (or an equivalent check); disable UI if unavailable. (4) Analytics on failure — measure impact per device / region. (5) Bundled fallback (iOS Vision framework alternatives, or a Firebase Function that runs cloud Vision API when ML Kit is unavailable). Interviewers respect the layered-fallback answer." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Barcode + OCR** — retail, logistics, ID capture.\n- **Face detection** — profile photo cropping, filters, AR effects.\n- **Pose detection** — fitness reps, yoga alignment.\n- **Translation** — travel + hospitality apps.\n- **Entity extraction** — auto-fill forms (dates, emails, addresses from OCR).\n- **NOT ideal for** — custom domain models (use TFLite / Vertex AI); high-accuracy medical / industrial (specialized SDK)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`InputImage.fromBytes` vs `fromFilePath`** — file path for pre-captured; bytes for streaming.\n- **Model manager APIs** — check downloaded / delete / re-download.\n- **On-device model registry** — Play Services caches models across apps.\n- **Custom text scripts** — separate models for Latin / Devanagari / CJK / Arabic; download the ones you need.\n- **Barcode `getRawValue` vs `displayValue`** — differ for GS1 codes with special chars.\n- **Face contour detection** — 133 landmarks vs 10; costs perf.\n- **Face tracking** — assign IDs to faces across frames.\n- **Smart Reply** — 3 short reply suggestions; consumer-messaging apps.\n- **Selfie Segmentation** — mask for background blur / replace.\n- **Digital Ink** — stylus input → recognized text; note-taking apps.\n- **Pose landmarks 3D** — approximate depth (z) per landmark.\n- **Vertex AI Studio** — bridge to hosted Gemini for tasks ML Kit can't do." }
   ],
   "flashcards": [
-    { "front": "Where does ML Kit run?", "back": "On device — no server needed; works offline." },
-    { "front": "Perf mistake?", "back": "Processing every frame + creating detector per frame — throttle + reuse instance." },
-    { "front": "Bundled vs Play-services models?", "back": "Bundled: bigger APK, works day one. Play-services: smaller APK, first-launch downloads." }
+    { "front": "ML Kit vs cloud?", "back": "On-device, free, private, offline-capable; cloud wins on accuracy for rare cases + custom-trained models." },
+    { "front": "Per-task package?", "back": "Install only google_mlkit_<task> you use — avoid APK bloat." },
+    { "front": "Camera stream to ML Kit?", "back": "Correct imageFormatGroup + InputImageRotation + busy flag + throttle." },
+    { "front": "Translation model?", "back": "Downloaded on demand ~20 MB per pair; UX Wi-Fi confirm." },
+    { "front": "Fallback path?", "back": "Try/catch MLKitException; feature-flag disabled; degrade to manual/cloud." },
+    { "front": "vs TFLite?", "back": "ML Kit = fixed tasks + easy; TFLite = deploy your own model + full control." },
+    { "front": "Close recognizer?", "back": "Yes — native resource leak otherwise." }
   ],
   "quiz": [
-    { "q": "ML Kit runs…", "options": ["Only in the cloud", "On device", "On the GPU only", "Nowhere"], "answer": 1, "explain": "On-device ML." },
-    { "q": "For custom models…", "options": ["Only Google-provided", "Custom .tflite via ML Kit's custom-model support", "Not possible", "Only server"], "answer": 1, "explain": "You can bring your own model." },
-    { "q": "Perf best practice?", "options": ["New detector per frame", "Reuse detector + throttle + downscale", "Full-res always", "Ignore"], "answer": 1, "explain": "Reuse + throttle for smooth performance." }
+    { "q": "Right default for camera CV?", "options": ["Cloud API always", "ML Kit — free + low latency + offline", "Only Vision AI", "Nothing"], "answer": 1, "explain": "On-device wins for most tasks." },
+    { "q": "Backlog fix on camera stream?", "options": ["Nothing", "Busy flag + drop frames", "Higher fps", "Delete cache"], "answer": 1, "explain": "Never queue faster than processing." },
+    { "q": "APK bloat mitigation?", "options": ["Include all modules", "Only depend on tasks used", "Cloud everything", "Static bundling"], "answer": 1, "explain": "Modules are big." },
+    { "q": "Play Services missing?", "options": ["Crash", "Detect + fallback to cloud or manual UX", "iOS only", "Restart"], "answer": 1, "explain": "Layered fallback." },
+    { "q": "Custom trained model?", "options": ["ML Kit", "TFLite (or Vertex AI)", "Nothing possible", "MediaPipe only"], "answer": 1, "explain": "ML Kit is fixed pre-trained tasks." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "OCR a picked image with text_recognition." },
-    { "level": "Medium", "text": "Live face-detection preview from the camera, throttled to 15fps." },
-    { "level": "Hard", "text": "Bundle a custom .tflite model and label images with it." },
-    { "level": "Expert", "text": "Compare bundled vs Play-services model UX (APK size, first-launch)." }
+    { "level": "Easy", "text": "Barcode scan on a picked still image." },
+    { "level": "Medium", "text": "OCR live camera stream with throttle + busy flag." },
+    { "level": "Medium", "text": "Face detection with landmarks overlay." },
+    { "level": "Hard", "text": "On-device translation en → hi with model download + Wi-Fi gate." },
+    { "level": "Hard", "text": "Pose detection + squat rep counter." },
+    { "level": "Hard", "text": "OCR + Entity Extraction pipeline: auto-fill a form." },
+    { "level": "Expert", "text": "Fallback to cloud Vision API when ML Kit unavailable on non-GMS device." }
   ],
   "interviewQuestions": [
-    "Advantages of on-device ML?",
-    "How do you feed camera frames efficiently?",
-    "Bundled vs Play-services model trade-offs?",
-    "Custom model support?",
-    "How to test ML Kit code?"
+    "When would you pick ML Kit over cloud vision APIs?",
+    "How do you feed camera frames to ML Kit without jank?",
+    "How do you handle APK size cost?",
+    "ML Kit vs TFLite / MediaPipe — how do you pick?",
+    "On-device translation — when + how?",
+    "How do you fall back gracefully when ML Kit is unavailable?"
   ],
   "references": [
-    { "label": "Google ML Kit Flutter", "url": "https://pub.dev/publishers/flutter-ml.dev/packages" }
+    { "label": "Google ML Kit for Flutter", "url": "https://pub.dev/publishers/flutter-ml.dev/packages" },
+    { "label": "ML Kit documentation", "url": "https://developers.google.com/ml-kit" },
+    { "label": "TFLite Flutter", "url": "https://pub.dev/packages/tflite_flutter" }
   ]
 }

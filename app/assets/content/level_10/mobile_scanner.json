@@ -2,44 +2,99 @@
   "id": "plg.mobile_scanner",
   "levelId": 10,
   "title": "mobile_scanner",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 50,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Scan barcodes/QR quickly with ML Kit",
-    "Debounce duplicate reads",
-    "Tune camera + performance"
+    "Understand mobile_scanner via a real-life analogy",
+    "Configure controller for formats + camera facing + torch",
+    "Overlay a scan rectangle + haptics on detect",
+    "Optimize CPU + battery for continuous scanning",
+    "Handle GS1 / DataMatrix / QR variants correctly",
+    "Answer mobile_scanner interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "`mobile_scanner` is a lightweight, community-maintained barcode/QR scanner using Google ML Kit under the hood — much faster and more accurate than the older `qr_code_scanner`, with better lifecycle handling." },
-    { "type": "code", "language": "dart", "code": "MobileScanner(\n  controller: MobileScannerController(\n    detectionSpeed: DetectionSpeed.normal,\n    facing: CameraFacing.back,\n    formats: const [BarcodeFormat.qrCode, BarcodeFormat.ean13],\n  ),\n  onDetect: (capture) {\n    for (final b in capture.barcodes) handle(b.rawValue);\n  },\n)" },
-    { "type": "callout", "variant": "interview", "markdown": "Real-world scanning UX needs **debouncing** (don't handle the same code 60 times a second) and clear scan-zone framing. Pass only the barcode formats you actually need; more formats = more CPU + more false positives." },
-    { "type": "callout", "variant": "mistake", "markdown": "Leaving the controller alive across screens → drains battery + keeps camera on. Dispose it in your State's dispose(), and pause on background." },
-    { "type": "callout", "variant": "tip", "markdown": "For enterprise GS1/retail workflows (heavy throughput, damaged barcodes), Scandit outperforms ML Kit. mobile_scanner is the default for consumer/QR scanning; Scandit for pro workflows." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of `mobile_scanner` as a specialized barcode reader you wire into your Flutter app.**\n\nIt's the `camera` plugin + Google's ML Kit Barcode Scanning wired together with a Flutter widget. You point it at codes; it fires callbacks with what it found.\n\n- **Formats** — 1D (Code 128, EAN-13, UPC-A) + 2D (QR, DataMatrix, PDF417, GS1 DataBar). Choose which to detect — narrower list = faster.\n- **Continuous vs one-shot** — keep scanning until you decide to stop, or capture the first hit.\n- **Camera controls** — front / back, torch, zoom, focus.\n- **Overlay UI** — draw a scan rectangle, corner markers, a moving reticle in Flutter, on top of the camera preview.\n- **Debouncing** — same barcode fires many times per second in continuous mode; you must debounce.\n\n**Why every commerce / logistics / delivery Flutter app installs it:** barcode scanning is table-stakes in retail + warehousing. `mobile_scanner` combines the camera-plugin lifecycle care + ML Kit detection into one widget-based API. Same author as some of the other big Flutter plugins; well-maintained." },
+    { "type": "callout", "variant": "definition", "markdown": "**`mobile_scanner`** wraps native camera streams + Google **ML Kit Barcode Scanning** on Android + iOS. `MobileScannerController` (formats, cameraFacing, torchEnabled, detectionSpeed, detectionTimeoutMs, returnImage). `MobileScanner` widget with `onDetect` callback receiving `BarcodeCapture` (raw value, format, rawBytes, corners). Alternative: `pod_player`-like preview + your own overlay UI." },
+    { "type": "theory", "markdown": "## Formats supported" },
+    { "type": "table", "headers": ["Family", "Examples", "Uses"], "rows": [
+      ["**1D (linear)**", "Code 128, EAN-13, UPC-A, ITF, Code 39", "Retail SKUs, boarding passes"],
+      ["**2D**", "QR, DataMatrix, PDF417, Aztec", "GS1 DataMatrix on pharma, boarding passes"],
+      ["**GS1 DataBar**", "Omnidirectional, Truncated, Expanded", "Perishables coupons"],
+      ["**GS1 Digital Link**", "QR / DataMatrix with structured GS1 payload", "Web-connected GS1 codes"]
+    ]},
+    { "type": "theory", "markdown": "## Full setup" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml: mobile_scanner: ^5.0.0\nimport 'package:mobile_scanner/mobile_scanner.dart';\n\nclass ScanScreen extends StatefulWidget {\n  const ScanScreen({super.key});\n  @override State<ScanScreen> createState() => _ScanScreenState();\n}\n\nclass _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {\n  final _ctrl = MobileScannerController(\n    formats: const [BarcodeFormat.qrCode, BarcodeFormat.ean13, BarcodeFormat.dataMatrix],\n    detectionSpeed: DetectionSpeed.noDuplicates,   // dedup same barcode\n    detectionTimeoutMs: 250,\n    cameraResolution: const Size(1280, 720),\n    facing: CameraFacing.back,\n    torchEnabled: false,\n    returnImage: false,   // set true only if you need the raw frame\n  );\n\n  String? _lastCode;\n\n  @override void initState() { super.initState(); WidgetsBinding.instance.addObserver(this); _ctrl.start(); }\n\n  @override\n  void didChangeAppLifecycleState(AppLifecycleState state) {\n    if (state == AppLifecycleState.paused) _ctrl.stop();\n    if (state == AppLifecycleState.resumed) _ctrl.start();\n  }\n\n  void _onDetect(BarcodeCapture capture) {\n    for (final b in capture.barcodes) {\n      if (b.rawValue == null || b.rawValue == _lastCode) continue;\n      _lastCode = b.rawValue;\n      HapticFeedback.mediumImpact();\n      Navigator.of(context).pop({'code': b.rawValue, 'format': b.format.name});\n      return;\n    }\n  }\n\n  @override\n  Widget build(BuildContext context) {\n    return Scaffold(\n      appBar: AppBar(title: const Text('Scan barcode'), actions: [\n        IconButton(icon: const Icon(Icons.flash_on),\n          onPressed: () => _ctrl.toggleTorch()),\n        IconButton(icon: const Icon(Icons.cameraswitch),\n          onPressed: () => _ctrl.switchCamera()),\n      ]),\n      body: Stack(children: [\n        MobileScanner(controller: _ctrl, onDetect: _onDetect),\n        // Overlay: scan rectangle centered\n        Center(\n          child: Container(\n            width: 260, height: 260,\n            decoration: BoxDecoration(\n              border: Border.all(color: Colors.white70, width: 3),\n              borderRadius: BorderRadius.circular(12),\n            ),\n          ),\n        ),\n      ]),\n    );\n  }\n\n  @override\n  void dispose() {\n    WidgetsBinding.instance.removeObserver(this);\n    _ctrl.dispose();\n    super.dispose();\n  }\n}" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Not disposing controller.** Camera stays open → next screen can't open. Always `dispose`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: No debounce.** Continuous scan fires 30 times a second for the same code; app pops the same route 30 times. Use `DetectionSpeed.noDuplicates` OR de-dup manually by `_lastCode`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: All formats enabled.** ML Kit tries every format on every frame — slow. Restrict to what you actually scan." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: `returnImage: true` always on.** Ships every frame back as bytes — memory pressure. Only true when you need raw." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Ignoring lifecycle.** Stopping the scanner on background + resuming on foreground is essential; else 'camera in use' or battery drain." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Missing NSCameraUsageDescription / manifest.** Silent iOS failure; Android runtime crash." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Small scan rectangle overlay AT WRONG SIZE.** Users think the rectangle IS the scan area; ML Kit actually scans the full frame. Either enforce region-of-interest (feature-gated) or make the overlay just a UX guide." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Not handling `LICENSE_UNAVAILABLE`.** Google Play Services may lack ML Kit modules on some devices; catch + fallback." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Narrow the `formats` list** — fastest detection." },
+    { "type": "callout", "variant": "best", "markdown": "**2. `DetectionSpeed.noDuplicates`** for scan-once UX." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Haptic + audio feedback** on detect — great UX." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Torch button** for low-light." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Overlay UX guide** (rectangle / reticle) even if it doesn't limit detection." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Lifecycle-safe start/stop.**" },
+    { "type": "callout", "variant": "best", "markdown": "**7. Fallback to typed entry** — some users can't focus (broken camera, low-light); allow manual entry." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Consider `google_mlkit_barcode_scanning`** if you already integrate ML Kit for other tasks; skip mobile_scanner + use camera plugin directly." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — QR-only scanner returning the value on detect." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Multi-format (QR + EAN-13 + DataMatrix); overlay rectangle." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Torch + camera switch + zoom control." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Continuous inventory scan: keep scanning + list all uniques in a session." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — GS1 DataMatrix parser: split raw value into AI-based fields (GTIN, batch, expiry)." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Lifecycle + license fallback: scanner unavailable → fallback to manual entry UI." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What's under the hood + how does it differ from raw ML Kit?**\n\n**A:** `mobile_scanner` combines: (1) the `camera` plugin's preview + frame-streaming pipeline; (2) `google_mlkit_barcode_scanning` for detection; (3) a Dart widget wrapper for the callback + overlay-ready UI. **Advantages over raw ML Kit + camera plugin:** (a) one widget instead of manual `startImageStream` → convert → detect → throttle wiring; (b) built-in lifecycle handling; (c) format restriction as a controller property; (d) `DetectionSpeed.noDuplicates` deduping. **Cost:** less control over the pipeline. **When to use raw ML Kit:** you already stream camera frames for other CV (face detection, text OCR); reuse the same stream + save memory. Interviewers score highly on knowing both paths exist." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How do you prevent 'ghost duplicate' pop-ups from continuous scan?**\n\n**A:** ML Kit fires callbacks per-frame — 15-30 fps × same barcode = 15-30 duplicates. **Options:** (1) `DetectionSpeed.noDuplicates` — plugin dedups the same rawValue over a short window. (2) Manual — hold `_lastCode + _lastAt`; ignore if `raw == last && now - lastAt < 800 ms`. (3) One-shot mode — call `_ctrl.stop()` on first detect; user taps 'Scan again' to resume. (4) Session mode — keep a `Set<String>` of scanned codes; ignore repeats. **Which pattern for which UX:** one-shot for 'scan and confirm' (checkout); session-set for 'batch inventory' (warehouse). Interviewers respect a specific pattern, not just 'we debounce.'" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do you decode GS1 DataMatrix codes (pharma, food)?**\n\n**A:** GS1 uses **Application Identifiers (AIs)** — 2-4-digit prefixes marking each field. Example raw: `(01)09501234567890(17)230101(10)ABC(21)12345` → GTIN 09501234567890, expiry 2023-01-01, batch ABC, serial 12345. The RAW value from mobile_scanner is a string; you parse via a GS1 AI table. **`mobile_scanner` doesn't parse AIs for you** — use a helper like `gs1_barcode_parser` or roll your own. **Special separator:** GS1 uses `<GS>` (ASCII 29) between variable-length AIs; sometimes rendered as `\\u{1d}` in the raw. **Digital Link** — GS1's URL-encoded format (`https://id.gs1.org/01/09501234567890/17/230101/...`) — parse via URL semantics. **Compliance:** pharma / medical device apps in EU + India MUST decode + validate GS1 AIs per DSCSA / DPDPA regulations. Interviewers in retail / logistics love GS1 depth." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you get high accuracy in low light or on damaged codes?**\n\n**A:** **(1) Torch on** — `_ctrl.toggleTorch()`; UX button. **(2) Auto-exposure lock** on the scan region — some plugins expose; native path via camera plugin. **(3) Zoom in** — for small codes; `_ctrl.setZoomScale(2.0)`. **(4) Higher camera resolution** — `cameraResolution: Size(1920, 1080)` for tiny codes; costs perf. **(5) Multi-format restriction** — narrower list, more CPU per format = better tolerance. **(6) Multiple frames + voting** — some codes need 3-5 detections to be confident; hold state. **(7) DataMatrix > QR for damaged** — DataMatrix has better error correction levels; recommend it when your app controls both ends. **(8) UI guidance** — 'hold still, zoom closer' hints. **When accuracy really matters** (pharma, industrial), consider `scandit` — commercial SDK with better damaged-code handling." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How would you build a warehouse inventory scanner UX?**\n\n**A:** **(1) Session mode** — user starts a session; scans codes one after another; `Set<String>` deduplicates within session. **(2) Confirmation + delete** — each scan appears in a list; tap to delete accidentally scanned. **(3) Visual + audio + haptic confirmation** — user knows each scan registered without looking. **(4) Format hint** — probable barcode format for inventory (Code 128); pre-restrict formats. **(5) Torch toggle + camera switch** for varying lighting. **(6) Auto-focus + zoom** for warehouse-height labels. **(7) Sync outbox** — write each scan to a local DB; upload via Workmanager when connectivity returns. **(8) Offline-first** — session survives app crash / reboot; resume where left off. **(9) Barcode-to-product lookup** offline — bundle a partial product catalog. This is a classic Flutter senior interview: knowing the offline + session-mode combo is the differentiator." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: When would you upgrade from `mobile_scanner` to `scandit`?**\n\n**A:** **`mobile_scanner`** covers 80 % of use cases free + open-source (ML Kit under the hood). **Upgrade to Scandit when:** **(1)** Enterprise-grade accuracy — damaged / low-contrast / oddly-lit codes; Scandit's CV models handle much better. **(2)** Multi-code capture — scan 5 codes at once (shipping labels, pallet manifests). **(3)** Text recognition alongside barcodes (VIN, price tags). **(4)** MatrixScan (AR-style multi-code highlighting). **(5)** Enterprise SLA + support contract. **Cost:** Scandit is paid — licensing per app + per active user. Free tier for < 5000 devices in some plans. **Trade-offs:** Scandit's SDK is bigger (~10 MB APK bloat); mobile_scanner is svelte. **Rule:** stay free until user complaints about scan-fail rates cost more than a Scandit license. Interviewers respect the pragmatic cost-benefit answer." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Retail POS + inventory scan** — Code 128, EAN, UPC.\n- **Warehousing** — Code 128 on pallet labels; GS1 SSCC.\n- **Pharma / medical device** — GS1 DataMatrix with lot + expiry.\n- **Boarding passes** — Aztec / PDF417.\n- **Consumer QR** — payment, deep-links.\n- **NOT ideal for** — high-volume industrial scanning with degraded codes (Scandit / Cognex)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Region-of-interest (ROI)** — some plugin versions expose; else Region isn't limited (ML Kit scans whole frame).\n- **`DetectionSpeed.normal`** vs `unrestricted` vs `noDuplicates` — trade-offs.\n- **`detectionTimeoutMs`** — throttle callback rate.\n- **`returnImage: true`** — bytes attached; huge memory cost; use only for evidence capture.\n- **Multiple barcodes per frame** — `BarcodeCapture.barcodes` is a list.\n- **Corners** — `Barcode.corners` — 4 points; overlay a bounding box.\n- **Camera zoom** — `_ctrl.setZoomScale(1.0-max)`.\n- **Pause / resume** — `_ctrl.stop()` / `.start()`.\n- **`cameraResolution`** — higher = better distant scan; costs perf.\n- **Sound / haptic** — `HapticFeedback.mediumImpact()` on detect.\n- **Test on real hardware** — emulators can't scan; use Xcode's simulator with a photo of a barcode as a test hack (limited).\n- **Alternatives** — `qr_code_scanner` (older, ZXing-based); `google_mlkit_barcode_scanning` (raw ML Kit)." }
   ],
   "flashcards": [
-    { "front": "Under the hood?", "back": "Google ML Kit's barcode scanning." },
-    { "front": "Why restrict formats?", "back": "Fewer formats = less CPU + fewer false positives." },
-    { "front": "Duplicate scans problem?", "back": "onDetect fires continuously; debounce by rawValue + a cooldown timer." }
+    { "front": "Under the hood?", "back": "Camera plugin + Google ML Kit Barcode Scanning + Dart widget wrapper." },
+    { "front": "Dedup pattern?", "back": "DetectionSpeed.noDuplicates OR track _lastCode + timestamp." },
+    { "front": "Narrow formats?", "back": "Restrict controller.formats to only what you scan → faster detection." },
+    { "front": "Low-light?", "back": "Torch + zoom + higher cameraResolution + longer exposure." },
+    { "front": "GS1 DataMatrix parsing?", "back": "Parse AI-prefixed groups; use gs1_barcode_parser or handroll AI table." },
+    { "front": "Warehouse UX?", "back": "Session mode + Set<String> dedup + haptic + offline outbox." },
+    { "front": "When Scandit?", "back": "Enterprise-grade accuracy, multi-code, text+barcode, damaged-code tolerance." }
   ],
   "quiz": [
-    { "q": "For consumer QR scanning use…", "options": ["mobile_scanner", "shared_preferences", "camera raw", "printf"], "answer": 0, "explain": "Fast and modern." },
-    { "q": "Duplicate reads should be…", "options": ["Handled every fire", "Debounced per rawValue", "Encrypted", "Ignored"], "answer": 1, "explain": "Otherwise UX cascades." },
-    { "q": "For heavy enterprise/damaged barcodes…", "options": ["mobile_scanner is best", "Scandit typically wins", "shared_preferences", "URL launcher"], "answer": 1, "explain": "Scandit is tuned for tough workflows." }
+    { "q": "Prevent duplicate callbacks?", "options": ["Nothing", "DetectionSpeed.noDuplicates or manual debounce", "Restart app", "Add sleep"], "answer": 1, "explain": "ML Kit fires per-frame." },
+    { "q": "Faster detection?", "options": ["All formats", "Narrow to needed formats", "Higher res always", "Web-only"], "answer": 1, "explain": "Less work per frame." },
+    { "q": "GS1 raw value contains…", "options": ["Just GTIN", "AI-prefixed fields (01=GTIN, 17=expiry, 10=lot, ...)", "Random bytes", "URL always"], "answer": 1, "explain": "Application Identifiers." },
+    { "q": "Overlay rectangle limits detection?", "options": ["Yes always", "Not by default — ML Kit scans full frame", "Web-only", "iOS-only"], "answer": 1, "explain": "UX guide, not ROI." },
+    { "q": "When Scandit?", "options": ["Never", "Enterprise/damaged codes/multi-code accuracy", "Always", "Only iOS"], "answer": 1, "explain": "Paid-tier gains." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Scan a QR code and show its content." },
-    { "level": "Medium", "text": "Debounce duplicate reads and restrict to EAN-13 + QR." },
-    { "level": "Hard", "text": "Add scan-region overlay + torch toggle + camera switch." },
-    { "level": "Expert", "text": "Benchmark mobile_scanner vs Scandit on a set of damaged codes." }
+    { "level": "Easy", "text": "QR-only scanner returning value on detect." },
+    { "level": "Easy", "text": "Torch + camera switch + zoom controls." },
+    { "level": "Medium", "text": "Multi-format scanner (QR + EAN-13 + DataMatrix) with overlay." },
+    { "level": "Medium", "text": "Continuous session with dedup Set<String>." },
+    { "level": "Hard", "text": "GS1 DataMatrix parser: split raw into AI fields." },
+    { "level": "Hard", "text": "Offline outbox: scans queue + sync via Workmanager." },
+    { "level": "Expert", "text": "Fallback: license/hardware unavailable → manual typed entry UI." }
   ],
   "interviewQuestions": [
-    "mobile_scanner vs qr_code_scanner?",
-    "Why restrict formats?",
-    "How do you debounce reads?",
-    "When to switch to Scandit?",
-    "How to test scanning code?"
+    "What's under the hood + how does it differ from raw ML Kit?",
+    "How do you prevent duplicate scans in continuous mode?",
+    "How do you decode GS1 DataMatrix?",
+    "High accuracy in low light / damaged codes — techniques?",
+    "How would you build a warehouse inventory scanner UX?",
+    "When would you upgrade to Scandit?"
   ],
   "references": [
-    { "label": "mobile_scanner", "url": "https://pub.dev/packages/mobile_scanner" }
+    { "label": "mobile_scanner package", "url": "https://pub.dev/packages/mobile_scanner" },
+    { "label": "google_mlkit_barcode_scanning", "url": "https://pub.dev/packages/google_mlkit_barcode_scanning" },
+    { "label": "GS1 General Specifications", "url": "https://www.gs1.org/standards/barcodes-epcrfid-id-keys/gs1-general-specifications" }
   ]
 }
