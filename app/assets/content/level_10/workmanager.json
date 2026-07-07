@@ -2,44 +2,103 @@
   "id": "plg.workmanager",
   "levelId": 10,
   "title": "workmanager (Flutter)",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 50,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Schedule guaranteed background work",
-    "Wire Android WorkManager and iOS BGTaskScheduler",
-    "Handle constraints, retries and platform limits"
+    "Understand workmanager (Flutter) via a real-life analogy",
+    "Schedule one-off + periodic background work",
+    "Handle Doze / Background App Refresh limitations",
+    "Register a Dart callback for isolate entry",
+    "Pick between workmanager, background_fetch, WorkManager natively, BGTaskScheduler",
+    "Answer workmanager interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "The Flutter `workmanager` package wraps Android WorkManager and iOS BGTaskScheduler so you can run Dart work in the background — even after app kill (Android) — with constraints and retries." },
-    { "type": "code", "language": "dart", "code": "void callbackDispatcher() {\n  Workmanager().executeTask((task, inputData) async {\n    await sync();\n    return Future.value(true);\n  });\n}\nawait Workmanager().initialize(callbackDispatcher);\nawait Workmanager().registerPeriodicTask('sync','sync',\n  frequency: const Duration(hours: 1),\n  constraints: Constraints(networkType: NetworkType.connected));" },
-    { "type": "callout", "variant": "interview", "markdown": "iOS is strict: BGTasks are opportunistic and rare. Never assume iOS will run your sync on time. Use it for eventually-consistent work (upload logs, refresh caches), not exact schedules. Android WorkManager is much more reliable." },
-    { "type": "callout", "variant": "mistake", "markdown": "Doing UI work or Firebase inits from the background isolate without re-initializing plugins. Background runs in a fresh isolate — you must set up plugins/DI inside `callbackDispatcher`." },
-    { "type": "callout", "variant": "tip", "markdown": "For pure Android use cases, plain WorkManager via native code + platform channel is more mature. This plugin is best when you need cross-platform simplicity and iOS 'good-enough' background work." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of `workmanager` (Flutter) as the OS-provided robot butler that runs errands while you sleep.**\n\nYou give the butler a task, some constraints ('only when connected to Wi-Fi, only when charging'), and a deadline. The OS decides WHEN to actually run it — could be minutes later, could be hours (Doze mode, iOS Background App Refresh). But it WILL run eventually + retry on failure.\n\nUnder the hood:\n- **Android** — Google's **WorkManager** (Jetpack). Uses JobScheduler / AlarmManager / GcmNetworkManager underneath depending on OS version. Constraints: network type, battery not low, storage not low, charging, device idle. Retries with backoff. Survives reboot.\n- **iOS** — **BGTaskScheduler** (iOS 13+). Two task types: `BGAppRefreshTask` (~15 min opportunistic) + `BGProcessingTask` (longer, up to ~1 min, when device charging + idle). iOS is stingier — tasks don't run reliably.\n- **Dart callback runs in a background isolate.** No shared globals with the main isolate. Must re-init Firebase, DBs, plugins.\n\n**Why every offline-first / sync-heavy Flutter app installs it:** FCM data messages can trigger work, but you also need periodic sync (fetch feed every hour), queued uploads that finish even if the user closes the app, telemetry batch sends. `workmanager` is the cross-platform bridge to OS background schedulers." },
+    { "type": "callout", "variant": "definition", "markdown": "**`workmanager`** (Vasili Rusev — Flutter package) wraps Android **WorkManager** + iOS **BGTaskScheduler**. Register a Dart top-level callback via `initialize`; enqueue one-off (`registerOneOffTask`) or periodic (`registerPeriodicTask`) with constraints (`Constraints(networkType, batteryNotLow, requiresCharging, ...)`), backoff policy, initial delay, and input data. On iOS you must also register task IDs in Info.plist + AppDelegate + call `submit` on the OS." },
+    { "type": "theory", "markdown": "## Cross-platform reality" },
+    { "type": "table", "headers": ["Aspect", "Android WorkManager", "iOS BGTaskScheduler"], "rows": [
+      ["Minimum interval", "15 min (periodic)", "~15 min (BGAppRefresh)"],
+      ["Guaranteed to run?", "Yes eventually, backoff on failure", "Best-effort, may skip for days"],
+      ["Constraints", "Network / battery / charging / idle / storage", "Charging + idle for BGProcessingTask only"],
+      ["Persistence across reboot", "✅", "✅"],
+      ["Duration limit", "~10 min per run", "~30 s BGAppRefresh; ~1-3 min BGProcessing"],
+      ["Retry with backoff", "✅ Exponential", "❌ Reschedule yourself"],
+      ["Reliability", "High", "Low — depends on user engagement"]
+    ]},
+    { "type": "theory", "markdown": "## Complete setup" },
+    { "type": "code", "language": "xml", "code": "<!-- android/app/src/main/AndroidManifest.xml — nothing special needed -->\n<!-- ios/Runner/Info.plist -->\n<key>UIBackgroundModes</key>\n<array>\n  <string>fetch</string>\n  <string>processing</string>\n</array>\n<key>BGTaskSchedulerPermittedIdentifiers</key>\n<array>\n  <string>com.example.dev.workmanager.iOSBackgroundAppRefresh</string>\n  <string>com.example.dev.workmanager.iOSBackgroundProcessingTask</string>\n</array>" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml: workmanager: ^0.5.2\nimport 'package:workmanager/workmanager.dart';\n\n// ────── TOP-LEVEL callback — required — @pragma('vm:entry-point') for release ──────\n@pragma('vm:entry-point')\nvoid callbackDispatcher() {\n  Workmanager().executeTask((task, inputData) async {\n    // NEW isolate — must re-init dependencies:\n    WidgetsFlutterBinding.ensureInitialized();\n    await Firebase.initializeApp();\n    Hive.registerAdapter(...);\n    await Hive.openBox('outbox');\n\n    switch (task) {\n      case 'syncOutbox':\n        final box = Hive.box('outbox');\n        for (final k in box.keys) {\n          try { await api.post(box.get(k)); await box.delete(k); }\n          catch (_) { return false; }   // false → retry with backoff\n        }\n        return true;\n      case 'fetchFeed':\n        await feedRepo.refresh();\n        return true;\n    }\n    return true;\n  });\n}\n\n// ────── Main isolate init ──────\nFuture<void> main() async {\n  WidgetsFlutterBinding.ensureInitialized();\n  await Firebase.initializeApp();\n  await Workmanager().initialize(callbackDispatcher, isInDebugMode: kDebugMode);\n  runApp(const MyApp());\n}\n\n// ────── One-off with constraints ──────\nawait Workmanager().registerOneOffTask(\n  'sync-outbox-once', 'syncOutbox',\n  constraints: Constraints(networkType: NetworkType.connected, batteryNotLow: true),\n  backoffPolicy: BackoffPolicy.exponential,\n  backoffPolicyDelay: const Duration(minutes: 1),\n  inputData: {'reason': 'user_tap'},\n);\n\n// ────── Periodic hourly (Android reliable, iOS best-effort) ──────\nawait Workmanager().registerPeriodicTask(\n  'feed-fetch', 'fetchFeed',\n  frequency: const Duration(hours: 1),\n  constraints: Constraints(networkType: NetworkType.unmetered),\n);\n\n// ────── Cancel ──────\nawait Workmanager().cancelByUniqueName('feed-fetch');\nawait Workmanager().cancelAll();" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Callback not top-level.** Must be a top-level function AND annotated `@pragma('vm:entry-point')` for release builds — else tree-shaker strips it + isolate can't find the entry." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Not re-initializing plugins in the isolate.** Firebase / Hive / secure_storage all need per-isolate init. Skipping = runtime crashes." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Expecting exact timing.** Doze mode + iOS BG limits mean tasks can be delayed by hours. Don't build UX assuming 'runs every hour on the hour.'" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Long-running tasks.** Exceeding OS time budget = force-killed + reported failure. Break big work into smaller chunks; chain via `initialDelay` or observe progress." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: iOS Info.plist entries missing.** `BGTaskSchedulerPermittedIdentifiers` + `UIBackgroundModes` are required for iOS." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Retry storm on flaky network.** Always return `false` → Workmanager retries hard. Distinguish transient failure (retry) from permanent (`true` + persist state)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Not handling logout.** Background tasks with a stale user's data cause issues. Cancel all + clear tokens on logout." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Debugging in release.** Workmanager debug logs only show in debug mode. `isInDebugMode: true` posts a debug notification when a task runs — invaluable during dev." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Small idempotent tasks** — safe to retry." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Constraints** — `networkType`, `batteryNotLow`, `requiresCharging` — respect user resources." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Exponential backoff** on transient failure." },
+    { "type": "callout", "variant": "best", "markdown": "**4. State via Hive / DB** — the isolate can't hold in-memory state across runs." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Chain via `initialDelay`** for staged work." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Test on Doze mode** — `adb shell dumpsys battery unplug + set level 5` to simulate." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Cancel on logout / uninstall paths.**" },
+    { "type": "callout", "variant": "best", "markdown": "**8. Fallback FCM data message** — hybrid pattern: server pushes when work is urgent, Workmanager handles opportunistic." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — One-off task that writes to a Hive box." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Periodic hourly feed refresh with network constraint." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Outbox pattern: queue writes when offline; sync when online." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — iOS BGTaskScheduler registration + verification via Xcode debug menu ('Simulate Background Fetch')." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Retry with exponential backoff on flaky network." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Hybrid: FCM data message triggers immediate sync; periodic Workmanager as safety net." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What are the reliability differences between Android + iOS background execution?**\n\n**A:** **Android WorkManager** is highly reliable: if you register a periodic task, it WILL run eventually (Doze may delay it, but persistence + retries guarantee it). Battery cost is enforced via constraints. **iOS BGTaskScheduler** is best-effort: BGAppRefreshTask fires only when the OS predicts the user will open the app soon (typical: never for infrequently-opened apps); BGProcessingTask requires charging + idle. Apple's decision is not documented + varies with iOS version. **Consequence:** don't design UX assuming background sync ran (data may be stale for hours or days on iOS). **Hybrid pattern:** FCM data message on the server side pushes when work matters; Workmanager handles opportunistic. **Testing:** iOS lets you simulate BG tasks via Xcode's `Debug → Simulate Background Fetch` — otherwise you'd wait forever. Interviewers love hearing the honest reliability answer." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What's the isolate setup story for Workmanager callbacks?**\n\n**A:** The callback runs in a **separate Dart isolate** — NO shared state with the main isolate. Must: **(1) Be a top-level function** (not a method); **@pragma('vm:entry-point')** so tree-shaker doesn't strip in release. **(2) Re-initialize plugins** — `WidgetsFlutterBinding.ensureInitialized()`, `Firebase.initializeApp()`, Hive registration + `openBox`, etc. Each isolate has its own plugin registrar. **(3) No BuildContext** — pure Dart. **(4) Access secure_storage / DB** — each has isolate-safe APIs, but re-init. **(5) Return `true` on success, `false` for retry** — the OS backoff handles the rest. **(6) Persist ephemeral state** via Hive (main isolate reads later) if the task needs to communicate results back. **The isolate story is the #1 source of workmanager bugs** — devs assume shared globals + get null-crashes." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do you build an offline-first outbox pattern?**\n\n**A:** **(1) Write path:** every mutation from the UI writes to a local Hive/Isar box (`outbox`) THEN triggers a `registerOneOffTask('sync-outbox', ...)`. **(2) Task:** iterate the outbox, POST each item to the API. **(3) Success:** delete from outbox. **(4) Transient failure:** return `false` → Workmanager exponential backoff. **(5) Permanent failure** (validation error): remove item + log to a dead-letter box; alert the user. **(6) FCM signal:** when user connectivity resumes, server can push a `sync-now` data message that triggers another task run. **(7) UX:** UI reads from Hive (source of truth); shows 'saved offline' pending state. **(8) Conflict resolution:** server responds with last-writer-wins or version numbers; app reconciles. This pattern powers WhatsApp / Slack / Superhuman-quality offline UX + is the most-asked senior interview question in mobile roles." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you handle Doze mode + Android App Standby?**\n\n**A:** Doze: after ~1 hour idle without charging, Android enters Doze — CPU + network throttled; alarms + jobs delayed. Deep Doze after several hours. **App Standby:** apps unused for days go to standby buckets (rare, frequent, working set, active) — the more standby, the less frequent background work. **Workmanager respects constraints** but delays are inevitable. **Mitigation:** (1) Set `Constraints(networkType: connected)` — task runs when Doze exits + net available. (2) `requiresCharging` — task runs when plugged in overnight — great for big sync jobs. (3) `expedited: true` on Android 12+ — high-priority immediate work; costs battery-quota. (4) FCM high-priority as fallback — messages bypass Doze delays for user-visible actions. **Never assume 'runs in 15 min'** — assume 'runs when the OS deems it OK.'" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: When would you pick a different package?**\n\n**A:** **`background_fetch`** — simpler API for iOS BGTaskScheduler + Android JobScheduler; less feature-rich than Workmanager but easier to grasp. **Native WorkManager (Kotlin)** — for complex chained jobs, expedited work, or when you need Google's exact latest features; call from Flutter via platform channels. **`flutter_background_service`** — foreground service on Android with persistent notification (delivery tracking, music player); iOS silent audio hack. **`android_alarm_manager_plus`** — old-style AlarmManager (unreliable in modern Android; avoid). **`flutter_isolate`** — spawn generic isolates without OS scheduling. **Rule:** default to `workmanager`. Only reach for others when you hit a specific gap. Interviewer red flag: 'use whatever the tutorial shows'; senior signal: 'here's the trade-off, here's my pick.'" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How do you test Workmanager tasks?**\n\n**A:** **Debug logs:** `Workmanager().initialize(dispatcher, isInDebugMode: true)` posts a debug notification when a task runs. **Android manual trigger:** `adb shell cmd jobscheduler run -f <package> <jobId>` — force a JobScheduler job to run immediately. **iOS manual trigger:** Xcode Debug menu → `Simulate Background Fetch` or `Simulate Background App Refresh`. **`e2e` tests** with real device — flaky. **Unit tests:** extract task logic into a plain Dart class + test it without Workmanager. **Integration tests** should mock the plugin. **CI limitations:** cloud emulators can't reliably simulate BG; skip flaky tests. **Interview highlight:** knowing the manual trigger commands is a differentiator." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Offline-first apps** — outbox sync.\n- **Feed pre-fetch** — hourly refresh.\n- **Telemetry batch upload** — send events in bulk.\n- **Cache warm-up** — download tomorrow's content overnight.\n- **NOT ideal for** — real-time work (use FCM data messages + foreground service); precise alarms (use flutter_local_notifications with exact schedule)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`expedited: true`** (Android 12+) — high-priority immediate task.\n- **`initialDelay`** — delay before first run.\n- **`existingWorkPolicy`** — replace / append / keep on duplicate name.\n- **Data pass-through** — `inputData: Map<String, dynamic>` sent to callback; keep small.\n- **`WorkManager().registerProcessingTask`** — iOS-specific long-running.\n- **`Progress reporting`** — Android WorkManager natively supports; Flutter plugin exposes limited.\n- **Chained work** — one task's completion triggers the next via cancellation + registration.\n- **`Constraints.deviceIdle`** — Android only.\n- **`checkService()`** — inspect scheduled tasks (Android only, debug builds).\n- **iOS `submit(BGTaskRequest)`** — under the hood; wired via AppDelegate.\n- **Persistent state across runs** — Hive box or shared_preferences.\n- **Coordination with FCM data messages** — data message enqueues an immediate task; periodic Workmanager as safety net." }
   ],
   "flashcards": [
-    { "front": "What does workmanager wrap?", "back": "Android WorkManager + iOS BGTaskScheduler behind one Dart API." },
-    { "front": "iOS background reality?", "back": "Opportunistic, rare, no guaranteed timing. Never rely for exact schedules." },
-    { "front": "Common pitfall in the callback?", "back": "Fresh isolate — plugins/DI must be re-initialized inside callbackDispatcher." }
+    { "front": "Callback rules?", "back": "Top-level, @pragma('vm:entry-point'), re-init plugins in the isolate." },
+    { "front": "Android reliability?", "back": "High — persistent + retries; but Doze delays." },
+    { "front": "iOS reliability?", "back": "Best-effort; BGTaskScheduler skips freely; use FCM for urgent work." },
+    { "front": "Constraints?", "back": "networkType / batteryNotLow / requiresCharging / storageNotLow / deviceIdle." },
+    { "front": "Outbox pattern?", "back": "Write to Hive → registerOneOffTask; iterate box + POST + delete on success." },
+    { "front": "Retry?", "back": "Return false → exponential backoff." },
+    { "front": "Debug?", "back": "isInDebugMode: true — posts a notification when a task fires; adb / Xcode manual triggers." }
   ],
   "quiz": [
-    { "q": "iOS BGTasks are…", "options": ["Guaranteed on schedule", "Opportunistic and rare", "Continuous", "Root-required"], "answer": 1, "explain": "iOS decides when to run them." },
-    { "q": "In callbackDispatcher you must…", "options": ["Nothing extra", "Re-init plugins/DI (new isolate)", "Return null", "Sleep 60s"], "answer": 1, "explain": "It runs in a fresh isolate." },
-    { "q": "For network-only sync…", "options": ["No constraints", "Constraints.networkType = connected", "Random", "Delete data"], "answer": 1, "explain": "Constraints avoid battery/data drain." }
+    { "q": "Callback must be…", "options": ["Instance method", "Top-level + @pragma('vm:entry-point')", "Async closure", "Inside main"], "answer": 1, "explain": "Isolate entry rules." },
+    { "q": "iOS BGTask reliability?", "options": ["Guaranteed", "Best-effort — may skip", "Better than Android", "Same as Android"], "answer": 1, "explain": "iOS is stingier." },
+    { "q": "Task returning false…", "options": ["Cancels", "Retries with backoff", "Doubles work", "Nothing"], "answer": 1, "explain": "Signal transient failure." },
+    { "q": "Doze mode…", "options": ["Ignored", "Delays alarms + jobs until idle exit", "Only on iOS", "Web-only"], "answer": 1, "explain": "Design for delay tolerance." },
+    { "q": "Isolate can access main isolate's Riverpod/Bloc?", "options": ["Yes", "No — no shared state", "Sometimes", "Only in debug"], "answer": 1, "explain": "Re-init all deps." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Run a one-off task that logs from background." },
-    { "level": "Medium", "text": "Periodic task with a network constraint that syncs data." },
-    { "level": "Hard", "text": "Wire retries with backoff for transient failures." },
-    { "level": "Expert", "text": "Design a hybrid: FCM data message triggers WorkManager for guaranteed processing." }
+    { "level": "Easy", "text": "One-off task writes to a Hive box." },
+    { "level": "Easy", "text": "Periodic hourly feed refresh with unmetered network constraint." },
+    { "level": "Medium", "text": "Outbox: write offline → sync on network." },
+    { "level": "Medium", "text": "iOS BGTaskScheduler registration + manual trigger from Xcode." },
+    { "level": "Hard", "text": "Retry with exponential backoff on transient failure." },
+    { "level": "Hard", "text": "Doze-mode compatibility: verify task runs after simulated Doze." },
+    { "level": "Expert", "text": "Hybrid pipeline: FCM data message + Workmanager fallback." }
   ],
   "interviewQuestions": [
-    "Android WorkManager vs iOS BGTaskScheduler expectations?",
-    "Common isolate pitfalls in callback?",
-    "How do you constrain and retry?",
-    "workmanager vs native WorkManager?",
-    "When wouldn't you use it?"
+    "Reliability differences between Android + iOS background execution?",
+    "Isolate setup story for the callback?",
+    "How do you build an offline-first outbox pattern?",
+    "How do you handle Doze + App Standby?",
+    "When would you pick a different package?",
+    "How do you test Workmanager tasks?"
   ],
   "references": [
-    { "label": "workmanager plugin", "url": "https://pub.dev/packages/workmanager" }
+    { "label": "workmanager Flutter package", "url": "https://pub.dev/packages/workmanager" },
+    { "label": "Android WorkManager", "url": "https://developer.android.com/topic/libraries/architecture/workmanager" },
+    { "label": "iOS BGTaskScheduler", "url": "https://developer.apple.com/documentation/backgroundtasks" }
   ]
 }

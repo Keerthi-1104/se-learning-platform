@@ -2,44 +2,101 @@
   "id": "plg.file_picker",
   "levelId": 10,
   "title": "file_picker",
-  "xp": 20,
-  "estimatedMinutes": 10,
+  "xp": 30,
+  "estimatedMinutes": 25,
   "objectives": [
-    "Pick single/multiple files with type filters",
-    "Handle iOS document picker + Android SAF",
-    "Deal with large files without OOM"
+    "Understand file_picker via a real-life analogy",
+    "Pick files across mobile / desktop / Web with correct API",
+    "Filter by extension + type; multi-select + drag-and-drop",
+    "Handle iOS Files app + Android Storage Access Framework quirks",
+    "Save files via file save dialog on desktop",
+    "Answer file_picker interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "`file_picker` opens the platform document/file picker and returns file(s) — with optional MIME/type filtering, multi-select and byte streams for large content." },
-    { "type": "code", "language": "dart", "code": "final result = await FilePicker.platform.pickFiles(\n  type: FileType.custom,\n  allowedExtensions: ['pdf','docx'],\n  allowMultiple: true,\n  withData: false,          // set true only for small files\n);\nfor (final f in result?.files ?? []) { /* use f.path */ }" },
-    { "type": "callout", "variant": "interview", "markdown": "Set `withData: false` for large files — otherwise the whole content is loaded into memory (OOM risk). Use `f.path` + a `File(...)` stream, or upload via a resumable client." },
-    { "type": "callout", "variant": "mistake", "markdown": "Assuming a stable file path. Android SAF and iOS document picker often return content-URIs / temporary paths; copy to your app's docs directory if you need durability." },
-    { "type": "callout", "variant": "tip", "markdown": "For image/video specifically, `image_picker` gives a nicer UX; use `file_picker` for arbitrary documents (PDFs, spreadsheets, archives)." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of `file_picker` as the system 'Open File' dialog wired to Flutter.**\n\nWhere `image_picker` opens the OS photo picker, `file_picker` opens the OS file picker — SAF (Storage Access Framework) on Android, `UIDocumentPicker` on iOS, native file dialogs on desktop, `<input type=\"file\">` on Web.\n\n- **Any file** — you don't need to know the extension; `FileType.any` accepts everything.\n- **Filtered** — `FileType.custom` + `allowedExtensions: ['pdf', 'docx', 'csv']`.\n- **Media** — `FileType.image` / `.video` / `.audio` shortcuts.\n- **Multi-select** — `allowMultiple: true`.\n- **Path vs bytes** — mobile returns a real filesystem path; Web returns bytes (no filesystem).\n- **Save dialog (desktop)** — `saveFile()` prompts for target location.\n\n**Why every 'attach a document' Flutter app installs it:** system pickers give users familiar UX + cross-app integrations (Google Drive, iCloud, Dropbox all show up in the picker). Building a native browser is a multi-week job — this delegates entirely." },
+    { "type": "callout", "variant": "definition", "markdown": "**`file_picker`** wraps: Android **Storage Access Framework** (SAF) via `ACTION_OPEN_DOCUMENT`, iOS **UIDocumentPickerViewController**, macOS/Windows/Linux **native file dialogs**, Web `<input type=\"file\">`. Also supports **drag-and-drop** on desktop (via `desktop_drop` under the hood on some versions). API: `FilePicker.platform.pickFiles(...)`, `getDirectoryPath()`, `saveFile()`. Returns `FilePickerResult` with `List<PlatformFile>` (name, path, bytes on Web, size, extension)." },
+    { "type": "theory", "markdown": "## API cheat sheet" },
+    { "type": "table", "headers": ["Method", "Purpose"], "rows": [
+      ["`pickFiles(type: .any, allowMultiple: false)`", "Pick file(s)"],
+      ["`pickFiles(type: .custom, allowedExtensions: [...])`", "Filtered"],
+      ["`getDirectoryPath()`", "Pick a folder (desktop + Android SAF)"],
+      ["`saveFile(fileName, allowedExtensions)`", "Save-as dialog (desktop)"],
+      ["`clearTemporaryFiles()`", "Cleanup"]
+    ]},
+    { "type": "theory", "markdown": "## Setup + patterns" },
+    { "type": "code", "language": "xml", "code": "<!-- Android: no manifest permission needed for SAF pick-only -->\n<!-- iOS: no permission needed for UIDocumentPicker either -->\n<!-- Info.plist for iOS iCloud files support: -->\n<key>NSDocumentsFolderUsageDescription</key>\n<string>Attach files from your Documents.</string>" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml: file_picker: ^8.0.0\nimport 'package:file_picker/file_picker.dart';\n\n// ────── Pick one PDF ──────\nFuture<PlatformFile?> pickPdf() async {\n  final result = await FilePicker.platform.pickFiles(\n    type: FileType.custom,\n    allowedExtensions: ['pdf'],\n  );\n  if (result == null || result.files.isEmpty) return null;\n  return result.files.first;\n}\n\n// ────── Multi-select ──────\nFuture<List<PlatformFile>> pickDocs() async {\n  final r = await FilePicker.platform.pickFiles(\n    type: FileType.custom,\n    allowedExtensions: ['pdf', 'docx', 'xlsx'],\n    allowMultiple: true,\n    withData: kIsWeb,     // Web needs bytes; mobile use path\n  );\n  return r?.files ?? [];\n}\n\n// ────── Upload single file via Dio ──────\nFuture<void> upload(PlatformFile f) async {\n  final MultipartFile mpf = kIsWeb\n    ? MultipartFile.fromBytes(f.bytes!, filename: f.name)\n    : await MultipartFile.fromFile(f.path!, filename: f.name);\n  await dio.post('/documents', data: FormData.fromMap({'file': mpf}));\n}\n\n// ────── Directory pick (desktop / Android SAF) ──────\nfinal dir = await FilePicker.platform.getDirectoryPath();\nif (dir != null) print('user picked: $dir');\n\n// ────── Save dialog (desktop only) ──────\nfinal saveTo = await FilePicker.platform.saveFile(\n  fileName: 'report_${DateTime.now().year}.pdf',\n  allowedExtensions: ['pdf'],\n);\nif (saveTo != null) await File(saveTo).writeAsBytes(pdfBytes);\n\n// ────── Cleanup temp files (Android SAF caches under app tmp) ──────\nawait FilePicker.platform.clearTemporaryFiles();" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Assuming `path` is always non-null.** On Web, `path` is null; use `bytes`. On mobile, path is the norm. Feature-detect via `kIsWeb`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Not calling `withData: true` when needed.** By default on mobile, `bytes` is null (only path). For upload where you need in-memory bytes, request them." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Big files loaded via `withData: true`.** A 100 MB video becomes a huge byte array in RAM — OOM. Stream from path instead." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Ignoring temp-file cleanup on Android SAF.** SAF caches picked files under the app's temp dir; `clearTemporaryFiles()` after use." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Long-lived file references.** Android SAF may revoke the URI after some time / device reboot. If you need durable access, copy the file into your app's own storage." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Assuming iOS 'copy' semantics.** On iOS, files from iCloud Drive may be lazily downloaded; access can throw if not-yet-cached. Use `NSFileCoordinator` semantics via the plugin." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Multi-select with too many files.** UI thread blocked while paths + metadata come back. Consider batching." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Assuming user cancel throws.** Cancel returns null; guard `result == null`." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Feature-detect Web** — use `bytes`; on mobile use `path`." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Filter by extension** for better UX." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Only `withData` when needed** — stream from path for large files." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Copy to app storage** if you need durable access." },
+    { "type": "callout", "variant": "best", "markdown": "**5. `clearTemporaryFiles` after upload.**" },
+    { "type": "callout", "variant": "best", "markdown": "**6. Progress indicator** for uploads." },
+    { "type": "callout", "variant": "best", "markdown": "**7. `saveFile` on desktop** for export flows." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Consider `file_selector`** (Flutter team) — simpler; less feature-full — alternative." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Pick one PDF + upload via Dio multipart." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Multi-pick + preview + batch upload." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Directory pick + list files inside." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Web + mobile parity for the same feature." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Desktop save-as flow for a generated report." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Copy Android SAF file to durable app storage; keep long-term reference." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: file_picker vs image_picker — when each?**\n\n**A:** **`image_picker`** — photos + videos ONLY, uses the OS PHOTO picker (iOS PHPickerViewController + Android Photo Picker). Very compact API. Best for profile pictures, chat photo attach. **`file_picker`** — any file type; uses the OS FILE picker (SAF / UIDocumentPicker / native file dialogs / <input type=file>). Best for: PDF / DOC / spreadsheet uploads, ZIP imports, generic 'attach a document' flows. **Also file_picker handles directory + save dialogs**; image_picker doesn't. **Rule:** photo → image_picker (better UX, no library permission); document → file_picker (universal). Some apps use both: `image_picker` for photo path; `file_picker` for the doc path." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How do you handle Web + desktop + mobile with one code path?**\n\n**A:** The tricky bit is `PlatformFile.path` vs `bytes`. On mobile + desktop, `path` is a real file path — cheap to access, stream-friendly. On Web, `path` is null — only `bytes` is populated (unless you set `withData: false`, in which case you get nothing). **Pattern:** feature-detect. Upload via Dio:\n\n```dart\nfinal mpf = kIsWeb\n  ? MultipartFile.fromBytes(f.bytes!, filename: f.name)\n  : await MultipartFile.fromFile(f.path!, filename: f.name);\n```\n\n**For 100 MB files:** don't request `withData` on mobile — path suffices, and streaming avoids OOM. On Web, big files can crash the tab — set a size limit + warn users. **Directory picking** works on desktop + Android SAF; not iOS or Web. Feature-gate the button." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What's the Android Storage Access Framework quirk?**\n\n**A:** Android SAF returns a URI (not a file path in the classic sense), pointing to a file that lives in **another app's storage** — Google Drive, Downloads, Files by Google. The plugin copies the file into your app's temporary cache + gives you a real path — but that path is TEMPORARY. **Consequences:** (1) Ephemeral — Android may clear the cache; if you need persistent access, copy to `getApplicationDocumentsDirectory()` immediately. (2) Doesn't survive reboot — URIs are session-scoped unless you took a persistable-URI permission (rare from Flutter). (3) `clearTemporaryFiles()` cleans up post-upload. **iOS analog:** UIDocumentPickerViewController returns files from iCloud / Files app; may lazily download; use security-scoped bookmarks for long-term access (usually plugin-transparent)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you handle very large files (100 MB+)?**\n\n**A:** **Don't request `withData: true`** — that loads the whole file into memory. Use `path` + stream. **For Dio uploads:** `MultipartFile.fromFile(path)` streams from disk. **For processing:** use `File(path).openRead()` for a `Stream<List<int>>` you can chunk. **On Web:** large files crash tabs; set a client-side limit + warn ('files >100 MB not supported on Web; use the desktop app'). **UX:** show a progress bar (Dio's `onSendProgress`); allow cancel via `CancelToken`. **Server:** chunked upload with resumable protocol (tus.io, S3 multipart) for reliability on flaky networks. Interviewers respect the streaming + resumable-upload answer." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: `file_picker` vs `file_selector` — what's the difference?**\n\n**A:** **`file_selector`** is the Flutter team's official minimal package — smaller API surface, cleaner cross-platform semantics, but limited features (no drag-drop, no directory pick on some platforms). **`file_picker`** is community — more features (media type filters, `withData`, `clearTemporaryFiles`, `getDirectoryPath` on more platforms) but occasional platform quirks. **When to pick each:** `file_selector` for simple 'open a file' needs + adherence to Flutter team maintenance; `file_picker` for feature-rich flows (multi-select, filters, directories). **Migration low friction** — both use `XFile`-like return types. Interviewer bonus: knowing both packages + preferring based on scope." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What are common security + privacy concerns?**\n\n**A:** **(1) Malicious files.** Users may upload malware / EXE. Scan server-side; don't execute; validate MIME + magic bytes; ClamAV or a commercial scanner. **(2) File type spoofing.** Extension `.pdf` ≠ actual PDF; sniff magic bytes. **(3) Path traversal (server-side).** Never trust filenames verbatim; sanitize or use UUIDs. **(4) Excessive size.** Enforce client + server limits. **(5) EXIF / metadata leaks.** Documents / photos may embed PII; strip on server or warn user. **(6) `withData` for huge files leaks memory.** **(7) Cache leaks.** SAF temp files linger; `clearTemporaryFiles`. **(8) Sharing across apps** — on Android, granting URI access to your app persists; revoke when done. **(9) DLP (Data Loss Prevention)** on enterprise MDM devices may block file access entirely — handle gracefully." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Document upload** — chat, email, form attachments.\n- **Import / export** — CSV import for a stock app; JSON export.\n- **Backup/restore** — pick backup file.\n- **Data migration** — importing from another app's export.\n- **NOT ideal for** — pure photo flows (image_picker better); background file scanning." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`FilePickerResult.count`** — number of selected files.\n- **`PlatformFile.readStream`** — chunk-reading option for streaming ingest.\n- **`dialogTitle`** — set the picker dialog title.\n- **`initialDirectory`** — starting folder (desktop / Web).\n- **`lockParentWindow`** — desktop modal parent.\n- **`onFileLoading`** callback — progress on Web.\n- **`file_picker_pro`** — commercial fork with additional features (rare).\n- **Drag-and-drop** — use `desktop_drop` package separately for stronger DnD; `file_picker` has limited support.\n- **`readAsBytesSync` gotcha** — not available on Web; use `readStream` or `bytes` accessor.\n- **iOS UIDocumentPicker mode** — `import` vs `open` semantics differ; plugin normalizes.\n- **`saveFile` on Web** — no native save dialog; download bytes via anchor click.\n- **File association (desktop)** — configure the app's supported file types in `Info.plist` / manifest for OS-level 'Open with' integration." }
   ],
   "flashcards": [
-    { "front": "Danger of withData: true?", "back": "Loads the entire file into memory — OOM on large files." },
-    { "front": "Are returned paths always stable?", "back": "No — copy to your app's docs directory if you need durability." },
-    { "front": "Prefer image_picker vs file_picker for photos?", "back": "image_picker for photos/videos; file_picker for arbitrary documents." }
+    { "front": "path vs bytes?", "back": "Mobile/desktop: path is a real filesystem path. Web: only bytes." },
+    { "front": "withData: true?", "back": "Loads bytes into memory; skip for large files on mobile — path streams." },
+    { "front": "Android SAF caveat?", "back": "Temp path in your app cache; copy to Documents for durable access." },
+    { "front": "Directory pick support?", "back": "Desktop + Android SAF; not iOS/Web." },
+    { "front": "Large file upload?", "back": "Stream from path via Dio; consider resumable protocols (tus, S3 multipart)." },
+    { "front": "file_picker vs file_selector?", "back": "file_selector = Flutter-team minimal; file_picker = community feature-rich." },
+    { "front": "Cleanup after use?", "back": "clearTemporaryFiles() — Android SAF caches don't auto-delete." }
   ],
   "quiz": [
-    { "q": "For a 500MB video, use…", "options": ["withData: true", "path + streaming", "In-memory Base64", "Skip"], "answer": 1, "explain": "Never load huge files into memory." },
-    { "q": "Returned paths are…", "options": ["Always permanent", "Often temporary/content-URIs", "Encrypted", "Random"], "answer": 1, "explain": "Copy to a durable path if needed." },
-    { "q": "For arbitrary docs use…", "options": ["image_picker", "file_picker", "shared_preferences", "camera"], "answer": 1, "explain": "Document picker across formats." }
+    { "q": "Web picked file has…", "options": ["path only", "bytes only (no path)", "Both", "Neither"], "answer": 1, "explain": "No filesystem access on Web." },
+    { "q": "Large mobile file — best?", "options": ["withData: true", "path streaming (withData: false)", "Copy to bytes", "Reject"], "answer": 1, "explain": "Streaming avoids OOM." },
+    { "q": "Android SAF path is…", "options": ["Permanent", "Temporary — copy for durable access", "Cached forever", "iCloud-backed"], "answer": 1, "explain": "Session-scoped." },
+    { "q": "iOS directory pick support?", "options": ["Full", "Not supported (mobile)", "Only iPad", "Only Files app"], "answer": 1, "explain": "Desktop + Android SAF only." },
+    { "q": "Save-as dialog on…", "options": ["Any platform", "Desktop mainly", "Web-only", "Nowhere"], "answer": 1, "explain": "saveFile() targets desktop." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Pick a single PDF and show its size." },
-    { "level": "Medium", "text": "Pick multiple docs with a type filter; render a list." },
-    { "level": "Hard", "text": "Stream a picked file to a server without loading into memory." },
-    { "level": "Expert", "text": "Copy the picked file to app docs; resume upload after app restart." }
+    { "level": "Easy", "text": "Pick a PDF + upload via Dio multipart." },
+    { "level": "Easy", "text": "Multi-pick + list with sizes." },
+    { "level": "Medium", "text": "Web + mobile parity: kIsWeb branch on bytes vs path." },
+    { "level": "Medium", "text": "Directory pick on desktop + Android SAF; list contents." },
+    { "level": "Hard", "text": "Large-file streaming upload with progress + cancel." },
+    { "level": "Hard", "text": "Copy Android SAF file into Documents for durable access." },
+    { "level": "Expert", "text": "Desktop save-as export of a generated PDF report." }
   ],
   "interviewQuestions": [
-    "How do you avoid OOM on large picks?",
-    "Why aren't returned paths stable?",
-    "file_picker vs image_picker?",
-    "How to filter by type/MIME?",
-    "How to test picker flows?"
+    "file_picker vs image_picker — when each?",
+    "Handle Web + desktop + mobile with one code path?",
+    "Android Storage Access Framework quirks?",
+    "Handle very large files (100 MB+)?",
+    "file_picker vs file_selector — differences?",
+    "Common security + privacy concerns?"
   ],
   "references": [
-    { "label": "file_picker", "url": "https://pub.dev/packages/file_picker" }
+    { "label": "file_picker package", "url": "https://pub.dev/packages/file_picker" },
+    { "label": "file_selector (Flutter team)", "url": "https://pub.dev/packages/file_selector" },
+    { "label": "Android SAF", "url": "https://developer.android.com/guide/topics/providers/document-provider" }
   ]
 }

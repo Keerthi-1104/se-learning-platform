@@ -2,43 +2,101 @@
   "id": "plg.local_auth",
   "levelId": 10,
   "title": "local_auth",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "xp": 40,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Authenticate with biometrics (Face ID, Touch ID, fingerprint)",
-    "Fall back to device passcode",
-    "Configure iOS + Android correctly"
+    "Understand local_auth via a real-life analogy",
+    "Configure Android + iOS manifests + strings",
+    "Check biometric availability + strong vs weak",
+    "Combine with flutter_secure_storage / Keystore for real security",
+    "Handle failure modes + fallback UX gracefully",
+    "Answer local_auth interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "`local_auth` gates actions with biometric authentication (Face ID / Touch ID / fingerprint) plus device passcode fallback. Uses LocalAuthentication (iOS) and BiometricPrompt (Android)." },
-    { "type": "code", "language": "dart", "code": "final la = LocalAuthentication();\nfinal can = await la.canCheckBiometrics && await la.isDeviceSupported();\nfinal ok = await la.authenticate(\n  localizedReason: 'Confirm to view balance',\n  options: const AuthenticationOptions(biometricOnly: false, stickyAuth: true),\n);" },
-    { "type": "callout", "variant": "interview", "markdown": "`local_auth` verifies the user is present — it does NOT protect secrets on its own. Combine with **flutter_secure_storage** (or Android Keystore biometric-bound keys via a custom channel) for real key-release-on-biometric flows." },
-    { "type": "callout", "variant": "mistake", "markdown": "Skipping iOS `NSFaceIDUsageDescription` in Info.plist — Face ID silently fails. Also: doing sensitive work in Dart based on `authenticate() == true` without any cryptographic binding." },
-    { "type": "callout", "variant": "tip", "markdown": "Use `stickyAuth: true` so backgrounding doesn't reset the prompt. Offer a manual retry and a device-passcode fallback for accessibility." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of `local_auth` as the doorman that says 'prove you're the owner' before letting you into a private room.**\n\nThe app doesn't know your fingerprint. Instead:\n\n- The OS presents a biometric prompt (Touch ID / Face ID / fingerprint / face unlock).\n- The **Secure Enclave / TrustZone** verifies the print against the enrolled template inside the hardware.\n- The OS returns a boolean 'yes/no' to your app. **Raw biometric data never leaves the enclave.**\n\n- **Weak vs strong** — Android has `BiometricStrong` (Class 3, on-device secure element) vs `BiometricWeak` (Class 2, less secure like some face unlock). iOS's Touch/Face ID is always strong. Request the right class for the risk level.\n- **Key-tied gating** — Android's Keystore keys can be marked `setUserAuthenticationRequired(true)` — the OS refuses to *decrypt with the key* unless biometrics succeed. Same on iOS via `SecAccessControl.biometryCurrentSet`. This is stronger than a plain 'ok' — it means an attacker who bypasses your Dart code STILL can't decrypt secrets.\n- **Failure modes** — user cancels, hardware unavailable, no enrolled biometrics, lockout after too many failures.\n\n**Why every banking / password-manager app uses this:** users want quick access without re-entering credentials each session; regulators want strong verification for high-value actions. Local biometrics = the sweet spot: convenient + hardware-attested." },
+    { "type": "callout", "variant": "definition", "markdown": "**`local_auth`** wraps Android **BiometricPrompt** (or older FingerprintManager fallback) + iOS **LocalAuthentication.LAContext**. Exposes `canCheckBiometrics`, `getAvailableBiometrics()` (list of `BiometricType`), `authenticate(localizedReason, options)`. Returns a boolean; the actual secret unlocking happens in the OS. Companions: `flutter_secure_storage` for token storage; `biometric_storage` for biometric-gated keychain items." },
+    { "type": "theory", "markdown": "## API surface" },
+    { "type": "table", "headers": ["Method", "Purpose"], "rows": [
+      ["`canCheckBiometrics`", "Hardware supports biometrics"],
+      ["`isDeviceSupported`", "Any authentication (biometric OR device passcode) supported"],
+      ["`getAvailableBiometrics()`", "List: fingerprint / face / iris / strong / weak"],
+      ["`authenticate(localizedReason, options: AuthenticationOptions(...))`", "Show prompt; returns bool"],
+      ["`stopAuthentication()`", "Cancel prompt programmatically"]
+    ]},
+    { "type": "theory", "markdown": "## Setup + complete flow" },
+    { "type": "code", "language": "xml", "code": "<!-- android/app/src/main/AndroidManifest.xml -->\n<uses-permission android:name=\"android.permission.USE_BIOMETRIC\" />\n<!-- Also declare fallback for older API levels -->\n<uses-permission android:name=\"android.permission.USE_FINGERPRINT\" />\n\n<!-- android/app/src/main/kotlin/.../MainActivity.kt -->\n// Extend FlutterFragmentActivity (not FlutterActivity) for BiometricPrompt to work.\nclass MainActivity : FlutterFragmentActivity() { }\n\n<!-- ios/Runner/Info.plist -->\n<key>NSFaceIDUsageDescription</key>\n<string>Verify your identity to unlock the app.</string>" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml: local_auth: ^2.3.0\nimport 'package:local_auth/local_auth.dart';\nimport 'package:local_auth_android/local_auth_android.dart';\nimport 'package:local_auth_darwin/local_auth_darwin.dart';\n\nfinal auth = LocalAuthentication();\n\nFuture<bool> authenticateUser({required String reason}) async {\n  // 1. Support check\n  final supported = await auth.isDeviceSupported();\n  if (!supported) return false;\n  final canBio = await auth.canCheckBiometrics;\n  if (!canBio) {\n    // Fallback: device passcode still works with biometricOnly: false\n  }\n\n  // 2. Determine available factors\n  final available = await auth.getAvailableBiometrics();\n  // available may contain: fingerprint, face, iris, strong, weak (Android 11+)\n\n  try {\n    return await auth.authenticate(\n      localizedReason: reason,\n      authMessages: const [\n        AndroidAuthMessages(\n          signInTitle: 'Verify identity',\n          biometricHint: 'Touch the fingerprint sensor',\n          cancelButton: 'Use PIN instead',\n        ),\n        IOSAuthMessages(cancelButton: 'Cancel', localizedFallbackTitle: 'Use passcode'),\n      ],\n      options: const AuthenticationOptions(\n        biometricOnly: false,      // allow device passcode fallback\n        stickyAuth: true,          // survive app backgrounding during prompt\n        useErrorDialogs: true,     // system dialogs on 'no fingerprints enrolled' etc.\n      ),\n    );\n  } on PlatformException catch (e) {\n    // codes: NotAvailable / NotEnrolled / LockedOut / PermanentlyLockedOut / UserCancel / …\n    return false;\n  }\n}\n\n// ────── Usage pattern ──────\nfinal ok = await authenticateUser(reason: 'Confirm to view your saved cards');\nif (!ok) {\n  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Auth cancelled')));\n  return;\n}\nfinal token = await FlutterSecureStorage().read(key: 'access_token');\n// Show sensitive UI" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Treating `authenticate` result as security.** A `true` from local_auth only says 'the OS says the user passed the biometric prompt.' It does NOT unlock a specific secret. A rooted device or a Dart-level bypass could return true. **Real security = a Keystore/Keychain key that's biometric-gated + used to encrypt/decrypt the actual secret.**" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Missing FlutterFragmentActivity change.** BiometricPrompt requires FragmentActivity; default FlutterActivity fails silently." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: No NSFaceIDUsageDescription in Info.plist.** iOS crashes on Face ID request." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Not handling lockout.** After N failed attempts, biometrics lock out for 30 s (Android) or need device passcode (iOS). Show clear UX." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Not handling 'no enrolled biometrics'.** User has hardware but hasn't set up a fingerprint. Prompt them to Settings or fall back to passcode." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Weak vs strong misuse.** Using weak-class face unlock to gate a bank transaction = insecure. Request `strong` where appropriate." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Sharing biometrics across users.** On a shared device, adding a new fingerprint would let a family member into a 'private' app. Combine with a biometric-gated Keystore key marked `setInvalidatedByBiometricEnrollment(true)` to invalidate on enrollment changes." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Sensitive UX before dispose.** If the app goes background while a bank statement is on screen, iOS shows the snapshot in the app switcher. Blank the UI on `AppLifecycleState.inactive`." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Tie biometrics to a key.** Real security = biometric-gated Keystore/Keychain key + encrypted secret; not just a bool." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Require `strong` class for high-value actions.**" },
+    { "type": "callout", "variant": "best", "markdown": "**3. Fallback to passcode** — `biometricOnly: false` covers users without enrolled biometrics." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Handle every error code** — lockout, cancel, not-enrolled." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Blank sensitive UI on background** to hide from app-switcher snapshots." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Re-verify for critical actions** — money transfer, credential export — don't rely on session-open." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Invalidate keys on biometric enrollment changes** — protects against fingerprint-add attack." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Localized reason string** — good UX + regulator-friendly." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Gate a settings screen behind biometric prompt with reason." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Fallback to passcode when biometrics unavailable." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Handle lockout + not-enrolled paths gracefully." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Combine with `flutter_secure_storage` — biometric-gated read of a token." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Blank sensitive UI on app background + require re-auth on foreground." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Use `biometric_storage` package to store a secret with `KeychainAccessibility.biometryCurrentSet` — invalidate on new fingerprint enrollment." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Why is a boolean `authenticate()` result NOT real security?**\n\n**A:** `local_auth.authenticate()` returns `true` if the OS shows 'the user passed the prompt.' But: (1) the actual secret still lives in your app storage; (2) a **rooted device with a bypass**, a Dart-level VM hook, or malware could make the call return true without a real biometric. **Real security** is: the secret is encrypted with a key that lives in **hardware Keystore/Keychain** + that key is marked **biometric-gated** (`setUserAuthenticationRequired(true)` on Android, `SecAccessControl.biometryCurrentSet` on iOS). The OS refuses to *use the key* without a successful biometric verification. Now a Dart-bypass gets `true` from local_auth but STILL can't decrypt because the Keystore refuses. This is why serious apps combine `local_auth` (the UX) with **`biometric_storage`** or `flutter_secure_storage` set to a biometry-gated accessibility. Interviewers score highly on hearing this distinction — it's the tell for someone who understands mobile security beyond surface." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What's the difference between BiometricStrong and BiometricWeak on Android?**\n\n**A:** Android's Biometric Compatibility Test Suite classifies biometric sensors by **spoof resistance**: **Class 3 / Strong** — hardware-backed, high spoof resistance; safe for financial + credential use. Includes most fingerprint sensors + certain face-unlock hardware (Pixel Face Unlock, Google Face Unlock on Pixel 7+). **Class 2 / Weak** — face-unlock on many devices where the sensor is a plain camera without depth (spoofable with a photo). **Class 1** — convenience-only (no security). The `BiometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)` tells you which class is available. **For high-risk actions** (bank transfer, unlocking a password vault) demand strong; for **low-risk** (unlock the app to see the timeline) either works. `local_auth`'s `getAvailableBiometrics()` returns `strong` / `weak` accordingly. iOS: Touch ID + Face ID are always effectively strong." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do you handle failure modes gracefully?**\n\n**A:** `authenticate()` throws `PlatformException` with codes: **`NotAvailable`** — no hardware; disable feature. **`NotEnrolled`** — hardware but no biometrics set up; prompt user to Settings. **`LockedOut`** — too many failed attempts; wait 30 s. **`PermanentlyLockedOut`** — user must sign in with password to unlock biometrics. **`UserCancel`** — user cancelled; do nothing. **`PasscodeNotSet`** — device has no passcode; disable biometric-gated features. **UX pattern:** (1) try biometrics; (2) on failure, show a UI with 'Try again' or 'Use PIN.' (3) On `NotEnrolled`, deep-link to system Settings via `openAppSettings` (from permission_handler) or platform-specific intents. **Analytics:** log failure codes to understand your user base — high `NotEnrolled` = need better fallback UX. Interviewers appreciate concrete error-code awareness over vague 'handle exceptions.'" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you protect against the 'family adds fingerprint' attack?**\n\n**A:** Scenario: user's device is shared; family member enrolls their fingerprint in system Settings; app biometric-unlocks for them because 'a valid biometric = OK.' **Defense:** create the encryption key with **`setInvalidatedByBiometricEnrollment(true)`** (Android Keystore) or **`SecAccessControl.biometryCurrentSet`** (iOS). Semantics: **the key becomes unusable the moment biometrics enrollment changes**. Adding a new fingerprint = key destroyed = secret undecryptable = re-authentication required (via password / server round-trip). **Trade-off:** if the user re-enrolls their own fingerprint (say due to injury), they also lose the key + must re-authenticate. **Acceptable for banking + password managers** where the security wins outweigh the convenience friction. `local_auth` alone doesn't do this; you need `biometric_storage` or native Keystore/Keychain integration." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: When would you not use biometrics?**\n\n**A:** **(1) Casual / non-secret features.** Prompting on every launch is friction; only gate what genuinely needs it. **(2) Low-value data** where a password would be equal security + less friction. **(3) Regulated flows requiring server verification** — a $10K transfer often requires OTP + biometric + server signal; biometric alone isn't enough. **(4) Kids / accessibility.** Some users can't reliably use biometrics; ensure passcode fallback. **(5) Enterprise MDM** — may disable biometrics entirely; policy check first. **(6) Shared devices** — biometrics don't isolate users well without the enrollment-change invalidation trick. **UX rule:** the FIRST biometric prompt sets user expectation — do it at meaningful action (money transfer, view credentials) not on every launch." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How do you test biometric flows?**\n\n**A:** **Unit tests** — abstract behind an `AuthGate` interface; fake success/fail states in tests. **Integration tests on device:** **Android** — biometric emulator supports simulating success/fail via `adb shell input keyevent BIOMETRIC_*` (needs debug build). **iOS Simulator** — Features menu → Face ID / Touch ID → Enrolled + Matching Face / Non-matching. **`patrol` package** can drive both. **Emulator caveats** — real security-key-tied behavior only works on real devices; test the whole flow on real hardware before release. **CI** — biometric flows on cloud emulators are unreliable; skip in CI or use fake AuthGate. Interviewers respect knowing the emulator gotchas + separating what you test where." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Banking + fintech** — bank apps.\n- **Password managers** — Bitwarden, 1Password.\n- **Health apps** — record access.\n- **Corporate MDM apps** — enterprise access.\n- **Consumer 'quick unlock'** — WhatsApp / signal chat lock.\n- **NOT ideal for** — non-secret features (adds friction); shared-device apps without enrollment invalidation." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`stickyAuth: true`** — prompt survives app backgrounding briefly.\n- **`sensitiveTransaction: true`** — iOS uses stronger UX language + requires eye contact for Face ID.\n- **`biometric_storage` package** — combines local_auth with Keychain/Keystore secure storage in one API.\n- **Android — FlutterFragmentActivity requirement** for BiometricPrompt.\n- **Android 11+ classes** — request strong via `BiometricManager.Authenticators.BIOMETRIC_STRONG`.\n- **App switcher snapshot masking** — Android FLAG_SECURE; iOS mask on `applicationWillResignActive`.\n- **Root / jailbreak detection** — `flutter_jailbreak_detection` or `flutter_root_jailbreak` before critical flows.\n- **Auth session** — track when last auth succeeded; re-auth if > X minutes since last for critical flows.\n- **Backend attestation** — Play Integrity / DeviceCheck can attest client-side biometric events for higher-trust decisions.\n- **Cross-platform passcode** — `local_auth`'s `biometricOnly: false` allows device PIN fallback.\n- **Enrollment changes on Android 12+** — auto-invalidation via key attributes.\n- **Accessibility** — screen reader + biometric prompt: iOS respects VoiceOver; test carefully." }
   ],
   "flashcards": [
-    { "front": "Does local_auth protect data?", "back": "No — it authenticates the user. Combine with secure storage / keystore-bound keys to protect data." },
-    { "front": "iOS Face ID requirement?", "back": "NSFaceIDUsageDescription in Info.plist." },
-    { "front": "What does stickyAuth do?", "back": "Keeps the prompt across app backgrounding instead of cancelling." }
+    { "front": "Why boolean isn't real security?", "back": "Bypassable at Dart level; must gate a Keystore/Keychain key on biometrics — OS refuses key use without biometric." },
+    { "front": "Strong vs Weak (Android)?", "back": "Class 3 (spoof-resistant, financial) vs Class 2 (basic face unlock). Request STRONG for high-value." },
+    { "front": "FlutterFragmentActivity?", "back": "Android — BiometricPrompt requires FragmentActivity; default FlutterActivity fails silently." },
+    { "front": "iOS Info.plist entry?", "back": "NSFaceIDUsageDescription — else crash on Face ID request." },
+    { "front": "Enrollment attack?", "back": "Set setInvalidatedByBiometricEnrollment(true) → new fingerprint = key destroyed." },
+    { "front": "Fallback to passcode?", "back": "biometricOnly: false covers users without enrolled biometrics." },
+    { "front": "Sensitive UI on background?", "back": "Blank / FLAG_SECURE (Android) / mask on willResignActive (iOS)." }
   ],
   "quiz": [
-    { "q": "local_auth returning true means…", "options": ["Data is encrypted", "The user was verified now", "The user is admin", "Nothing"], "answer": 1, "explain": "It's a presence check; pair with real key material for security." },
-    { "q": "For real key protection on Android use…", "options": ["nothing extra", "Keystore biometric-bound key material", "shared_preferences", "print statements"], "answer": 1, "explain": "Biometric-bound keys via Keystore are the strong control." }
+    { "q": "authenticate() returning true means…", "options": ["Data unlocked", "OS passed biometric prompt only — not real key access", "Ready to bill", "Nothing"], "answer": 1, "explain": "Real security = key-tied." },
+    { "q": "Android — activity requirement?", "options": ["FlutterActivity", "FlutterFragmentActivity", "Any Kotlin", "Nothing"], "answer": 1, "explain": "BiometricPrompt needs FragmentActivity." },
+    { "q": "iOS Face ID needs…", "options": ["Nothing", "NSFaceIDUsageDescription", "Only permission", "Only on iPhone 13+"], "answer": 1, "explain": "Info.plist string required." },
+    { "q": "Family fingerprint attack defense?", "options": ["Nothing", "Invalidate on biometric enrollment change", "Longer PIN", "Random"], "answer": 1, "explain": "Key becomes unusable on enrollment change." },
+    { "q": "High-value transaction should use…", "options": ["Weak biometric OK", "Strong / Class 3 + optional server OTP", "Face ID only", "Nothing"], "answer": 1, "explain": "Match risk to spoof resistance." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Gate a screen behind biometric authenticate()." },
-    { "level": "Medium", "text": "Add device-passcode fallback and stickyAuth." },
-    { "level": "Hard", "text": "Bind an AES key to biometrics via Android Keystore (custom channel)." },
-    { "level": "Expert", "text": "Wrap secure_storage reads behind a biometric prompt with retry + timeout." }
+    { "level": "Easy", "text": "Gate a settings screen behind biometric prompt." },
+    { "level": "Easy", "text": "Localized reason + fallback to passcode." },
+    { "level": "Medium", "text": "Handle NotEnrolled + LockedOut with UX to Settings." },
+    { "level": "Medium", "text": "Biometric-gated read of an access token via biometric_storage." },
+    { "level": "Hard", "text": "Blank UI on background + require re-auth on foreground for sensitive screens." },
+    { "level": "Hard", "text": "Invalidate keys on biometric enrollment change." },
+    { "level": "Expert", "text": "Combine with Play Integrity attestation for server-side trust." }
   ],
   "interviewQuestions": [
-    "What does local_auth actually verify?",
-    "How do you truly bind keys to biometrics?",
-    "Face ID vs Touch ID differences?",
-    "How to handle biometric changes (new fingerprint added)?",
-    "Accessibility fallbacks?"
+    "Why is a boolean authenticate() result NOT real security?",
+    "Difference between BiometricStrong and BiometricWeak?",
+    "How do you handle failure modes gracefully?",
+    "How do you protect against the 'family adds fingerprint' attack?",
+    "When would you NOT use biometrics?",
+    "How do you test biometric flows?"
   ],
   "references": [
-    { "label": "local_auth", "url": "https://pub.dev/packages/local_auth" }
+    { "label": "local_auth package", "url": "https://pub.dev/packages/local_auth" },
+    { "label": "biometric_storage", "url": "https://pub.dev/packages/biometric_storage" },
+    { "label": "Android BiometricPrompt", "url": "https://developer.android.com/training/sign-in/biometric-auth" }
   ]
 }

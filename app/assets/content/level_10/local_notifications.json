@@ -2,44 +2,104 @@
   "id": "plg.local_notifications",
   "levelId": 10,
   "title": "flutter_local_notifications",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 50,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Schedule + show local notifications",
-    "Handle taps, categories and channels",
-    "Combine with FCM for hybrid flows"
+    "Understand flutter_local_notifications via a real-life analogy",
+    "Configure Android channels + iOS categories + timezone data",
+    "Schedule + repeat notifications; handle timezone changes",
+    "Show FCM foreground notifications correctly",
+    "Handle taps + deep links across foreground / background / terminated",
+    "Answer flutter_local_notifications interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "`flutter_local_notifications` schedules and shows OS notifications from your app — reminders, alarms, timers — without a server. Different from FCM (which pushes from a server), though the two often combine." },
-    { "type": "code", "language": "dart", "code": "final fln = FlutterLocalNotificationsPlugin();\nawait fln.initialize(const InitializationSettings(\n  android: AndroidInitializationSettings('@mipmap/ic_launcher'),\n  iOS: DarwinInitializationSettings(),\n), onDidReceiveNotificationResponse: (r) { handleTap(r.payload); });\nawait fln.zonedSchedule(1, 'Time!', 'Meeting in 10 min',\n  TZDateTime.now(local).add(Duration(minutes: 10)),\n  const NotificationDetails(android: AndroidNotificationDetails('cal','Calendar')),\n  androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle);" },
-    { "type": "callout", "variant": "interview", "markdown": "Android channels are required (8.0+): create them once at startup with correct importance. Android 13+ requires POST_NOTIFICATIONS runtime permission. iOS uses interruption levels (`passive`, `active`, `timeSensitive`, `critical`) — pick the right one." },
-    { "type": "callout", "variant": "mistake", "markdown": "Assuming exact alarms are free on Android 12+. `SCHEDULE_EXACT_ALARM` (or `USE_EXACT_ALARM`) permission is needed, and exact alarms are user-visible in system settings. Use inexact scheduling unless timing truly matters." },
-    { "type": "callout", "variant": "tip", "markdown": "Use the `timezone` package (`tz.local`) for correct DST-aware scheduling. On iOS, register categories for actions (buttons). Handle app-launched-from-notification by reading `getNotificationAppLaunchDetails()`." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of `flutter_local_notifications` as the sticky-note dispenser your app owns on the fridge — vs FCM which is the postal service.**\n\n- **FCM** — SERVER pushes a message; the OS wakes your app + optionally shows.\n- **Local notifications** — YOUR APP tells the OS 'please show this to the user at time T with this content.' No server, no network. Perfect for: reminders, workout timers, downloaded-content-ready alerts, foreground FCM display (FCM notifications don't auto-render while the app is in the foreground).\n\n**Key concepts:**\n- **Channels (Android 8+)** — group notifications by category (`orders`, `promos`, `chat`); user can mute per channel in Settings. Channel = immutable settings package (importance, sound, vibration).\n- **Categories (iOS)** — set of interactive actions attached to a notification type.\n- **Zoned scheduling** — timezone-aware; a 'daily 8 AM alarm' should follow the user across timezones.\n- **Sound + priority + full-screen intent (Android)** — cross the lockscreen for alarm-style critical use.\n- **Payload** — arbitrary string attached to a notification; parsed on tap.\n\n**Why every consumer + productivity app installs it:** cheap engagement (reminders), essential UX plumbing (foreground FCM display, scheduled workouts), and legally required in some flows (medication reminders). The complexity is worth it: getting notifications right is a huge trust/retention win." },
+    { "type": "callout", "variant": "definition", "markdown": "**`flutter_local_notifications`** wraps Android **NotificationManager + AlarmManager** + iOS **UNUserNotificationCenter**. Provides: initialize (icon, categories, tap callback), `show`, `zonedSchedule`, `periodicallyShow`, `cancel[All]`, channel management, notification action buttons, big-text/inbox/messaging styles, media / progress bars, iOS Interruption Levels, full-screen intent. Companion: `timezone` package for zoned scheduling." },
+    { "type": "theory", "markdown": "## Key API surface" },
+    { "type": "table", "headers": ["Feature", "How"], "rows": [
+      ["Initialize", "`initialize(InitializationSettings, onDidReceiveNotificationResponse: …)`"],
+      ["Show immediately", "`show(id, title, body, details, payload: …)`"],
+      ["Schedule", "`zonedSchedule(id, title, body, tz.TZDateTime, details, uiLocalNotificationDateInterpretation, …)`"],
+      ["Repeat", "`periodicallyShow(id, ..., RepeatInterval.hourly / daily)`"],
+      ["Cancel", "`cancel(id)` / `cancelAll()`"],
+      ["Channels (Android)", "`AndroidFlutterLocalNotificationsPlugin.createNotificationChannel(...)`"],
+      ["Categories (iOS)", "`DarwinInitializationSettings(notificationCategories: [...])`"],
+      ["Get pending", "`pendingNotificationRequests()`"],
+      ["Delivered (iOS + Android 9+)", "`getActiveNotifications()`"]
+    ]},
+    { "type": "theory", "markdown": "## Full setup" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml:\n//   flutter_local_notifications: ^17.0.0\n//   timezone: ^0.9.0\nimport 'package:flutter_local_notifications/flutter_local_notifications.dart';\nimport 'package:timezone/data/latest.dart' as tz_data;\nimport 'package:timezone/timezone.dart' as tz;\nimport 'package:flutter_timezone/flutter_timezone.dart';\n\nfinal notifs = FlutterLocalNotificationsPlugin();\n\nFuture<void> initNotifs() async {\n  tz_data.initializeTimeZones();\n  tz.setLocalLocation(tz.getLocation(await FlutterTimezone.getLocalTimezone()));\n\n  const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');\n  const iosInit = DarwinInitializationSettings(\n    requestAlertPermission: false,\n    requestBadgePermission: false,\n    requestSoundPermission: false,\n    notificationCategories: [\n      DarwinNotificationCategory('MSG',\n        actions: [DarwinNotificationAction.plain('REPLY', 'Reply', options: {DarwinNotificationActionOption.foreground})]),\n    ],\n  );\n\n  await notifs.initialize(\n    const InitializationSettings(android: androidInit, iOS: iosInit),\n    onDidReceiveNotificationResponse: _onTap,   // FOREGROUND / BACKGROUND if isolate has state\n    onDidReceiveBackgroundNotificationResponse: _bgTap,   // TERMINATED — top-level static\n  );\n\n  // Android 8+ channels — create at app start\n  await notifs.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()\n      ?.createNotificationChannel(const AndroidNotificationChannel(\n        'orders', 'Order updates',\n        importance: Importance.high, playSound: true));\n\n  // Android 13+ POST_NOTIFICATIONS runtime permission\n  await notifs.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()\n      ?.requestNotificationsPermission();\n\n  // iOS runtime\n  await notifs.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()\n      ?.requestPermissions(alert: true, badge: true, sound: true);\n}\n\nvoid _onTap(NotificationResponse resp) {\n  // parse resp.payload → deep-link\n  // e.g., router.go('/orders/${resp.payload}')\n}\n\n@pragma('vm:entry-point')\nvoid _bgTap(NotificationResponse resp) {\n  // Runs in a background isolate — persist a pending-nav via shared_preferences\n}\n\n// ────── Show immediate ──────\nawait notifs.show(\n  1, 'Order shipped', 'Your order #123 is on the way',\n  const NotificationDetails(\n    android: AndroidNotificationDetails('orders', 'Order updates',\n      importance: Importance.high, priority: Priority.high),\n    iOS: DarwinNotificationDetails(interruptionLevel: InterruptionLevel.active),\n  ),\n  payload: '123',\n);\n\n// ────── Zoned schedule ──────\nfinal now = tz.TZDateTime.now(tz.local);\nawait notifs.zonedSchedule(\n  2, 'Time to hydrate', 'Take a sip', now.add(const Duration(hours: 1)),\n  const NotificationDetails(android: AndroidNotificationDetails('reminders', 'Reminders')),\n  uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,\n  androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,\n  matchDateTimeComponents: DateTimeComponents.time,   // repeat daily\n);\n\n// ────── FCM foreground display ──────\nFirebaseMessaging.onMessage.listen((msg) async {\n  final n = msg.notification;\n  if (n == null) return;\n  await notifs.show(\n    msg.hashCode, n.title, n.body,\n    const NotificationDetails(\n      android: AndroidNotificationDetails('promos', 'Promotions'),\n      iOS: DarwinNotificationDetails(),\n    ),\n    payload: msg.data['deep_link'],\n  );\n});" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Not creating channels on Android 8+.** No channel = notification silently doesn't show. Create in `initialize`, not lazily." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Skipping Android 13+ POST_NOTIFICATIONS.** Runtime permission required; older devices auto-granted so devs forget." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Naive `Duration` arithmetic across timezones.** Doesn't handle DST + user relocation. Use `tz.TZDateTime` with the user's local timezone." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Missing background isolate handler.** Tap while app terminated → no callback → the deep link is lost. Register `@pragma('vm:entry-point')` background handler." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Non-idempotent IDs.** Reusing ID `1` for every notification overwrites the previous. Use `msg.hashCode` or a database sequence." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Ignoring channel importance.** Sound but muted = user pissed; too importance = spammy. Match to the category." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: FCM notification message + local display combined = doubles.** If a FCM notification payload arrives while the app is background, the OS shows it AND `onBackgroundMessage` may re-show. Only display locally in `onMessage` (foreground)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Full-screen intent misuse.** Android reserves it for alarms + calls; misuse gets your app deprioritized by Google. Only use for genuine wake-me-up alarms." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Channels per category** — `orders`, `chat`, `promos`, `reminders`. User controls per-channel mute." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Android 13+ permission** on first launch after installation." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Zoned scheduling with `tz.TZDateTime`** for reminders." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Cancel + rebuild schedule** on timezone / DST change." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Payload for deep linking** — JSON-encode a route + args." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Background isolate handler** for terminated-tap navigation." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Foreground FCM display via local_notifications** — the platform doesn't auto-show FCM in the foreground." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Quiet hours + user preferences** — never send at 3 AM local." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Immediate notification on button tap." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Zoned schedule for a daily reminder." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Multiple channels with different importance." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Deep link into a specific screen on tap in all three states (foreground / background / terminated)." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — iOS action button — reply from notification without opening the app." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Rebuild schedule on timezone change: listen for `SystemChannels.lifecycle` + `flutter_timezone` polling." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: FCM vs local notifications — when do you use each?**\n\n**A:** **FCM** delivers messages from your SERVER at any time — remote push. Used for: chat messages, order updates, marketing campaigns triggered server-side, silent background sync. **Local notifications** are scheduled BY YOUR APP for the OS to display later without network. Used for: (1) local reminders (medication, workout, hydration); (2) downloaded-content-ready callbacks; (3) **displaying FCM notification payloads while the app is in the foreground** — because iOS + Android suppress the system-tray notification when the app is open. Typical app uses both: FCM for messages received from server, local for reminders + FCM foreground display. Interviewer red flag: 'local can replace FCM' — they can't (no network / cross-device sync); FCM alone can't schedule reliably." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What are Android notification channels + why do they matter?**\n\n**A:** Since Android 8 (Oreo), every notification MUST belong to a channel. Channel = immutable settings package: **name** (user-facing), **importance** (high / default / low / min), **sound**, **vibration**, **led color**, **badge**. **Users can mute per-channel** in system Settings — 'I want order updates but not promos.' **You define channels at first launch**; changing them afterwards has caveats (importance changes are ignored; user preferences win). **Best practice:** define categories users will care about (`orders`, `chat`, `promos`, `reminders`, `sync`); NEVER put everything in one 'default' channel. **Channel groups** — group related channels under a heading. **Notification without a channel on Android 8+ = silent-drop.** Interviewer bonus: knowing users can delete their notification history + per-channel muting is a differentiator." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do you deep-link from a notification tap in all three app states?**\n\n**A:** **Foreground:** `onDidReceiveNotificationResponse` fires. Parse `resp.payload`, use your router (GoRouter / Navigator) to navigate. **Background (app suspended):** same callback fires because the isolate is warm. **Terminated (app killed):** register `onDidReceiveBackgroundNotificationResponse` — a **top-level `@pragma('vm:entry-point')` function** that runs in a background isolate. It can't touch the running UI (no BuildContext). Instead: persist the pending deep-link via `shared_preferences` (or a Hive box). On next foreground start of main isolate, read + navigate. **Alternative:** `getNotificationAppLaunchDetails()` in `main()` — returns the notification response if the app was launched from a tap. Combine both paths so no tap is lost. **Modern router:** GoRouter's `redirect` handles the pending deep-link on startup." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you schedule notifications that survive timezone changes + DST?**\n\n**A:** Naive `Duration(hours: 24)` addition breaks when: (1) user flies from Bangalore to New York; the 8 AM daily reminder now fires at 3 AM. (2) Fall-back / spring-forward DST — off by an hour. **Solution:** `tz.TZDateTime(tz.local, y, m, d, 8, 0)` — a timezone-aware datetime; the OS re-computes on delivery. **`matchDateTimeComponents: DateTimeComponents.time`** — repeat daily at that wall-clock time in whichever timezone the device is in. **On timezone change:** listen via periodic check or platform events; if changed, `cancelAll` + rebuild the schedule. **Persist schedule metadata in DB** — not just the notification IDs. **DST edge:** on the fall-back night, an 8 AM reminder still fires at 8 AM local; OS handles. Interviewers love hearing about the traveler-user scenario + repeat DST awareness." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What are iOS Interruption Levels + Android importance — how do you pick?**\n\n**A:** **iOS Interruption Levels** (iOS 15+): `passive` (silent, appear in tray only), `active` (default sound + banner), `time-sensitive` (breaks through Focus modes — 'delivery arriving now'), `critical` (bypass silent switch, needs Apple entitlement — for emergency alerts only). **Android importance:** `IMPORTANCE_MIN`, `LOW`, `DEFAULT`, `HIGH`, `MAX` (max = full-screen intent — reserved for alarms). Match to user value: news alerts = default; chat = high; workout timer end = default; alarm-app snooze notification = max + full-screen intent. **Anti-pattern:** everything on HIGH — trains users to ignore. **Regulator hint:** critical alerts on iOS require Apple approval + a real emergency-services justification." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How do you test notification behavior?**\n\n**A:** **Unit tests** — mock the plugin via method-channel overrides; assert `show / schedule` was called with the right arguments. **Manual on device** — real system behavior. **`adb shell dumpsys notification`** on Android to inspect. **iOS Simulator** simulates most; APNs delivery isn't real (test on real device). **Integration tests** with `patrol` can drive the notification tray. **Edge cases to test:** (1) tap while foreground / background / terminated; (2) tap during a phone call / DND; (3) permission denied; (4) channel muted by user; (5) timezone change mid-schedule; (6) low-battery Doze mode delaying deliveries. **CI limitations:** notification delivery on emulators is flaky; skip flaky suites; use unit tests for logic + manual verification for delivery. Interviewers respect knowing these limits." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **FCM foreground display** — every consumer app.\n- **Reminders** — medication, workouts, hydration, water plants.\n- **Content-ready** — offline download complete, print job done.\n- **Alarm-style** — timers, focus sessions.\n- **NOT ideal for** — real-time chat (use FCM); background data sync (use WorkManager)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`fullScreenIntent: true`** — Android alarm-style; reserved use.\n- **`ongoing: true`** — non-swipable (music player, ongoing call).\n- **Big-text / inbox / messaging styles** — rich formats.\n- **Media styles** — play/pause/skip controls.\n- **Progress notifications** — for uploads / downloads.\n- **Notification actions with `RemoteInput`** — quick reply on Android; UNTextInputAction on iOS.\n- **Grouped notifications (Android)** — group by key + summary.\n- **`silent: true`** — no sound / vibration.\n- **`autoCancel: false`** — persists after tap.\n- **`showWhen: false`** — hide timestamp.\n- **iOS Communication Notifications (iOS 15+)** — richer chat notifications with sender identity.\n- **Notification importance changes on Android** — users can override; app changes IGNORED after first set." }
   ],
   "flashcards": [
-    { "front": "Android 8+ requires…", "back": "A notification channel per category with an importance level." },
-    { "front": "Exact alarms on Android 12+?", "back": "Need SCHEDULE_EXACT_ALARM/USE_EXACT_ALARM; prefer inexact when possible." },
-    { "front": "iOS interruption levels?", "back": "passive, active, timeSensitive, critical — pick by user impact." }
+    { "front": "FCM vs local?", "back": "FCM = server push; local = your app schedules for OS to show later without network." },
+    { "front": "Android 8+ requirement?", "back": "Every notification must belong to a Channel with settings + user-mute control." },
+    { "front": "Android 13+ requirement?", "back": "POST_NOTIFICATIONS runtime permission." },
+    { "front": "Timezone-aware schedule?", "back": "tz.TZDateTime + matchDateTimeComponents; not naive Duration arithmetic." },
+    { "front": "Tap while terminated?", "back": "onDidReceiveBackgroundNotificationResponse top-level @pragma('vm:entry-point'); persist pending deep link." },
+    { "front": "FCM foreground display?", "back": "OS suppresses; render locally in FirebaseMessaging.onMessage." },
+    { "front": "iOS levels?", "back": "passive / active / time-sensitive / critical (entitlement)." }
   ],
   "quiz": [
-    { "q": "For a reminder in 10 min…", "options": ["Push via FCM", "Local zonedSchedule with tz", "Poll a timer", "Wake up user via alarm always"], "answer": 1, "explain": "Local notifications don't need a server." },
-    { "q": "Android 13+ additionally requires…", "options": ["Nothing new", "POST_NOTIFICATIONS runtime permission", "Root", "Kernel hack"], "answer": 1, "explain": "Runtime permission for showing notifications." },
-    { "q": "For DST-safe scheduling use…", "options": ["DateTime.now()", "tz.TZDateTime with tz.local", "Random", "Server time"], "answer": 1, "explain": "The `timezone` package handles DST correctly." }
+    { "q": "Notification without a channel on Android 8+…", "options": ["Fine", "Silent-drop", "Doubles", "Web only"], "answer": 1, "explain": "Channel is mandatory." },
+    { "q": "Repeat daily at wall-clock 8 AM across timezones?", "options": ["Duration(hours: 24)", "tz.TZDateTime + matchDateTimeComponents.time", "Rebuild manually", "Impossible"], "answer": 1, "explain": "OS handles the wall-clock." },
+    { "q": "Tap while terminated needs…", "options": ["Nothing", "onDidReceiveBackgroundNotificationResponse @pragma", "onMessage", "print"], "answer": 1, "explain": "Isolate entry rules." },
+    { "q": "FCM foreground display?", "options": ["Auto", "Render locally with flutter_local_notifications", "Nothing works", "Web only"], "answer": 1, "explain": "OS suppresses in-foreground." },
+    { "q": "iOS `time-sensitive` level?", "options": ["Silent", "Breaks through Focus modes", "Random", "Same as active"], "answer": 1, "explain": "iOS 15+ user-visible priority." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Show an immediate local notification with a channel." },
-    { "level": "Medium", "text": "Schedule a reminder for tomorrow at 9AM local time." },
-    { "level": "Hard", "text": "Add tap handling + notification actions (buttons)." },
-    { "level": "Expert", "text": "Combine FCM (delivery) + local notifications (display) with rich actions." }
+    { "level": "Easy", "text": "Immediate notification + tap payload → deep link." },
+    { "level": "Easy", "text": "Multiple channels: orders / chat / promos." },
+    { "level": "Medium", "text": "Daily zoned schedule at 8 AM local." },
+    { "level": "Medium", "text": "FCM foreground display via onMessage." },
+    { "level": "Hard", "text": "Tap-while-terminated → persisted pending route → cold-start navigation." },
+    { "level": "Hard", "text": "iOS reply action button + background handler." },
+    { "level": "Expert", "text": "Rebuild schedule on timezone/DST change." }
   ],
   "interviewQuestions": [
-    "Local vs push notifications?",
-    "Android notification channels — why?",
-    "Exact vs inexact alarms on Android 12+?",
-    "iOS interruption levels?",
-    "How do you handle app-launched-from-notification?"
+    "FCM vs local notifications — when each?",
+    "What are Android notification channels + why they matter?",
+    "How do you deep-link from a tap in all three states?",
+    "How do you schedule across timezones + DST?",
+    "iOS Interruption Levels vs Android importance — pick when?",
+    "How do you test notification behavior?"
   ],
   "references": [
-    { "label": "flutter_local_notifications", "url": "https://pub.dev/packages/flutter_local_notifications" }
+    { "label": "flutter_local_notifications", "url": "https://pub.dev/packages/flutter_local_notifications" },
+    { "label": "Android Notifications", "url": "https://developer.android.com/develop/ui/views/notifications" },
+    { "label": "iOS User Notifications", "url": "https://developer.apple.com/documentation/usernotifications" }
   ]
 }
