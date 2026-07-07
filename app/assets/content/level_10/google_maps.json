@@ -2,44 +2,106 @@
   "id": "plg.google_maps",
   "levelId": 10,
   "title": "google_maps_flutter",
-  "xp": 40,
-  "estimatedMinutes": 25,
+  "xp": 50,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Embed a Google Map with markers/polylines",
-    "Handle iOS + Android API keys and permissions",
-    "Cluster markers and control performance"
+    "Understand google_maps_flutter via a real-life analogy",
+    "Configure API keys + platform manifests correctly",
+    "Add markers, polylines, polygons, circles + custom info windows",
+    "Handle camera control, clustering, and Lite mode for perf",
+    "Manage cost + attribution + Advanced Markers migration",
+    "Answer Google Maps interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "`google_maps_flutter` embeds a native Google Map inside a Flutter widget. You provide API keys per platform, add markers/polylines/circles, and drive camera position via a `GoogleMapController`." },
-    { "type": "code", "language": "dart", "code": "GoogleMap(\n  initialCameraPosition: CameraPosition(target: LatLng(12.97, 77.59), zoom: 12),\n  markers: {\n    Marker(markerId: MarkerId('a'), position: LatLng(12.97, 77.59))\n  },\n  onMapCreated: (c) => _controller.complete(c),\n)" },
-    { "type": "callout", "variant": "interview", "markdown": "Native maps are the heaviest platform view Flutter embeds. Keep markers under a few hundred, cluster the rest, and avoid rebuilding the whole GoogleMap when only markers change — pass the marker set as a const-friendly Set." },
-    { "type": "callout", "variant": "mistake", "markdown": "Committing API keys in source. Restrict keys per platform + application (bundle ID / SHA1) in the Google Cloud Console, and inject via build config (`--dart-define`, Info.plist, AndroidManifest placeholders)." },
-    { "type": "callout", "variant": "tip", "markdown": "For heat maps or thousands of points, prefer a tile-based layer or clustering (fluster / google_maps_cluster_manager). Cache tiles for offline where feasible. Consider Mapbox/MapLibre if pricing/features push you." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of `google_maps_flutter` as embedding a mini Google Maps app inside a Flutter widget.**\n\nUnlike most Flutter widgets, GoogleMap is a **native view surface** — on Android it's a SurfaceView/TextureView hosting the Maps SDK; on iOS it's an MKMapView-styled UIView; on Web an iframe with the JS Maps API. Flutter composes it via a `PlatformView`. Everything you know about widgets — hot reload, Widget-tree rebuild, tests — has caveats around this surface.\n\n- **API key required** — Google issues one per Android app + one per iOS bundle + one restricted to your Web domain. Ungoverned keys = billing horror stories.\n- **Cost model** — Maps SDK is free up to $200 credit/month; overage bills per **map load** + per **direction request** + per **place autocomplete**. High-DAU consumer apps must monitor.\n- **Advanced Markers** — new marker API (with better clustering + collision detection) replacing legacy `Marker` in 2024+. Migration ongoing.\n- **Not everything Google Maps does is in the SDK** — Directions, Places, Roads are separate REST APIs consumed via HTTP calls; SDK renders the map + basic overlays.\n\n**Why every logistics / delivery / discovery app uses this:** users expect the exact Google Maps UX (satellite, traffic, 3D, StreetView). Building a bespoke map UI is a multi-year project. Cost is the tension: budget it up front + tune (Lite mode, static maps for previews, capped autocomplete)." },
+    { "type": "callout", "variant": "definition", "markdown": "**`google_maps_flutter`** wraps the native Google Maps SDKs (Android, iOS, Web) as a Flutter widget. Renders the map as a `PlatformView`; exposes markers, polylines, polygons, circles, tile overlays, and a `GoogleMapController` (imperative API for camera control, projection, snapshot). Requires an API key per platform, enabled Maps SDK for Android / Maps SDK for iOS / Maps JS API in Google Cloud Console." },
+    { "type": "theory", "markdown": "## API surface at a glance" },
+    { "type": "table", "headers": ["Feature", "How", "Notes"], "rows": [
+      ["Show a map", "GoogleMap widget", "PlatformView; heavy — avoid rebuilding often"],
+      ["Camera control", "GoogleMapController.animateCamera/moveCamera", "CameraUpdate targets"],
+      ["Markers", "Set<Marker>", "Advanced Markers roll-out in progress"],
+      ["Polylines", "Set<Polyline>", "For routes / paths"],
+      ["Polygons / Circles", "Set<Polygon> / Set<Circle>", "Geofences, service areas"],
+      ["Tile overlay", "Set<TileOverlay>", "Custom raster tiles (weather, heat)"],
+      ["Info windows", "Marker.infoWindow / custom via Marker tap", "Native styling limited"],
+      ["Snapshot", "controller.takeSnapshot()", "Save the map bitmap"],
+      ["Lite mode", "liteModeEnabled: true (Android)", "Static-like map — cheaper + faster"]
+    ]},
+    { "type": "theory", "markdown": "## Setup — keys + manifests" },
+    { "type": "code", "language": "xml", "code": "<!-- android/app/src/main/AndroidManifest.xml -->\n<application>\n  <meta-data\n    android:name=\"com.google.android.geo.API_KEY\"\n    android:value=\"YOUR_ANDROID_KEY\" />\n</application>\n\n<!-- Also set minSdkVersion 21+ in build.gradle -->" },
+    { "type": "code", "language": "swift", "code": "// ios/Runner/AppDelegate.swift\nimport GoogleMaps\n\n@UIApplicationMain\n@objc class AppDelegate: FlutterAppDelegate {\n  override func application(_ application: UIApplication,\n    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {\n    GMSServices.provideAPIKey(\"YOUR_IOS_KEY\")\n    return super.application(application, didFinishLaunchingWithOptions: launchOptions)\n  }\n}" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml: google_maps_flutter: ^2.7.0\nimport 'package:google_maps_flutter/google_maps_flutter.dart';\n\nclass MapScreen extends StatefulWidget {\n  const MapScreen({super.key});\n  @override State<MapScreen> createState() => _MapScreenState();\n}\n\nclass _MapScreenState extends State<MapScreen> {\n  GoogleMapController? _controller;\n  final _markers = <MarkerId, Marker>{};\n  final _polylines = <PolylineId, Polyline>{};\n\n  static const _initial = CameraPosition(target: LatLng(12.9716, 77.5946), zoom: 12);\n\n  @override\n  Widget build(BuildContext context) {\n    return GoogleMap(\n      initialCameraPosition: _initial,\n      onMapCreated: (c) => _controller = c,\n      markers: _markers.values.toSet(),\n      polylines: _polylines.values.toSet(),\n      myLocationEnabled: true,\n      myLocationButtonEnabled: true,\n      zoomControlsEnabled: false,\n      onTap: _addPin,\n    );\n  }\n\n  void _addPin(LatLng p) {\n    final id = MarkerId('pin_${DateTime.now().microsecondsSinceEpoch}');\n    setState(() => _markers[id] = Marker(\n      markerId: id, position: p,\n      infoWindow: InfoWindow(title: '${p.latitude.toStringAsFixed(3)}, ${p.longitude.toStringAsFixed(3)}'),\n      onTap: () async {\n        await _controller!.animateCamera(CameraUpdate.newLatLngZoom(p, 16));\n      },\n    ));\n  }\n\n  Future<void> _drawRoute(List<LatLng> points) async {\n    const id = PolylineId('route');\n    setState(() => _polylines[id] = Polyline(\n      polylineId: id, color: Colors.blue, width: 5, points: points,\n    ));\n    // Fit bounds\n    final bounds = LatLngBounds(\n      southwest: LatLng(points.map((p) => p.latitude).reduce(min),\n                        points.map((p) => p.longitude).reduce(min)),\n      northeast: LatLng(points.map((p) => p.latitude).reduce(max),\n                        points.map((p) => p.longitude).reduce(max)),\n    );\n    await _controller!.animateCamera(CameraUpdate.newLatLngBounds(bounds, 60));\n  }\n\n  @override void dispose() { _controller?.dispose(); super.dispose(); }\n}" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Unrestricted API key.** Copy-paste from a tutorial → leak in APK / Web bundle → attacker uses your quota. **Always restrict** in Google Cloud Console: Android key by SHA-1 + package; iOS by bundle ID; Web by referrer domain." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Rebuilding the GoogleMap widget on every state change.** PlatformView re-init is expensive (100-500 ms) + jarring. Isolate map state in its own widget/StatefulWidget; use markers/polylines via `Set` diffs." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Not batching marker updates.** 500 markers rebuilt one at a time thrashes the platform channel. Build the `Set<Marker>` once, then `setState`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Ignoring cost.** Map loads at consumer scale rack up bills. Use **Lite mode** (Android) for lists of maps, **Static Maps API** for previews, cache Places autocomplete results." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Wrong permission wiring.** `myLocationEnabled: true` without runtime permission = silent failure. Request via `permission_handler` + `geolocator`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Marker cluster storm.** 10 000 markers = frozen map. Use `google_maps_cluster_manager` or migrate to Advanced Markers with built-in clustering." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Info window UI limits.** Info windows are native raster; you can't put a Flutter widget inside. For rich UI, place a Flutter widget on top of the map via `Stack` + convert screen coords via `controller.getScreenCoordinate`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Missing `dispose` on controller.** Leaks the map surface + memory. Always dispose in `State.dispose`." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Restrict API keys.** Package + SHA-1 (Android), bundle ID (iOS), referrer (Web)." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Isolate map widget.** Wrap in a dedicated widget; parent state changes don't rebuild the PlatformView." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Marker sets batched.** Compute once, apply once." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Clustering for > 100 markers.**" },
+    { "type": "callout", "variant": "best", "markdown": "**5. Use Static Maps for thumbnails / previews** — cheaper + faster." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Lite mode for scrollable list of maps** — Android saves battery + CPU." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Attribution + terms compliant** — Google requires their branding + logo visible; don't hide." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Cost dashboards** — Google Cloud billing alert at $50 / $200; monitor per-day." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Show a map centered on user location; add a marker on tap." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Draw a route polyline between two points + animate camera to bounds." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Custom Flutter widget overlay tied to marker screen coord." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — 5000 markers with `google_maps_cluster_manager` — verify perf." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Lite mode inside a scrollable list of shop cards." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Restrict API keys + set up Cloud billing alerts; simulate a keyless build to verify restriction works." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: How is Google Maps rendered inside a Flutter app?**\n\n**A:** As a **PlatformView** — a native view surface embedded in the Flutter widget tree via `AndroidView` / `UiKitView`. On Android, it's a `MapView` (Google Maps SDK for Android); on iOS, a `GMSMapView` (Google Maps SDK for iOS); on Web, an iframe embedding the JS Maps API. Flutter's `GoogleMap` widget bridges via method channels — commands like `animateCamera` are serialized + sent to the native view; events (tap, camera move) come back. **Consequences:** (1) The map is NOT rendered by Skia / Impeller — it doesn't participate in Flutter's paint pipeline; (2) hot reload sometimes doesn't refresh map state; (3) placing Flutter widgets over the map works but they may flicker during heavy animations; (4) PlatformView init is expensive (~100-500 ms). **Rule:** treat the map as a heavy component; embed once; mutate via `GoogleMapController`." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How do you keep Google Maps costs under control?**\n\n**A:** **Cost model:** free $200/month credit; overage bills per map-load, per-Places-autocomplete, per-Directions-request. Levers: **(1) Static Maps** for previews (thumbnails in a card) — costs ~1/1000 of an interactive map load. **(2) Lite mode** on Android — static-like interactive map (no 3D / no gestures beyond pan/zoom) — cheaper + faster. **(3) Cache Places autocomplete** — dedupe recent queries locally, only hit API when new. **(4) Session tokens** for Places autocomplete — one billed session covers the typing + selection sequence. **(5) Cap Directions calls** — recompute only when destination changes. **(6) Cloud billing budget alerts** at $50 / $200 / $500. **(7) Monitor per-day usage** in Cloud Console; anomaly detection. **(8) Restrict keys** so a leaked key doesn't get exploited. **Sr interview signal:** knowing the specific SKUs + their per-1000 pricing." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What's the cluster manager story for large marker sets?**\n\n**A:** Rendering 5000 markers as individual `Marker`s tanks the map — every zoom triggers thousands of screen conversions. **Two options:** (1) **`google_maps_cluster_manager`** (community Flutter package) — groups markers by grid cell at the current zoom level + emits a single `Marker` per cluster with the item count. Zoom in → clusters split. (2) **Advanced Markers** (new SDK API, mid-2024 rollout) — built-in clustering with collision detection + custom cluster styles + PlatformView-optimized. **Migration path:** Advanced Markers eventually deprecate the legacy Marker; migrate when the flutter plugin support is stable. **Interview tip:** know that clustering exists — most candidates don't." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you overlay a Flutter widget onto a marker (custom info window)?**\n\n**A:** Info windows in the SDK are **native raster** — you can't put a Flutter widget inside. **Pattern:** (1) place your Flutter widget in a `Stack` over the map; (2) on marker tap, capture the marker's LatLng; (3) convert to screen coords via `controller.getScreenCoordinate(latLng)`; (4) `setState` to move the Flutter widget to those coords; (5) on camera move, listen via `onCameraMove` + re-convert. **Alternative:** on marker tap, show a `showModalBottomSheet` or floating card that's a full Flutter widget. Interviewers respect knowing the LIMITATION + the SDK's raster info-window vs the Flutter overlay pattern." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you handle location permissions + user-location display?**\n\n**A:** `myLocationEnabled: true` on the GoogleMap widget shows the blue dot + accuracy circle **IF** location permission is granted. Otherwise silently disabled. **Runtime:** (1) request via `permission_handler` (or `geolocator.checkPermission` + `requestPermission`); (2) also handle iOS 'When in Use' vs 'Always' distinction; Android's ACCESS_FINE_LOCATION vs COARSE. (3) React to permission changes at runtime — a user can revoke in Settings. **Manifests:** Android `<uses-permission android:name=\"android.permission.ACCESS_FINE_LOCATION\" />`; iOS `NSLocationWhenInUseUsageDescription` in Info.plist. **UX:** first-launch flow — explain WHY you need location (privacy rationale), then request. **Silent failure trap:** if permission denied, map still loads but no blue dot — devs think the plugin is broken. Log + surface UI: 'Enable location for map features.'" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What are the Web trade-offs?**\n\n**A:** Web target uses the Maps JavaScript API loaded from Google's CDN. **Wins:** same widget API in Flutter code. **Caveats:** (1) API key must be **domain-restricted** in Cloud Console. (2) JS API pricing differs slightly from mobile SDK; check the per-load SKUs. (3) Not all APIs are 1:1 with mobile — some options fall back or no-op. (4) Loading the JS SDK adds ~150 KB gzipped to the app; consider lazy-load. (5) StreetView + advanced markers landed at different times on Web; check plugin support. (6) In `<iframe>` sandbox modes some features misbehave; test in prod-like host. (7) Attribution + Terms still enforced. **When Web parity matters:** consider Mapbox / Leaflet as alternatives — cheaper for high-DAU Web-first apps." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Delivery + logistics** — driver tracking, order handoff.\n- **Discovery / listings** — restaurants, shops, listings on a map.\n- **Route planning** — Directions API + Polyline.\n- **Geofencing** — Circles / Polygons + native geofencing APIs.\n- **NOT ideal for** — offline-only maps (use OSM / Mapbox); indoor floor plans (use Mapbox); high-DAU Web-first apps (consider MapLibre / Mapbox for cost)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Advanced Markers** — collision detection + higher-density rendering; migrate when Flutter plugin support stable.\n- **Custom map styles** — Cloud-hosted styles via `MapId` in the console; SDK loads styled map without runtime JSON.\n- **Traffic layer** — `trafficEnabled: true` — extra cost.\n- **Indoor maps** — auto-shown for shopping malls / airports.\n- **`controller.getVisibleRegion()`** — for viewport-driven queries (fetch pins in bounds).\n- **`controller.getScreenCoordinate` / `.getLatLng`** — screen-to-map + inverse.\n- **`snapshot()`** — bitmap capture, useful for share.\n- **Marker icon customization** — `BitmapDescriptor.fromBytes` + custom-painted PNGs.\n- **Google Places SDK / API** — separate; used for autocomplete + place details.\n- **Directions API** — separate REST call; returns route polyline + waypoints.\n- **Roads API** — snap-to-road for tracks.\n- **Static Maps API** — server-rendered map image URL; cheapest for thumbnails.\n- **Consumer alternatives** — Mapbox (better custom styling), OpenStreetMap via `flutter_map` (free but simpler feature set)." }
   ],
   "flashcards": [
-    { "front": "Where do API keys live?", "back": "Info.plist (iOS) + AndroidManifest.xml (Android), restricted to your bundle IDs in Cloud Console." },
-    { "front": "How to handle many markers?", "back": "Cluster them; don't render thousands independently." },
-    { "front": "Why is GoogleMap heavy?", "back": "It's a native platform view — heavier than pure Flutter widgets." }
+    { "front": "Rendering technique?", "back": "PlatformView — native map surface embedded in Flutter widget tree." },
+    { "front": "API key restriction?", "back": "Android SHA-1+package; iOS bundle ID; Web referrer. Always restrict." },
+    { "front": "Cost levers?", "back": "Static Maps for thumbnails; Lite mode; Places session tokens; cache autocomplete; Cloud billing alerts." },
+    { "front": "> 500 markers?", "back": "google_maps_cluster_manager OR Advanced Markers with built-in clustering." },
+    { "front": "Custom info window with Flutter widget?", "back": "Native info windows are raster; overlay a Flutter widget via getScreenCoordinate." },
+    { "front": "User-location dot?", "back": "myLocationEnabled: true + runtime location permission (via permission_handler / geolocator)." },
+    { "front": "Directions?", "back": "Separate REST API — SDK doesn't include; call + draw polyline." }
   ],
   "quiz": [
-    { "q": "API keys should be…", "options": ["Committed to git", "Restricted per platform + bundle ID and injected", "Hardcoded in Dart", "Shared publicly"], "answer": 1, "explain": "Never expose unrestricted keys." },
-    { "q": "For thousands of markers…", "options": ["Add them one by one", "Cluster or use tile layers", "Skip performance", "Use setState per marker"], "answer": 1, "explain": "Clustering keeps rendering feasible." },
-    { "q": "Camera control uses…", "options": ["setState only", "GoogleMapController", "Navigator", "Provider"], "answer": 1, "explain": "The controller manages camera + animations." }
+    { "q": "Google Maps in Flutter uses…", "options": ["Custom painter", "PlatformView", "Impeller", "Widget only"], "answer": 1, "explain": "Native SurfaceView / UIView." },
+    { "q": "5000 markers — approach?", "options": ["Add all", "Cluster manager or Advanced Markers", "Ignore", "Sync loop"], "answer": 1, "explain": "Grid-based clustering." },
+    { "q": "Info window Flutter widget?", "options": ["Directly supported", "Native raster only — overlay via Stack", "Web only", "Impossible"], "answer": 1, "explain": "Use Stack + getScreenCoordinate." },
+    { "q": "Static Maps API vs interactive?", "options": ["Same cost", "Static ~1/1000 of interactive", "Static more expensive", "N/A"], "answer": 1, "explain": "Use for thumbnails / previews." },
+    { "q": "Blue dot requires…", "options": ["Nothing", "myLocationEnabled + location permission", "Paid tier", "Web-only"], "answer": 1, "explain": "Silent-fail without permission." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Show a map centered on a city with one marker." },
-    { "level": "Medium", "text": "Draw a polyline between two points and fit camera bounds." },
-    { "level": "Hard", "text": "Add clustering for 5k markers." },
-    { "level": "Expert", "text": "Overlay a custom tile source with offline caching." }
+    { "level": "Easy", "text": "Show a map + marker on tap." },
+    { "level": "Easy", "text": "Camera animation to a point + fit bounds around two markers." },
+    { "level": "Medium", "text": "Polyline route between two points; camera fits bounds." },
+    { "level": "Medium", "text": "Flutter card overlay tied to marker screen coord." },
+    { "level": "Hard", "text": "5000 markers with google_maps_cluster_manager." },
+    { "level": "Hard", "text": "Lite mode inside a ListView of shop cards." },
+    { "level": "Expert", "text": "Cost dashboard: restrict keys + Cloud billing alerts + Static Maps for previews." }
   ],
   "interviewQuestions": [
-    "How does the plugin embed native maps?",
-    "How do you secure API keys?",
-    "How do you handle many markers?",
-    "google_maps vs Mapbox/MapLibre — trade-offs?",
-    "How do you drive the camera from state?"
+    "How is Google Maps rendered in Flutter?",
+    "How do you keep Google Maps costs under control?",
+    "Cluster manager story for large marker sets?",
+    "Custom Flutter widget over a marker — how?",
+    "Location permissions + user-location dot handling?",
+    "Web trade-offs?"
   ],
   "references": [
-    { "label": "google_maps_flutter", "url": "https://pub.dev/packages/google_maps_flutter" }
+    { "label": "google_maps_flutter", "url": "https://pub.dev/packages/google_maps_flutter" },
+    { "label": "Maps SDK pricing", "url": "https://mapsplatform.google.com/pricing/" },
+    { "label": "Advanced Markers", "url": "https://developers.google.com/maps/documentation/javascript/advanced-markers/overview" }
   ]
 }

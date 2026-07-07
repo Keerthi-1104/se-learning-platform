@@ -2,44 +2,103 @@
   "id": "plg.geolocator",
   "levelId": 10,
   "title": "geolocator",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "xp": 40,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Request location permissions correctly",
-    "Choose accuracy vs battery trade-offs",
-    "Stream position updates safely"
+    "Understand geolocator via a real-life analogy",
+    "Request + verify location permission on both platforms",
+    "Pick the right accuracy vs battery trade-off",
+    "Stream position updates + handle background limits",
+    "Compute distances / bearings correctly",
+    "Answer geolocator interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "`geolocator` gives you the device's current position, distance/bearing calculations, and a position stream. It handles the platform permission dance and picks the right underlying provider (GPS / Wi-Fi / network)." },
-    { "type": "code", "language": "dart", "code": "var p = await Geolocator.checkPermission();\nif (p == LocationPermission.denied) p = await Geolocator.requestPermission();\nfinal pos = await Geolocator.getCurrentPosition(\n  locationSettings: LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 10),\n);\nGeolocator.getPositionStream(...).listen(...);" },
-    { "type": "callout", "variant": "interview", "markdown": "Battery vs accuracy is a real design choice. `LocationAccuracy.high` uses GPS aggressively; `medium`/`low` prefers cell/Wi-Fi. `distanceFilter` throttles updates. Background location requires **extra platform config + reviewer justification** on both stores." },
-    { "type": "callout", "variant": "mistake", "markdown": "Requesting `alwaysGranted` without a strong reason. On iOS, Apple rejects apps that ask for background location without clear justification. Ask for `whileInUse` first, then upgrade only when needed." },
-    { "type": "callout", "variant": "tip", "markdown": "Add proper strings: iOS `NSLocationWhenInUseUsageDescription` (and `Always` if needed) in Info.plist; Android permissions in AndroidManifest.xml. Check `Geolocator.isLocationServiceEnabled` before requesting." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of geolocator as the GPS antenna + a very talkative doorman.**\n\nThe GPS chip on the phone is a shared resource. The OS makes you knock politely — declare intent, ask permission, tell it how sharp you need the fix + how often. In return you get positions.\n\n- **Accuracy trade-off** — `LocationAccuracy.high` = live GPS (2-5 s TTFF; ~1% battery per hour). `medium` = network + cell (~10 m). `low` = cell only (~1 km, cheap). Match to use case: rider tracking = high; nearby-shops = medium.\n- **Permission tiers** — iOS 'When in Use' vs 'Always'; Android FINE vs COARSE (Android 12+ user can even choose 'Approximate only').\n- **Background** — iOS suspends most background updates; Android 10+ needs a foreground service for continuous. `geolocator` gives you the API but the OS decides delivery.\n- **Distances + bearings** — `Geolocator.distanceBetween(...)` handles the haversine math + returns meters.\n\n**Why every location-aware Flutter app installs it:** wraps the platform boilerplate (permission dance, service availability, position stream) into one Dart API. Even if you use FusedLocationProvider (Android) or CLLocationManager (iOS) natively for advanced use cases, `geolocator` remains the go-to for reading a single position or streaming updates in the foreground." },
+    { "type": "callout", "variant": "definition", "markdown": "**`geolocator`** wraps native location services: Android's **FusedLocationProviderClient** (Google Play Services) or `LocationManager` fallback, iOS's **CLLocationManager**, and Web's Geolocation API. Exposes: `checkPermission`, `requestPermission`, `isLocationServiceEnabled`, `getCurrentPosition`, `getLastKnownPosition`, `getPositionStream(LocationSettings)`, `distanceBetween`, `bearingBetween`, `openLocationSettings`, `openAppSettings`." },
+    { "type": "theory", "markdown": "## Accuracy vs battery" },
+    { "type": "table", "headers": ["LocationAccuracy", "Typical error", "Battery cost", "Use case"], "rows": [
+      ["`best` / `bestForNavigation`", "1-5 m", "Highest", "Turn-by-turn navigation"],
+      ["`high`", "~10 m", "High", "Rider tracking, live sharing"],
+      ["`medium`", "~50 m", "Medium", "Nearby-shops, weather"],
+      ["`low`", "~500 m", "Low", "Region-based offers, timezone hints"],
+      ["`lowest`", "~3000 m", "Lowest", "Very rough city-level only"],
+      ["`reduced` (iOS 14+)", "10 km", "Very low", "When user grants coarse only"]
+    ]},
+    { "type": "theory", "markdown": "## Setup + permission flow" },
+    { "type": "code", "language": "xml", "code": "<!-- android/app/src/main/AndroidManifest.xml -->\n<uses-permission android:name=\"android.permission.ACCESS_COARSE_LOCATION\" />\n<uses-permission android:name=\"android.permission.ACCESS_FINE_LOCATION\" />\n<!-- Optional for background: -->\n<uses-permission android:name=\"android.permission.ACCESS_BACKGROUND_LOCATION\" />" },
+    { "type": "code", "language": "xml", "code": "<!-- ios/Runner/Info.plist -->\n<key>NSLocationWhenInUseUsageDescription</key>\n<string>We use your location to show nearby stores.</string>\n<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>\n<string>We use your location to track your delivery.</string>" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml: geolocator: ^11.0.0\nimport 'package:geolocator/geolocator.dart';\n\n// ────── One-shot position with the full permission dance ──────\nFuture<Position?> getMyLocation() async {\n  final serviceEnabled = await Geolocator.isLocationServiceEnabled();\n  if (!serviceEnabled) {\n    await Geolocator.openLocationSettings();\n    return null;\n  }\n\n  LocationPermission p = await Geolocator.checkPermission();\n  if (p == LocationPermission.denied) {\n    p = await Geolocator.requestPermission();\n    if (p == LocationPermission.denied) return null;\n  }\n  if (p == LocationPermission.deniedForever) {\n    await Geolocator.openAppSettings();\n    return null;\n  }\n\n  return await Geolocator.getCurrentPosition(\n    locationSettings: const LocationSettings(\n      accuracy: LocationAccuracy.high,\n      timeLimit: Duration(seconds: 15),\n    ),\n  );\n}\n\n// ────── Position stream (foreground rider tracking) ──────\nStreamSubscription<Position>? _sub;\n\nvoid startTracking() {\n  final settings = defaultTargetPlatform == TargetPlatform.android\n      ? AndroidSettings(\n          accuracy: LocationAccuracy.high,\n          distanceFilter: 10,               // meters\n          intervalDuration: const Duration(seconds: 5),\n          foregroundNotificationConfig: const ForegroundNotificationConfig(\n            notificationText: 'Tracking delivery',\n            notificationTitle: 'Live location',\n            enableWakeLock: true,\n          ),\n        )\n      : const AppleSettings(\n          accuracy: LocationAccuracy.high,\n          distanceFilter: 10,\n          pauseLocationUpdatesAutomatically: true,\n          activityType: ActivityType.automotiveNavigation,\n        );\n  _sub = Geolocator.getPositionStream(locationSettings: settings)\n      .listen((pos) => print('${pos.latitude}, ${pos.longitude}'));\n}\n\nvoid stopTracking() { _sub?.cancel(); _sub = null; }\n\n// ────── Distance / bearing math ──────\nfinal meters = Geolocator.distanceBetween(a.lat, a.lng, b.lat, b.lng);\nfinal degrees = Geolocator.bearingBetween(a.lat, a.lng, b.lat, b.lng);" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Requesting permission without the manifest / Info.plist entries.** iOS silently returns denied; Android throws. Wire manifests first." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Ignoring `LocationServiceDisabled`.** GPS off → all requests fail. Check `isLocationServiceEnabled` + prompt to enable." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Using `LocationAccuracy.best` everywhere.** Battery drain. Match accuracy to the task." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Not stopping the stream.** `_sub` alive after screen leaves = wake locks / battery drain. Cancel in `dispose`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Assuming background delivery.** iOS suspends silently; Android 10+ requires foreground service + notification. For always-on delivery you need `ACCESS_BACKGROUND_LOCATION` + user opts into 'Allow all the time.'" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: No `timeLimit` on `getCurrentPosition`.** In a subway / basement, the request hangs forever. Set 10-15 s and fall back to `getLastKnownPosition`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Precision leak.** Storing sub-centimeter coordinates for a use case that needs neighborhood accuracy → PII risk + unnecessary DB size. Round when appropriate." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: 'Approximate location' surprise (Android 12+).** User can grant only coarse; your app sees ~200 m error even with FINE requested. Handle gracefully." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Full permission dance** — service + permission + Always vs When in Use + Approximate. Show explainer UI first-time." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Match accuracy to task** — don't burn battery with `best` when `medium` suffices." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Cancel streams in `dispose`.** Every subscription released." },
+    { "type": "callout", "variant": "best", "markdown": "**4. `distanceFilter` + `intervalDuration`** — throttle updates to what UI actually needs." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Android foreground service** — for delivery tracking; user sees a persistent notification (legally required in many jurisdictions)." },
+    { "type": "callout", "variant": "best", "markdown": "**6. iOS `activityType`** — hint to the OS (`automotive`, `fitness`, `otherNavigation`) for better filtering + battery." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Fallback to `getLastKnownPosition`** when live fix times out." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Round + throttle stored coordinates** — send only when displacement > threshold; store 5-decimal precision if 1 m suffices." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — One-shot `getCurrentPosition` with full permission flow." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Position stream with `distanceFilter=20` + cancel-on-dispose." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Compute route length + heading between waypoints." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Android foreground-service tracking during a run (fitness app style)." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Handle user picking 'Approximate only' on Android 12+ — degrade UI." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Battery benchmark: high vs medium accuracy vs 30-s interval — measure over 1 h." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Walk through the full permission dance.**\n\n**A:** **(1) Check location service.** `Geolocator.isLocationServiceEnabled()` — GPS toggle in Settings. If false, `openLocationSettings()` (best UX with rationale). **(2) Check permission.** `checkPermission()` returns `denied / deniedForever / whileInUse / always`. **(3) Request if denied.** `requestPermission()` — first call triggers the system prompt. If user picks 'Deny' → `denied`; 'Don't ask again' → `deniedForever` on Android, or 'Never' on iOS → prompt user to open Settings via `openAppSettings()`. **(4) Handle `whileInUse` vs `always`.** For foreground use, `whileInUse` is fine. For continuous background, iOS requires `always` (and the user must OPT-UP from `whileInUse` in Settings — you can't request Always directly on iOS 14+). **(5) Android 12+ approximate mode.** User can grant only coarse; queries return ~200 m accurate; degrade UI. **(6) Rationale first.** Show a 'why we need this' pre-prompt screen — dramatically improves acceptance rate." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How do you get reliable background location tracking?**\n\n**A:** Depends on platform + urgency. **Android:** need a **foreground service** with persistent notification (`ForegroundNotificationConfig` in geolocator's Android settings) + `ACCESS_BACKGROUND_LOCATION` permission + user grants 'Allow all the time.' The service keeps the app process alive; OS won't kill it while the notification is visible. **iOS:** `AppleSettings(pauseLocationUpdatesAutomatically: true, activityType: ActivityType.automotiveNavigation)` + `NSLocationAlwaysUsageDescription` in Info.plist + **background modes → location updates** enabled in Xcode. iOS pauses updates when the app has been static; resumes when the device moves significantly. **Battery honesty:** even with all these, continuous high-accuracy tracking burns ~15% battery per hour on both platforms. **Alternative for less-critical needs:** significant-change notifications (iOS) or geofencing (both) — one-shot triggers on region enter/exit at low battery cost." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do you pick the right `LocationAccuracy`?**\n\n**A:** Match to the USE CASE. **`bestForNavigation`** — turn-by-turn nav: 1-3 m, highest battery. **`high`** — rider tracking, live-share: 5-10 m, high battery. **`medium`** — nearby-shops, weather: 50-100 m, moderate. **`low`** — city/regional offers: 500 m-1 km, cheap. **`lowest`** — timezone hints only. **`reduced`** (iOS 14+, iOS-user picked coarse) — 10 km-ish. **Rule of thumb:** if the UI shows a pin on a map, `high` is the max you need — GPS beyond that is jitter, not precision. For a nearby-list, `medium` is enough. `bestForNavigation` should only run while user is actively driving. Combine with `distanceFilter` (only emit when moved > N meters) and `intervalDuration` (throttle rate) to keep both accuracy AND battery in check." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you compute distance / bearing correctly?**\n\n**A:** Use `Geolocator.distanceBetween(lat1, lng1, lat2, lng2)` — returns meters via the **haversine formula** (great-circle distance on a sphere). Accurate to ~0.5% for < 100 km distances. **Bearing:** `Geolocator.bearingBetween(...)` returns degrees clockwise from North. **When haversine isn't enough:** > 1000 km / geodetic precision → Vincenty's formula (ellipsoid model); use `latlong2` or `flutter_map`'s helpers. **Rounding pitfall:** doing math on doubles then subtracting nearly-equal values loses precision — order operations to avoid catastrophic cancellation. **Storing:** WGS84 (standard GPS coordinates) is universal; if joining with a backend that stores UTM or MGRS, convert at the boundary. **Anti-pattern:** naive Euclidean `sqrt(dx² + dy²)` on lat/lng — hits accuracy nightmares near poles + at large distances." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: Location + privacy / GDPR / DPDPA — what to watch?**\n\n**A:** **(1) Consent first.** Explain what you'll do with the location before requesting permission. Consent is required under GDPR / DPDPA / CPRA — permission alone is not consent. **(2) Minimal accuracy.** Store only the precision needed; round to 4 decimals (~10 m) if you don't need finer. **(3) Retention limits.** Don't keep raw tracks forever; aggregate to trip summaries or delete after N days. **(4) Purpose limitation.** Location for delivery = OK; also selling it to ad networks = separate consent required. **(5) Data-subject rights.** User can request export + deletion; design your DB for it. **(6) Cross-border storage** — some regulations require in-country storage of location; check Firebase / your backend regions. **(7) Analytics + location** — Firebase Analytics does NOT log GPS by default; log city-level at most. **(8) Sensitive-location deny-list** — some apps mask locations near shelters / religious sites; considered ethical best practice." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What are the platform-specific gotchas?**\n\n**A:** **Android:** (1) `LocationServices` (Play Services) vs `LocationManager` fallback — the plugin uses the fused API on Play Services devices, LocationManager on Huawei / Amazon / non-GMS. (2) `ACCESS_BACKGROUND_LOCATION` is a separate permission on Android 10+ + user must grant 'Allow all the time.' (3) 'Approximate only' on Android 12+ — even with FINE, accuracy drops. (4) Play Console requires justification for background location. **iOS:** (1) Cannot request `always` directly on iOS 14+ — user must upgrade in Settings. (2) `pauseLocationUpdatesAutomatically` + `activityType` for battery savings. (3) `NSLocation*UsageDescription` in Info.plist required per permission type. (4) Background modes → location updates capability. (5) iPad restrictions on GPS in some regions. **Web:** limited API surface; no background; user prompt per session for some browsers. **Windows / macOS:** desktop targets have partial support; test on real hardware." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Delivery + rider tracking** — foreground service; every 5 s.\n- **Nearby discovery** — one-shot medium accuracy.\n- **Fitness apps** — activityType `fitness` + foreground service.\n- **Weather + timezone** — low accuracy suffices.\n- **NOT ideal for** — geofencing (use native + `flutter_background_geolocation` or platform APIs); indoor positioning (Bluetooth beacons)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`AndroidSettings.foregroundNotificationConfig`** — the plugin manages the foreground service for you.\n- **`AppleSettings.activityType`** — hints iOS about your movement pattern for smarter power management.\n- **Geofencing** — geolocator itself doesn't do it; use `flutter_background_geolocation` or platform native APIs.\n- **`Geolocator.getServiceStatusStream`** — observe user toggling GPS.\n- **`getLastKnownPosition`** — instant fallback (may be minutes stale).\n- **Mock locations** — Android's mock provider; testers can spoof coords with `set_mock_location`.\n- **Web target permission** — synchronous prompt not always possible on some browsers.\n- **iOS Simulator location** — set via menu; useful for testing.\n- **Location smoothing** — Kalman filter or moving-average to reduce jitter.\n- **Battery Health mode** — some devices throttle GPS on low battery; live longer.\n- **`ACCESS_COARSE_LOCATION`-only apps** — perfectly valid; skip fine if you don't need it (Play Store approval friction).\n- **Alternative packages** — `location`, `flutter_background_geolocation`, `background_locator_2`." }
   ],
   "flashcards": [
-    { "front": "Common accuracy setting?", "back": "LocationAccuracy.high uses GPS; medium/low favor cell/Wi-Fi (battery-friendly)." },
-    { "front": "Distance filter?", "back": "Minimum movement (meters) before emitting a new position — saves battery + reduces noise." },
-    { "front": "Background location on iOS?", "back": "Extra Info.plist keys + review scrutiny; use whileInUse where possible." }
+    { "front": "Full permission dance?", "back": "service enabled → checkPermission → requestPermission → deniedForever → openAppSettings." },
+    { "front": "Background tracking Android?", "back": "Foreground service + ACCESS_BACKGROUND_LOCATION + user grants 'Allow all the time'." },
+    { "front": "Background tracking iOS?", "back": "always permission (user upgrades in Settings) + BG modes → location updates + activityType." },
+    { "front": "distance / bearing?", "back": "distanceBetween (meters, haversine); bearingBetween (degrees from North)." },
+    { "front": "Match accuracy?", "back": "bestForNavigation for nav; high for rider; medium for nearby; low for regional." },
+    { "front": "GDPR / DPDPA?", "back": "Consent + purpose limitation + retention limits + minimal precision + data-subject rights." },
+    { "front": "Approximate only (Android 12+)?", "back": "User can grant coarse even with FINE requested; ~200m accuracy; degrade UI." }
   ],
   "quiz": [
-    { "q": "For battery-friendly city tracking…", "options": ["accuracy.best + no filter", "medium accuracy + distanceFilter", "None", "GPS forever"], "answer": 1, "explain": "Lower accuracy + a filter reduces GPS usage." },
-    { "q": "Before requesting permission, check…", "options": ["Nothing", "isLocationServiceEnabled + checkPermission", "GPU state", "Storage"], "answer": 1, "explain": "Confirm services + current status first." },
-    { "q": "iOS background location needs…", "options": ["Nothing", "Extra Info.plist entries + justification", "Root", "Firebase"], "answer": 1, "explain": "Apple review requires clear justification." }
+    { "q": "Continuous Android tracking needs…", "options": ["Nothing extra", "Foreground service + ACCESS_BACKGROUND_LOCATION", "just FINE permission", "reboot"], "answer": 1, "explain": "OS kills background otherwise." },
+    { "q": "iOS Always permission is requested…", "options": ["Directly at first prompt", "User upgrades from WhenInUse in Settings", "Impossible", "Only iPad"], "answer": 1, "explain": "iOS 14+ semantics." },
+    { "q": "distanceBetween uses…", "options": ["Euclidean", "Haversine (great-circle)", "Vincenty always", "Random"], "answer": 1, "explain": "Meters on a sphere." },
+    { "q": "Best accuracy for nearby shops?", "options": ["best", "high", "medium", "low"], "answer": 2, "explain": "50-100m suffices; save battery." },
+    { "q": "Stream leak fix?", "options": ["setState", "Cancel subscription in dispose", "Restart app", "Ignore"], "answer": 1, "explain": "Otherwise wake locks + battery drain." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Show the current lat/lng once." },
-    { "level": "Medium", "text": "Stream positions with a 20m filter; update a marker on a map." },
-    { "level": "Hard", "text": "Handle permanently-denied permission with a settings redirect." },
-    { "level": "Expert", "text": "Enable background location and pass Apple review with proper strings." }
+    { "level": "Easy", "text": "Full permission flow returning current position." },
+    { "level": "Easy", "text": "Distance between two saved landmarks in meters." },
+    { "level": "Medium", "text": "Position stream with distanceFilter=20; cancel-on-dispose." },
+    { "level": "Medium", "text": "Handle 'Approximate only' by disabling street-level UI." },
+    { "level": "Hard", "text": "Android foreground service tracking a delivery route." },
+    { "level": "Hard", "text": "iOS pauseLocationUpdatesAutomatically + activityType tuning." },
+    { "level": "Expert", "text": "Battery benchmark across accuracy tiers + distanceFilter values." }
   ],
   "interviewQuestions": [
-    "How do you balance accuracy and battery?",
-    "How do you request permissions correctly?",
-    "What is distanceFilter?",
-    "iOS background location requirements?",
-    "Fallback behavior when location is off?"
+    "Walk through the full permission dance.",
+    "Reliable background location tracking on Android + iOS?",
+    "How do you pick the right LocationAccuracy?",
+    "Compute distance + bearing correctly?",
+    "Privacy / GDPR / DPDPA considerations?",
+    "Platform-specific gotchas?"
   ],
   "references": [
-    { "label": "geolocator", "url": "https://pub.dev/packages/geolocator" }
+    { "label": "geolocator package", "url": "https://pub.dev/packages/geolocator" },
+    { "label": "iOS Location docs", "url": "https://developer.apple.com/documentation/corelocation" },
+    { "label": "Android Location docs", "url": "https://developer.android.com/develop/sensors-and-location/location" }
   ]
 }

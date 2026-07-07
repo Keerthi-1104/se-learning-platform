@@ -2,44 +2,105 @@
   "id": "plg.camera",
   "levelId": 10,
   "title": "camera",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 50,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Preview and capture safely with the camera plugin",
-    "Dispose controllers on route change",
-    "Handle orientation and permissions"
+    "Understand the camera plugin via a real-life analogy",
+    "Set up manifest / Info.plist + permission handling",
+    "Preview, capture stills, record video, control zoom / flash / exposure",
+    "Stream image frames for ML Kit / mobile_scanner",
+    "Handle lifecycle + orientation + disposal correctly",
+    "Answer camera plugin interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "The `camera` plugin (Flutter Team) provides low-level access to the platform camera: enumerate cameras, start a preview, capture stills, and record videos with a `CameraController`." },
-    { "type": "code", "language": "dart", "code": "final cams = await availableCameras();\nfinal ctrl = CameraController(cams.first, ResolutionPreset.high);\nawait ctrl.initialize();\n// ... show CameraPreview(ctrl)\nfinal file = await ctrl.takePicture();\n@override void dispose(){ ctrl.dispose(); super.dispose(); }" },
-    { "type": "callout", "variant": "interview", "markdown": "The camera is a scarce, expensive resource. Dispose the controller in `dispose()`; pause it in the app's `AppLifecycleState.paused` (background) and re-init on resume. Otherwise you'll leak sensors and drain battery." },
-    { "type": "callout", "variant": "mistake", "markdown": "Setting the highest `ResolutionPreset` for a UI preview → hot device + jank. Use `medium`/`high` for preview and switch just before capture, or use `imageFormatGroup` tuned to your ML/scan pipeline." },
-    { "type": "callout", "variant": "tip", "markdown": "For scanning workflows (barcodes, ML Kit), prefer `mobile_scanner` or camera + ML Kit direct — the raw camera plugin gives you flexibility but more code. Watch orientation with WidgetsBindingObserver + didChangeMetrics." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of the `camera` plugin as a viewfinder + shutter you rent.**\n\nThe camera hardware belongs to the OS; multiple apps compete for it. When you call `controller.initialize()` you're telling the OS 'I'd like the back sensor at 1080p, please.' The OS opens the pipeline, streams frames to a native texture that Flutter composites via `CameraPreview` widget, and gives you a `CameraController` handle. When you leave the screen — return the rental.\n\n- **`CameraDescription`** — a listing entry per lens (back-wide, back-telephoto, front). Get them via `availableCameras()`.\n- **`CameraController`** — the actual handle; opens/closes the device.\n- **`CameraPreview`** — Flutter widget that renders the native texture.\n- **`takePicture()`** — one still into a temp file.\n- **`startVideoRecording() / stopVideoRecording()`** — video capture; returns a temp file.\n- **`startImageStream()`** — raw YUV / BGRA frames delivered per capture-rate; feed to ML Kit / mobile_scanner.\n\n**Why every capture-heavy Flutter app uses this instead of `image_picker`:** `image_picker` opens the SYSTEM camera app (or gallery); great for a one-off snapshot, useless for guided capture (barcode scan, document scan, KYC ID capture). The `camera` plugin gives you the raw feed to overlay UI, control focus/exposure, and stream frames to ML pipelines. Cost: much more code + lifecycle care than `image_picker`." },
+    { "type": "callout", "variant": "definition", "markdown": "**`camera`** wraps Android's **CameraX** (or Camera2 fallback) and iOS's **AVFoundation**. Provides `availableCameras()`, `CameraController(desc, ResolutionPreset, imageFormatGroup: ...)`, `initialize`, `takePicture`, `startVideoRecording`, `startImageStream`, plus zoom / focus / flash / exposure / orientation controls. Widget: `CameraPreview(controller)`. Requires manifest permissions + Info.plist usage descriptions. Web target is limited (no image streaming)." },
+    { "type": "theory", "markdown": "## Feature matrix" },
+    { "type": "table", "headers": ["Feature", "Method", "Notes"], "rows": [
+      ["Preview", "`CameraPreview(controller)` widget", "Native texture; PlatformView on some setups"],
+      ["Still capture", "`controller.takePicture()`", "Returns `XFile` (temp path)"],
+      ["Video record", "`start/stopVideoRecording()`", "Returns `XFile` with .mp4"],
+      ["Image stream", "`startImageStream((img) => ...)`", "Feeds ML Kit, barcode scanner"],
+      ["Zoom", "`setZoomLevel(min..max)`", "getMax/MinZoomLevel"],
+      ["Flash", "`setFlashMode(FlashMode)`", "off / auto / always / torch"],
+      ["Focus point", "`setFocusPoint(Offset)`", "Tap-to-focus"],
+      ["Exposure point", "`setExposurePoint(Offset)`", "Tap-to-adjust brightness"],
+      ["Orientation lock", "`lockCaptureOrientation(...)`", "Portrait / landscape"]
+    ]},
+    { "type": "theory", "markdown": "## Complete setup + lifecycle-safe wiring" },
+    { "type": "code", "language": "xml", "code": "<!-- android/app/src/main/AndroidManifest.xml -->\n<uses-permission android:name=\"android.permission.CAMERA\" />\n<uses-permission android:name=\"android.permission.RECORD_AUDIO\" />\n<uses-feature android:name=\"android.hardware.camera\" android:required=\"false\" />\n\n<!-- ios/Runner/Info.plist -->\n<key>NSCameraUsageDescription</key>\n<string>We use the camera to scan barcodes.</string>\n<key>NSMicrophoneUsageDescription</key>\n<string>We record audio when you shoot video.</string>" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml: camera: ^0.10.5+9\nimport 'package:camera/camera.dart';\n\nclass ScanScreen extends StatefulWidget {\n  const ScanScreen({super.key});\n  @override State<ScanScreen> createState() => _ScanScreenState();\n}\n\nclass _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {\n  CameraController? _controller;\n  Future<void>? _init;\n\n  @override\n  void initState() {\n    super.initState();\n    WidgetsBinding.instance.addObserver(this);\n    _init = _bootCamera();\n  }\n\n  Future<void> _bootCamera() async {\n    final cams = await availableCameras();\n    final back = cams.firstWhere((c) => c.lensDirection == CameraLensDirection.back);\n    _controller = CameraController(back, ResolutionPreset.high,\n      enableAudio: false,\n      imageFormatGroup: ImageFormatGroup.yuv420);   // ML Kit likes YUV420\n    await _controller!.initialize();\n    if (!mounted) return;\n    setState(() {});\n  }\n\n  @override\n  void didChangeAppLifecycleState(AppLifecycleState state) {\n    // Camera must be released when app goes background / re-init on resume\n    if (_controller == null || !_controller!.value.isInitialized) return;\n    if (state == AppLifecycleState.inactive) {\n      _controller?.dispose();\n      _controller = null;\n    } else if (state == AppLifecycleState.resumed) {\n      _init = _bootCamera();\n    }\n  }\n\n  Future<void> _snap() async {\n    final file = await _controller!.takePicture();\n    if (!mounted) return;\n    Navigator.of(context).push(MaterialPageRoute(builder: (_) => PreviewScreen(file)));\n  }\n\n  Future<void> _startBarcodeStream(void Function(CameraImage) onFrame) async {\n    await _controller!.startImageStream(onFrame);\n  }\n\n  @override\n  Widget build(BuildContext context) {\n    return FutureBuilder(\n      future: _init,\n      builder: (_, s) {\n        if (s.connectionState != ConnectionState.done || _controller == null) {\n          return const Center(child: CircularProgressIndicator());\n        }\n        return Stack(children: [\n          CameraPreview(_controller!),\n          Align(alignment: Alignment.bottomCenter,\n            child: Padding(padding: const EdgeInsets.all(24),\n              child: FloatingActionButton(onPressed: _snap, child: const Icon(Icons.camera)),\n            ),\n          ),\n        ]);\n      },\n    );\n  }\n\n  @override\n  void dispose() {\n    WidgetsBinding.instance.removeObserver(this);\n    _controller?.dispose();\n    super.dispose();\n  }\n}" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Not disposing.** `CameraController` holds a native handle — leaks after screen leave = 'Camera in use by another app' on next open. Always dispose." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Ignoring app lifecycle.** OS pauses the camera when app backgrounds; the controller becomes invalid. Wire `WidgetsBindingObserver` → dispose on `inactive` → re-init on `resumed`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Wrong `imageFormatGroup`.** ML Kit wants YUV420 on Android + BGRA8888 on iOS. Default may not match — set explicitly." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Sending every frame to ML Kit.** 30 fps × heavy CV = jank + battery. Throttle (e.g., process 1 in 3 frames, or serialize + drop-if-busy)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Not handling `CameraException`.** Users deny permission or another app holds the camera. Catch + show a permission-explanation UI." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Preview orientation bugs.** Portrait phone lens is rotated; landscape apps need to correct. Use `lockCaptureOrientation` for consistent output." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Storing captures in gallery.** Temp file location may be cleared. If the user wants to keep the image, copy to app documents or `gal.saveImage`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: `ResolutionPreset.max` on old devices.** Some devices have massive sensors but low RAM; app OOMs. Prefer `high` or `veryHigh` unless explicitly needed." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Dispose + re-init on lifecycle.** Own the invariant." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Explicit `imageFormatGroup`.** Match ML pipeline expectations." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Throttle image stream** — one-in-N frames or busy-flag." },
+    { "type": "callout", "variant": "best", "markdown": "**4. `ResolutionPreset.high` default** — balances quality vs memory." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Lock capture orientation** for consistent output." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Tap-to-focus / tap-to-expose** — huge UX win." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Torch mode for low-light barcode scanning.**" },
+    { "type": "callout", "variant": "best", "markdown": "**8. Fall back to `image_picker`** when the camera is unavailable (emulator, older device)." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Preview + `takePicture` → PreviewScreen." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Video recording with start/stop + display." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Image stream feeding a simple frame-counter." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Tap-to-focus + zoom pinch gesture." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Lifecycle-safe re-init on background/resume." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Feed image stream to ML Kit barcode scanner + throttle to 10 fps." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is `imageFormatGroup` + why does it matter?**\n\n**A:** The camera hardware produces frames in a specific pixel format. On Android, the platform default is `YUV_420_888` (Camera2 native); on iOS it's `BGRA_8888` (CoreVideo). Some downstream libraries (ML Kit, mobile_scanner, image_picker) have preferences: ML Kit's barcode scanner accepts YUV420 on Android + BGRA8888 on iOS. If your code assumes RGB but the plugin delivers YUV, colors are wrong + processing is slow. **Set explicitly:** `CameraController(desc, preset, imageFormatGroup: Platform.isAndroid ? ImageFormatGroup.yuv420 : ImageFormatGroup.bgra8888)`. Also affects `CameraImage.planes` layout — YUV has 3 planes, BGRA has 1. Doing pixel-level work? Test on both platforms. **Interview delighter:** knowing the plane count differs per format." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How do you avoid the 'camera in use by another app' error?**\n\n**A:** The native camera device is single-instance per app process. Common causes: **(1) Multiple `CameraController`s** for the same lens — dispose the old one before creating a new one. **(2) Screen leaves without dispose** — controller still holds the device; next screen can't open. Wire `dispose()` in `State.dispose`. **(3) App backgrounds without release** — OS pauses; some devices raise the error on resume. Use `WidgetsBindingObserver` → dispose on `inactive` → re-init on `resumed`. **(4) Concurrent flutter isolates trying to open** — main isolate should own the camera. **Recovery UX:** if `CameraException.code == 'CameraAccessError'`, show a 'Please close other apps using the camera + retry' banner. Interviewers score highly on candidates who mention the lifecycle observer explicitly." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do you use `startImageStream` with ML Kit without janking the UI?**\n\n**A:** `startImageStream` delivers frames on the platform channel — potentially 30 fps. ML Kit processing (barcode, text, face) can take 30-200 ms per frame. Naive `startImageStream((img) => await mlKit.process(img))` queues up frames faster than they're processed → memory spike, UI jank. **Pattern:** **(1) Busy flag.** `bool _busy = false; startImageStream((img) { if (_busy) return; _busy = true; process(img).whenComplete(() => _busy = false); });`. **(2) Throttle** — process 1 in 3 frames via a counter. **(3) Convert on isolate** — for CPU-heavy CV, offload via `Isolate.run`. **(4) Stop stream between processing bursts** — `stopImageStream` after detecting a barcode, resume when needed. **(5) `imageFormatGroup` correctly** so ML Kit doesn't waste time converting. **Also:** throttle UI updates from callbacks via `Throttle`/`Debounce` if the detection updates state." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you handle orientation correctly?**\n\n**A:** Camera sensors have a fixed physical orientation (often 90° rotated from portrait). Preview may be correctly rotated by the SDK; captured images may not. Options: **(1) `lockCaptureOrientation(DeviceOrientation.portraitUp)`** — force portrait capture; the plugin handles rotation. **(2) Read `NativeDeviceOrientation`** — save + tag EXIF. **(3) On write, rotate the file** via `image` package before storing. **(4) `CameraPreview`'s aspect ratio** — use `controller.value.aspectRatio` to size the widget correctly; wrap in an `AspectRatio` widget. **iOS vs Android differ** — iOS auto-applies orientation metadata; Android sometimes does not. **Test on both** — orientation bugs are the #1 support ticket for camera-heavy apps. **Landscape apps** — additional complexity; lock or handle 4 orientations explicitly." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: `camera` plugin vs `image_picker` — when to use which?**\n\n**A:** **`image_picker`** — opens the SYSTEM camera app OR photo gallery. UX is native to the platform (users know it). Best for: profile picture, avatar upload, one-shot 'attach a photo' flows. Zero UI complexity for you. **`camera`** plugin — gives you the raw feed + a `CameraPreview` widget you can wrap in your own UI. Best for: barcode scanning, document scanning with an overlay guide, KYC face capture with detection, in-app photo booth. Cost: much more lifecycle care + orientation handling. **Rule:** if you can point to 'the system camera works fine here,' use `image_picker`. If you need overlay UI, custom controls, or frame streaming, use `camera`. **Combine both** — `camera` for the guided flow, `image_picker` as fallback when the plugin fails (emulator, unsupported device)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How do you test camera-dependent code?**\n\n**A:** **Don't test the camera itself in unit tests.** Instead, wrap in a service interface: `abstract class CameraService { Future<XFile> takePicture(); Future<CameraImage> nextFrame(); ... }`. Production impl uses `camera`. Test impl is a fake returning canned XFiles / synthetic CameraImages. Assert on the business logic (barcode detected → item added to cart) not the plugin. **For integration tests** on device / emulator: mock permission grants; use `flutter_driver` or `patrol` for the UI. **Emulator camera** — Android emulator has a virtual camera that shows animated moving squares; useful for basic tests. iOS Simulator has no camera. **Golden test** captures via a preset image file rather than the real device. **Interview highlight:** 'abstract behind an interface' is the right answer; concrete plugin details in tests are brittle." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Barcode / QR scanning** — pair with mobile_scanner or ML Kit.\n- **Document scan** — draw an overlay outline; user aligns; capture.\n- **KYC identity capture** — face detection guide; capture front + back of ID.\n- **AR-lite overlays** — image stream + Custom Painter.\n- **NOT ideal for** — 'take a snapshot for my profile' (use image_picker); AR / SceneKit (use ARCore/ARKit plugins)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`ResolutionPreset`** — low / medium / high / veryHigh / ultraHigh / max — trade quality vs memory.\n- **`enableAudio: false`** — skip mic permission on Android when video not needed.\n- **`CameraController.setFlashMode(FlashMode.torch)`** — flashlight without capture.\n- **Native texture rendering** — CameraPreview uses `Texture` on iOS + AndroidView on Android; test integration with `Stack` overlays.\n- **`XFile`** — abstraction over paths + bytes; works on Web too.\n- **`saveTo(path)`** — copy XFile to a permanent path.\n- **HDR / RAW** — not exposed by this plugin; use native for pro apps.\n- **Multiple lenses** — user switches between back-wide / back-telephoto / front; `availableCameras()` returns all.\n- **`stopImageStream`** — always call before starting recording (mutually exclusive on some devices).\n- **`flutter_camera_ml_vision` / `google_mlkit_*`** — companion packages for ML pipelines.\n- **`gal` for saving** — copies XFile to system Photos gallery with correct scoped-storage handling.\n- **Web target** — CameraController supports basic preview + capture; no image streaming." }
   ],
   "flashcards": [
-    { "front": "When to dispose CameraController?", "back": "In State.dispose() AND on AppLifecycleState.paused; re-init on resume." },
-    { "front": "Why not always max resolution?", "back": "Overheats, drops frames, and burns battery. Use appropriate preset per stage." },
-    { "front": "For scanning, prefer…", "back": "mobile_scanner or camera + ML Kit direct, tuned for detection latency." }
+    { "front": "camera vs image_picker?", "back": "camera = raw feed + custom UI + streams; image_picker = system camera app for one-off capture." },
+    { "front": "Lifecycle rule?", "back": "Dispose on inactive; re-init on resumed via WidgetsBindingObserver." },
+    { "front": "ML Kit imageFormatGroup?", "back": "YUV420 on Android, BGRA8888 on iOS." },
+    { "front": "Frame processing pattern?", "back": "Busy flag + throttle + isolate for heavy CV." },
+    { "front": "Orientation control?", "back": "lockCaptureOrientation(DeviceOrientation.portraitUp) for consistent captures." },
+    { "front": "Torch?", "back": "setFlashMode(FlashMode.torch)." },
+    { "front": "Testing?", "back": "Wrap in a CameraService interface; fake it in unit tests." }
   ],
   "quiz": [
-    { "q": "Best pattern for camera lifecycle?", "options": ["Ignore", "Dispose on route exit; pause on background", "Keep it open forever", "Reinitialize every frame"], "answer": 1, "explain": "Camera is expensive — free it when unused." },
-    { "q": "For a smooth preview…", "options": ["Always max resolution", "Reasonable preset + switch before capture", "Disable preview", "Software render"], "answer": 1, "explain": "Balance quality vs heat/battery." },
-    { "q": "For barcode scanning use…", "options": ["Raw camera + heavy Dart parsing", "mobile_scanner / ML Kit", "shared_preferences", "Nothing"], "answer": 1, "explain": "Purpose-built scanners are lower-latency." }
+    { "q": "Camera released on…", "options": ["setState", "dispose + on app inactive lifecycle", "Never", "Only crash"], "answer": 1, "explain": "Native resource must be released." },
+    { "q": "ML Kit YUV420 needed on…", "options": ["Web", "Android", "iOS", "Nowhere"], "answer": 1, "explain": "iOS wants BGRA8888." },
+    { "q": "Naive startImageStream causes…", "options": ["Nothing", "Frame queue explosion + jank", "Battery boost", "TTFF drop"], "answer": 1, "explain": "Add busy flag / throttle." },
+    { "q": "Rotation bug fix?", "options": ["Ignore", "lockCaptureOrientation + AspectRatio wrapper", "Random", "Print"], "answer": 1, "explain": "Sensor + device orientation differ." },
+    { "q": "Best fallback when plugin fails?", "options": ["Crash", "image_picker", "Firestore", "Restart"], "answer": 1, "explain": "System camera works everywhere." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Show a camera preview + take a photo." },
-    { "level": "Medium", "text": "Add orientation lock and switch front/back cameras." },
-    { "level": "Hard", "text": "Handle lifecycle: pause/resume without leaking sensors." },
-    { "level": "Expert", "text": "Feed frames to ML Kit for realtime pose/text detection." }
+    { "level": "Easy", "text": "Preview + takePicture + open PreviewScreen." },
+    { "level": "Easy", "text": "Video record start/stop; play the file back." },
+    { "level": "Medium", "text": "Image stream feeds a running frame-counter widget." },
+    { "level": "Medium", "text": "Tap-to-focus + pinch-to-zoom gestures." },
+    { "level": "Hard", "text": "Lifecycle observer that survives background/resume without crash." },
+    { "level": "Hard", "text": "Image stream → ML Kit barcode; throttle to 10 fps." },
+    { "level": "Expert", "text": "Custom overlay UI on top of CameraPreview with device orientation handled." }
   ],
   "interviewQuestions": [
-    "How do you manage the CameraController lifecycle?",
-    "Why does resolution matter for a preview?",
-    "camera vs mobile_scanner?",
-    "How do you handle orientation?",
-    "How to keep power/temperature under control?"
+    "What is imageFormatGroup + why does it matter?",
+    "How do you avoid 'camera in use' errors?",
+    "startImageStream with ML Kit without jank — how?",
+    "Handle orientation correctly?",
+    "camera plugin vs image_picker — when to use which?",
+    "How do you test camera-dependent code?"
   ],
   "references": [
-    { "label": "camera plugin", "url": "https://pub.dev/packages/camera" }
+    { "label": "camera plugin", "url": "https://pub.dev/packages/camera" },
+    { "label": "Android CameraX", "url": "https://developer.android.com/training/camerax" },
+    { "label": "iOS AVFoundation", "url": "https://developer.apple.com/documentation/avfoundation" }
   ]
 }

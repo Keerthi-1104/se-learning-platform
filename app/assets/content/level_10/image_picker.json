@@ -2,44 +2,102 @@
   "id": "plg.image_picker",
   "levelId": 10,
   "title": "image_picker",
-  "xp": 20,
-  "estimatedMinutes": 10,
+  "xp": 30,
+  "estimatedMinutes": 25,
   "objectives": [
-    "Pick photos/videos from gallery or camera",
-    "Handle iOS Photos permissions",
-    "Compress/resize before upload"
+    "Understand image_picker via a real-life analogy",
+    "Pick from camera or gallery — single + multi + video",
+    "Handle iOS PHPickerViewController + Android Photo Picker (scoped storage)",
+    "Compress + resize before upload",
+    "Fall back gracefully on desktop / web / emulator",
+    "Answer image_picker interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "`image_picker` (Flutter Team) opens the system gallery or camera and returns a picked file. Simple, reliable, and adequate for 90% of 'let me add a profile pic' UX." },
-    { "type": "code", "language": "dart", "code": "final picker = ImagePicker();\nfinal xfile = await picker.pickImage(\n  source: ImageSource.gallery,\n  imageQuality: 80,           // JPEG compression 0..100\n  maxWidth: 1600,\n);" },
-    { "type": "callout", "variant": "interview", "markdown": "iOS 14+ splits photo access into **full** and **limited**. The plugin handles the sheet, but you must add `NSPhotoLibraryUsageDescription` (and `NSCameraUsageDescription` if you allow camera). Limited access can silently return only a subset of images." },
-    { "type": "callout", "variant": "mistake", "markdown": "Uploading the raw 12MP image directly — kills bandwidth and storage. Use `imageQuality` + `maxWidth`/`maxHeight` for quick compression, or a proper image lib for heavy work." },
-    { "type": "callout", "variant": "tip", "markdown": "For gallery UIs and richer selection UX use `photo_manager`. For camera-first flows with framing/cropping, layer `image_cropper` on top." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of `image_picker` as the 'system attach photo' dialog you see in every messenger app.**\n\nUser taps 'Attach.' The OS shows its native picker — gallery + camera + files sometimes — and returns the chosen file(s). You get a path (or bytes on Web). That's it. No preview, no in-app UI to design.\n\n- **Simple** — 3 lines of code for a picker; fits 80 % of 'upload a photo' needs.\n- **Native UX** — the user's brain already knows the flow; no learning curve.\n- **Modern pickers** — iOS 14+ uses `PHPickerViewController` (no photo library permission needed for pick-only flows); Android 13+ uses Android Photo Picker (scoped access without READ_MEDIA_IMAGES permission).\n- **Not for guided capture** — if you need overlays, barcode reads, real-time preview, use the `camera` plugin.\n- **Compression + resize** — built-in `maxWidth / maxHeight / imageQuality` params handle it before returning the file.\n\n**Why every consumer Flutter app uses it for profile-picture / attach-photo flows:** the OS already ships an excellent picker; matching it in-app is 100× more work for no user benefit. Users trust the system UI. Also — with iOS PHPicker + Android Photo Picker, you don't even need the photo-library permission for a pick-only flow, dramatically reducing permission-prompt friction." },
+    { "type": "callout", "variant": "definition", "markdown": "**`image_picker`** wraps the OS photo picker: `PHPickerViewController` (iOS 14+), Android Photo Picker (Android 13+, backport via `androidx.activity.result.PickVisualMedia`), file dialogs on desktop/Web. Two source flavors: `ImageSource.camera` (opens native camera app) or `ImageSource.gallery`. Returns `XFile` (single) or `List<XFile>` (multi). Compression: `maxWidth`, `maxHeight`, `imageQuality`. Also picks videos: `pickVideo()`." },
+    { "type": "theory", "markdown": "## Key APIs" },
+    { "type": "table", "headers": ["Method", "Purpose"], "rows": [
+      ["`pickImage(source, maxWidth, imageQuality)`", "One image; source = camera / gallery"],
+      ["`pickMultiImage(maxWidth, imageQuality)`", "Multi-select from gallery (iOS 14+, Android)"],
+      ["`pickVideo(source, maxDuration)`", "One video"],
+      ["`pickMedia(mediaOptions)`", "Newer API — combined images + videos"],
+      ["`retrieveLostData()`", "Android only; recover after low-mem kill during pick"]
+    ]},
+    { "type": "theory", "markdown": "## Setup + basic use" },
+    { "type": "code", "language": "xml", "code": "<!-- ios/Runner/Info.plist -->\n<!-- ONLY needed if you use ImageSource.camera or the pre-PHPicker gallery -->\n<key>NSCameraUsageDescription</key>\n<string>Attach a photo from your camera.</string>\n<key>NSPhotoLibraryUsageDescription</key>\n<string>Attach a photo from your library.</string>\n<key>NSMicrophoneUsageDescription</key>\n<string>Record audio when you attach a video.</string>\n\n<!-- Android — no special manifest permissions for the Photo Picker path -->\n<!-- Only if you use ImageSource.camera: -->\n<uses-permission android:name=\"android.permission.CAMERA\" />" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml: image_picker: ^1.1.0\nimport 'package:image_picker/image_picker.dart';\n\nfinal picker = ImagePicker();\n\n// ────── Pick a single image (gallery, compressed) ──────\nFuture<XFile?> pickOne() async {\n  try {\n    return await picker.pickImage(\n      source: ImageSource.gallery,\n      maxWidth: 1600,\n      imageQuality: 85,     // JPEG 0-100\n      requestFullMetadata: false, // skip GPS EXIF for privacy\n    );\n  } on PlatformException catch (e) {\n    // 'photo_access_denied' on iOS, 'camera_access_denied' on Android\n    return null;\n  }\n}\n\n// ────── Multi-select (returns [] if user cancels) ──────\nFuture<List<XFile>> pickMany() async {\n  final files = await picker.pickMultiImage(maxWidth: 1600, imageQuality: 85);\n  return files;\n}\n\n// ────── Camera capture ──────\nFuture<XFile?> snap() async {\n  return await picker.pickImage(source: ImageSource.camera, imageQuality: 90);\n}\n\n// ────── Video ──────\nFuture<XFile?> pickVideo() async {\n  return await picker.pickVideo(source: ImageSource.gallery,\n    maxDuration: const Duration(seconds: 60));\n}\n\n// ────── Android: recover from low-memory kill ──────\nFuture<void> _recoverLostData() async {\n  if (!Platform.isAndroid) return;\n  final lost = await picker.retrieveLostData();\n  if (lost.file != null) { /* re-use lost.file */ }\n  else if (lost.exception != null) { /* handle */ }\n}\n\n// ────── Upload flow using Dio ──────\nFuture<void> uploadAvatar(XFile file) async {\n  final form = FormData.fromMap({\n    'file': await MultipartFile.fromFile(file.path, filename: file.name),\n  });\n  await dio.post('/avatar', data: form,\n    onSendProgress: (sent, total) => print('${sent / total * 100} %'));\n}" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Requesting photo-library permission on iOS 14+ for pick-only flows.** PHPicker doesn't need it. If you request unnecessarily, users get an extra prompt they may deny." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Ignoring `PlatformException`.** User denies camera permission → PlatformException. Catch + show explainer." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Uploading full-resolution.** A modern phone shoots 12 MP = ~5 MB JPEG. Compress via `maxWidth: 1600` + `imageQuality: 85` before upload — usually enough for any web UI, saves bandwidth 10-20×." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Missing lost-data recovery on Android.** If the OS kills your app during the pick (low memory), `retrieveLostData` recovers the selected file on next launch. Skip = silent data loss." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Assuming `path` is stable.** iOS returns a temp path; may be deleted after the app terminates. Copy to app documents if you need to keep." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: EXIF leaks GPS.** Photos taken with camera have GPS coordinates in EXIF. `requestFullMetadata: false` strips it; also possible to strip via the `image` package." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Not handling `null` return.** User cancels the picker → returns null. Guard." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Web bytes vs mobile path.** On Web, `XFile.path` is a blob URL, not a real path — use `await file.readAsBytes()` for upload." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Prefer PHPicker / Android Photo Picker** — no permission for pick-only." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Compress before upload** — `maxWidth: 1600 + imageQuality: 85` is a solid default." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Strip EXIF GPS** via `requestFullMetadata: false` OR the `image` package." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Copy to persistent path** if you need to keep beyond the current session." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Recover Android lost data** via `retrieveLostData` on app launch." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Handle `PlatformException` + null cancels gracefully.**" },
+    { "type": "callout", "variant": "best", "markdown": "**7. `XFile.readAsBytes` on Web** for upload." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Fall back to `file_picker`** for generic file selection when you don't want images-only." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Pick single from gallery + preview." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Easy)** — Camera snap + display + save." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Multi-pick + horizontal ListView preview." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Medium)** — Compress via `maxWidth + imageQuality`; report file-size delta." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Android low-memory kill recovery via `retrieveLostData`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Hard)** — Strip EXIF GPS + upload via Dio multipart." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 7 (Expert)** — Fallback flow: image_picker fails → `camera` plugin flow → file_picker last-resort." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: When would you pick `image_picker` over `camera` plugin?**\n\n**A:** `image_picker` — one-off 'attach a photo' flows: profile picture, chat attachment, KYC ID upload where system camera works. The OS provides the whole UI; you get one file back. **Advantages:** minimal code (5 lines), native permissions handling, users know the UX. `camera` plugin — need overlay UI (barcode scanner, guided document capture, KYC face capture with detection ring), real-time preview manipulation, image-stream to ML Kit, custom controls (zoom, exposure). **Cost:** much more code + lifecycle care. **Rule:** if the answer to 'do I need custom UI over the preview?' is 'no', use `image_picker`. **Modern bonus:** iOS PHPicker + Android Photo Picker require no photo-library permission for pick-only flows — using image_picker actually reduces prompts vs rolling your own." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What changed with PHPickerViewController (iOS 14+) and Android Photo Picker?**\n\n**A:** **PHPickerViewController** (iOS 14+, replaces `UIImagePickerController` for gallery): the system runs the picker **out-of-process**, returns copies of the selected images to your app. Your app **never sees the full photo library** — no permission needed. Reduces prompt friction + is required for App Store approval for pick-only flows going forward. **Android Photo Picker** (Android 13+; back-port via `androidx.activity.result.PickVisualMedia` down to Android 4.4): equivalent system picker. `image_picker` uses these automatically. **Implication:** the old advice ('need `Photos` permission to pick') is obsolete for the pick-only case. If you need to READ full library, iterate all photos, or do EXIF/live-photo work — that still needs the permission. **Interviewer bonus:** knowing 'permission-less pick' is a specific answer that separates junior from senior candidates." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do you compress + resize before upload?**\n\n**A:** `pickImage(maxWidth: 1600, maxHeight: 1600, imageQuality: 85)` — the plugin re-encodes as JPEG at 85% quality after resizing to fit within 1600 px. **Why 1600 + 85?** — max reasonable UI display size on modern screens is ~2 K; 85 % JPEG is visually lossless at that size; typical output is 200-500 KB (vs 5 MB original). **When you need custom control:** use the `image` or `flutter_image_compress` package after picking — supports PNG, WebP, EXIF stripping, aspect ratio preservation. **Video:** limited built-in compression; use `video_compress` for aggressive re-encoding. **Server-side re-compression** — always do it at the server too; users may bypass client compression. **Anti-pattern:** upload full 12 MP; cellular users will drop off + your bill will explode." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What's `retrieveLostData` and when do you call it?**\n\n**A:** **Android-only.** If your app is killed by the OS while the picker is open (rare but real on low-memory devices), your `pickImage` future never resolves. On next launch, `picker.retrieveLostData()` returns the file the user had selected. **Where to call:** in `main`, after Firebase init, before showing the UI. **Handle:** if `lost.file != null`, resume the intended flow (upload / show preview); if `lost.exception != null`, log + show error. **Not needed on iOS** — the system re-launches into the picker. Overlooking this = users complaining 'I picked a photo, went away for 30 s, came back, nothing happened' — silent data loss." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: Web + desktop targets — what to know?**\n\n**A:** **Web:** `image_picker` uses a `<input type=\"file\">` element. `XFile.path` is a blob URL — NOT a real file path. To upload, `await file.readAsBytes()` and send bytes. **No `ImageSource.camera` support** on all browsers (requires `getUserMedia`). **Desktop (Windows/macOS/Linux):** file dialog picker. `pickImage(ImageSource.camera)` on desktop opens a webcam via CameraX-equivalents on some platforms — mostly missing. Fallback: use `file_picker` (better desktop story) or open the platform-native camera app externally. **Trap:** running on desktop in dev without a webcam — plugin errors. Feature-detect + gracefully degrade. **Common pattern:** `if (kIsWeb || !Platform.isMobile) → show file_picker; else → image_picker`." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: Privacy — what should you strip / not track?**\n\n**A:** **(1) EXIF GPS** — photos have latitude/longitude embedded. `requestFullMetadata: false` strips before returning. Alternatively `image` package after pick. **(2) Timestamps** — creation date leaks user timezone; not usually a concern but consider for anonymized flows. **(3) Face detection metadata** — some devices embed facial data in EXIF; strip for anonymous flows. **(4) Cross-user upload** — same photo uploaded by 2 users can reveal shared context; server-side hash + dedup carefully. **(5) Consent for uploads** — 'we'll upload this to our servers, delete anytime' — required under GDPR / DPDPA. **(6) Server-side scanning** — many apps scan uploaded images for CSAM / illegal content; part of Trust & Safety, but disclose in ToS. **(7) Don't request full library** access when pick-only will do — respects user privacy + reduces attack surface." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Chat / messenger apps** — attach photo/video.\n- **Profile / KYC** — avatar upload, ID card capture.\n- **Product listings** — sellers upload catalog images.\n- **Reviews** — attach a review photo.\n- **NOT ideal for** — guided capture (use `camera`); general file picking (use `file_picker`)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`pickMedia`** — new combined images + videos picker (iOS 14+, Android modern).\n- **`XFile.readAsBytes`** — cross-platform bytes access.\n- **`preferredCameraDevice: CameraDevice.front`** — hint the front camera on iOS (Android varies).\n- **`imageQuality: 100`** — no compression; may return larger than source for some formats.\n- **`maxDuration` for video** — truncated to fit.\n- **EXIF stripping** via `image` package: `decodeJpg` → `encodeJpg` re-encodes without EXIF.\n- **File extension handling** — HEIC/HEIF on iOS may need conversion via `flutter_image_compress` for backend compatibility.\n- **UploadedXFile lifecycle** — copy to persistent path if needed later.\n- **`file_picker` alternative** — better desktop + multi-file support.\n- **Video thumbnails** — separate package `video_thumbnail`.\n- **iOS 17+ 'limited access' library** — user grants access to a subset; PHPicker sidesteps this by design.\n- **Testing** — mock `ImagePickerPlatform` via `flutter_test`'s method-channel overrides." }
   ],
   "flashcards": [
-    { "front": "How does image_picker compress?", "back": "imageQuality (0..100) and maxWidth/maxHeight parameters." },
-    { "front": "iOS Photos permission?", "back": "NSPhotoLibraryUsageDescription (add limited/full considerations)." },
-    { "front": "For a fancier gallery UI use…", "back": "photo_manager (richer selection) + image_cropper for cropping." }
+    { "front": "image_picker vs camera?", "back": "image_picker = system picker for one-off; camera = raw feed + custom UI." },
+    { "front": "PHPicker / Android Photo Picker?", "back": "OS pickers requiring no library permission for pick-only flows." },
+    { "front": "Compression defaults?", "back": "maxWidth: 1600 + imageQuality: 85 → ~200-500 KB output." },
+    { "front": "EXIF GPS strip?", "back": "requestFullMetadata: false OR image package re-encode." },
+    { "front": "Android low-memory kill recovery?", "back": "picker.retrieveLostData() on app start." },
+    { "front": "Web upload?", "back": "XFile.readAsBytes → send bytes; path is a blob URL." },
+    { "front": "Return null?", "back": "User cancelled picker — handle gracefully." }
   ],
   "quiz": [
-    { "q": "Before uploading a picked image…", "options": ["Send raw", "Compress via imageQuality/maxWidth or a lib", "Delete it", "Convert to text"], "answer": 1, "explain": "Compress to save bandwidth." },
-    { "q": "iOS 14+ can return…", "options": ["Whole library only", "Limited-access subset", "No images ever", "Only videos"], "answer": 1, "explain": "Users can grant partial access." },
-    { "q": "For richer selection UI, prefer…", "options": ["image_picker only", "photo_manager", "shared_preferences", "hive"], "answer": 1, "explain": "photo_manager exposes albums, metadata, custom UIs." }
+    { "q": "iOS 14+ gallery picker permission?", "options": ["Always required", "PHPicker → not needed for pick-only", "Only camera needs it", "Only for videos"], "answer": 1, "explain": "PHPicker runs out-of-process." },
+    { "q": "Best compression defaults?", "options": ["No compression", "maxWidth 1600 + imageQuality 85", "maxWidth 400", "imageQuality 30"], "answer": 1, "explain": "Visually lossless + tiny." },
+    { "q": "Android low-memory kill recovery?", "options": ["Not possible", "retrieveLostData on next launch", "Poll every 5s", "Only iOS"], "answer": 1, "explain": "Recovery API for the picker." },
+    { "q": "Web upload byte source?", "options": ["path", "XFile.readAsBytes", "print", "Nothing works"], "answer": 1, "explain": "Blob URL, not a real path." },
+    { "q": "EXIF GPS strip flag?", "options": ["requestFullMetadata: false", "trimEXIF: true", "gps: false", "No option"], "answer": 0, "explain": "Skips full metadata including GPS." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Pick a single image from gallery and show it." },
-    { "level": "Medium", "text": "Add camera option; handle permission denial gracefully." },
-    { "level": "Hard", "text": "Compress + crop before upload; measure size reduction." },
-    { "level": "Expert", "text": "Support iOS limited-photo access with a re-request flow." }
+    { "level": "Easy", "text": "Pick single from gallery + preview." },
+    { "level": "Easy", "text": "Camera snap + save + display." },
+    { "level": "Medium", "text": "Multi-pick + horizontal previews." },
+    { "level": "Medium", "text": "Compress + report file-size delta." },
+    { "level": "Hard", "text": "Strip EXIF GPS + upload multipart via Dio with progress." },
+    { "level": "Hard", "text": "Android retrieveLostData recovery on cold start." },
+    { "level": "Expert", "text": "Cross-platform (mobile + web + desktop) with graceful fallbacks." }
   ],
   "interviewQuestions": [
-    "image_picker vs photo_manager?",
-    "How to compress before upload?",
-    "iOS limited photo access handling?",
-    "Camera source vs gallery source?",
-    "How to test image-picker flows?"
+    "When would you pick image_picker over the camera plugin?",
+    "What changed with PHPicker / Android Photo Picker?",
+    "How do you compress + resize before upload?",
+    "What's retrieveLostData and when do you call it?",
+    "Web + desktop trade-offs?",
+    "Privacy — what to strip / not track?"
   ],
   "references": [
-    { "label": "image_picker", "url": "https://pub.dev/packages/image_picker" }
+    { "label": "image_picker package", "url": "https://pub.dev/packages/image_picker" },
+    { "label": "iOS PHPickerViewController", "url": "https://developer.apple.com/documentation/photokit/phpickerviewcontroller" },
+    { "label": "Android Photo Picker", "url": "https://developer.android.com/training/data-storage/shared/photopicker" }
   ]
 }
