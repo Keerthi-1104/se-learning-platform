@@ -2,44 +2,101 @@
   "id": "plg.isar",
   "levelId": 10,
   "title": "isar (plugin)",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 50,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Wire Isar + codegen",
-    "Batch writes in writeTxn",
-    "Watch queries reactively"
+    "Understand Isar via a real-life analogy (plugin view)",
+    "Model Isar collections with indexes + composite keys",
+    "Read/write via type-safe queries + transactions",
+    "Stream reactive changes to Flutter UI",
+    "Migrate schemas + handle Isar 3 vs 4",
+    "Answer Isar interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "`isar` is a fast native NoSQL DB for Flutter/Dart: schemas from Dart classes via codegen, indexes, full-text search, links, and reactive queries — all with a compact native binary." },
-    { "type": "code", "language": "dart", "code": "@collection\nclass User {\n  Id id = Isar.autoIncrement;\n  @Index(caseSensitive: false) late String name;\n}\nfinal isar = await Isar.open([UserSchema]);\nawait isar.writeTxn(() async {\n  await isar.users.put(User()..name = 'Ada');\n});\nfinal adas = await isar.users.filter().nameEqualTo('Ada').findAll();" },
-    { "type": "callout", "variant": "interview", "markdown": "Isar's edge: high write throughput + rich queries without SQL migrations. `writeTxn` batches many puts efficiently. `watchLazy()` / `watch()` streams re-emit on change — perfect for offline-first Flutter UIs." },
-    { "type": "callout", "variant": "mistake", "markdown": "Writing outside a `writeTxn` (throws) or writing one record per transaction (slow). Batch inside a single writeTxn for bulk operations." },
-    { "type": "callout", "variant": "tip", "markdown": "One query uses one index at a time — design indexes to match top queries. On desktop/CI, initialize with the correct native library path. Consider Isar v4 / community forks as the ecosystem evolves." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Isar as a sprint-car version of Hive with a real query engine bolted on.**\n\nHive is one KV shoebox per Box; you scan linearly. Isar keeps objects in **typed collections** and maintains **indexes** on the fields you flag. A query like *'unread notifications for tenant X, ordered by timestamp desc, first 20'* is O(log n) — the index seeks straight to the answer instead of walking every row.\n\n- **Blazing fast** — internal storage is `mdbx` (a memory-mapped B+tree KV engine on native platforms). Cold open of a 100 K-row DB is ~10 ms; a filtered query returns in single-digit ms.\n- **Typed queries** — `isar.messages.filter().unreadEqualTo(true).timestampGreaterThan(t).sortByTimestampDesc().findAll()` — no strings, no runtime typos.\n- **Reactive streams** — every query has `.watch()` + `.watchLazy()` that emit on relevant writes.\n- **ACID transactions** — `isar.writeTxn(() async { ... })` groups writes atomically across collections.\n- **Cross-platform** — Android, iOS, macOS, Linux, Windows. **Web** is where Isar 3 falls short; Isar 4 (in preview) is adding it.\n\n**Why Isar became the go-to alternative to SQLite for object-oriented persistence:** the app almost always has objects (message, contact, order) — SQL forces you to shred them into rows + reassemble on read. Isar stores objects directly + gives you fast filter/sort/index without SQL ceremony. Perfect for chat apps, feed caches, offline-first productivity apps." },
+    { "type": "callout", "variant": "definition", "markdown": "**Isar** (`isar` + `isar_flutter_libs` + `isar_generator`) is a fast NoSQL object DB written in Rust, mmap-backed via mdbx. **Collections** are typed classes annotated `@collection`; **indexes** via `@Index()` (single, multi-field, composite, hashed, full-text). Codegen emits typed queries with filter/sort/limit/offset/aggregate. **Isar 3** targets native platforms; **Isar 4** (author: Simon Choi) is a rewrite in preview adding Web + performance + newer API." },
+    { "type": "theory", "markdown": "## Isar vs Hive vs drift" },
+    { "type": "table", "headers": ["Aspect", "Hive", "Isar", "drift"], "rows": [
+      ["Model", "KV + typed objects", "Object DB w/ indexes", "SQL relational"],
+      ["Queries", "Linear scan", "Rich typed filter/sort/index", "Full SQL"],
+      ["Full-text search", "❌", "✅ built-in", "SQLite FTS5"],
+      ["Transactions", "❌", "✅ multi-collection", "✅"],
+      ["Reactive", "box.watch", ".watch() / watchLazy", ".watch()"],
+      ["Web (Isar 3)", "IndexedDB", "❌ (Isar 4 preview)", "✅ WASM SQLite"],
+      ["Best for", "Small typed KV", "Chat / feed / big lists", "Relational + reporting"]
+    ]},
+    { "type": "theory", "markdown": "## Full plugin setup — messages collection" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml (Isar 3.x):\n//   isar: ^3.1.0\n//   isar_flutter_libs: ^3.1.0\n//   path_provider: ^2.1.0\n// dev_dependencies:\n//   isar_generator: ^3.1.0\n//   build_runner: ^2.4.8\n\nimport 'package:isar/isar.dart';\nimport 'package:path_provider/path_provider.dart';\npart 'message.g.dart';\n\n@collection\nclass Message {\n  Id id = Isar.autoIncrement;\n  @Index(composite: [CompositeIndex('tenantId')])\n  String threadId;\n  String tenantId;\n  String body;\n  @Index() DateTime createdAt;\n  @Index() bool unread;\n  Message({required this.threadId, required this.tenantId, required this.body,\n           required this.createdAt, required this.unread});\n}\n\nlate final Isar isar;\nFuture<void> initIsar() async {\n  final dir = await getApplicationDocumentsDirectory();\n  isar = await Isar.open([MessageSchema], directory: dir.path, name: 'app');\n}\n\n// ────── Writes must be inside writeTxn ──────\nFuture<void> saveMessage(Message m) async {\n  await isar.writeTxn(() async {\n    await isar.messages.put(m);\n  });\n}\n\n// ────── Typed query (indexed) ──────\nFuture<List<Message>> unreadForThread(String threadId, String tenantId) {\n  return isar.messages\n    .filter()\n    .threadIdEqualTo(threadId)\n    .and().tenantIdEqualTo(tenantId)\n    .and().unreadEqualTo(true)\n    .sortByCreatedAtDesc()\n    .limit(50)\n    .findAll();\n}\n\n// ────── Reactive stream — auto-updates on any write ──────\nStream<List<Message>> watchUnread(String threadId, String tenantId) =>\n  isar.messages\n    .filter()\n    .threadIdEqualTo(threadId)\n    .and().tenantIdEqualTo(tenantId)\n    .and().unreadEqualTo(true)\n    .sortByCreatedAtDesc()\n    .watch(fireImmediately: true);\n\n// ────── Full-text search (Isar 3 ships lightweight FTS) ──────\nfinal results = await isar.messages\n  .filter()\n  .bodyContains(query, caseSensitive: false)\n  .findAll();\n\n// Regen: dart run build_runner watch --delete-conflicting-outputs" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Writes outside `writeTxn`.** Throws. All mutations must be inside `writeTxn()`. Reads can be direct." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Missing indexes.** Filtering on a non-indexed field is O(n). Add `@Index()` for hot query fields." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Over-indexing.** Every index costs write speed + storage. Index only what you actually filter on." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Long-running transactions.** `writeTxn` blocks other writers. Keep transactions tight — validate outside, commit inside." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Storing big blobs.** Isar can, but performance degrades. Files → disk; only paths in Isar." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Not versioning collections.** Adding a required field without a migration breaks old-user data reads. Add fields with defaults; migrate lazily." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Ignoring Isar 3 vs 4.** New projects: check maturity of Isar 4; existing: stay on Isar 3 unless there's a specific reason. Isar 3 is stable but Web-less; Isar 4 adds Web but is preview." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Multi-isolate confusion.** Each isolate opens its own Isar handle; changes propagate via the DB, not via memory. Use `isar.getInstance(name)` in the isolate." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Index every field you filter or sort on.** Composite indexes for compound filters." },
+    { "type": "callout", "variant": "best", "markdown": "**2. `writeTxn` — narrow scope.** Validate outside." },
+    { "type": "callout", "variant": "best", "markdown": "**3. `.watch(fireImmediately: true)`** — Streams for reactive UI; skip manual refresh triggers." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Bulk writes via `putAll`** — 10-100× faster than one-at-a-time." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Use `putSync` inside `writeTxnSync` for hot paths** — small overhead saved per call." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Schema evolution with defaults** — add nullable/defaulted fields; migrate lazily." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Encrypt if needed** — 3rd-party wrappers or a `flutter_secure_storage`-held key for object-level encryption." },
+    { "type": "callout", "variant": "best", "markdown": "**8. In-memory Isar for tests** — `Isar.open([...], directory: tempDir, name: 'test')`." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Message collection with @Index on `createdAt`; insert + query recent." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Composite index `(tenantId, threadId, unread)`; verify the query plan uses it." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Reactive UI via `.watch()` — new inserts show up live." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Bulk `putAll` 100K rows; benchmark vs one-by-one." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Full-text search via `bodyContains`; check performance on 100K rows." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Two isolates writing concurrently; verify propagation via streams." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What makes Isar fast compared to Hive?**\n\n**A:** Two things: **(1) Storage engine.** Isar sits on **mdbx** (a memory-mapped B+tree from the LMDB family) written in Rust; reads are essentially memcpy from mmap, and writes are B+tree updates with copy-on-write semantics. Hive uses its own log-structured Dart implementation with periodic compaction — slower for random reads. **(2) Indexes.** Isar maintains B+tree indexes on annotated fields; filter/sort queries seek O(log n) directly to matching keys. Hive has no indexes — every query is a Dart-level linear scan. **On a 100 K-row DB:** Isar responds to filtered queries in single-digit ms; Hive can take hundreds of ms. **Cost:** Isar's write path is slower (index maintenance), and every index costs storage — index only what you filter." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: When is Isar the right choice over drift or Hive?**\n\n**A:** **Isar** — object-shaped data with rich queries (chat messages, contacts, feed items, offline task lists). Zero SQL ceremony; fastest reads. **drift** — relational data with joins across many tables (invoices → line items → tax lines, dashboards with SUM/GROUP BY). SQL wins on relations. **Hive** — small typed KV without complex queries (settings, cart, cached blobs). Rule: **big object collections with filter+sort → Isar; relational with joins → drift; small typed KV → Hive.** Also platform: Isar 3 doesn't support Web; drift does via WASM. That alone tips new Web-targeting apps toward drift or Isar 4 preview." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: Explain composite indexes + when they're needed.**\n\n**A:** A single-field index accelerates queries filtering on that field. But a query like `WHERE tenantId = X AND unread = true SORT BY createdAt DESC` benefits from a **composite index** `(tenantId, unread, createdAt)` — the DB seeks directly to `(X, true, ...)` + reads in sorted order without a second sort pass. In Isar: `@Index(composite: [CompositeIndex('threadId'), CompositeIndex('unread')])`. **Rules:** (1) put the most selective column first. (2) match the composite order to the query's WHERE + SORT order. (3) don't over-index — each index costs storage + write CPU. (4) profile with realistic data — the difference between O(log n) and O(n) matters at scale, not on 10 rows. Interviewers love hearing about the **column ordering rule** — most candidates skip it." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do Isar reactive streams differ from Hive's or drift's?**\n\n**A:** All three support reactive UI, but the semantics differ. **Hive:** `box.listenable()` fires on any change to the entire box; you filter downstream. **drift:** `.watch()` uses a table-dep graph; a write to a table your query reads from re-runs the query. **Isar:** `.watch()` on a **specific query** re-runs it on relevant collection changes; `.watchLazy()` emits *events without values* — useful when you only want to know 'something changed' and will re-fetch on demand. `fireImmediately: true` yields the current result on subscribe. Isar streams also support **object-level watching**: `isar.messages.watchObject(id)` — one Stream per document. **Perf:** Isar's watches are efficient; the DB handles diff/dispatch. Widget-side, wrap in Riverpod's `StreamProvider` or a `StreamBuilder`." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you migrate an Isar schema?**\n\n**A:** Isar's approach is **schema-forward-compatible with lazy migration**: (1) **Add a new field** with a default value; old objects read with the default. Safe. (2) **Remove a field** — leave the Dart property, mark as `@ignore` if deprecated, avoid deleting until you're sure no reads happen. (3) **Rename a field** — old data keys off the old name; write a one-time migration that reads old + writes new. (4) **Change type** — dangerous. Add new field + migrate + deprecate old. (5) **Add a collection** — no migration needed. (6) **Remove a collection** — drop after export. **Version tracking:** store `schemaVersion` in a separate settings collection or `shared_preferences`; on cold start, run migrations if `<target`. Isar has no built-in migration DSL like drift's `Migrator`; it's application-level. **Test coverage:** simulate old-version data + verify new-version reads correctly." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How do you keep Isar performant at scale (millions of rows)?**\n\n**A:** **(1) Right indexes for the query pattern** — profile actual queries with realistic data. (2) **Bulk writes via `putAll`** — one txn wraps 1000 objects; 10-100× faster than one-at-a-time. (3) **Narrow `writeTxn` scope** — shorter transactions unblock other writers faster. (4) **Async APIs (default) not `Sync`** — sync APIs block the main isolate. (5) **Offload heavy work to a background isolate** — open a separate Isar instance in the isolate; changes propagate via the DB. (6) **Avoid full-collection scans** — pagination via `.limit + .offset`; cursor-based (index-based) pagination beats offset on very large sets. (7) **`putAllByIndex`** for upserts on unique indexes — avoids read-then-write. (8) **Compaction** happens automatically but can be forced via `.copyToFile(...)` maintenance flows. (9) **Monitor DB file size**; > 1 GB indicates you're storing blobs — move to disk." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Chat apps** — messages + threads + reactions; fast filter/sort on tenant + unread.\n- **Offline-first apps** — feed cache, task lists, notes; index by tag + tenant.\n- **Contact books** — big lists with search.\n- **Analytics event queue** — bulk insert + batch upload + delete.\n- **NOT for** — small KV (Hive fine); heavily relational reporting (drift wins)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Composite + unique indexes** — enforce dedup at DB level.\n- **`@Index(type: IndexType.value)`** — vs hashed indexes for equality-only.\n- **`Isar.getInstance(name)`** — retrieve within an isolate.\n- **`putSync` / `getSync`** inside `writeTxnSync` — synchronous fast-path; blocks the current isolate.\n- **`writeAsync` in Isar 4** — new API removing the txn-per-write ceremony.\n- **`copyToFile` for backup** — export the whole DB.\n- **Web via Isar 4 preview** — check maturity before adopting.\n- **Encryption** — Isar itself doesn't ship encryption; wrap sensitive fields or migrate to SQLCipher/drift for compliance.\n- **Query pagination via `.limit + .offset`** — offset pagination is fine at small offsets, use cursor (last-seen-id) for large.\n- **Transactions across collections** — one `writeTxn` covers multiple collections atomically.\n- **`watchObject(id)`** — per-document reactive stream.\n- **`filter()` vs `where()` in Isar 4** — new query API." }
   ],
   "flashcards": [
-    { "front": "Batch writes in Isar?", "back": "Wrap them in a single writeTxn() closure." },
-    { "front": "Reactive updates?", "back": "watch() / watchLazy() streams re-emit on data changes." },
-    { "front": "Query index rule?", "back": "One index used per query — design indexes for top query patterns." }
+    { "front": "Why Isar over Hive?", "back": "B+tree indexes + mmap storage → O(log n) filter/sort vs Hive's linear scan." },
+    { "front": "Writes must be…", "back": "Inside writeTxn(). Reads can be direct." },
+    { "front": "Composite index for filter+sort?", "back": "@Index(composite: [...]) matching WHERE + SORT order; most selective column first." },
+    { "front": "Reactive stream?", "back": ".watch(fireImmediately: true) or .watchLazy() for change-only signals." },
+    { "front": "Schema evolution?", "back": "Add default-valued fields safe; renames need one-time migration; version-track manually." },
+    { "front": "Web?", "back": "Isar 3 lacks Web; Isar 4 preview adds it. Use drift if Web is required now." },
+    { "front": "Testing?", "back": "In-memory / temp-dir Isar in setUp; deleteFromDisk in tearDown." }
   ],
   "quiz": [
-    { "q": "For a fast bulk import…", "options": ["One writeTxn per row", "One writeTxn wrapping all rows", "No transaction", "Delete and reinsert"], "answer": 1, "explain": "Single transaction beats many." },
-    { "q": "A query uses…", "options": ["Multiple indexes at once", "One index at a time", "No indexes", "SQL joins"], "answer": 1, "explain": "Design indexes to match top queries." },
-    { "q": "Isar is best fit for…", "options": ["Server SQL queries", "Local mobile-first NoSQL with high write throughput", "Auth flows", "Static assets"], "answer": 1, "explain": "Local high-perf NoSQL for Flutter." }
+    { "q": "Writes without writeTxn…", "options": ["Allowed", "Throw at runtime", "Cached", "Async"], "answer": 1, "explain": "All mutations must be in a txn." },
+    { "q": "Filter on non-indexed field is…", "options": ["O(1)", "O(log n)", "O(n) — linear scan", "Free"], "answer": 2, "explain": "Index missing = full-collection scan." },
+    { "q": "Web in Isar 3?", "options": ["Full support", "None (Isar 4 preview adds it)", "Only IndexedDB", "Only WASM"], "answer": 1, "explain": "Isar 3 is native-only." },
+    { "q": "Bulk insert speed vs single?", "options": ["Same", "10-100× faster via putAll", "Slower", "Only 2× faster"], "answer": 1, "explain": "One txn wraps all." },
+    { "q": "Composite index column order?", "options": ["Alphabetical", "Match WHERE + SORT; most selective first", "Random", "Reverse"], "answer": 1, "explain": "Determines the seek path." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Collection + put/find." },
-    { "level": "Medium", "text": "Index + filter query; observe changes with watch()." },
-    { "level": "Hard", "text": "Model a one-to-many with IsarLinks." },
-    { "level": "Expert", "text": "Add full-text search + benchmark 100k inserts." }
+    { "level": "Easy", "text": "Message collection + insert + typed query." },
+    { "level": "Easy", "text": "Add index; benchmark scan speed." },
+    { "level": "Medium", "text": "Composite index for (tenantId, unread) + descending createdAt query." },
+    { "level": "Medium", "text": ".watch() feed of unread messages; auto-updates on insert." },
+    { "level": "Hard", "text": "Bulk putAll 100K rows; compare to one-by-one." },
+    { "level": "Hard", "text": "Isolate-based writer + main-isolate reader via streams." },
+    { "level": "Expert", "text": "Lazy schema migration adding a new field with default; verify old + new work." }
   ],
   "interviewQuestions": [
-    "Isar vs Drift vs Hive?",
-    "Why wrap writes in writeTxn?",
-    "How do watch() streams work?",
-    "How do you handle schema changes?",
-    "How do you optimize a slow Isar query?"
+    "What makes Isar fast vs Hive?",
+    "When is Isar the right choice over drift or Hive?",
+    "Explain composite indexes + when they're needed.",
+    "How do reactive streams differ across Hive / Isar / drift?",
+    "How do you migrate an Isar schema?",
+    "How do you keep Isar performant at millions of rows?"
   ],
   "references": [
-    { "label": "Isar", "url": "https://pub.dev/packages/isar" }
+    { "label": "Isar docs", "url": "https://isar.dev" },
+    { "label": "isar package", "url": "https://pub.dev/packages/isar" }
   ]
 }

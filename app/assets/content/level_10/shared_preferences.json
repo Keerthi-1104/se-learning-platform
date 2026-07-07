@@ -2,44 +2,96 @@
   "id": "plg.shared_preferences",
   "levelId": 10,
   "title": "shared_preferences",
-  "xp": 20,
-  "estimatedMinutes": 10,
+  "xp": 30,
+  "estimatedMinutes": 25,
   "objectives": [
-    "Persist simple primitive settings",
-    "Know its limits vs Hive/secure storage",
-    "Handle async initialization"
+    "Understand shared_preferences via a real-life analogy",
+    "Store bool / int / double / String / StringList primitives",
+    "Use the modern `SharedPreferencesAsync` + `SharedPreferencesWithCache` APIs",
+    "Know when to graduate to Hive / secure_storage",
+    "Test without hitting the real file",
+    "Answer shared_preferences interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "`shared_preferences` persists small primitive values (bool, int, double, String, List<String>) using the platform's native key-value store: SharedPreferences on Android, NSUserDefaults on iOS." },
-    { "type": "code", "language": "dart", "code": "final prefs = await SharedPreferences.getInstance();\nawait prefs.setBool('onboarded', true);\nfinal on = prefs.getBool('onboarded') ?? false;" },
-    { "type": "callout", "variant": "interview", "markdown": "Perfect for tiny app settings (theme, onboarded flag, last-used tab). Not encrypted, not fast for big data, and easy to inspect on a rooted device — never store tokens here." },
-    { "type": "callout", "variant": "mistake", "markdown": "Storing JSON blobs, objects, or auth tokens. For structured data → Hive/Drift/Isar. For secrets → flutter_secure_storage. shared_preferences is for tiny flags and settings." },
-    { "type": "callout", "variant": "tip", "markdown": "`getInstance()` is async — the modern approach uses `SharedPreferencesAsync` (newer API) or the sync-after-init pattern. Migrate to the new SharedPreferencesAsync/WithCache APIs when convenient." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of `shared_preferences` as the sticky notes on your fridge.**\n\nSmall labels: `dark_mode = true`, `locale = 'en'`, `onboarding_done = true`. Cheap. Anyone can peek — the fridge is in the kitchen, not a safe. Perfect for the boring, non-sensitive settings your app needs to remember across launches.\n\n- **Fast** — file on IO platforms (XML on Android, plist on iOS), localStorage on Web. Cold read is a few ms.\n- **Primitive types only** — `bool`, `int`, `double`, `String`, `List<String>`. That's the entire API surface.\n- **Not encrypted, not queryable** — the wrong tool for tokens (use `flutter_secure_storage`) or lists of objects (use Hive).\n\n**Why it's in every Flutter app anyway:** the *right* size for the 20-line 'remember one setting' case. Overusing it (storing a JSON blob of the user's cart) is a classic beginner mistake — you outgrow it the moment you want to search, watch changes, or store more than a screenful of key-values. The old `SharedPreferences.getInstance()` API loads the whole file into memory once, which is fine at 10 keys and awful at 500. Modern `SharedPreferencesAsync` / `SharedPreferencesWithCache` fix that." },
+    { "type": "callout", "variant": "definition", "markdown": "**`shared_preferences`** (`^2.x`) is Flutter's cross-platform primitive KV store. Values are **plain-text at rest** (SharedPreferences XML on Android, `NSUserDefaults` plist on iOS, `localStorage` on Web, JSON files on desktop). **Two APIs:** legacy `SharedPreferences` (in-memory cache of the whole file — `getInstance()` returns a synchronous read/write handle), and modern `SharedPreferencesAsync` + `SharedPreferencesWithCache` (async by default, no full-file load, backed by the same platform storage)." },
+    { "type": "theory", "markdown": "## Modern (2024+) vs legacy API" },
+    { "type": "table", "headers": ["API", "When", "Notes"], "rows": [
+      ["Legacy `SharedPreferences.getInstance()`", "Prior to 2.3.0; still supported", "One synchronous instance; loads whole file"],
+      ["`SharedPreferencesAsync`", "New default in 2.3.0+", "Async per-op; no full-file load; recommended"],
+      ["`SharedPreferencesWithCache`", "New in 2.3.0+", "Sync reads for a whitelist of keys after `create()`; best of both"]
+    ]},
+    { "type": "theory", "markdown": "## Complete setup" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml: shared_preferences: ^2.3.2\nimport 'package:shared_preferences/shared_preferences.dart';\n\n// ────── Legacy sync API (still works) ──────\nfinal prefs = await SharedPreferences.getInstance();\nawait prefs.setBool('dark_mode', true);\nfinal dark = prefs.getBool('dark_mode') ?? false;\n\n// ────── Modern async API (recommended for new code) ──────\nfinal async = SharedPreferencesAsync();\nawait async.setBool('dark_mode', true);\nfinal darkA = await async.getBool('dark_mode');\n\n// ────── Cached async — sync reads for a known key set ──────\nfinal cache = await SharedPreferencesWithCache.create(\n  cacheOptions: const SharedPreferencesWithCacheOptions(\n    allowList: {'dark_mode', 'locale', 'onboarding_done'},\n  ),\n);\ncache.setBool('dark_mode', true);        // async write, sync return\nfinal cachedDark = cache.getBool('dark_mode') ?? false;   // SYNC read from cache\n\n// ────── Reading & writing all primitive types ──────\nawait async.setInt('counter', 42);\nawait async.setDouble('threshold', 0.75);\nawait async.setString('locale', 'en_US');\nawait async.setStringList('recent_searches', ['flutter', 'dio', 'hive']);\n\n// ────── Delete + clear ──────\nawait async.remove('counter');\nawait async.clear(allowList: {'onboarding_done'});  // clear WITHOUT wiping onboarding\n\n// ────── Repository wrapper (recommended pattern) ──────\nclass SettingsStore {\n  SettingsStore(this._prefs);\n  final SharedPreferencesWithCache _prefs;\n\n  bool get darkMode => _prefs.getBool('dark_mode') ?? false;\n  Future<void> setDarkMode(bool v) => _prefs.setBool('dark_mode', v);\n\n  String get locale => _prefs.getString('locale') ?? 'en';\n  Future<void> setLocale(String v) => _prefs.setString('locale', v);\n}" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Storing tokens or PII.** Plain-text at rest. Any device backup / rooted device reads it. Use `flutter_secure_storage` for anything sensitive." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: JSON blob for structured data.** Encoding a `Cart` as JSON string works but you lose type safety, atomicity, and queries. Use Hive or a proper DB." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Reading in every build.** Even the cache is O(1), but tying UI directly to `prefs.getBool` couples widgets to the store. Wrap in a repository + expose via Riverpod / Bloc." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Assuming `List<int>`/`Map` support.** Only `List<String>`. For anything else, JSON-encode into a String — but again, prefer Hive." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Legacy sync API in isolates.** `getInstance()` isn't safe to call from a background isolate; the async API is." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Not testing.** SharedPreferences.setMockInitialValues seeds an in-memory map for widget tests." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Ignoring migration when moving to secure_storage.** After moving tokens out, `clear()` old values or they leak forever." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Assuming atomicity across keys.** There's none — a crash between two writes leaves inconsistent state. For related fields use one JSON blob or a real DB with transactions." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Reserve for non-sensitive prefs** — theme, locale, boolean flags, onboarding done." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Use `SharedPreferencesWithCache` for the hot 5-20 keys** — sync reads + async writes." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Wrap in a `SettingsStore` repository.**" },
+    { "type": "callout", "variant": "best", "markdown": "**4. Namespace keys** by feature (`onboarding.done`, `search.recent`) to avoid collisions." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Sensible defaults** on every getter (`?? false`, `?? 'en'`)." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Test with `setMockInitialValues`.**" },
+    { "type": "callout", "variant": "best", "markdown": "**7. Migrate secrets to `flutter_secure_storage` early.**" },
+    { "type": "callout", "variant": "best", "markdown": "**8. Consider Hive** the moment you store an object or need reactive listeners." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Persist dark-mode toggle; UI reads on start." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Easy)** — Recent-searches list capped at 10 items." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Repository + Riverpod/Bloc expose settings reactively." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Medium)** — Migrate one JSON-blob setting to Hive." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Migrate stored tokens from shared_preferences to secure_storage + clear old keys." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Multi-launch test: `setMockInitialValues` simulates upgraded user with stale keys; verify migration path." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: When is `shared_preferences` the right choice?**\n\n**A:** For **small, non-sensitive, primitive key-value settings** the app must remember across launches. Theme, locale, feature-flag booleans, onboarding-done, `int` counter, `List<String>` recent-searches. **Not the right tool when:** (1) the data is a secret (tokens, PIN) → `flutter_secure_storage`. (2) the data is a structured object (`Cart`, `UserProfile`) → Hive. (3) you need queries, indexing, or joins → Isar / Drift. (4) you need reactive change streams → Hive's `box.listenable()` or a proper state layer. (5) you have hundreds of keys — the legacy `getInstance` loads the whole file; migrate to `SharedPreferencesAsync` or move out entirely." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: Legacy `SharedPreferences.getInstance()` vs `SharedPreferencesAsync` — what's changed?**\n\n**A:** Legacy `getInstance` returns a **singleton with an in-memory cache of the whole file**. Reads are sync; writes are async but the cache updates sync. Problem: on cold start, the WHOLE file loads — fine at 10 keys, painful at 500. Also `getInstance` is main-isolate-only. **`SharedPreferencesAsync`** (2.3.0+) offers **per-op async reads/writes with no full-file preload**. Better cold start, isolate-safe. **`SharedPreferencesWithCache`** — hybrid: on `create()` you pass an allow-list of keys you want cached; those return sync from cache; other keys go async. Best of both. **Recommendation:** new code = `SharedPreferencesWithCache`; existing code = keep legacy until a refactor natural moment." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do you make UI react to shared_preferences changes?**\n\n**A:** There's **no first-class change stream**. Your options: (1) **Store in `shared_preferences` + expose via Riverpod/Bloc/Provider** — writes go through the state layer, which emits changes; widgets watch the state, not the store. (2) **Hive** — natively reactive via `box.listenable()`; move to it if you need this often. (3) **Manual `ChangeNotifier`** wrapping a `SharedPreferencesWithCache` — write methods call `notifyListeners()`. Small teams use option 3 for a `SettingsController extends ChangeNotifier`. Larger apps: option 1 with a repository interface. **Anti-pattern:** widgets calling `prefs.getBool` directly in `build` — you never learn about writes." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you test code that uses shared_preferences?**\n\n**A:** `SharedPreferences.setMockInitialValues({'dark_mode': true, 'locale': 'en'})` in `setUp` seeds an in-memory map for the test. Legacy API reads from it; no filesystem hits. For the modern `SharedPreferencesAsync` API, use `SharedPreferencesAsyncPlatform.instance = InMemorySharedPreferencesAsync.empty()` or the plugin's provided test double. Even better: wrap in a `SettingsStore` interface + inject a Fake implementation in tests — no plugin dance at all. **Pattern:** in unit tests, fake at the repo level; in widget tests where the platform channel might get called, use `setMockInitialValues`." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: Any atomicity or migration gotchas?**\n\n**A:** **Atomicity:** shared_preferences is NOT transactional — a crash between two related writes leaves inconsistent state. If you have related fields (`billing_address` + `billing_zip`), either bundle them into a single JSON String write OR use a real DB. **Migration:** when moving a key elsewhere (e.g., a token → secure_storage), you must **read from old location + write to new + delete old** in one migration step, ideally guarded by a `migration_v_run` boolean also in prefs. **Rename gotcha:** renaming a key means new users have new-key data, old users still have old-key data — write a code path that reads either. **Cross-platform quirks:** iOS `NSUserDefaults` can be quirky about type coercion (a value written as int on one launch, string on the next); always use the same setter/getter type. **Web:** localStorage limits (~5 MB) mean giant String lists silently fail — keep values small." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How do you migrate from shared_preferences to Hive or secure_storage cleanly?**\n\n**A:** Two-step migration guarded by a version key. **(1) On first launch of the new build**, check `prefs.getInt('migration_v') ?? 0`; if `< target`, read the relevant keys from `SharedPreferences`, write them into the new store (Hive/secure_storage), then `prefs.remove(...)` the old keys, then `prefs.setInt('migration_v', target)`. **(2) Later builds** see `migration_v == target` and skip. **Rollback safety** — keep the migration key + delete-old-key step behind the write-to-new step so an app crash mid-migration retries safely (idempotent). **User-facing UX** — usually invisible; if it can take > 1 second (large blob), show a splash 'Preparing…' screen. **Testing** — `setMockInitialValues` simulates an old-version user; assert the new-store contents post-migration." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every Flutter app** — the tiny-setting default.\n- **Legacy code paths** — pre-2.3.0 apps still on `SharedPreferences.getInstance()`.\n- **Consent banner state** — 'seen it' checkbox.\n- **NOT for** — tokens, PII, structured data, large blobs." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`SharedPreferencesAsyncPlatform.setInstance(...)`** — swap the platform impl for tests or custom backends.\n- **`registerWith(webOptions:)`** — customize Web localStorage prefix.\n- **`SharedPreferencesWithCacheOptions.allowList`** — controls which keys the cache tracks.\n- **`clear(allowList:)`** — clears everything EXCEPT the whitelisted keys.\n- **Reactive shims** — 3rd-party packages wrap prefs with `ValueListenable` per key.\n- **Isolate access** — modern async API is isolate-safe; legacy is not.\n- **Cross-platform storage locations** — `Android` `SharedPreferences` XML in `/data/data/<pkg>/shared_prefs/`; `iOS` `NSUserDefaults` in `Library/Preferences/*.plist`; `Web` `localStorage`; desktop `~/Library/Preferences` (mac), `%APPDATA%` (win).\n- **Backup rules** — Android `android:allowBackup` controls whether Google Drive backup includes prefs; iOS iTunes/iCloud backup includes NSUserDefaults by default.\n- **Migration from Preferences DataStore (Android native)** — not automatic; write a one-time reader.\n- **Type coercion** — `getBool` on a String value returns null (not throws); handle nulls." }
   ],
   "flashcards": [
-    { "front": "What is shared_preferences backed by?", "back": "Android SharedPreferences / iOS NSUserDefaults." },
-    { "front": "Types you can store?", "back": "bool, int, double, String, List<String>. That's it." },
-    { "front": "Should you keep tokens here?", "back": "No — not encrypted; use flutter_secure_storage." }
+    { "front": "Types stored?", "back": "bool / int / double / String / List<String>. No Map, no other List types." },
+    { "front": "Encrypted?", "back": "No. Plain-text at rest. Use flutter_secure_storage for secrets." },
+    { "front": "Modern API (2.3.0+)?", "back": "SharedPreferencesAsync + SharedPreferencesWithCache." },
+    { "front": "Reactive?", "back": "No native change stream. Wrap in a repository + state layer, or move to Hive." },
+    { "front": "Testing?", "back": "SharedPreferences.setMockInitialValues({...}) in setUp." },
+    { "front": "Migration path?", "back": "Version-gate migration_v; read old, write new, delete old, bump version." },
+    { "front": "Atomic across keys?", "back": "No. Bundle related fields into one JSON String, or use a DB with transactions." }
   ],
   "quiz": [
-    { "q": "Right use case?", "options": ["Auth tokens", "Onboarded flag / theme", "Photos", "Chat history"], "answer": 1, "explain": "Tiny primitive settings only." },
-    { "q": "Backing store on iOS?", "options": ["Keychain", "NSUserDefaults", "Core Data", "CloudKit"], "answer": 1, "explain": "iOS user defaults." },
-    { "q": "Storing an object?", "options": ["Direct .setObject", "JSON-encode to String (small only)", "Cannot at all", "Photos allowed"], "answer": 1, "explain": "Serialize to a small string; better yet, use Hive." }
+    { "q": "Tokens belong in…", "options": ["shared_preferences", "flutter_secure_storage", "Hive plain", "Everywhere"], "answer": 1, "explain": "Plain-text is unsafe." },
+    { "q": "Modern API name?", "options": ["SharedPreferences", "SharedPreferencesAsync / WithCache", "SharedPreferencesHive", "SharedStorage"], "answer": 1, "explain": "Added in 2.3.0+." },
+    { "q": "Encrypted at rest?", "options": ["Yes", "No", "Only iOS", "Only Web"], "answer": 1, "explain": "Plain-text everywhere." },
+    { "q": "Reactive listener?", "options": ["Built-in stream", "None — wrap in a state layer", "Riverpod-only", "Bloc-only"], "answer": 1, "explain": "No native change stream." },
+    { "q": "Related fields need atomic write?", "options": ["Yes, native", "No — bundle to JSON or move to a DB", "Only on iOS", "Only Web"], "answer": 1, "explain": "shared_preferences isn't transactional." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Persist an 'onboarded' bool." },
-    { "level": "Medium", "text": "Persist a list of recent search strings." },
-    { "level": "Hard", "text": "Migrate from shared_preferences to Hive without losing state." },
-    { "level": "Expert", "text": "Adopt SharedPreferencesAsync/WithCache in a legacy codebase." }
+    { "level": "Easy", "text": "Dark-mode toggle persisted across launches." },
+    { "level": "Easy", "text": "Recent-searches list capped at 10 with FIFO eviction." },
+    { "level": "Medium", "text": "SharedPreferencesWithCache + repository exposing sync getters." },
+    { "level": "Medium", "text": "State-layer wrap so UI reacts to writes." },
+    { "level": "Hard", "text": "Migrate tokens from shared_preferences to flutter_secure_storage; ensure clean-up." },
+    { "level": "Hard", "text": "setMockInitialValues test simulating an old-version user; verify migration runs once." },
+    { "level": "Expert", "text": "Move a structured object from JSON-blob shared_preferences to Hive; benchmark cold-start improvement." }
   ],
   "interviewQuestions": [
-    "When is shared_preferences the right tool?",
-    "Why NOT store tokens here?",
-    "Which types does it support?",
-    "shared_preferences vs Hive vs secure_storage?",
-    "What is SharedPreferencesAsync?"
+    "When is shared_preferences the right choice?",
+    "Legacy vs SharedPreferencesAsync + WithCache — what changed?",
+    "How do you make UI react to shared_preferences changes?",
+    "Testing patterns?",
+    "Atomicity + migration gotchas?",
+    "How do you migrate to Hive / secure_storage cleanly?"
   ],
   "references": [
-    { "label": "shared_preferences", "url": "https://pub.dev/packages/shared_preferences" }
+    { "label": "shared_preferences package", "url": "https://pub.dev/packages/shared_preferences" }
   ]
 }

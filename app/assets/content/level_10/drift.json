@@ -2,44 +2,104 @@
   "id": "plg.drift",
   "levelId": 10,
   "title": "drift (plugin)",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 50,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Wire drift on mobile/desktop/web",
-    "Use build_runner for the schema",
-    "Move heavy work off the UI isolate"
+    "Understand drift via a real-life analogy (plugin-oriented view)",
+    "Set up drift with codegen + platform executors (Web included)",
+    "Write typed CRUD + joins + streams",
+    "Migrate schemas safely",
+    "Test with in-memory database",
+    "Answer drift-plugin interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "`drift` (formerly moor) is Flutter's typed reactive SQL persistence library over SQLite. You define tables in Dart or .drift files; codegen produces type-safe DAOs and reactive Streams." },
-    { "type": "code", "language": "dart", "code": "@DriftDatabase(tables: [Users])\nclass AppDb extends _$AppDb {\n  AppDb(): super(NativeDatabase.createInBackground(_openFile()));\n  int get schemaVersion => 1;\n}\nStream<List<User>> watchAll() =>\n  (select(users)..orderBy([(u) => OrderingTerm.desc(u.id)])).watch();" },
-    { "type": "callout", "variant": "interview", "markdown": "Use `NativeDatabase.createInBackground()` to run SQLite on a **background isolate** — the UI thread never touches disk. Combined with reactive streams, this yields buttery-smooth offline-first UIs." },
-    { "type": "callout", "variant": "mistake", "markdown": "Skipping schema migrations. Bump `schemaVersion` and provide a `MigrationStrategy` (or Drift's `schemaSteps`) — otherwise upgrades crash on production devices." },
-    { "type": "callout", "variant": "tip", "markdown": "Put complex SQL in .drift files (SQL-first) — you get full syntax + type-checked results. On Web, target drift's WASM SQLite build." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of drift as SQLite with typed autocomplete + reactive superpowers.**\n\nSQLite is the powerful old-school relational engine that ships on every mobile OS. Raw `sqflite` gives you `db.rawQuery('SELECT ...')` returning `List<Map<String,dynamic>>` — you cast every field by hand, you spell every column, you learn about typos at runtime.\n\ndrift wraps the same SQLite with **compile-time typing**:\n\n- Define tables in Dart or in `.drift` SQL files.\n- Codegen emits: table classes, row classes with `copyWith`/`toJson`, typed query methods (`select(users).join(...)`), a `.watch()` counterpart to every `.get()`.\n- Rename a column → compile errors point you at every caller.\n- Any query result can be `.watch()` streamed — UI auto-updates on relevant writes.\n\n**Why drift is the right choice when you need SQL:** offline-first apps with relational data (invoices → line items → tax lines) demand joins, transactions, and complex WHERE clauses. Hive and Isar are object stores; SQL wins on relational data + reporting queries. drift gives you SQL power without the raw-string typos. Runs on Android, iOS, macOS, Linux, Windows, **and Web** (via WASM sqlite3)." },
+    { "type": "callout", "variant": "definition", "markdown": "**drift** (formerly `moor`) is a reactive persistence library on top of SQLite. `drift` + `drift_flutter` + `drift_dev` (codegen) + `sqlite3_flutter_libs` (native binaries) or `sqlite3/wasm` (Web). Define tables in Dart classes (`@DataClassName` + `IntColumn/TextColumn/...`) or in `.drift` SQL files. Codegen emits a `Database` class with typed queries, migrations, and reactive Streams. Full transaction support; multi-isolate support via `DriftIsolate`." },
+    { "type": "theory", "markdown": "## drift vs Hive vs Isar" },
+    { "type": "table", "headers": ["Aspect", "Hive", "Isar", "drift"], "rows": [
+      ["Model", "KV + typed objects", "Object DB with indexes", "Relational (SQL)"],
+      ["Queries", "Linear scan", "Filter/sort/multi-index", "Full SQL: JOIN, GROUP BY, subquery"],
+      ["Transactions", "❌", "✅", "✅"],
+      ["Web", "IndexedDB", "❌ Isar 3 (Isar 4 in progress)", "✅ WASM SQLite"],
+      ["Reactive streams", "box.watch", ".watch()", "any query has .watch()"],
+      ["Schema evolution", "Field-number rules", "Version + schema history", "SQL migrations"],
+      ["Best for", "Small typed KV", "Big single-object collections", "Relational + reporting"]
+    ]},
+    { "type": "theory", "markdown": "## Complete plugin setup" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml:\n//   drift: ^2.16.0\n//   drift_flutter: ^0.1.0\n//   sqlite3_flutter_libs: ^0.5.0\n//   path_provider: ^2.1.0\n//   path: ^1.9.0\n// dev_dependencies:\n//   drift_dev: ^2.16.0\n//   build_runner: ^2.4.8\n\n// ────── tables/tables.dart ──────\nimport 'package:drift/drift.dart';\n\nclass Users extends Table {\n  IntColumn get id => integer().autoIncrement()();\n  TextColumn get name => text().withLength(min: 1, max: 100)();\n  TextColumn get email => text().unique()();\n  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();\n}\n\nclass Orders extends Table {\n  IntColumn get id => integer().autoIncrement()();\n  IntColumn get userId => integer().references(Users, #id)();\n  TextColumn get status => textEnum<OrderStatus>()();\n  RealColumn get total => real()();\n  DateTimeColumn get placedAt => dateTime().withDefault(currentDateAndTime)();\n}\nenum OrderStatus { pending, paid, shipped, delivered, cancelled }\n\n// ────── database.dart ──────\nimport 'package:drift/drift.dart';\nimport 'package:drift_flutter/drift_flutter.dart';\nimport 'tables/tables.dart';\npart 'database.g.dart';\n\n@DriftDatabase(tables: [Users, Orders])\nclass AppDatabase extends _$AppDatabase {\n  AppDatabase() : super(driftDatabase(name: 'app.sqlite'));\n\n  @override int get schemaVersion => 2;\n\n  @override\n  MigrationStrategy get migration => MigrationStrategy(\n    onCreate: (m) async => await m.createAll(),\n    onUpgrade: (m, from, to) async {\n      if (from < 2) {\n        // add the placedAt column safely\n        await m.addColumn(orders, orders.placedAt);\n      }\n    },\n  );\n\n  // ────── Typed queries ──────\n  Future<List<User>> allUsers() => select(users).get();\n  Stream<List<User>> watchAllUsers() => select(users).watch();\n\n  Future<int> addUser(UsersCompanion u) => into(users).insert(u);\n\n  Stream<List<OrderWithUser>> watchRecentOrders() {\n    final q = select(orders).join([leftOuterJoin(users, users.id.equalsExp(orders.userId))])\n      ..orderBy([OrderingTerm.desc(orders.placedAt)])\n      ..limit(50);\n    return q.watch().map((rows) => rows.map((r) =>\n      OrderWithUser(order: r.readTable(orders), user: r.readTableOrNull(users))\n    ).toList());\n  }\n\n  Future<double> monthRevenue() async {\n    final total = orders.total.sum();\n    final row = await (selectOnly(orders)\n      ..addColumns([total])\n      ..where(orders.placedAt.isBiggerOrEqualValue(DateTime.now().subtract(const Duration(days: 30))))\n    ).getSingle();\n    return row.read(total) ?? 0;\n  }\n}\n\nclass OrderWithUser { final Order order; final User? user; OrderWithUser({required this.order, required this.user}); }\n\n// Regen: dart run build_runner watch --delete-conflicting-outputs" },
+    { "type": "theory", "markdown": "## Reactive UI (streams are the point)" },
+    { "type": "code", "language": "dart", "code": "// Any query has a .watch() counterpart — Streams update whenever affected tables change.\nclass UserList extends StatelessWidget {\n  const UserList({super.key, required this.db});\n  final AppDatabase db;\n  @override\n  Widget build(BuildContext context) {\n    return StreamBuilder<List<User>>(\n      stream: db.watchAllUsers(),\n      builder: (ctx, snap) {\n        if (!snap.hasData) return const CircularProgressIndicator();\n        final users = snap.data!;\n        return ListView.builder(\n          itemCount: users.length,\n          itemBuilder: (_, i) => ListTile(title: Text(users[i].name)),\n        );\n      },\n    );\n  }\n}\n\n// Insert from elsewhere:\ndb.addUser(UsersCompanion.insert(name: 'Ada', email: 'ada@x'));\n// UserList's Stream fires — UI rebuilds. No manual invalidation." },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Running queries on the main isolate for heavy work.** For big reports use `DriftIsolate` — SQLite off the main isolate keeps the UI at 60/120fps." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Missing migration for schema change.** Users on old builds crash on first launch. Bump `schemaVersion` + write the `onUpgrade` step. Test with `schema_test`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Ignoring composite indexes.** A query with `WHERE tenant_id = ? AND status = ?` runs slow without a `(tenant_id, status)` index. Add one via `Index` builders in a migration." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Long-running transactions.** Wrapping the whole feed load in a `transaction { ... }` blocks writes. Keep transactions short + focused." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Storing giant blobs.** SQLite handles blobs but > 1 MiB rows are painful; store files on disk + only paths in drift." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Forgetting `.watch()` invalidation for cross-table joins.** drift auto-detects table dependencies; but raw `customSelect` needs `readsFrom: {tableA, tableB}` for stream updates." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Web target without `sqlite3/wasm` setup.** Silent failure on `flutter run -d chrome`. Follow drift's Web guide." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: One monster database class.** 200-table `@DriftDatabase` gets slow to codegen. Split via `@DriftAccessor` DAOs per feature." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Use DAOs** (`@DriftAccessor`) to organize per-feature queries." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Migrations are code, not magic** — write + test each schema step." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Add indexes** for hot WHERE clauses." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Prefer `.watch` streams** for reactive UI; skip manual refresh triggers." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Isolate heavy work** via `DriftIsolate`." },
+    { "type": "callout", "variant": "best", "markdown": "**6. In-memory DB for tests** — fast, deterministic." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Type enums via `textEnum<...>()`** or int enum column — avoids string typos." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Encrypt if needed** via `sqlcipher_flutter_libs` — drop-in replacement + password on open." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Users table CRUD + watchAllUsers stream in UI." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Orders table joined with Users; watchRecentOrders in a list." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Add composite index; benchmark before/after." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Migrate from v1 → v2 adding a column; verify via `schema_test`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Run monthly revenue report on `DriftIsolate` off the main thread." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — SQLCipher-encrypted DB + key stored via `flutter_secure_storage`." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: When would you pick drift over Isar / Hive?**\n\n**A:** **drift wins when the data is relational** — many-to-one, many-to-many, joins, reporting queries, GROUP BY / SUM / HAVING. Also **when you need standard SQL** (existing team knowledge, portable to other SQLite tools like Datasette / DB Browser). **Also on the Web** — Isar 3 lacks a Web target (Isar 4 in progress); drift has a mature WASM SQLite path. **Isar wins** for **big single-object collections** with rich filter + full-text search. **Hive wins** for **small typed KV**. Rule: SQL / joins → drift; big object list with search → Isar; simple KV → Hive. Interview red flag: 'always drift' — sledgehammer for a nut when a Hive box would do." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: Explain the reactive Stream architecture.**\n\n**A:** Every `select()` / typed query has a `.watch()` counterpart. drift keeps a **table dependency graph** — the built query knows which tables it reads from. Any write to those tables triggers re-execution + emit-if-changed on the Stream. `join()` queries read from multiple tables → invalidation happens on writes to any of them. **`customSelect`** requires you to declare `readsFrom: {t1, t2}` so drift knows the deps. **UI:** wire `StreamBuilder` (or Riverpod's `StreamProvider`) to `.watch()` — no manual invalidation, no observer boilerplate. **Perf:** drift dedups identical results via `distinct()`; a write that doesn't change the visible slice doesn't cause a rebuild." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do you migrate a schema safely?**\n\n**A:** Bump `schemaVersion` + implement `onUpgrade`. Each step uses `Migrator` methods: `addColumn`, `createTable`, `renameColumn`, `deleteTable`, `createIndex`. **Golden rules:** (1) **Never modify a column type in place** — SQLite is loose but drift's typed classes will disagree; add new column + copy data + drop old. (2) **Test with `drift_dev`'s `schema_test` extractor** — generate a schema snapshot at each version + write migration tests. (3) **Backup on major upgrades** — copy the DB file before migration; rollback on failure. (4) **Idempotency** — each `onUpgrade` step should be safe to re-run. (5) **Long migrations off the UI thread** — show a splash screen; wrap in `DriftIsolate` if it takes seconds. **Rollback strategy** is the interview delighter — most candidates forget it." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How does drift compare to sqflite?**\n\n**A:** `sqflite` is a raw SQLite binding — `db.rawQuery('SELECT ...')` returns `List<Map<String, dynamic>>`. You cast every field, type every column name, discover typos at runtime, and get no streams. drift adds: **(1) codegen with typed Dart row classes** (`User` not `Map`). **(2) query builder with autocomplete + refactor-safety**. **(3) reactive `.watch()` streams**. **(4) migrations helpers**. **(5) transactions with proper isolation**. **(6) Web target via WASM**. Cost: codegen build step + steeper learning curve. **Rule:** new projects → drift; legacy sqflite apps → migrate when you touch the persistence layer. `sqflite` remains fine for tiny use cases where drift's codegen feels heavy." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you offload heavy queries to a background isolate?**\n\n**A:** `DriftIsolate.spawn(...)` creates a database on a separate isolate; `DatabaseConnection.delayed(...)` on the main isolate proxies queries via messages. Heavy queries (monthly report, initial full sync from server) execute on the background isolate without blocking the UI. **Pattern:** main isolate creates the `DriftIsolate` handle at app start; long-running queries are DAO methods that internally proxy to the isolate. Streams still work — updates flow back through messages. **Trade-off:** message-passing has overhead (~1 ms per call); use isolates for BATCH work, not per-row queries. **Gotcha:** each isolate needs its own SQLite handle to the same DB file — SQLite allows this but you must be aware of WAL mode for concurrent read/write. **Advanced:** run analytics report SQL on an isolate + stream partial progress back to the UI." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How do you encrypt a drift database?**\n\n**A:** Swap `sqlite3_flutter_libs` for `sqlcipher_flutter_libs` (drop-in replacement providing the SQLCipher-enabled SQLite build). Pass a `password` when opening: `NativeDatabase(file, setup: (rawDb) => rawDb.execute(\"PRAGMA key = '\\$key'\"))`. **Where does the key live?** — random 32-byte key generated on first launch + stored in `flutter_secure_storage` (Keychain / EncryptedSharedPreferences). Never in code. **Cost:** SQLCipher adds ~30-100 KB APK size + ~15-30% CPU on writes. **Alternative for lighter needs:** encrypt only sensitive fields at the model layer + keep the DB plain. **Compliance:** SQLCipher is FIPS-140 available in the paid tier; open source is fine for most use cases. **Testing:** in-memory DB with encryption — same setup works." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Offline-first apps** — invoices, orders, tasks, medical records — anywhere joins matter.\n- **Reporting screens** — SUM / GROUP BY / HAVING in SQL beats hand-rolled Dart aggregation.\n- **Web + mobile parity** — WASM SQLite same code both platforms.\n- **NOT ideal for** — simple prefs (shared_preferences); tiny cached blobs (Hive).\n- **Common companions** — Riverpod/Bloc for state; freezed for domain types outside the DB layer." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`@DriftAccessor`** — per-feature DAOs cluster related queries.\n- **`@DriftDatabase(daos: [...])`** — register DAOs in the DB class.\n- **`useDartVM` executor** for tests — in-memory + fast.\n- **`schema_test` / `drift_dev schema`** — schema snapshot + migration verification.\n- **`.drift` files** — SQL-first table declarations; useful for teams with strong SQL background.\n- **Views** — `@DriftDatabase(views: [Feed])` — SQL views as first-class typed sources.\n- **Multi-database projects** — separate `AppDatabase` per feature (rare).\n- **JSON columns** — `TextColumn` + adapter converters.\n- **Full-text search** — SQLite FTS5 via `.drift` file with `CREATE VIRTUAL TABLE`.\n- **Streams distinct** — `.distinct()` dedups identical results, skipping rebuilds.\n- **Batch inserts** — `batch((b) { b.insertAll(orders, list); })` — 100× faster than one-at-a-time.\n- **`transaction` blocks** — atomic multi-table writes; roll back on throw." }
   ],
   "flashcards": [
-    { "front": "Where does drift run its SQL?", "back": "Best practice: a background isolate via NativeDatabase.createInBackground()." },
-    { "front": "Reactive queries?", "back": "watch() returns a Stream that emits when relevant tables change." },
-    { "front": "How to migrate schema?", "back": "Bump schemaVersion + MigrationStrategy (or schemaSteps generated from .drift files)." }
+    { "front": "When to pick drift?", "back": "Relational data + joins + reporting queries; Web parity via WASM SQLite." },
+    { "front": "Reactive streams?", "back": "Every query has .watch() — auto-invalidated on relevant table writes." },
+    { "front": "Schema evolution?", "back": "Bump schemaVersion + onUpgrade Migrator steps. Test via drift_dev schema_test." },
+    { "front": "Heavy queries?", "back": "DriftIsolate.spawn — proxy queries to a background isolate." },
+    { "front": "Encryption?", "back": "sqlcipher_flutter_libs + PRAGMA key='...' + key in flutter_secure_storage." },
+    { "front": "Composite index for WHERE a AND b?", "back": "Add via a migration; drift builds Index constructs." },
+    { "front": "Testing?", "back": "In-memory database via `useDartVM` / `NativeDatabase.memory()` — fast, deterministic." }
   ],
   "quiz": [
-    { "q": "For a snappy UI on large queries…", "options": ["Run on the UI isolate", "createInBackground()", "Disable Streams", "Use setState only"], "answer": 1, "explain": "Background isolate keeps the UI free." },
-    { "q": "Reactive updates come from…", "options": ["Polling a timer", "watch() streams reacting to table changes", "setState", "restarts"], "answer": 1, "explain": "Table-change subscriptions drive Streams." },
-    { "q": "Schema evolution needs…", "options": ["Nothing", "schemaVersion + MigrationStrategy", "Wiping user data", "A new package"], "answer": 1, "explain": "Otherwise old databases crash." }
+    { "q": "drift on Web uses…", "options": ["Nothing", "WASM SQLite", "IndexedDB directly", "localStorage"], "answer": 1, "explain": "sqlite3/wasm target." },
+    { "q": "Reactive updates fire when…", "options": ["Manual refresh", "Any write to a table the query reads from", "Every second", "Not supported"], "answer": 1, "explain": "Table-dep graph invalidates streams." },
+    { "q": "Schema change without migration…", "options": ["Auto-handled", "Crashes existing users", "Only affects new users", "SQLite lets it pass"], "answer": 1, "explain": "Migrations are mandatory." },
+    { "q": "Heavy report query lives on…", "options": ["Main isolate", "DriftIsolate", "UI thread", "Analytics thread"], "answer": 1, "explain": "Keep UI thread responsive." },
+    { "q": "Encryption via…", "options": ["Manual XOR", "sqlcipher_flutter_libs + PRAGMA key", "Hive box", "Nothing"], "answer": 1, "explain": "SQLCipher is the standard." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Define Users table; watch a list." },
-    { "level": "Medium", "text": "Migration adding a column with default backfill." },
-    { "level": "Hard", "text": "Complex JOIN in a .drift file with typed API." },
-    { "level": "Expert", "text": "Move DB to background isolate; measure jank before/after." }
+    { "level": "Easy", "text": "Users table + watchAllUsers stream in UI." },
+    { "level": "Easy", "text": "Insert / delete / update flows behind a DAO." },
+    { "level": "Medium", "text": "Orders join Users; watch recent orders with left join." },
+    { "level": "Medium", "text": "Add composite index; measure query time before/after." },
+    { "level": "Hard", "text": "Migration v1 → v2 adding a column; validate via schema_test." },
+    { "level": "Hard", "text": "Run a monthly-report SQL on a DriftIsolate." },
+    { "level": "Expert", "text": "SQLCipher-encrypted DB with key in flutter_secure_storage." }
   ],
   "interviewQuestions": [
-    "Drift vs raw sqflite?",
-    "How do reactive queries work?",
-    "Why run on a background isolate?",
-    "How do migrations work?",
-    "Drift on Web?"
+    "When would you pick drift over Isar / Hive?",
+    "How does the reactive Stream architecture work?",
+    "How do you migrate a schema safely?",
+    "drift vs sqflite — what's the difference?",
+    "How do you offload heavy queries to an isolate?",
+    "How do you encrypt a drift database?"
   ],
   "references": [
-    { "label": "drift", "url": "https://pub.dev/packages/drift" }
+    { "label": "drift docs", "url": "https://drift.simonbinder.eu" },
+    { "label": "drift on Web", "url": "https://drift.simonbinder.eu/platforms/web/" },
+    { "label": "sqlcipher_flutter_libs", "url": "https://pub.dev/packages/sqlcipher_flutter_libs" }
   ]
 }
