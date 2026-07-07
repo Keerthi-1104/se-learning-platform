@@ -2,44 +2,103 @@
   "id": "plg.provider",
   "levelId": 10,
   "title": "provider (plugin)",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "xp": 40,
+  "estimatedMinutes": 35,
   "objectives": [
-    "Wire providers cleanly at the app root",
-    "Use Consumer, Selector, watch/read correctly",
-    "Combine multiple providers with MultiProvider / ProxyProvider"
+    "Understand `provider` via a real-life analogy",
+    "Pick the right provider variant (Provider vs ChangeNotifierProvider vs ProxyProvider vs StreamProvider)",
+    "Combine providers with `MultiProvider` + read/watch/select",
+    "Avoid rebuild storms + listen-during-build errors",
+    "Test provider-backed widgets",
+    "Answer provider interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "`provider` is a lightweight wrapper around InheritedWidget with builders for ChangeNotifier, Streams, Futures, and dependent providers. It's the officially recommended baseline for shared state." },
-    { "type": "code", "language": "dart", "code": "runApp(MultiProvider(providers: [\n  ChangeNotifierProvider(create: (_) => AuthNotifier()),\n  ProxyProvider<AuthNotifier, Api>(update: (_, a, __) => Api(a.token)),\n], child: const MyApp()));\n\nfinal count = context.watch<Counter>().value;\ncontext.read<Counter>().inc();" },
-    { "type": "callout", "variant": "interview", "markdown": "Under the hood everything provider offers is an InheritedWidget — the value is that you don't have to write one. It's the fastest way to teach a team dependency injection + state without a heavier framework." },
-    { "type": "callout", "variant": "mistake", "markdown": "Using `context.watch` inside a callback → rebuild loops / assertion errors. Use `context.read` in callbacks and event handlers; use `watch` / `Consumer` / `Selector` only inside `build`." },
-    { "type": "callout", "variant": "tip", "markdown": "For granular rebuilds use `Selector<T, S>` or Consumer's `child:` parameter to avoid rebuilding heavy subtrees. Consider Riverpod when compile-time safety and multi-instance providers matter." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of `provider` as the office intercom system.**\n\nEvery widget in the tree is a room in a building. `provider` mounts an **intercom (`InheritedWidget`)** at some level of the tree. Rooms below can:\n\n- **Listen** (`context.watch<Counter>()`) — the intercom pages this room every time `Counter` changes. Room repaints.\n- **Ask once** (`context.read<Counter>()`) — this room dials the intercom, gets the value, doesn't subscribe. No rebuild on change.\n- **Filter** (`context.select<Cart, int>((c) => c.itemCount)`) — the intercom only pages when the *itemCount slice* changes; ignores unrelated `Cart` field changes.\n\nA `ChangeNotifierProvider` is the intercom that holds a `ChangeNotifier`; whenever it fires `notifyListeners()`, subscribed rooms rebuild.\n\n**Why `provider` shaped a generation of Flutter code:** before it, DI + state exposure required either global singletons (untestable) or drilling props through 5 constructors (`prop drilling`). `InheritedWidget` was the built-in answer, but its API was awkward. `provider` wrapped `InheritedWidget` in an ergonomic API, added lifetime management (`dispose` called automatically), and paired with `ChangeNotifier` gave Flutter its first great state-management story. Riverpod, Bloc, and MobX all take inspiration from it. Even in 2026, half of Flutter tutorials + the majority of small/mid apps still use `provider` because it's simple + battle-tested." },
+    { "type": "callout", "variant": "definition", "markdown": "**`provider`** (`^6.1.x`) is Remi Rousselet's dependency-injection + state-observation library built on Flutter's `InheritedWidget`. Ships variants: `Provider<T>` (immutable value), `ChangeNotifierProvider<T>` (mutable observable), `ValueListenableProvider`, `StreamProvider`, `FutureProvider`, `ProxyProvider` (derived from other providers), and `MultiProvider` (composition). Consumers use `Provider.of<T>(context)`, extension methods `context.read/watch/select`, or the `Consumer<T>` builder widget. Automatic `dispose` when the provider leaves the tree. **Predecessor + inspiration for Riverpod**, still recommended in the Flutter docs for small/mid apps." },
+    { "type": "theory", "markdown": "## Variant cheat sheet" },
+    { "type": "table", "headers": ["Variant", "Wraps", "Rebuilds descendants when", "Use for"], "rows": [
+      ["`Provider<T>`", "Immutable value", "Never (value never changes)", "Repositories, config, API clients"],
+      ["`ChangeNotifierProvider<T>`", "ChangeNotifier", "`notifyListeners()` fires", "Screen-scoped view models"],
+      ["`ValueListenableProvider<T>`", "ValueListenable", "`value` changes", "`ValueNotifier<int>` counters"],
+      ["`StreamProvider<T>`", "Stream", "New event", "Firebase snapshots, WebSocket"],
+      ["`FutureProvider<T>`", "Future", "Resolves", "One-shot fetch"],
+      ["`ProxyProvider<A,B>`", "Derived from A", "A rebuilds", "Compose ApiClient(from AuthState)"],
+      ["`MultiProvider`", "N providers", "N/A", "Wraps app to register many at once"]
+    ]},
+    { "type": "theory", "markdown": "## Complete setup — counter with proper VM" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml: provider: ^6.1.1\nimport 'package:flutter/material.dart';\nimport 'package:provider/provider.dart';\n\n// ────── View model ──────\nclass CounterVM extends ChangeNotifier {\n  int _n = 0;\n  int get n => _n;\n  void inc() { _n++; notifyListeners(); }\n  @override void dispose() { /* free timers, subscriptions */ super.dispose(); }\n}\n\nvoid main() => runApp(const MyApp());\n\nclass MyApp extends StatelessWidget {\n  const MyApp({super.key});\n  @override\n  Widget build(BuildContext context) {\n    // ────── MultiProvider mounts app-level DI at root ──────\n    return MultiProvider(\n      providers: [\n        Provider<ApiClient>(create: (_) => ApiClient()),        // immutable\n        ChangeNotifierProvider(create: (_) => CounterVM()),      // mutable\n        ProxyProvider<ApiClient, UserRepository>(               // derived\n          update: (_, api, prev) => UserRepository(api),\n        ),\n      ],\n      child: MaterialApp(home: const Home()),\n    );\n  }\n}\n\nclass Home extends StatelessWidget {\n  const Home({super.key});\n  @override\n  Widget build(BuildContext context) {\n    // watch<T>() subscribes; rebuild on notifyListeners()\n    final vm = context.watch<CounterVM>();\n    return Scaffold(\n      appBar: AppBar(title: const Text('Counter')),\n      body: Center(child: Text('${vm.n}', style: const TextStyle(fontSize: 48))),\n      floatingActionButton: FloatingActionButton(\n        // read<T>() does NOT subscribe — perfect for event handlers.\n        onPressed: () => context.read<CounterVM>().inc(),\n        child: const Icon(Icons.add),\n      ),\n    );\n  }\n}" },
+    { "type": "theory", "markdown": "## The three access APIs — watch vs read vs select" },
+    { "type": "code", "language": "dart", "code": "// 1. watch<T> — subscribe; rebuild on ANY change of T.\nfinal cart = context.watch<Cart>();\nText('${cart.items.length} items');   // this Text rebuilds on any Cart change\n\n// 2. read<T> — no subscription; used in callbacks (onTap) or initState.\nElevatedButton(\n  onPressed: () => context.read<Cart>().add(item),  // won't cause the button to rebuild\n  child: const Text('Add'),\n)\n\n// 3. select<T, R> — subscribe to a slice; rebuild only when the slice changes.\nfinal count = context.select<Cart, int>((c) => c.items.length);\nText('$count items');   // rebuilds only when the count changes, not on price change\n\n// 4. Consumer<T> — same as watch but scopes the rebuild boundary.\nConsumer<Cart>(\n  builder: (context, cart, _) => Badge(count: cart.items.length),\n);\n\n// 5. Selector<A, R> — the widget-form of select.\nSelector<Cart, int>(\n  selector: (_, c) => c.items.length,\n  builder: (context, count, _) => Text('$count'),\n);" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: `context.watch` inside `initState`.** InheritedWidgets aren't ready until `didChangeDependencies`. Use `context.read` in `initState`, or move logic to `didChangeDependencies`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: `context.watch` inside a callback (`onPressed`).** Callbacks aren't in the build phase — `watch` throws `ProviderNotFoundException` or produces stale reads. Use `context.read` in callbacks." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: `notifyListeners()` inside `build`.** Infinite rebuild loop — flutter throws 'setState during build.' Only mutate + notify in event handlers / futures." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: One giant VM for the whole app.** Every field change rebuilds every consumer. Split into focused VMs (`CartVM`, `AuthVM`, `ThemeVM`) or use `select` to filter." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Provider without `.value` when you already own the object.** `ChangeNotifierProvider.value(value: existing)` when the object outlives the widget; use `create:` when the provider should own the lifetime + call `dispose`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Nested Consumer soup.** Three deep Consumers = three rebuild scopes crossing. Combine with `Selector` or move to `context.select` inside the outer widget." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: `provider` above `MaterialApp` for i18n / theme.** Routes navigate to new pages that don't inherit the same tree unless you provide above `MaterialApp` (or via `builder`). Understand the tree." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Testing without `ChangeNotifierProvider` wrap.** Widget tests need the provider in scope; use `pumpWidget(ChangeNotifierProvider(create: (_) => TestVM(), child: SUT()))`." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. `read` in callbacks, `watch` in build, `select` for slices.** Rule memorized." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Focused VMs.** One per screen or feature, not one god VM." },
+    { "type": "callout", "variant": "best", "markdown": "**3. `MultiProvider` for app-level DI** — repositories, API clients, config." },
+    { "type": "callout", "variant": "best", "markdown": "**4. `ProxyProvider` for derived state** — recompose when a dependency changes." },
+    { "type": "callout", "variant": "best", "markdown": "**5. `StreamProvider` / `FutureProvider` for external sources** — Firebase snapshots, one-shot fetches." },
+    { "type": "callout", "variant": "best", "markdown": "**6. `Selector` around expensive widgets** — limit rebuild scope." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Widget tests wrap with the necessary provider tree** — verify observability." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Move to Riverpod** if you outgrow provider: compile-time safety, no BuildContext dependency, better async." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Counter with `ChangeNotifierProvider` + `context.watch`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Split into `CounterVM` + `ThemeVM`; use `select` for theme so counter changes don't rebuild theme." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — `ProxyProvider` — build `UserRepository` from `ApiClient`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — `StreamProvider` on a Firestore snapshot; UI reacts live." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Diagnose a rebuild storm using Flutter DevTools; fix with `Selector`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Widget test that pumps a `ChangeNotifierProvider` + verifies UI observability." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: `watch` vs `read` vs `select` — when do you use each?**\n\n**A:** **`watch<T>()`** — subscribes the current `build` method to any change of `T`. Use in `build`. Rebuilds the widget whenever `T.notifyListeners()` fires. **`read<T>()`** — one-shot read, no subscription. Use in `initState`, `onPressed`, `Future.microtask`, anywhere OUTSIDE the build phase. Cheap. **`select<T, R>((t) => t.someSlice)`** — subscribes only to the slice `R`; the widget rebuilds only when the slice changes, ignoring unrelated T changes. Use when a widget cares about a subset of a big VM (e.g., only `Cart.itemCount`, not full `Cart`). Rule to memorize: **read in callbacks, watch in build, select for slices.** Violating this either crashes (`watch` in callback) or produces rebuild storms (`watch` when `select` would do)." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What's the underlying Flutter mechanism?**\n\n**A:** `provider` is a thin wrapper around **`InheritedWidget`**. When you write `ChangeNotifierProvider(create: (_) => VM(), child: ...)`, it mounts a `_InheritedProviderScope<VM>` in the tree. Descendant widgets that call `context.watch<VM>()` register themselves as dependents via `dependOnInheritedWidgetOfExactType`. When the `ChangeNotifier` fires `notifyListeners`, provider iterates registered dependents and marks them dirty for rebuild. `read` uses `getElementForInheritedWidgetOfExactType` — reads without subscribing. `select` layers on top: it subscribes but re-evaluates the selector; if `oldSlice == newSlice`, no rebuild. **Consequence:** everything provider does is standard Flutter mechanism — no runtime magic, testable via `pumpWidget`, works with hot reload. **Not exclusive to `ChangeNotifier`** — any observable (Stream, ValueListenable, Future) has its own Provider variant." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: You have a screen that rebuilds too often — how do you diagnose + fix?**\n\n**A:** **Diagnose:** enable Flutter DevTools's **Repaint Rainbow** or **`debugPrintRebuildDirtyWidgets`** — the widgets that flash on every state change are the offenders. **Common patterns:** **(1) `context.watch<BigVM>()` at the top of the widget** subscribes to any change, so *every* field change rebuilds the entire subtree. Fix: `context.select<BigVM, R>((vm) => vm.smallField)` for each place. **(2) Anonymous callbacks in build (`onPressed: () => ...`)** — technically not a rebuild issue but keeps identity stable across rebuilds; less common cause. **(3) Nested Consumers of unrelated VMs** — split into `Selector` widgets that watch narrow slices. **(4) Multi-purpose `ChangeNotifier`** — refactor into small focused VMs. **(5) `StreamProvider` re-emitting the same value** — override equality on the emitted class. **Metric that matters:** frame time. p50 < 16ms; if not, Repaint-Rainbow + Timeline profile." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: When would you migrate from `provider` to Riverpod?**\n\n**A:** Migrate when you hit these pain points: **(1) `ProviderNotFoundException` at runtime** — provider is BuildContext-scoped; forgetting to wrap something is a compile-passing runtime error. Riverpod checks at compile time. **(2) Async initialization is awkward** — `FutureProvider` + errors is verbose; Riverpod's `AsyncValue` is nicer. **(3) `ProxyProvider` composition explodes** — 4 layers of derived state = unreadable soup; Riverpod's family + ref.watch is cleaner. **(4) Testing without BuildContext** — Riverpod runs providers in pure Dart tests. **(5) Family / autoDispose semantics** — provider has no first-class support; Riverpod does. **Cost:** rewrite of the state-management layer. **Migration path:** identify screen-scoped VMs first (easy wins), leave root-level DI on provider (also easy to move but low priority), test-cover as you go. **When NOT to migrate:** small stable app, team knows provider well, no acute pain — churn is expensive." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you handle async data with provider?**\n\n**A:** Options: **(1) `FutureProvider<T>`** — one-shot fetch; children see `AsyncSnapshot`-like states via `context.watch<AsyncSnapshot<T>>()` (or a builder). Cleans up when leaving tree. **(2) `StreamProvider<T>`** — continuous updates (Firestore snapshot, WebSocket). Same builder-style consumption. **(3) `ChangeNotifierProvider` + manual future in the VM** — VM holds `loading/data/error` fields, calls the future, notifies. Most flexible; verbose. **(4) `flutter_bloc` / Riverpod** — better ergonomics for complex flows. **Trap:** kicking off a fetch inside `build` — will re-fetch on every rebuild. Do it in `initState` (with `context.read`) or in VM constructor with a load flag. **Recommendation:** `FutureProvider` for simple one-shots; VM pattern for anything with retries, refresh, or user-triggered mutations." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What are common testing patterns for provider-backed widgets?**\n\n**A:** **(1) Widget test with `ChangeNotifierProvider(create: (_) => TestVM(), child: SUT())`.** VM instance controlled by the test; fire events + `pump()` + verify. **(2) Fake VMs** — implement the interface with a `TestVM extends ChangeNotifier` that has pre-programmed states. **(3) `Mocktail` for VM methods** — combined with a `.value` provider for injecting the mock. **(4) `MultiProvider` in tests** — mimic the app tree exactly for integration widget tests. **(5) Unit-test the VM in isolation** — no widget tree needed; assert on notifyListeners calls via a `TestListener`. **(6) `ProviderScope` isolation** — each test gets a fresh scope; teardown ensures no state leaks between tests. **Key insight for interviews:** the test *tree* mimics the runtime *tree*; provider makes DI trivial at test time." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Small + mid Flutter apps** — the reference state-management for years.\n- **Firebase snapshots** — StreamProvider around `Firestore.collection().snapshots()`.\n- **App-level DI** — repositories, API clients, theme, locale.\n- **NOT ideal for** — very large apps with complex derived-state graphs (Riverpod / Bloc win)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`Provider.debugCheckInvalidValueType`** — hook to guard against passing non-immutable values into `Provider<T>`.\n- **`MultiProvider` composition order** — later providers can read earlier ones via `ProxyProvider.update`.\n- **`Consumer<A, B, C>`** — multi-consumer for 2-6 providers at once.\n- **`Provider.value` vs `Provider(create: ...)`** — value: reuse an outer object; create: provider owns lifetime + calls dispose.\n- **`ChangeNotifier` equality** — provider re-emits on `notifyListeners`; if you override `==`, ensure it still matches actual changes.\n- **`ValueListenableProvider`** — great for lightweight `ValueNotifier<T>` counters.\n- **`StateNotifierProvider`** — from `flutter_state_notifier` — immutable-state-emitting notifier; Riverpod adopted this pattern.\n- **Not for global state?** — provider is scoped by widget tree; there is no default 'app-wide singleton' concept, though `MultiProvider` at root emulates it.\n- **Hot reload safety** — `provider` handles hot reload gracefully; if VM state matters, `dispose + create` fresh on reload.\n- **Riverpod's genesis** — same author (Remi Rousselet); provider laid the groundwork.\n- **Bloc + provider** — many teams provide a Bloc via `BlocProvider` (which is provider-based) alongside app-level providers." }
   ],
   "flashcards": [
-    { "front": "watch vs read?", "back": "watch subscribes and rebuilds; read is a one-off access (callbacks/handlers)." },
-    { "front": "How to combine dependent providers?", "back": "ProxyProvider (or ChangeNotifierProxyProvider) — rebuilds when its dependencies change." },
-    { "front": "How to reduce rebuild cost?", "back": "Selector or Consumer's child parameter." }
+    { "front": "watch vs read vs select?", "back": "Watch = subscribe (build only). Read = one-shot (callbacks). Select = subscribe to slice — rebuild only when slice changes." },
+    { "front": "Underlying mechanism?", "back": "InheritedWidget + dependent registration; ChangeNotifier fires notify → dependents marked dirty." },
+    { "front": "Provider.value vs .create?", "back": "value = reuse outer object (no dispose); create = provider owns lifetime + calls dispose." },
+    { "front": "Rebuild storm fix?", "back": "Selector / context.select to narrow slice; split god VM into focused VMs." },
+    { "front": "read in initState allowed?", "back": "Yes — watch is not (deps not ready); use read + move complex logic to didChangeDependencies." },
+    { "front": "Async data — which provider?", "back": "FutureProvider for one-shot; StreamProvider for continuous; VM pattern for complex flows." },
+    { "front": "Testing?", "back": "Wrap SUT in ChangeNotifierProvider with a test VM; verify notifyListeners drives UI." }
   ],
   "quiz": [
-    { "q": "In a button onPressed, use…", "options": ["watch", "read", "Selector", "MultiProvider"], "answer": 1, "explain": "read is one-off; no subscription." },
-    { "q": "ProxyProvider is for…", "options": ["Networking", "Depending on other providers", "Routing", "Theming"], "answer": 1, "explain": "It derives its value from other providers." },
-    { "q": "The primitive underneath provider is…", "options": ["Stream", "InheritedWidget", "Isolate", "ChangeNotifier only"], "answer": 1, "explain": "provider wraps InheritedWidget." }
+    { "q": "context.watch inside onPressed…", "options": ["OK", "Throws / stale — use read", "Preferred", "Necessary"], "answer": 1, "explain": "Callbacks aren't build; use read." },
+    { "q": "Best way to only rebuild on Cart.count change…", "options": ["watch<Cart>", "read<Cart>", "select<Cart,int>((c)=>c.count)", "Consumer<Cart>"], "answer": 2, "explain": "select narrows the dependency to a slice." },
+    { "q": "notifyListeners inside build?", "options": ["Fine", "Infinite rebuild loop — never", "Only in test", "Rare"], "answer": 1, "explain": "Only mutate + notify in callbacks/futures." },
+    { "q": "ProxyProvider is for…", "options": ["Async data", "Derived state (B from A)", "Global singletons", "Debugging"], "answer": 1, "explain": "Recomposes B when A changes." },
+    { "q": "provider is built on…", "options": ["Reflection", "InheritedWidget", "isolates", "streams"], "answer": 1, "explain": "Thin, ergonomic wrapper." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Counter with ChangeNotifierProvider + Consumer." },
-    { "level": "Medium", "text": "Selector to rebuild only one label." },
-    { "level": "Hard", "text": "ProxyProvider deriving an Api from an AuthNotifier." },
-    { "level": "Expert", "text": "Refactor an over-rebuilding screen; measure rebuild count before/after." }
+    { "level": "Easy", "text": "Counter with ChangeNotifierProvider + context.watch." },
+    { "level": "Easy", "text": "MultiProvider registering ApiClient + AuthVM at app root." },
+    { "level": "Medium", "text": "Selector to prevent rebuilds on unrelated Cart field changes." },
+    { "level": "Medium", "text": "ProxyProvider composes UserRepository from ApiClient." },
+    { "level": "Hard", "text": "StreamProvider on Firestore snapshot; verify live rebuild." },
+    { "level": "Hard", "text": "Diagnose + fix a rebuild storm using DevTools." },
+    { "level": "Expert", "text": "Widget-test a screen with pumpWidget wrapped in the correct provider tree." }
   ],
   "interviewQuestions": [
-    "watch vs read vs Selector?",
-    "How does ProxyProvider work?",
-    "How does provider relate to InheritedWidget?",
-    "When would you leave provider for Riverpod?",
-    "How to test code that depends on provider?"
+    "watch vs read vs select — when do you use each?",
+    "What Flutter mechanism does provider use under the hood?",
+    "Diagnose + fix a rebuild storm — walk me through it.",
+    "When would you migrate from provider to Riverpod?",
+    "How do you handle async data with provider?",
+    "Testing patterns for provider-backed widgets?"
   ],
   "references": [
-    { "label": "provider package", "url": "https://pub.dev/packages/provider" }
+    { "label": "provider package", "url": "https://pub.dev/packages/provider" },
+    { "label": "State-management docs", "url": "https://docs.flutter.dev/data-and-backend/state-mgmt/simple" }
   ]
 }
