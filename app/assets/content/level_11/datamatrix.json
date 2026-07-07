@@ -1,51 +1,104 @@
 {
   "id": "gs1.datamatrix",
   "levelId": 11,
-  "title": "DataMatrix",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "title": "DataMatrix (GS1)",
+  "xp": 50,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Explain the DataMatrix code format",
-    "Encode GS1 AI data with FNC1",
-    "Choose DataMatrix vs QR for a use case"
+    "Understand GS1 DataMatrix via a real-life analogy",
+    "Encode GS1 element strings correctly with FNC1",
+    "Compare DataMatrix vs QR vs GS1-128 for regulated use",
+    "Handle small-code readability + error-correction levels",
+    "Fit DataMatrix into pharma DSCSA / India CDSCO flows",
+    "Answer DataMatrix interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "**DataMatrix** is a compact 2D matrix barcode (square or rectangular) using Reed-Solomon error correction. When used with GS1 (as **GS1 DataMatrix**), the first character is FNC1 — signalling that the payload is a stream of Application Identifiers." },
-    { "type": "code", "language": "text", "code": "GS1 DataMatrix payload (with FNC1 as start-of-message):\n  <FNC1> 01 08901234000015 17 261231 10 BATCH42 21 SN-777\n\nParsing rules:\n  - Fixed-length AIs (01, 17) read exact digit count\n  - Variable-length AIs (10, 21, 91-99) end at FNC1 or end-of-data\n  - FNC1 = 0x1D (GS in ASCII) — invisible to humans, delimits fields" },
-    { "type": "table", "headers": ["", "DataMatrix", "QR Code"], "rows": [
-      ["Size", "Very compact for small data", "Larger; better for URLs / logos"],
-      ["Aesthetic", "Utilitarian (industrial)", "Consumer-familiar"],
-      ["Error correction", "Reed-Solomon (fixed levels)", "Reed-Solomon (L/M/Q/H)"],
-      ["GS1 signal", "FNC1 in first position", "GS1 QR uses FNC1 too"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of GS1 DataMatrix as the tiny black-and-white square you see on medicine boxes + medical devices — the code regulators trust.**\n\nUnlike QR codes (marketing-friendly, iconic) or EAN-13 (retail POS), **GS1 DataMatrix** is the workhorse of REGULATED industries:\n\n- **Small** — fits on a 6 × 6 mm print on a pill blister pack.\n- **High error correction** — Reed-Solomon; readable even if half is scratched.\n- **Structured payload** — encodes GS1 element strings with **FNC1** as the first character (marks it as GS1 format).\n- **Regulator-approved** — DSCSA (US), EU FMD, India CDSCO drug tracing all require DataMatrix on drug packaging.\n- **Also on medical devices** — EU MDR / India MDR + FDA UDI use DataMatrix or GS1-128.\n\nWhat's inside a pharma DataMatrix:\n```\nFNC1 (marker) 01 08901234567895 17 260101 10 BATCH99 21 SERIAL42\n```\n\nGTIN + expiry + batch + serial — everything needed for regulatory verification + supply-chain traceability. **Why every pharma / medical / hospital Flutter app must speak DataMatrix fluently:** hospital pharmacies scan hundreds a day; a wrong parse = wrong drug dispensed. Regulators audit every scan against their trace database. Get the FNC1 handling wrong + the whole payload misparses." },
+    { "type": "callout", "variant": "definition", "markdown": "**GS1 DataMatrix** is a 2D barcode symbology using ECC 200 (Reed-Solomon error correction), specialized by GS1 to carry element strings with **FNC1** as the first character to identify it as GS1 format. Data structure = GS1 element string (AI + value pairs). Common in pharma + medical devices + industrial + healthcare due to small print size + error correction. Multiple sizes: 10 × 10 to 144 × 144 modules." },
+    { "type": "theory", "markdown": "## DataMatrix vs QR vs GS1-128" },
+    { "type": "table", "headers": ["Aspect", "GS1 DataMatrix", "QR (GS1)", "GS1-128"], "rows": [
+      ["Symbology", "2D ECC 200", "2D QR Model 2", "1D Code 128"],
+      ["Data capacity", "~2 KB max", "~4 KB", "~800 chars"],
+      ["Print size", "As small as 3 × 3 mm", "Bigger (min ~15 mm)", "Long strip"],
+      ["Consumer familiarity", "Low", "Very high", "Low"],
+      ["Regulatory (pharma)", "**Preferred**", "Rare", "Legacy"],
+      ["Error correction", "Fixed (28 %)", "Configurable (L/M/Q/H)", "None"],
+      ["Best for", "Small pharma packaging", "Consumer scan", "Warehouse labels"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "DataMatrix dominates **regulated industries**: pharmaceuticals (EU FMD / US DSCSA), medical devices (UDI), electronic components. Its compactness lets you fit GTIN + batch + expiry + serial on a tiny label — critical for small syringes or pills." },
-    { "type": "callout", "variant": "mistake", "markdown": "Ignoring the FNC1 → treating the payload as plain text. Without recognizing FNC1 (0x1D), your parser can't tell where a variable-length AI ends. Every GS1 DataMatrix parser must handle this delimiter." },
-    { "type": "callout", "variant": "tip", "markdown": "For pharma, use DataMatrix with GTIN + serial + batch + expiry (the DSCSA/FMD 'four elements'). For consumer engagement, use QR (or a Digital Link QR)." }
+    { "type": "theory", "markdown": "## Encoding GS1 element strings" },
+    { "type": "code", "language": "text", "code": "// The RAW encoded data in a GS1 DataMatrix starts with FNC1 (ASCII 232 in Code Page 437,\n// or a special GS1-defined character depending on encoding). Elements:\n\n// Fixed-length AIs concatenate directly (no separator needed).\n//   01 (GTIN, 14 digits fixed): 01 08901234567895\n//   17 (expiry, 6 digits fixed): 17 260101\n\n// Variable-length AIs need a Group Separator (GS, ASCII 29) after them.\n//   10 (batch, up to 20 chars): 10 BATCH99 <GS>\n//   21 (serial, up to 20 chars): 21 SERIAL42\n\n// Full payload for a pharma DataMatrix:\n//   FNC1 01 08901234567895 17 260101 10 BATCH99 <GS> 21 SERIAL42\n\n// Human-readable representation (for humans, not the code):\n//   (01)08901234567895(17)260101(10)BATCH99(21)SERIAL42" },
+    { "type": "theory", "markdown": "## Parse the raw scan value" },
+    { "type": "code", "language": "dart", "code": "/// Parse a raw GS1 DataMatrix scan value into a Map<AI, Value>.\n/// Handles FNC1 (identifier) + Group Separator between variable-length AIs.\nclass Gs1Parser {\n  static const _fnc1 = 0x1D;   // GS in element strings; some scanners strip the FNC1 identifier\n\n  // AI catalog: length -1 = variable\n  static const _fixedLen = <String, int>{\n    '00': 18, '01': 14, '02': 14, '15': 6, '17': 6, '20': 2,\n  };\n\n  static Map<String, String> parse(String raw) {\n    // Some scanners return '(01)…' human-readable; strip parentheses if present.\n    if (raw.contains('(')) raw = raw.replaceAll('(', '').replaceAll(')', ']');\n\n    // Strip leading FNC1 marker (`]d2` for DataMatrix or ASCII 0x1D from readers configured that way)\n    // The exact leading marker depends on scanner config — normalize.\n    if (raw.startsWith(String.fromCharCode(_fnc1))) raw = raw.substring(1);\n\n    final result = <String, String>{};\n    int i = 0;\n    while (i < raw.length) {\n      // AI is 2-4 chars; try 2 first, then extend if not recognized\n      String ai = raw.substring(i, i + 2);\n      i += 2;\n\n      final fixed = _fixedLen[ai];\n      if (fixed != null) {\n        result[ai] = raw.substring(i, i + fixed);\n        i += fixed;\n      } else {\n        // variable: read until GS (0x1D) or end\n        final gs = raw.indexOf(String.fromCharCode(_fnc1), i);\n        final end = gs < 0 ? raw.length : gs;\n        result[ai] = raw.substring(i, end);\n        i = end == raw.length ? end : end + 1;\n      }\n    }\n    return result;\n  }\n}\n\n// Example — pharma scan\nfinal ais = Gs1Parser.parse('01089012345678951726010110BATCH99\\u001D21SERIAL42');\nprint(ais['01']);   // 08901234567895\nprint(ais['17']);   // 260101\nprint(ais['10']);   // BATCH99\nprint(ais['21']);   // SERIAL42" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Ignoring the Group Separator between variable-length AIs.** Batch `ABC12321SERIAL42` (missing GS) parses as batch = `ABC12321SERIAL42` — corruption." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Stripping the FNC1 identifier wrongly.** Some scanners return `]d2` prefix; some return raw ASCII 0x1D; some strip entirely. Normalize based on scanner config." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Using QR for pharma.** Regulators require DataMatrix; some Indian pharma companies got compliance letters for using QR." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Print quality below ISO 15415 grade C.** Damaged / low-contrast DataMatrix fails at scan; must be validated at print time." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Missing expiry in short-shelf-life products.** AI 17 required; some brand owners omit → non-compliant." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Duplicating AIs.** Same AI twice = invalid + parser confusion." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Serial re-use.** SGTIN serials must be unique per GTIN forever (~4 years no reuse minimum)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Mixing Digital Link URI syntax with classic AI in the same DataMatrix.** Choose one." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Validate at print time** — ISO 15415 grade C or better." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Include expiry (17), batch (10), serial (21)** for pharma." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Correct FNC1 + GS handling** in parser." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Support Digital Link URI syntax** in addition to classic." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Reject unreadable / low-grade codes at scanner boundary.**" },
+    { "type": "callout", "variant": "best", "markdown": "**6. Track parse failures** as a quality signal — bad print run detection." },
+    { "type": "callout", "variant": "best", "markdown": "**7. High error correction** — DataMatrix ECC 200 default is fine; don't downgrade." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Test scanner config** — different scanners return different FNC1 markers." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Parse a pharma DataMatrix payload into an AI map." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Detect + reject QR when the flow requires DataMatrix." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Validate that serial + batch + expiry are all present." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Support both classic AI + Digital Link URI syntax scanning." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Hospital dispense: verify serial + expiry against local + backend cache." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Print-quality validator: post-print scan + ISO grade computation." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Why does pharma prefer DataMatrix over QR?**\n\n**A:** **(1) Print size** — DataMatrix can be as small as 3 × 3 mm; a QR at that size is barely readable. A pill blister pack has room for one, not the other. **(2) Fixed error correction** — DataMatrix ECC 200 provides ~28 % correction; QR is user-configurable (L/M/Q/H) which introduces inconsistency. **(3) Regulatory** — DSCSA (US), EU FMD, India CDSCO drug tracing STANDARDS specify DataMatrix; QR is not compliant by default. **(4) FNC1 identifier** — DataMatrix has a well-defined GS1 mode; QR's GS1 mode is less commonly implemented. **(5) Consumer psychology** — QR is 'marketing'; DataMatrix is 'industrial + regulated' — matches how pharma sees packaging. **(6) Historic** — pharma adopted DataMatrix in the early 2000s; QR came later; installed base of scanners + printers is DataMatrix. Interviewer signal: knowing multiple reasons + regulator name-drops." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What's FNC1 + why does it matter for GS1 codes?**\n\n**A:** **FNC1** = Function Character 1. In GS1 barcodes, it serves as a **format identifier** at the start of the payload — 'this data is GS1 format, parse accordingly.' Without FNC1, a decoder can't tell if `0189012345…` starts with AI `01` (GTIN) or is just a random number. **Also serves as a Group Separator** between variable-length AI values so the parser knows where one field ends + the next begins. Different symbologies encode FNC1 differently: DataMatrix uses ECC 200 shift character; Code 128 uses `FNC1` in position 1; QR (GS1 mode) uses a specific control character. Scanners typically return FNC1 as ASCII 0x1D (GS) OR as a leading identifier like `]d2` — parser must normalize. **Missing FNC1 = the code isn't really GS1** even if the numbers look like AIs. Interviewer bonus: knowing symbology-specific encoding rules." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: Walk through parsing `(01)08901234567895(17)260101(10)BATCH99(21)SERIAL42`.**\n\n**A:** **(1) Detect format.** Parentheses = human-readable; scanner-returned raw would use FNC1 + GS instead. Strip parentheses. **(2) FIRST AI = 01.** Fixed-length 14. Read next 14 digits → GTIN `08901234567895`. **(3) Next AI = 17.** Fixed-length 6. Read next 6 digits → expiry `260101` (2026-01-01, YYMMDD). **(4) Next AI = 10.** VARIABLE length. Read until next GS or start of next AI marker. In parenthesized form, the closing `)` acts as delimiter; in raw form, GS (0x1D) after the value. Read `BATCH99`. **(5) Next AI = 21.** Variable. Read `SERIAL42`. **(6) End.** **Result:** {01: '08901234567895', 17: '260101', 10: 'BATCH99', 21: 'SERIAL42'}. **Trap:** if the last AI is variable but there's no more data, don't need trailing GS. If a variable AI comes BEFORE a fixed one, GS separator IS required. **Interview signal:** knowing when GS is required vs implicit." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How would you validate a pharma DataMatrix at scan time?**\n\n**A:** **(1) Detect symbology** — must be DataMatrix (not QR / Code 128). Reject wrong symbology with clear UX. **(2) Detect FNC1** — verify the payload starts with FNC1 (or the equivalent scanner-returned marker). **(3) Parse AIs** — extract 01, 17, 10, 21 minimum for compliant pharma. **(4) Required fields check** — GTIN + expiry + batch + serial all present. **(5) GTIN check-digit valid** — mod-10 verify. **(6) Expiry not in past** — 17 date > today. **(7) Serial format valid per brand-owner rule** — some brands enforce specific patterns. **(8) Server-side verification** — call regulator's authentication API (India CDSCO National Serialization Track & Trace); confirm serial not previously dispensed / reported counterfeit. **(9) UX** — green tick + product name + expiry countdown for dispense flow; red flag for counterfeit. **(10) Audit log** — every scan + result logged for compliance." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What role does ISO 15415 grade play?**\n\n**A:** **ISO 15415** is the ISO standard for 2D symbol print-quality grading. Assesses: contrast, modulation, axial non-uniformity, grid non-uniformity, unused error correction, print-growth. Grades A (best) to F (fail). **Regulators + retailers require grade C or better** for reliable scans in real conditions (dim warehouse, worn packaging). **Enforcement:** brand owners run print samples through verification cameras; QC fails builds where average grade drops. **Consumer + hospital scanners** may successfully scan grade D codes; but you can't rely on that + regulators disallow it. **Implication for apps:** if you're building a print-side app that generates DataMatrix codes for printing, you MUST verify with an ISO 15415-compliant verifier post-print. Reading-side apps benefit indirectly — better print quality = higher scan success rates. Interviewer bonus signal." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How would you architect a hospital pharmacy dispense app around DataMatrix?**\n\n**A:** **(1)** Camera scan via `mobile_scanner` or Scandit (for damaged codes); prefer Scandit for pharma-grade accuracy. **(2)** Parse via GS1 element-string parser; validate all required AIs. **(3)** Verify GTIN → drug identity in local catalog + look up in India CDSCO drug database. **(4)** Verify serial → not-yet-dispensed; call regulator authentication API + cache. **(5)** Expiry check; UI blocks if past expiry. **(6)** Match patient prescription; dose-check via pharmacy system. **(7)** Record dispense event → EPCIS ObjectEvent (bizStep=dispense) with GLNs, timestamp, patient (pseudo-ID). **(8)** Backend sync; audit trail immutable. **(9)** Offline mode: local catalog + queue serial verification via Workmanager. **(10)** Analytics on scan-fail rates as a quality signal. **This is the full DSCSA-style architecture** — senior pharma interviewers respect end-to-end knowledge." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Pharma** — India CDSCO drug tracing on Schedule H1 + injectables + biosimilars.\n- **Medical devices** — EU MDR + India MDR + FDA UDI.\n- **Hospitals** — dispense verification + inventory.\n- **Automotive** — parts + supplier serialization.\n- **Industrial** — small-parts tracking.\n- **NOT ideal for** — consumer marketing (use QR); large 1D warehouse labels (GS1-128)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **ECC 200** — the modern DataMatrix; earlier ECC 000-140 obsolete.\n- **Symbol sizes** — 10×10 up to 144×144 modules; also rectangular sizes.\n- **Quiet zone** — 1-module white border required; scanners fail otherwise.\n- **AIM Symbology Identifier** — `]d2` prefix from scanner indicates DataMatrix + GS1 format.\n- **Direct Part Marking (DPM)** — laser-etched DataMatrix on metal parts; scanning is harder + specialized cameras.\n- **Structured Append** — split large payloads across multiple DataMatrix codes; rare in GS1.\n- **Digital Link inside DataMatrix** — modern brand owners encode `https://id.gs1.org/…` URI form; both parsers coexist during migration.\n- **Verification tools** — Cognex DataMan, Axicon Verifier — hardware for ISO 15415 grading.\n- **App-side software verifier** — sample the printed code with camera + estimate grade.\n- **India CDSCO** — publishes portals for drug authentication; APIs available.\n- **DSCSA (US)** — Track and Trace for prescription drugs; requires DataMatrix + serialized SGTIN.\n- **EU FMD** — Falsified Medicines Directive; DataMatrix + national verification (NMVS)." }
   ],
   "flashcards": [
-    { "front": "How does GS1 DataMatrix signal AI data?", "back": "With FNC1 (0x1D) at start-of-message and between variable-length AIs." },
-    { "front": "Where does DataMatrix dominate?", "back": "Pharma (DSCSA/FMD), medical devices (UDI), industrial components — small labels + serialization." },
-    { "front": "GS1 'four elements' on pharma packs?", "back": "GTIN, serial number, batch/lot, expiry date." }
+    { "front": "DataMatrix ECC 200?", "back": "Reed-Solomon error correction; ~28% redundancy; readable when half is damaged." },
+    { "front": "FNC1?", "back": "Format identifier at start of GS1 payload; also separator between variable-length AIs (as ASCII GS 0x1D)." },
+    { "front": "Pharma DataMatrix contents?", "back": "GTIN (01) + expiry (17) + batch (10) + serial (21)." },
+    { "front": "Fixed vs variable AI?", "back": "Fixed length concatenates directly; variable needs GS (0x1D) separator." },
+    { "front": "Grade requirement?", "back": "ISO 15415 grade C or better for regulator + reliable scans." },
+    { "front": "Symbology identifier?", "back": "]d2 prefix indicates DataMatrix + GS1 format from scanner." },
+    { "front": "DataMatrix vs QR for pharma?", "back": "DataMatrix wins — smaller print, fixed ECC, regulator-mandated." }
   ],
   "quiz": [
-    { "q": "GS1 DataMatrix indicates its payload with…", "options": ["A header string", "FNC1 at start of data", "A URL prefix", "A magic image"], "answer": 1, "explain": "FNC1 signals AI-formatted data." },
-    { "q": "DataMatrix shines for…", "options": ["Consumer marketing QR", "Small labels with serialized data (pharma/UDI)", "Traffic signs", "Web login"], "answer": 1, "explain": "Compact + regulated serialization use." },
-    { "q": "Pharma packs typically carry…", "options": ["GTIN only", "GTIN + serial + batch + expiry", "Only expiry", "Nothing"], "answer": 1, "explain": "The 'four elements' for DSCSA/FMD compliance." }
+    { "q": "Pharma-mandated 2D symbology?", "options": ["QR", "DataMatrix (GS1 ECC 200)", "Aztec", "PDF417"], "answer": 1, "explain": "Regulatory standard." },
+    { "q": "Variable-length AI needs…", "options": ["Nothing", "Group Separator (GS 0x1D) or end-of-data", "New line", "Semicolon"], "answer": 1, "explain": "Separator to end variable field." },
+    { "q": "Required AIs for pharma DataMatrix?", "options": ["01 only", "01 + 17 + 10 + 21", "01 + 17", "01 + 21"], "answer": 1, "explain": "GTIN + expiry + batch + serial." },
+    { "q": "ISO 15415 grade C means…", "options": ["Failed", "Acceptable print quality — regulator + retailer minimum", "Perfect", "Test grade"], "answer": 1, "explain": "Common minimum threshold." },
+    { "q": "AIM symbology identifier for GS1 DataMatrix?", "options": ["]C1", "]d2", "]Q3", "]A0"], "answer": 1, "explain": "Scanner-emitted prefix." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Parse a GS1 DataMatrix string with GTIN + batch + expiry into fields." },
-    { "level": "Medium", "text": "Build a Dart parser handling fixed- and variable-length AIs + FNC1." },
-    { "level": "Hard", "text": "Generate a printable GS1 DataMatrix label with the 'four elements'." },
-    { "level": "Expert", "text": "Implement DSCSA-style verification: scan → parse → check GTIN/serial via API." }
+    { "level": "Easy", "text": "Parse a pharma DataMatrix payload into an AI map." },
+    { "level": "Medium", "text": "Reject non-DataMatrix symbologies when the flow requires it." },
+    { "level": "Medium", "text": "Verify all required AIs (01/17/10/21) present." },
+    { "level": "Hard", "text": "Dual-parse: classic AI + Digital Link URI syntax." },
+    { "level": "Hard", "text": "Hospital dispense app: scan → validate → verify serial with regulator API." },
+    { "level": "Expert", "text": "Print-quality verification workflow: sample + ISO 15415 grade estimate." }
   ],
   "interviewQuestions": [
-    "What is GS1 DataMatrix and how does it differ from a plain DataMatrix?",
-    "What is FNC1 and why is it required?",
-    "DataMatrix vs QR — when use each?",
-    "How do you parse variable-length AIs?",
-    "What are the pharma 'four elements'?"
+    "Why does pharma prefer DataMatrix over QR?",
+    "What is FNC1 + why does it matter for GS1 codes?",
+    "Walk through parsing a full pharma element string.",
+    "Validate a pharma DataMatrix at scan time?",
+    "What role does ISO 15415 grade play?",
+    "Architect a hospital dispense app around DataMatrix?"
   ],
   "references": [
-    { "label": "GS1 DataMatrix Guideline", "url": "https://www.gs1.org/standards/barcodes/2d-barcodes" }
+    { "label": "GS1 DataMatrix guideline", "url": "https://www.gs1.org/standards/barcodes/2d-datamatrix" },
+    { "label": "India CDSCO", "url": "https://cdsco.gov.in" },
+    { "label": "ISO 15415", "url": "https://www.iso.org/standard/70663.html" }
   ]
 }

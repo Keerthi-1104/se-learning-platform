@@ -1,50 +1,102 @@
 {
   "id": "gs1.qr",
   "levelId": 11,
-  "title": "QR Code",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "title": "QR Code (GS1 + generic)",
+  "xp": 40,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Explain QR structure and error correction",
-    "Distinguish plain QR from GS1 QR from Digital Link QR",
-    "Choose sizing + ECC level for real-world scanning"
+    "Understand QR via a real-life analogy",
+    "Pick QR error-correction level appropriately",
+    "Encode GS1 element strings + Digital Link URLs into QR",
+    "Design QR for consumer scanning success",
+    "Avoid common security + phishing pitfalls",
+    "Answer QR interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "**QR (Quick Response)** codes are 2D matrix barcodes with Reed-Solomon error correction, capable of encoding up to ~3 KB. Ubiquitous in consumer apps; the default 'scan this' code because every smartphone camera reads them natively." },
-    { "type": "table", "headers": ["ECC level", "Recoverable damage", "Data capacity"], "rows": [
-      ["L", "~7%", "Highest"],
-      ["M", "~15%", "High"],
-      ["Q", "~25%", "Medium"],
-      ["H", "~30%", "Lowest"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of QR as the consumer's poster child of 2D barcodes.**\n\nInvented by Denso Wave in 1994 for automotive parts — now the most recognizable code type on Earth. Every phone camera has a native QR reader. Iconic finder patterns + high capacity + configurable error correction.\n\n- **Consumer familiarity** — no learning curve; users know 'scan this square.'\n- **Very high capacity** — 4 KB with the smallest correction level.\n- **Error correction 4 levels** — L (7%), M (15%), Q (25%), H (30%). Higher = more redundancy = bigger code but tolerates more damage.\n- **Structure** — finder patterns (3 corners), timing pattern, alignment patterns, data + ECC.\n- **GS1 mode** — QR can encode GS1 element strings with FNC1 marker; supported but less used than plain URL QR.\n- **Digital Link fits QR beautifully** — consumer-facing packaging with `https://id.gs1.org/…` URLs.\n\n**Why every consumer-facing Flutter app scans + generates QR:** payments (UPI in India, Alipay/WeChat in China), Wi-Fi credentials, business cards, event tickets, marketing campaigns, deep links. **The QR tax** — because they're so universal, they're also the #1 phishing vector: attackers stick fake QRs over real ones on parking meters, restaurant tables, ATMs. Displaying the destination URL BEFORE opening is essential." },
+    { "type": "callout", "variant": "definition", "markdown": "**QR (Quick Response) code** is a 2D matrix symbology invented by Denso Wave. Models 1 (original) + Model 2 (current standard). Configurable Reed-Solomon error correction (L/M/Q/H). Capacity: up to ~2953 bytes at L level (Version 40). Encodable data: numeric, alphanumeric, binary, kanji, plus a special GS1 mode for element strings. Standardized as ISO/IEC 18004. Free to use — Denso Wave holds the patent but doesn't enforce it commercially." },
+    { "type": "theory", "markdown": "## Error correction levels" },
+    { "type": "table", "headers": ["Level", "Recovery", "Use case"], "rows": [
+      ["**L** (Low)", "~7 %", "Clean digital display, indoor screens"],
+      ["**M** (Medium)", "~15 %", "Business cards, packaging (default)"],
+      ["**Q** (Quartile)", "~25 %", "Outdoor posters, weathered surfaces"],
+      ["**H** (High)", "~30 %", "Damaged surfaces, artistic overlays with logo in center"]
     ]},
-    { "type": "code", "language": "text", "code": "Three flavors on GS1 products:\n  1. Plain QR — arbitrary URL / text (marketing links)\n  2. GS1 QR   — payload begins with FNC1, carries AIs like DataMatrix\n  3. Digital Link QR — URL like https://id.gs1.org/01/...\n                       (consumer-friendly + carries GS1 data)" },
-    { "type": "callout", "variant": "interview", "markdown": "For consumer engagement, **Digital Link QR is the future**: same code serves POS, regulator, and consumer. Choose ECC ≥ M (higher for outdoor/damaged surfaces), and place a **quiet zone** (blank border) — most 'won't scan' complaints trace to no quiet zone or too small a code." },
-    { "type": "callout", "variant": "mistake", "markdown": "Embedding a giant logo covering >30% of the QR without upgrading to ECC-H. The code stops scanning. Always test on real devices with real lighting, not just the printer PDF." },
-    { "type": "callout", "variant": "tip", "markdown": "Rule of thumb: minimum module (pixel) size = 0.4 mm printed; scan distance ≈ 10× code width. Sub-1cm codes are unreliable in real retail lighting." }
+    { "type": "theory", "markdown": "## What can a QR carry?" },
+    { "type": "code", "language": "text", "code": "// URL (most common for consumer)\nhttps://example.com/product/8901234\n\n// UPI payment (India-specific)\nupi://pay?pa=merchant@bank&pn=Merchant&am=100&cu=INR\n\n// Wi-Fi credentials\nWIFI:S:MyNetwork;T:WPA;P:Passw0rd;;\n\n// Contact card (vCard)\nBEGIN:VCARD\nVERSION:4.0\nFN:Ada Lovelace\nORG:GS1 India\nEND:VCARD\n\n// GS1 element string (rare — pharma prefers DataMatrix)\n]Q301089012345678951726010110BATCH99\\u001D21SERIAL42\n\n// GS1 Digital Link (consumer + Sunrise 2027)\nhttps://id.gs1.org/01/08901234567895/10/BATCH99/21/SERIAL42?17=260101" },
+    { "type": "theory", "markdown": "## Generate + scan QR in Flutter" },
+    { "type": "code", "language": "dart", "code": "// Generate:\n//   pubspec.yaml: qr_flutter: ^4.1.0\nimport 'package:qr_flutter/qr_flutter.dart';\n\nQrImageView(\n  data: 'https://id.gs1.org/01/08901234567895',\n  size: 200,\n  errorCorrectionLevel: QrErrorCorrectLevel.M,\n  embeddedImage: const AssetImage('assets/logo.png'),\n  embeddedImageStyle: const QrEmbeddedImageStyle(size: Size(40, 40)),\n);\n\n// Scan:\n//   mobile_scanner already covers QR — restrict formats: [BarcodeFormat.qrCode]\n\n// Detect QR type + route:\nvoid onQrDetect(String raw) {\n  if (raw.startsWith('upi://')) {\n    // UPI payment intent\n    launchUrl(Uri.parse(raw));\n  } else if (raw.startsWith('WIFI:')) {\n    // Parse Wi-Fi credentials\n  } else if (raw.startsWith('https://id.gs1.org/')) {\n    // GS1 Digital Link\n    _handleDigitalLink(raw);\n  } else if (raw.startsWith('https://')) {\n    // Generic URL — show destination BEFORE opening (phishing defense)\n    _confirmUrlDialog(raw);\n  } else {\n    // Plain text or GS1 element string\n  }\n}" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: L-level EC on printed packaging.** Rain / scratches degrade past 7 %; use M or Q." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Logo overlay without H-level EC.** Center logo eats correction budget; require H if you want a logo." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Auto-opening URLs.** Attackers stick fake QRs on parking meters. Show destination first." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Storing tokens in URL.** QR is publicly scannable; anyone who photographs the code can replay." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Too small print.** Below ~1.5 cm for consumer scan → focus issues on low-end phones." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Poor contrast.** White-on-dark backgrounds sometimes scan; test on real devices." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Version too high without need.** Big QR = harder to scan; use the smallest version that fits your data + ECC choice." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Not testing on old Android + iPhone SE.** Older cameras autofocus slower; small codes fail." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Show destination URL** before opening; block obvious phishing patterns." },
+    { "type": "callout", "variant": "best", "markdown": "**2. M-level EC for indoor printing;** Q for outdoor; H for logo overlay." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Minimum 2 cm quiet-zone-included size** for consumer scan." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Contrast ratio 4:1 minimum** — dark modules on light background." },
+    { "type": "callout", "variant": "best", "markdown": "**5. HTTPS-only URLs in production QR.**" },
+    { "type": "callout", "variant": "best", "markdown": "**6. Version-track the URL** — allows regeneration + tracking." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Analytics on scan** — count campaign scans via unique URL parameters." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Consider Micro QR** for very-small codes; supported on modern scanners." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Generate a URL QR + display it." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Easy)** — Scan a QR + route by prefix (upi:// / WIFI: / https://)." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Logo-overlaid QR with H-level EC; test scan rate." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Medium)** — Consumer scan with destination-confirmation dialog." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — GS1 Digital Link QR generation with proper AI encoding." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Phishing-defense scanner: flag suspicious URLs against a threat-intel list before opening." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: How do you pick an error-correction level?**\n\n**A:** **L (7 %)** — clean digital displays; smallest code; use when the medium is highly reliable. **M (15 %)** — default for printed packaging + business cards + Wi-Fi codes; balances size + robustness. **Q (25 %)** — outdoor posters, weathered surfaces, delivery labels. **H (30 %)** — necessary when you want to overlay a logo in the center; the redundancy compensates for lost modules. **Trade-offs:** higher EC = MORE modules = physically LARGER code = potentially harder scan at distance. So pick the LOWEST EC that meets your damage tolerance. **Rule:** consumer-facing marketing QR = M; outdoor billboard = Q; logo-overlaid = H; test in worst-case conditions." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What's the phishing risk with QR + how do you mitigate?**\n\n**A:** **Risk:** attackers replace a legitimate QR (parking meter, restaurant menu, ATM cash slip) with a sticker QR pointing to phishing / malware URL. User scans, phone auto-opens URL, credentials stolen. **Real incidents:** parking-meter QR scams have taken millions in India + US. **Defense in the app:** (1) show the DESTINATION URL BEFORE opening — a preview banner or confirmation dialog. (2) Compare against a threat-intel list (Google Safe Browsing, custom malicious-domain list). (3) Warn on IDN homograph domains (`ăpple.com`). (4) Detect URL shorteners (`bit.ly`, `t.co`) that hide destination + expand server-side first. (5) HTTPS-only for known sensitive contexts (payments, banking). (6) Sandbox opening — some apps show a WebView preview before the full browser. (7) User-education UX. **This is now table-stakes for any consumer QR-scanning Flutter app.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do QR + DataMatrix differ + when do you pick each?**\n\n**A:** **QR wins when:** (1) Consumer scan (native camera support everywhere); (2) Higher capacity (~4 KB vs ~2 KB); (3) Configurable error correction; (4) Consumer familiarity + trust; (5) Marketing + campaigns + payments. **DataMatrix wins when:** (1) Small print size (3 × 3 mm feasible); (2) Regulated pharma + medical + industrial; (3) Fixed high error correction; (4) DPM (Direct Part Marking on metal); (5) Established installed base of specialty scanners. **Rule:** consumer → QR; industrial + regulated → DataMatrix. **Sunrise 2027** blurs this — GS1 encourages 2D on all retail packaging; brands pick QR (consumer-friendly) or DataMatrix (small print) based on package size. Interviewer signal: knowing both are ISO-standardized + specific use-case fit." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you handle UPI payment QR codes in a Flutter app?**\n\n**A:** UPI QRs use the `upi://pay?...` scheme (not `https://`). Params include `pa` (payee address), `pn` (name), `am` (amount), `cu` (currency), `tn` (transaction note). **Scan flow:** (1) Detect `upi://` prefix. (2) Parse query params. (3) Show confirmation UI: 'Pay ₹100 to Merchant@bank?' (4) `launchUrl(Uri.parse(upiUri), mode: LaunchMode.externalApplication)` opens the user's UPI app (GPay, PhonePe, Paytm). (5) UPI app handles the actual payment + returns result via callback. **Safety:** always confirm amount + payee before launch; never auto-execute. **Compliance:** RBI + NPCI guidelines govern UPI QRs; static vs dynamic; merchant registration. **Merchant side:** Flutter apps can generate static QRs bound to a UPI address + optional amount; scan-and-pay flows for street vendors + kiranas. Interviewer bonus: India-specific familiarity." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What's the story with Micro QR + rQR?**\n\n**A:** **Micro QR** — smaller variant with 4 versions (M1-M4); one finder pattern instead of three; capacity 5-35 numeric characters. Fits where regular QR is too big (mini stickers, embedded metal parts). Supported by most modern scanners but rare in consumer wild. **rQR (Rectangular Micro QR, 2022)** — rectangular Micro QR; fits narrow strips of space (product bottoms, cable labels). Newer + less-supported. **When to use:** rare in mainstream Flutter apps; niche in labeling / industrial. Encourage regular QR for anything consumer-facing. Interviewer bonus: knowing they exist AT ALL + when." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How would you build a QR scan-and-pay app with phishing defense?**\n\n**A:** **(1)** Camera scan via `mobile_scanner` restricted to QR format. **(2)** On detect, PARSE the URI + classify: `upi://` (UPI intent), `https://` (URL — potentially phishing), `WIFI:`, GS1 Digital Link, etc. **(3)** Route to type-specific UI. **(4)** URL flow: display destination hostname prominently ('You're about to open MYBANK.COM'); highlight punycode / IDN + suspicious TLDs. **(5)** Check against known-bad-domain feed (updated via Remote Config). **(6)** For UPI, parse + confirm amount + payee; show masking on payee ID. **(7)** For sensitive payloads, redirect to WebView with SSL cert + address bar visible. **(8)** Log all scans (pseudo-anonymized) for anti-abuse analysis. **(9)** Rate-limit scans in short intervals (fraud pattern). **(10)** Accessibility — voice out the destination for low-vision users. **This layered defense is the standard for consumer payment apps in India post-2023.**" },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **UPI payments** — merchant QR at every shop in India.\n- **Wi-Fi sharing** — home + restaurant hotspots.\n- **Deep links** — app install + campaigns.\n- **Business cards** — vCard QR.\n- **Ticketing** — concert / airline / rail.\n- **GS1 Digital Link** — Sunrise 2027 retail migration.\n- **NOT ideal for** — very small print (DataMatrix); regulated pharma (DataMatrix)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Versions 1-40** — module sizes 21×21 up to 177×177.\n- **Encoding modes** — numeric (10 bits/3 digits), alphanumeric (11 bits/2 chars), byte (8 bits/char), kanji (13 bits/char).\n- **Mask patterns** — 8 masks chosen automatically to maximize scannability.\n- **Structured Append** — split a big payload across up to 16 QRs; rare.\n- **Model 1 vs Model 2** — Model 2 (current) has alignment patterns.\n- **Frame QR (Denso)** — decorated variant; less standard.\n- **iQR** — Denso extension with more sizes + rectangular options.\n- **QR + AR** — some AR apps use QR as anchor markers.\n- **QR + payments** — EMVCo Merchant-Presented QR spec globally; UPI in India.\n- **Print testing** — verify at real print size + on target scanners.\n- **Dark/light theme mismatch** — some designers use dark modules on dark background; scanner fails.\n- **QR generation service** — server-side rendering (Sharp, canvas) + delivery via CDN URL for dynamic marketing QRs." }
   ],
   "flashcards": [
-    { "front": "QR error correction levels?", "back": "L (~7%) / M (~15%) / Q (~25%) / H (~30%) — higher = more damage tolerance but less capacity." },
-    { "front": "What is a quiet zone?", "back": "A blank margin around the code (usually ≥ 4 modules) required for scanners to detect it." },
-    { "front": "Three GS1-relevant QR flavors?", "back": "Plain QR (URL), GS1 QR (FNC1 + AIs), Digital Link QR (GS1-formatted URL)." }
+    { "front": "Error-correction levels?", "back": "L (7%), M (15%), Q (25%), H (30%). Higher = larger code, more damage tolerance." },
+    { "front": "Logo overlay level?", "back": "H — center logo eats correction budget." },
+    { "front": "Phishing defense?", "back": "Show destination before opening; threat-intel check; warn on shorteners + IDN homographs." },
+    { "front": "QR vs DataMatrix for consumer?", "back": "QR — native camera support, higher capacity, iconic." },
+    { "front": "UPI QR scheme?", "back": "upi://pay?pa=…&pn=…&am=…&cu=INR" },
+    { "front": "Wi-Fi credentials format?", "back": "WIFI:S:<ssid>;T:<WPA/WEP>;P:<password>;;" },
+    { "front": "Micro QR use?", "back": "Space-constrained places; rare in consumer wild." }
   ],
   "quiz": [
-    { "q": "For consumer engagement + POS on the same code use…", "options": ["Plain QR", "GS1 Digital Link QR", "SSCC label", "SGLN"], "answer": 1, "explain": "One code serves multiple audiences." },
-    { "q": "For a logo inside the QR you should…", "options": ["Ignore ECC", "Use ECC-H", "Skip quiet zone", "Print smaller"], "answer": 1, "explain": "Higher ECC tolerates the covered area." }
+    { "q": "EC level for logo overlay?", "options": ["L", "M", "Q", "H"], "answer": 3, "explain": "H tolerates the logo-erased modules." },
+    { "q": "Phishing-QR defense in app?", "options": ["Auto-open", "Show destination + check threat feed before opening", "Only iOS", "Nothing"], "answer": 1, "explain": "Confirm before nav." },
+    { "q": "UPI QR scheme prefix?", "options": ["https://", "upi://", "pay://", "npci://"], "answer": 1, "explain": "UPI intent URI." },
+    { "q": "QR vs DataMatrix for small pharma packaging?", "options": ["QR", "DataMatrix (smaller + regulated)", "Either", "Aztec"], "answer": 1, "explain": "DataMatrix wins on size + regulation." },
+    { "q": "Consumer QR minimum recommended print size?", "options": ["3mm", "~2 cm", "5 cm", "20 cm"], "answer": 1, "explain": "Reliable focus on low-end phone cameras." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Generate a QR that encodes a URL." },
-    { "level": "Medium", "text": "Generate a GS1 QR with FNC1 + GTIN + batch + expiry." },
-    { "level": "Hard", "text": "Test scan reliability across ECC levels and module sizes." },
-    { "level": "Expert", "text": "Ship a labeling pipeline that auto-generates Digital Link QRs with brand logo overlay + quiet zone enforcement." }
+    { "level": "Easy", "text": "Generate a URL QR + display it." },
+    { "level": "Easy", "text": "Scan a QR + route by prefix (upi:// / WIFI: / https://)." },
+    { "level": "Medium", "text": "Logo-embedded QR with H-level EC + confirm scanability." },
+    { "level": "Medium", "text": "Destination confirmation dialog before URL open." },
+    { "level": "Hard", "text": "GS1 Digital Link QR generator with proper AI encoding." },
+    { "level": "Hard", "text": "UPI QR generator with amount + payee validation." },
+    { "level": "Expert", "text": "Phishing-defense scanner: threat-intel + IDN homograph check + shortener expansion." }
   ],
   "interviewQuestions": [
-    "QR ECC levels — trade-offs?",
-    "Why is quiet zone required?",
-    "Plain vs GS1 vs Digital Link QR?",
-    "QR vs DataMatrix?",
-    "How do you size a QR for retail print?"
+    "How do you pick an error-correction level?",
+    "What's the phishing risk with QR + how do you mitigate?",
+    "QR vs DataMatrix — when do you pick each?",
+    "UPI payment QR handling in a Flutter app?",
+    "Micro QR + rQR — when useful?",
+    "Build a QR scan-and-pay app with phishing defense?"
   ],
   "references": [
-    { "label": "GS1 QR + DataMatrix", "url": "https://www.gs1.org/standards/barcodes/2d-barcodes" }
+    { "label": "ISO/IEC 18004 (QR)", "url": "https://www.iso.org/standard/62021.html" },
+    { "label": "qr_flutter", "url": "https://pub.dev/packages/qr_flutter" },
+    { "label": "UPI QR spec (NPCI)", "url": "https://www.npci.org.in" }
   ]
 }

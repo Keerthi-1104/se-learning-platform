@@ -2,44 +2,107 @@
   "id": "gs1.digital_link",
   "levelId": 11,
   "title": "GS1 Digital Link",
-  "xp": 50,
-  "estimatedMinutes": 25,
+  "xp": 60,
+  "estimatedMinutes": 50,
   "objectives": [
-    "Explain the Web URL syntax for GS1 identifiers",
-    "Resolve a scan to the right content",
-    "Encode a GS1 Digital Link in QR / DataMatrix"
+    "Understand GS1 Digital Link via a real-life analogy",
+    "Encode GTIN + AIs into a web URI structure",
+    "Parse Digital Link URIs back into GS1 keys + AIs",
+    "Resolve a Digital Link via GS1 Resolver services",
+    "Fit Digital Link into consumer + regulatory + traceability flows",
+    "Answer Digital Link interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "**GS1 Digital Link** is a web-friendly URL syntax for GS1 identifiers. Instead of a raw GTIN, a product carries a URL like `https://id.gs1.org/01/08901234000015`. Scanning it in any camera opens a web page — no special app needed — and the URL can carry batch/serial/expiry info too." },
-    { "type": "code", "language": "text", "code": "Structure: https://<resolver>/<Primary key>/<value>[/<qualifier>/<value>]*[?params]\n\nExamples:\n  https://id.gs1.org/01/08901234000015\n  https://id.gs1.org/01/08901234000015/10/BATCH42/17/261231/21/SN-777\n    01 = GTIN\n    10 = Batch/Lot     (Application Identifier)\n    17 = Expiry (YYMMDD)\n    21 = Serial number\n\nThe resolver returns different content per context:\n  Consumer   -> product page / recipes\n  Regulator  -> compliance data\n  Pharmacist -> track-and-trace data" },
-    { "type": "callout", "variant": "interview", "markdown": "Digital Link solves the '**one barcode, many uses**' problem. A single 2D code (QR/DataMatrix) can serve consumers (marketing/nutrition), retailers (POS scan → GTIN), regulators (traceability), and product authentication — because a resolver dispatches by requesting context / Accept headers." },
-    { "type": "callout", "variant": "mistake", "markdown": "Assuming a QR from an unknown source is a GS1 Digital Link. Validate the structure: valid resolver + `/01/` + a real GTIN + valid AIs. Treat unrecognized URLs as untrusted content, not identifiers." },
-    { "type": "callout", "variant": "best", "markdown": "For QR + Digital Link, place a GS1-approved resolver URL like `id.gs1.org` (or your own brand resolver). Include the minimum AIs on-pack; carry extended data (photos, allergens) in the resolver response — smaller printed code, easier to change online." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of GS1 Digital Link as turning every barcode into a smart URL.**\n\nA classic EAN-13 barcode carries a GTIN — a number the CASH REGISTER understands but the CONSUMER can't use with a smartphone. GS1 Digital Link changes this: instead of the barcode encoding just `8901234567895`, it encodes `https://id.gs1.org/01/08901234567895`. Scanning this URL:\n\n- **Consumer** — opens a webpage with product info, recipes, allergen alerts, promotions.\n- **Retailer POS** — parses `/01/` to extract the GTIN → same behavior as an old barcode.\n- **Regulator** — parses batch + expiry + serial from URL path to verify authenticity.\n- **Brand owner** — one QR / DataMatrix carries all use cases; server-side redirects route each scanner to the right destination.\n\nURL structure: **`{host}/{primary AI}/{primary value}[/{qualifier AI}/{value}...][?{data AI}={value}...]`**\n\n- Primary: GTIN (`/01/`), GLN (`/414/`), SSCC (`/00/`).\n- Qualifiers: variant (`/22/`), lot (`/10/`), serial (`/21/`).\n- Data: expiry (`?17=YYMMDD`), best-before (`?15=YYMMDD`), weight (`?310n=`).\n\n**Why every consumer-facing packaging in 2026+ ships this:** the retail industry (Sunrise 2027) is migrating all EAN-13s to 2D codes with GS1 Digital Link inside. Consumers point their phone at a milk carton → info page loads. Pharma DataMatrix carries GTIN + batch + expiry + serial in Digital Link form → regulator scans same code → verifies authenticity." },
+    { "type": "callout", "variant": "definition", "markdown": "**GS1 Digital Link** is a URI standard for encoding any GS1 identifier + qualifiers + attributes into a well-defined web URL structure. Structure: `{scheme}://{host}/{primary AI}/{primary value}[/{qualifier AI}/{qualifier value}...][?{data AI}={data value}&...]`. Compatible with QR + DataMatrix + NFC + human-readable. Resolves via **GS1 Resolver** — configurable redirect service that routes scans to different destinations based on scanner context (consumer app, retail POS, regulator)." },
+    { "type": "theory", "markdown": "## URL structure — hierarchy of AIs" },
+    { "type": "table", "headers": ["Position", "Purpose", "Example"], "rows": [
+      ["`/01/`", "Primary — GTIN", "`/01/08901234567895`"],
+      ["`/414/`", "Primary — GLN", "`/414/8901234567895`"],
+      ["`/00/`", "Primary — SSCC", "`/00/389012340123456787`"],
+      ["`/10/`", "Qualifier — batch/lot", "`/10/ABC123`"],
+      ["`/21/`", "Qualifier — serial", "`/21/98765`"],
+      ["`/22/`", "Qualifier — CPV (variant)", "`/22/2024`"],
+      ["`?17=`", "Data attribute — expiry", "`?17=260101`"],
+      ["`?15=`", "Data attribute — best before", ""],
+      ["`?3103=`", "Data — net weight kg × 10⁻³", ""]
+    ]},
+    { "type": "theory", "markdown": "## Full URL example (pharma)" },
+    { "type": "code", "language": "text", "code": "https://id.gs1.org/01/08901234567895/10/BATCH99/21/SERIAL42?17=260101\n\n// Broken down:\n// host       = id.gs1.org (or brand.example.com)\n// /01/       = AI 01 (GTIN)\n// 08901234567895 = GTIN-14 padded\n// /10/       = AI 10 (batch/lot)\n// BATCH99    = lot ID\n// /21/       = AI 21 (serial)\n// SERIAL42   = unique serial\n// ?17=       = AI 17 (expiry)\n// 260101     = 2026-01-01 (YYMMDD)" },
+    { "type": "theory", "markdown": "## Encode + parse in Dart" },
+    { "type": "code", "language": "dart", "code": "class DigitalLink {\n  final String host;\n  final Map<String, String> pathAIs;   // ordered: primary + qualifiers\n  final Map<String, String> queryAIs;  // data attributes\n\n  DigitalLink({required this.host, required this.pathAIs, required this.queryAIs});\n\n  /// Encode to URI\n  Uri toUri({String scheme = 'https'}) {\n    final buffer = StringBuffer('$scheme://$host');\n    pathAIs.forEach((ai, value) => buffer.write('/$ai/$value'));\n    if (queryAIs.isNotEmpty) {\n      buffer.write('?');\n      buffer.write(queryAIs.entries.map((e) => '${e.key}=${e.value}').join('&'));\n    }\n    return Uri.parse(buffer.toString());\n  }\n\n  /// Parse from URI — very simplified; production parser must handle AI-length rules.\n  static DigitalLink? parse(String uri) {\n    final u = Uri.tryParse(uri);\n    if (u == null) return null;\n    final segments = u.pathSegments;\n    if (segments.length < 2 || segments.length.isOdd) return null;\n    final path = <String, String>{};\n    for (int i = 0; i < segments.length; i += 2) {\n      path[segments[i]] = segments[i + 1];\n    }\n    return DigitalLink(\n      host: u.host,\n      pathAIs: path,\n      queryAIs: u.queryParameters,\n    );\n  }\n}\n\n// Build\nfinal dl = DigitalLink(\n  host: 'id.gs1.org',\n  pathAIs: {'01': '08901234567895', '10': 'BATCH99', '21': 'SERIAL42'},\n  queryAIs: {'17': '260101'},\n);\nprint(dl.toUri());  // https://id.gs1.org/01/08901234567895/10/BATCH99/21/SERIAL42?17=260101\n\n// Parse\nfinal parsed = DigitalLink.parse('https://id.gs1.org/01/08901234567895?17=260101');\nprint(parsed?.pathAIs['01']);   // 08901234567895" },
+    { "type": "theory", "markdown": "## Resolver — one URL, many destinations" },
+    { "type": "code", "language": "json", "code": "// A GS1 Resolver takes the same URL + context + serves different downstream pages.\n// Configuration example (conceptual):\n{\n  \"target\": \"01/08901234567895\",\n  \"routes\": [\n    { \"context\": \"consumer\",         \"url\": \"https://brand.com/products/8901234567895\" },\n    { \"context\": \"pharmacist\",       \"url\": \"https://verify.brand.com/rx/8901234567895\" },\n    { \"context\": \"trace\",            \"url\": \"https://epcis.brand.com/lookup?gtin=8901234567895\" },\n    { \"context\": \"consumer_recipes\", \"url\": \"https://recipes.brand.com/using/8901234567895\" }\n  ]\n}" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Random-order AIs.** Path order MATTERS — primary AI first, then qualifiers. Data attributes go in query string." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: URL-encoding text values incorrectly.** Batch `ABC/123` breaks the path; percent-encode." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Storing GTIN inconsistently in URL.** Padding rules: `01` slot expects GTIN-14 padded; parsing must normalize." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Bypassing the resolver.** Hardcoding brand.com/product/X means you can never route different scanners differently. Always resolve." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Not caching resolver responses.** Every scan hits the network → slow + expensive. Cache with TTL." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Forgetting DataMatrix + QR need FNC1 in classic AI form** but Digital Link URLs don't. Encoding rules differ." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Assuming ALL scanners understand URI form.** Legacy POS may only parse classic AI syntax; support both." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Storing PII in URL query.** Digital Link is often publicly scannable; DON'T leak identifiers or coupons that could be replayed." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Ordered path AIs** — primary + qualifiers in canonical order." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Percent-encode text values.**" },
+    { "type": "callout", "variant": "best", "markdown": "**3. Resolver-based routing** — flexibility." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Cache resolver responses** with sensible TTL." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Support classic + URI syntax** — dual scanners." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Analytics on scan context** — count consumer vs retail POS scans." },
+    { "type": "callout", "variant": "best", "markdown": "**7. HTTPS only** — never http." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Structured data on resolved pages** — schema.org Product markup for SEO + search." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Encode + decode a Digital Link URI for a GTIN + batch + expiry." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Consumer app: scan QR → parse Digital Link → open product page." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Support both URI + classic AI parse paths." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Build a simple Resolver: config-driven routing by context header." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Pharma flow: scan DataMatrix → verify serial + expiry via resolver → show authenticity." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Analytics: track scan geography + resolve latency; alert on abnormal traffic." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What problem does GS1 Digital Link solve that classic barcodes don't?**\n\n**A:** Classic barcodes (EAN-13, GS1-128, DataMatrix with classic AIs) encode structured data that ONLY specialized scanners understand — the CONSUMER's phone has no idea what to do with `(01)08901234567895`. Digital Link turns the same data into an HTTPS URL: `https://id.gs1.org/01/08901234567895`. Consumer phones parse it as a URL, load a product page. POS still parses `01/…` for the GTIN. Same barcode serves both worlds. **Also:** ONE code carries GTIN + batch + serial + expiry + attributes; one QR / DataMatrix carries the whole story. Combined with the industry's 'Sunrise 2027' — plan to replace EAN-13 with 2D codes — Digital Link is the migration destination for retail packaging. Interviewer signal: knowing it's not just a URL trick but an industry-wide migration." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How is a Digital Link URL structured?**\n\n**A:** `{scheme}://{host}/{primary AI}/{primary value}[/{qualifier AI}/{qualifier value}...][?{data AI}={data value}&...]`. **Primary AI** — the main GS1 key: `01` (GTIN), `414` (GLN), `00` (SSCC), etc. **Qualifiers** are AIs that make the primary MORE SPECIFIC: `10` (batch/lot), `21` (serial), `22` (variant). Multiple qualifiers stack in canonical order. **Data attributes** in the query string are optional metadata: `17` (expiry), `15` (best before), `3103` (net weight kg). **Order matters** — the primary comes first; qualifiers follow in canonical order; data goes to query string. Interviewer bonus: knowing WHY the split — path AIs form the identifier; query AIs are attributes." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What is a GS1 Resolver + why use one?**\n\n**A:** A **Resolver** is a redirect service that takes a Digital Link URL + scanner context and serves a specific destination. Same URL, different consumers: a shopper's phone gets recipes; a retailer gets stock info; a pharmacist gets verification data; a regulator gets traceability. **Config-driven** — brand owners define routing rules in the resolver dashboard; no need to reprint packaging when the destination changes. **Standard Resolver format** — GS1 publishes a spec for how routing decisions are made based on `Accept-Language`, `linkType` query param, User-Agent. **Cost saver:** one packaging print serves many use cases across the product's lifetime; can add campaigns without new SKUs. Interviewer red flag: 'I'd hardcode the URL' — misses the whole point." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How does Digital Link handle both classic AI syntax + URI syntax?**\n\n**A:** Some scanners are legacy — they only parse classic AI element strings like `(01)08901234567895(10)BATCH99`. Others are modern — they parse the URI form. A **dual-encoded barcode** carries BOTH: the primary payload is a Digital Link URL that contains the classic AIs in URL-parseable form. Scanners choose their preferred parse path. **On the app side:** your scan handler should try URL parsing first (Digital Link) → fall back to classic AI parsing. **In DataMatrix encoded via ISO/IEC 15434**: format-05 for the URL form; format-04 for classic. **This dual-support is critical during the migration years** — Sunrise 2027 doesn't mean every scanner is upgraded overnight. Interviewer signal: knowing the migration reality." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you handle percent-encoding + AI value rules in URLs?**\n\n**A:** Values must be **URL-safe**. Text AIs (batch, lot, serial) can contain characters like `/`, `?`, `#` that break URL parsing → percent-encode (`%2F`, `%3F`, `%23`). GS1 spec restricts allowed characters — check the AI's allowed set. **Numeric AIs** — GTIN in `01` slot is 14 digits padded; date AIs use `YYMMDD`; weight AIs use fixed-decimal implied (e.g., `3103` = kg × 10⁻³). **Case sensitivity** — AI values ARE case-sensitive in most cases (batch `abc123` ≠ `ABC123`). **Duplicate AIs** in the same URL — invalid; each AI appears once. **Interviewer signal:** knowing encoding rules + not just 'stringify the value.'" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How would you build a consumer Flutter app that scans + resolves Digital Link codes?**\n\n**A:** **(1)** Camera scan via `mobile_scanner` — configure QR + DataMatrix formats. **(2)** On detect, parse raw string: if starts with `https://` → try Digital Link parse; else → classic AI parse. **(3)** Extract GTIN + qualifiers + attributes. **(4)** If Digital Link URL, follow the resolver (HTTP GET with `linkType` context) → get canonical product URL. **(5)** Render product page in WebView OR fetch structured data via API + native UI. **(6)** Cache resolver responses to Hive with 24h TTL. **(7)** Offline mode: match against a local product catalog by GTIN. **(8)** Analytics: track scan → resolve latency + destination clickthrough. **(9)** Handle regional resolvers (id.gs1.org global; id.gs1india.org for India-specific). This is the flagship Consumer 2027 pattern; senior interviewers respect the full pipeline." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Consumer QR on packaging** — Coca-Cola, Nestlé, Kellogg's already deploying.\n- **Pharma DataMatrix** — GTIN + batch + expiry + serial in Digital Link URLs.\n- **GS1 India products** — many brands migrating.\n- **Recall management** — resolver switches destination to recall page.\n- **Anti-counterfeit** — serial + resolver verify authenticity.\n- **NOT ideal for** — internal SKUs (use plain identifiers)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`linkType` query param** — specify desired destination type (`gs1:pip`, `gs1:productBundle`, `gs1:recipeInfo`, `gs1:certificationInfo`).\n- **`Accept-Language` header** — resolver serves localized destination.\n- **Fragment id** — reserved by GS1 for future use.\n- **Digital Link Toolkit** — open-source parsers + validators in multiple languages.\n- **Cache-Control on resolver responses** — respect TTL for perf.\n- **Legacy Web** — some old browsers can't handle DataMatrix scan → paste URL into address bar; support that fallback.\n- **NFC tags** — same Digital Link URL can be written to NFC — tap-to-scan alternative.\n- **Web NFC on mobile Chrome** — reads NFC tags with URL payloads → same handler.\n- **Print-on-demand** — some retailers dynamically generate Digital Link labels at checkout.\n- **API vs URL** — resolvers can return JSON structured data instead of HTML redirects (linkType = `gs1:linkset`).\n- **Testing** — GS1 provides a Digital Link Validator + Toolkit online.\n- **Regulatory** — EU + India + regulatory frameworks are aligning on Digital Link for consumer transparency." }
   ],
   "flashcards": [
-    { "front": "What is GS1 Digital Link?", "back": "A web URL syntax for GS1 identifiers that anyone with a camera can 'scan' — no special app." },
-    { "front": "How to encode batch and expiry?", "back": "Use Application Identifiers in the URL path: /10/<lot>/17/<yymmdd>/21/<serial>." },
-    { "front": "How does one code serve many audiences?", "back": "The resolver returns different content by context/Accept — consumer vs regulator vs POS." }
+    { "front": "Digital Link solves what?", "back": "One QR/DataMatrix carries GTIN + qualifiers + attributes; consumer AND POS AND regulator all parse the same URL." },
+    { "front": "URL structure?", "back": "{scheme}://{host}/{primary AI}/{value}[/{qualifier AI}/{value}...][?{data AI}={value}]" },
+    { "front": "Path vs query?", "back": "Primary + qualifiers in path (identify); data attributes in query (metadata)." },
+    { "front": "Resolver?", "back": "Redirect service — one URL routes to different destinations by scanner context (consumer/POS/regulator)." },
+    { "front": "Sunrise 2027?", "back": "Retail industry migration replacing EAN-13 with 2D codes carrying Digital Link URLs." },
+    { "front": "Encoding rules?", "back": "Percent-encode text values; GTIN 14-digit padded; dates YYMMDD; case-sensitive." },
+    { "front": "Classic + URI dual encoding?", "back": "Legacy scanners parse classic AIs; modern parse URL — support both during migration." }
   ],
   "quiz": [
-    { "q": "Digital Link is…", "options": ["A binary format", "A Web URL syntax for GS1 identifiers", "A radio protocol", "An RFID standard"], "answer": 1, "explain": "URL-based — works with any smartphone camera." },
-    { "q": "In `/01/…/10/…/17/…/21/…`, `01` is…", "options": ["An IP", "GTIN Application Identifier", "A GLN", "A random path"], "answer": 1, "explain": "GS1 Application Identifier for GTIN." },
-    { "q": "One code, many uses works via…", "options": ["Copy-paste", "A resolver that dispatches by context", "Multiple codes on-pack", "Nothing"], "answer": 1, "explain": "Resolver → context-appropriate content." }
+    { "q": "Digital Link primary form is a…", "options": ["Number", "URL (https://…)", "XML", "JSON"], "answer": 1, "explain": "Web URI with AI-path structure." },
+    { "q": "GTIN AI in Digital Link path?", "options": ["/01/", "/10/", "/21/", "/17/"], "answer": 0, "explain": "AI 01 = GTIN." },
+    { "q": "Data attributes (expiry) go in…", "options": ["Path only", "Query string", "Fragment", "Header"], "answer": 1, "explain": "?17=YYMMDD." },
+    { "q": "Resolver purpose?", "options": ["Print label", "Route same URL to different destinations by context", "Encrypt", "Nothing"], "answer": 1, "explain": "Redirect + context-aware routing." },
+    { "q": "Sunrise 2027?", "options": ["QR migration in retail", "Random deadline", "iOS release", "Nothing"], "answer": 0, "explain": "Retail industry migration to 2D." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Parse a Digital Link URL and extract GTIN + batch." },
-    { "level": "Medium", "text": "Emit a valid Digital Link with GTIN + expiry + serial." },
-    { "level": "Hard", "text": "Build a resolver stub that returns different JSON for consumer vs regulator Accept headers." },
-    { "level": "Expert", "text": "Migrate an existing SKU line from EAN-13 to a single Digital Link QR on-pack." }
+    { "level": "Easy", "text": "Encode + decode a Digital Link URL with GTIN + batch + expiry." },
+    { "level": "Medium", "text": "Consumer scan flow: QR → parse → open product page." },
+    { "level": "Medium", "text": "Dual-parse: try Digital Link, fall back to classic AI syntax." },
+    { "level": "Hard", "text": "Build a minimal resolver: config-driven routing by linkType context." },
+    { "level": "Hard", "text": "Pharma verification flow via serial + resolver." },
+    { "level": "Expert", "text": "Analytics + geo tracking on scan → resolve; alert on abnormal traffic." }
   ],
   "interviewQuestions": [
-    "What problem does Digital Link solve?",
-    "How does a resolver work?",
-    "How do you encode batch/expiry/serial in a Digital Link?",
-    "Digital Link vs traditional 1D barcodes at POS?",
-    "How do you validate a Digital Link on scan?"
+    "What problem does GS1 Digital Link solve?",
+    "How is a Digital Link URL structured?",
+    "What is a GS1 Resolver + why use one?",
+    "How does Digital Link handle classic + URI syntax during migration?",
+    "Percent-encoding + AI value rules?",
+    "Build a consumer Flutter app scanning + resolving Digital Link?"
   ],
   "references": [
-    { "label": "GS1 Digital Link", "url": "https://www.gs1.org/standards/gs1-digital-link" }
+    { "label": "GS1 Digital Link spec", "url": "https://www.gs1.org/standards/gs1-digital-link" },
+    { "label": "Digital Link Toolkit", "url": "https://github.com/gs1/GS1DigitalLinkToolkit.js" },
+    { "label": "Sunrise 2027", "url": "https://www.gs1.org/industries/retail/sunrise-2027" }
   ]
 }

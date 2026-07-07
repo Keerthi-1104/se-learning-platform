@@ -3,51 +3,105 @@
   "levelId": 11,
   "title": "Barcode Standards",
   "xp": 40,
-  "estimatedMinutes": 20,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Distinguish the common 1D + 2D symbologies",
-    "Choose the right symbology per use case",
-    "Understand Application Identifiers (AIs)"
+    "Understand barcode standards via a real-life analogy",
+    "Distinguish EAN-13, UPC-A, ITF-14, Code 128, GS1-128, GS1 DataBar, PDF417, Aztec",
+    "Choose symbology per use case",
+    "Handle multi-symbology scanner workflows",
+    "Answer barcode-standards interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "GS1 defines a family of symbologies for different use cases. Each is a specification for how data becomes bars/dots — the identifier itself (GTIN, SSCC…) is separate from how it's encoded." },
-    { "type": "table", "headers": ["Symbology", "Dim.", "Use"], "rows": [
-      ["EAN-13 / UPC-A", "1D", "Retail POS"],
-      ["ITF-14", "1D", "Cases/cartons (GTIN-14)"],
-      ["GS1-128 (Code 128)", "1D", "Logistics labels: SSCC + AIs"],
-      ["GS1 DataBar", "1D", "Small items (fresh food, coupons)"],
-      ["GS1 DataMatrix", "2D", "Pharma/UDI/serialized items"],
-      ["GS1 QR", "2D", "Consumer engagement + GS1 data"],
-      ["GS1 Digital Link QR", "2D 'web'", "Multi-purpose future default"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of barcode standards as different languages spoken by the same alphabet of bars + squares.**\n\nA barcode is a way to encode data. Symbologies differ in: character set, density, error correction, orientation (1D linear vs 2D matrix), and industry adoption. Picking the right one is like picking the right ISO standard — one wrong choice + your entire supply chain speaks the wrong language.\n\n- **EAN-13 / UPC-A** — retail POS at cash register.\n- **ITF-14** — case-level shipping labels.\n- **Code 128 / GS1-128** — warehouse + logistics; carries any AI.\n- **GS1 DataBar** — coupons + perishables; smaller than EAN.\n- **PDF417** — driving licenses, boarding passes.\n- **Aztec** — transit tickets.\n- **QR** — consumer + payments.\n- **DataMatrix** — pharma + small parts.\n\n**Why every Flutter app touching physical goods must speak multiple symbologies:** a retail app scans EAN + Code 128 + DataMatrix; a boarding-pass app needs PDF417 + Aztec; a warehouse app touches Code 128 + DataMatrix + GS1-128. `mobile_scanner` + Scandit + ML Kit all expose format filters — enable ONLY what you need." },
+    { "type": "callout", "variant": "definition", "markdown": "**Barcode standards** are the specifications that define symbologies — how data is encoded into bars, spaces, modules, and the printing/scanning rules. Governed by ISO/IEC + industry consortia (GS1, AIM). Common symbologies each optimized for a use case: retail (EAN/UPC), logistics (Code 128), pharma (DataMatrix), consumer (QR), transit (Aztec), documents (PDF417), coupons (GS1 DataBar)." },
+    { "type": "theory", "markdown": "## Symbology cheat sheet" },
+    { "type": "table", "headers": ["Symbology", "Type", "Primary use"], "rows": [
+      ["**EAN-13**", "1D", "Retail POS (Europe, India, RoW)"],
+      ["**UPC-A**", "1D", "Retail POS (North America)"],
+      ["**EAN-8**", "1D", "Very small retail items"],
+      ["**ITF-14**", "1D", "Case-level shipping labels"],
+      ["**Code 128**", "1D", "Logistics; any character set"],
+      ["**GS1-128 (UCC/EAN-128)**", "1D", "Logistics with AIs"],
+      ["**GS1 DataBar**", "1D", "Coupons, produce, small SKUs"],
+      ["**Code 39**", "1D", "Legacy industrial"],
+      ["**PDF417**", "2D", "Driving licenses, boarding passes"],
+      ["**Aztec**", "2D", "Transit tickets, boarding passes"],
+      ["**QR**", "2D", "Consumer, payments, marketing"],
+      ["**DataMatrix**", "2D", "Pharma, medical, small parts"],
+      ["**MaxiCode**", "2D", "UPS shipping labels"]
     ]},
-    { "type": "code", "language": "text", "code": "Application Identifiers (AI) — the language of GS1-128 and GS1 2D:\n  01  GTIN                    (14 digits)\n  10  Batch/Lot               (variable, up to 20)\n  11  Production date         (YYMMDD)\n  17  Expiry date             (YYMMDD)\n  21  Serial number           (variable, up to 20)\n  00  SSCC                    (18 digits)\n  310n Net weight (kg, n = dec places)\n\nFNC1 delimits variable-length AIs from the next AI." },
-    { "type": "callout", "variant": "interview", "markdown": "Two dimensions of choice: **symbology** (how bars/dots encode data) and **data content** (which AIs and identifiers you include). Choose symbology by physical constraints (small pack? DataMatrix). Choose AIs by workflow (pharma needs GTIN+batch+expiry+serial)." },
-    { "type": "callout", "variant": "mistake", "markdown": "Using EAN-13 on a case/carton — POS won't accept it. Use ITF-14 or GS1-128 for logistics units. Conversely, printing GS1-128 on a consumer pack: retail POS may not be configured for it." }
+    { "type": "theory", "markdown": "## When each wins\n\n- **Retail cash register** — EAN-13 / UPC-A (fixed length, easy scan).\n- **Case shipping label** — ITF-14 (large bars, tough to damage).\n- **Full logistics detail** — Code 128 / GS1-128 (any AIs).\n- **Pharma serialized** — DataMatrix (small, high error correction).\n- **Consumer scan** — QR (native camera support).\n- **Boarding pass** — PDF417 (dense, alphanumeric).\n- **Transit ticket** — Aztec (compact + tolerant).\n- **UPS logistics** — MaxiCode (concentric-circle finder)." },
+    { "type": "theory", "markdown": "## Multi-symbology scanner config" },
+    { "type": "code", "language": "dart", "code": "// Restrict formats to what you actually scan — faster detection + fewer misclassifications.\nfinal ctrl = MobileScannerController(\n  formats: const [\n    BarcodeFormat.ean13,       // retail POS\n    BarcodeFormat.code128,     // logistics\n    BarcodeFormat.dataMatrix,  // pharma\n    BarcodeFormat.qrCode,      // consumer + payments\n  ],\n);\n\n// Handle detection generically:\nvoid onDetect(BarcodeCapture cap) {\n  for (final b in cap.barcodes) {\n    switch (b.format) {\n      case BarcodeFormat.ean13:\n      case BarcodeFormat.ean8:\n      case BarcodeFormat.upcA:\n      case BarcodeFormat.upcE:\n        _handleRetail(b.rawValue!);\n        break;\n      case BarcodeFormat.code128:\n        _handleLogistics(b.rawValue!);   // possibly GS1-128 with AIs\n        break;\n      case BarcodeFormat.dataMatrix:\n        _handlePharma(b.rawValue!);\n        break;\n      case BarcodeFormat.qrCode:\n        _handleQr(b.rawValue!);\n        break;\n      default:\n    }\n  }\n}" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Enabling every symbology.** Slower detection + false positives. Restrict to your use cases." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Assuming Code 128 = GS1-128.** GS1-128 is Code 128 with FNC1 identifier + GS1 element strings. Not all Code 128 codes are GS1." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Wrong print size.** EAN needs ≥ 80 % of nominal size for POS-scanner reliability." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Missing quiet zone.** Every symbology requires a blank area around the code; without it scanners fail." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Contrast below 4:1.** Print quality matters as much as symbology choice." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: PDF417 for consumer marketing.** Dense; ugly; consumer doesn't recognize. Use QR." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Aztec on packaging.** Unusual + few scanners know it outside transit. Stick to established symbologies for your industry." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Symbology mismatch between print + scanner config.** A brand prints DataMatrix; the retailer's scanner only enables Code 128 → silent-fail at POS." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Pick per use case** — don't over-standardize." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Verify with ISO grading** — 15416 (1D) / 15415 (2D)." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Enable only needed formats** in scanner." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Quiet zone + print size + contrast** rules honored." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Multi-symbology fallback** — try Code 128 if GS1-128 parse fails." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Analytics per symbology** — track scan-fail rates." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Sunrise 2027 planning** — retail migrating to 2D on packaging." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Fallback to typed entry** for damaged labels." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Restrict scanner to EAN + Code 128; test detection speed." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Route by symbology to different handler functions." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Detect + parse GS1-128 (Code 128 + FNC1) with AI extraction." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Analytics + Firebase log per symbology + scan-fail rate." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert)** — Retail Sunrise 2027 dual-encoding: EAN-13 on packaging + DataMatrix carrying same GTIN + batch + expiry." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Why so many symbologies?**\n\n**A:** Different physical + operational constraints. **Retail POS scanner** (fixed laser at checkout) needs a 1D EAN-13 that scans in a swipe. **Warehouse handheld** scans Code 128 case labels + DataMatrix on damaged pallets. **Consumer phone** wants QR (recognizable, native camera support). **Boarding pass printer** needs PDF417 (dense, tolerant). **Pharma pill blister** needs DataMatrix (small print). No single symbology is best at everything: EAN can't carry batch/lot; QR too big for pill blister; PDF417 too dense for consumer camera. Standards exist so each industry picks its right tool. **Sunrise 2027 aims to converge on 2D** (QR / DataMatrix) but retail's installed POS scanners take decades to fully migrate. Interviewer signal: knowing the trade-offs, not just the names." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What's the difference between Code 128 and GS1-128?**\n\n**A:** **Code 128** — general-purpose 1D symbology supporting full ASCII. Data structure = whatever you encode. **GS1-128** (formerly UCC/EAN-128) — a *subset use* of Code 128 that: (1) starts with a specific `FNC1` character in position 1; (2) encodes data as GS1 element strings (AI-prefixed values). **Every GS1-128 is a Code 128, but not every Code 128 is a GS1-128.** Scanners often return both under the same symbology enum; you must inspect the raw payload for the `FNC1` marker + first-2-digit AI pattern to know. **Also:** GS1-128 rules include specific character-set constraints + separator handling for variable-length AIs (GS 0x1D). **Interviewer signal:** knowing the encoding is a Code 128 CONVENTION, not a separate symbology." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: When would you pick PDF417 over QR?**\n\n**A:** **PDF417 wins when:** (1) Consumer familiarity doesn't matter (driver's license, boarding pass, government document). (2) Very high alphanumeric density needed. (3) Narrow rectangular space available (fits on a driving-license strip). (4) Existing industry standard mandates it (AAMVA driver-license spec; IATA boarding pass Bar Coded Boarding Pass BCBP). (5) Compression via variable rows + columns is useful. **QR wins for:** consumer marketing, payments, easy phone scan. **In practice:** you rarely 'choose' PDF417 for a green-field project; you use it because a downstream regulator or partner requires it. Interviewer signal: recognizing PDF417 = 'government / travel' domain." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you architect a retail app that scans multiple symbologies?**\n\n**A:** **(1) Symbology filter** — enable EAN-8/13, UPC-A/E, Code 128, GS1 DataBar (retail-common); reserve DataMatrix / QR for consumer-facing rollout. **(2) Router by format** — switch on `barcode.format` → EAN → GTIN lookup; Code 128 → check for FNC1 + parse as GS1-128; QR → check for Digital Link URL. **(3) Multi-format scanner** — `mobile_scanner` with formats list; Scandit for damaged codes. **(4) Fallback** — if no format matches, try typed entry. **(5) Analytics** — track scan-attempt vs scan-success per format; drops indicate label quality issue. **(6) Migration plan** — as retailers deploy 2D readers (Sunrise 2027), enable DataMatrix + QR reading + parse for Digital Link URLs carrying GTIN + batch + expiry. **(7) Regional variation** — India retail heavily EAN-13; US retail UPC-A + moving to 2D." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What are the ISO grading standards for barcode print quality?**\n\n**A:** **ISO/IEC 15416** — 1D barcode print quality (EAN, UPC, Code 128, etc.). Grades A (best) to F (fail); measures reflectance profile, decode + edge determination, symbol contrast. **ISO/IEC 15415** — 2D matrix symbols (DataMatrix, QR). Measures unused error correction, modulation, axial/grid non-uniformity, print growth. **Verifiers** — hardware devices (Cognex DataMan, Axicon) certified against these standards; grade every printed code. **Retail + regulatory require grade C or better.** **App-side:** if you're building a mobile print-quality checker, camera-based grade estimation gives a rough approximation; hardware verifier for authoritative grade. **Why bother:** grade-C+ codes have 99 %+ scan success in real world; grade-D drops to ~85 %. On a warehouse with 100 K scans / day, that's 15 K scan failures = worker frustration + errors." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: Sunrise 2027 — what changes + what's the migration?**\n\n**A:** **Sunrise 2027** is the retail industry's commitment to have POS scanners capable of reading 2D codes (QR + DataMatrix) alongside classic 1D by end of 2027. Purpose: enable brand owners to encode more information (GTIN + batch + expiry + serial + Digital Link URL) on consumer packaging using one 2D code instead of a cluttered strip of 1D + text. **Migration:** (1) **Retailers** deploy 2D-capable scanners (imagers replace lasers). (2) **Brand owners** print DUAL-encoded barcodes on packaging (EAN-13 for legacy scanners + DataMatrix / QR carrying full Digital Link for new). (3) **Regulators** align on Digital Link URLs as machine-readable spec. (4) **Consumers** benefit from tap-to-scan getting rich product info. **App impact:** every retail app must be ready to parse Digital Link URLs from scanned QR / DataMatrix, in addition to legacy EAN. Not a hard deadline but the industry is moving fast. Interviewer signal: knowing this is happening + why." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Retail POS** — EAN-13 / UPC-A.\n- **Case shipping** — ITF-14 / Code 128 / GS1-128.\n- **Pharma** — DataMatrix.\n- **Consumer marketing / payments** — QR.\n- **Boarding passes / licenses** — PDF417 + Aztec.\n- **Coupons / produce** — GS1 DataBar.\n- **NOT ideal for** — over-standardizing on one; each has its lane." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **AIM Symbology Identifiers** — scanner-returned prefix like `]C0` (Code 128), `]E0` (EAN-13), `]d2` (DataMatrix + GS1).\n- **Sunrise 2027** — retail industry 2D migration.\n- **RSS Symbology** — old name for GS1 DataBar.\n- **GS1 Composite Symbology** — 1D + 2D stacked (retail coupon).\n- **PDF417 macro** — split large payloads into multiple codes.\n- **BCBP (IATA)** — Bar Coded Boarding Pass; PDF417 spec.\n- **AAMVA** — driver-license PDF417 spec.\n- **EMVCo QR** — merchant + consumer-presented payment QR global spec.\n- **Symbol-quality analyzers** — Axicon, Cognex, HP Scanner Utility.\n- **ISO 15420** — EAN + UPC symbology spec.\n- **ISO 15417** — Code 128.\n- **ISO 15438** — PDF417.\n- **Multi-symbology decoders** — ZXing (open-source), ZBar, ML Kit, Scandit all handle diverse formats." }
   ],
   "flashcards": [
-    { "front": "GS1-128 primary use?", "back": "Logistics labels — encodes SSCC and other AIs on cases/pallets." },
-    { "front": "Application Identifier (AI)?", "back": "A short numeric prefix (01, 10, 17, 21, …) that says what the following digits mean." },
-    { "front": "AI 00, 01, 17?", "back": "00 = SSCC, 01 = GTIN, 17 = Expiry (YYMMDD)." }
+    { "front": "Retail POS at checkout?", "back": "EAN-13 (RoW) or UPC-A (North America)." },
+    { "front": "Warehouse case shipping?", "back": "ITF-14 / Code 128 / GS1-128." },
+    { "front": "Pharma serialized?", "back": "GS1 DataMatrix." },
+    { "front": "Consumer + payments?", "back": "QR." },
+    { "front": "Government / travel documents?", "back": "PDF417 + Aztec." },
+    { "front": "Code 128 vs GS1-128?", "back": "GS1-128 = Code 128 with FNC1 marker + GS1 AI element strings." },
+    { "front": "Sunrise 2027?", "back": "Retail industry migration — POS scanners read 2D on packaging by end of 2027." }
   ],
   "quiz": [
-    { "q": "For a small pharma vial serialized to the unit, choose…", "options": ["EAN-13", "GS1-128", "GS1 DataMatrix", "ITF-14"], "answer": 2, "explain": "Compact 2D with serialization support." },
-    { "q": "For a pallet with SSCC + shipment details use…", "options": ["EAN-13", "GS1-128", "QR", "UPC-A"], "answer": 1, "explain": "GS1-128 is the logistics workhorse." },
-    { "q": "AI '01' means…", "options": ["Expiry", "GTIN", "Batch", "SSCC"], "answer": 1, "explain": "AI 01 introduces a GTIN." }
+    { "q": "Retail POS symbology?", "options": ["DataMatrix", "EAN-13 / UPC-A", "PDF417", "Aztec"], "answer": 1, "explain": "Fixed-length 1D." },
+    { "q": "Boarding pass symbology?", "options": ["EAN-13", "PDF417 (BCBP) or Aztec", "QR", "MaxiCode"], "answer": 1, "explain": "IATA specifies BCBP." },
+    { "q": "GS1-128 differs from Code 128 by…", "options": ["Nothing", "FNC1 marker + AI element strings", "Color", "Print size"], "answer": 1, "explain": "GS1 convention on top of Code 128." },
+    { "q": "Sunrise 2027 goal?", "options": ["1D removal", "Retail 2D-capable POS scanners", "New language", "Nothing"], "answer": 1, "explain": "Enable 2D on retail packaging." },
+    { "q": "PDF417 typical use?", "options": ["Retail", "Driving licenses + boarding passes", "Pharma", "Consumer marketing"], "answer": 1, "explain": "Government + travel." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Given AI-encoded string, decode into GTIN/batch/expiry fields." },
-    { "level": "Medium", "text": "Encode SSCC + weight for a GS1-128 label." },
-    { "level": "Hard", "text": "Write a symbology chooser for use cases: (retail unit, case, pallet, pharma)." },
-    { "level": "Expert", "text": "Build an end-to-end labeler that picks symbology + AIs from a product spec." }
+    { "level": "Easy", "text": "Restrict scanner formats to retail + Code 128; test detection speed." },
+    { "level": "Medium", "text": "Router by symbology to different handler flows." },
+    { "level": "Medium", "text": "Detect + parse GS1-128 (Code 128 + FNC1) with AI extraction." },
+    { "level": "Hard", "text": "Multi-symbology retail app: EAN + Code 128 + DataMatrix + Digital Link URL." },
+    { "level": "Hard", "text": "Analytics per symbology + scan-fail rate dashboard." },
+    { "level": "Expert", "text": "Sunrise 2027 dual-encoding pipeline: EAN + DataMatrix carrying same GTIN + batch + expiry." }
   ],
   "interviewQuestions": [
-    "Family of GS1 symbologies?",
-    "How do you choose a symbology?",
-    "What are Application Identifiers?",
-    "GS1-128 vs Code 128?",
-    "When would you pick DataMatrix over QR?"
+    "Why so many symbologies?",
+    "Code 128 vs GS1-128 — differences?",
+    "When would you pick PDF417 over QR?",
+    "Architect a retail app scanning multiple symbologies?",
+    "ISO grading standards for barcode print quality?",
+    "Sunrise 2027 — what changes + what's the migration?"
   ],
   "references": [
-    { "label": "GS1 General Specifications", "url": "https://www.gs1.org/standards/barcodes-epcrfid-id-keys/gs1-general-specifications" }
+    { "label": "GS1 General Specifications", "url": "https://www.gs1.org/standards/barcodes-epcrfid-id-keys/gs1-general-specifications" },
+    { "label": "Sunrise 2027", "url": "https://www.gs1.org/industries/retail/sunrise-2027" },
+    { "label": "ISO/IEC 15416 + 15415", "url": "https://www.iso.org" }
   ]
 }
