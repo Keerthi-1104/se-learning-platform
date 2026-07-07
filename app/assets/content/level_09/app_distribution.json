@@ -1,50 +1,106 @@
 {
   "id": "fb.app_distribution",
   "levelId": 9,
-  "title": "App Distribution",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "title": "Firebase App Distribution",
+  "xp": 40,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Ship pre-release builds to testers fast",
-    "Compare with Play internal / TestFlight",
-    "Automate distribution in CI"
+    "Understand App Distribution via a real-life analogy",
+    "Upload APK / AAB / IPA builds to tester groups",
+    "Automate distribution from CI (GitHub Actions / Fastlane / Codemagic)",
+    "Show in-app 'update available' via the Tester SDK",
+    "Fit App Distribution into a full multi-track release strategy",
+    "Answer App Distribution interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Firebase App Distribution ships APK/AAB (Android) and IPA (iOS) builds to invited testers by email — no Play/App Store review. Great for daily internal builds and QA loops." },
-    { "type": "code", "language": "bash", "code": "# Upload from CI\nfirebase appdistribution:distribute app-release.apk \\\n  --app 1:1234:android:abcd \\\n  --release-notes-file notes.txt \\\n  --groups qa,internal" },
-    { "type": "table", "headers": ["", "App Distribution", "Play Internal", "TestFlight"], "rows": [
-      ["Review needed", "No", "No (internal track)", "Yes (external), No (internal)"],
-      ["iOS", "IPA via emails", "N/A", "Apple's own"],
-      ["Analytics", "Adoption per tester", "Play console", "TestFlight"],
-      ["Best for", "Fast iteration", "Google-side QA / staged rollouts", "Broad iOS beta"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of App Distribution as the private preview cinema for your app.**\n\nBefore a movie hits theaters, the studio invites critics + focus groups to a private screening — no ticket lines, no store review. **Firebase App Distribution is that private cinema for your app.**\n\n- **Tester groups** — VIP invite lists: `qa`, `internal`, `beta`, `partners_india`.\n- **Release notes** — the printed synopsis handed at the door: 'fixed login crash, new home layout.'\n- **CLI / Fastlane upload** — the studio's private courier delivering the reel.\n- **Email invitation** — the ticket. Tester taps → App Distribution app installs the build.\n- **Tester SDK** — an usher inside the theater who taps you on the shoulder: 'a newer cut just dropped, want to swap?'\n- **No store review** — the studio can screen new cuts hourly if it wants. Play/App Store 'internal tracks' also skip review but are slower to set up.\n\n**Why every mobile team runs this pipeline:** waiting 2 hours for Play Internal → 24 hours for Play Alpha review just to get a QA build into a tester's hands kills iteration speed. Firebase App Distribution: `firebase appdistribution:distribute` → 30 seconds later testers have it. Combined with CI, EVERY commit to `main` can auto-produce a fresh build the whole company can install." },
+    { "type": "callout", "variant": "definition", "markdown": "**Firebase App Distribution** ships pre-release Android APK / AAB / iOS IPA builds to invited testers **without going through the store**. Upload via **console, CLI, Gradle plugin, Fastlane, GitHub Action, or Codemagic**. Testers receive an email with a link → install via the Firebase App Distribution app (Android) or a signed provisioning profile (iOS). **Tester SDK** shows 'new build available' inside your app. Free at any volume. Great for internal QA + external beta; complements Play Internal / TestFlight for wider rings." },
+    { "type": "theory", "markdown": "## Distribution channels compared" },
+    { "type": "table", "headers": ["Channel", "Review time", "Tester cap", "Best for"], "rows": [
+      ["**Firebase App Distribution**", "**None** — instant", "Unlimited", "Internal QA, focused beta cohorts"],
+      ["**Play Internal test**", "~2 hours", "100", "Internal QA of AAB signing chain"],
+      ["**Play Closed test**", "~1 day", "10,000+", "External beta by invite list / opt-in URL"],
+      ["**Play Open test**", "~1 day", "Anyone on Play Store", "Public early-access"],
+      ["**TestFlight Internal**", "None", "100 dev-team members", "Internal iOS QA"],
+      ["**TestFlight External**", "~1 day", "10,000", "External iOS beta"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "The typical setup: **daily builds → App Distribution** for internal QA, **weekly builds → Play Internal / TestFlight** for wider beta, **release → production tracks**. This lets designers/QA test hot changes without waiting for review." },
-    { "type": "callout", "variant": "tip", "markdown": "Automate via `fastlane`, `codemagic`, or GitHub Actions. Include commit SHA + build number in release notes. Set the auto-update SDK so testers get notified in-app when a new build lands." }
+    { "type": "theory", "markdown": "## CLI upload — the pattern every CI runs" },
+    { "type": "code", "language": "bash", "code": "# One-time login\nnpm install -g firebase-tools\nfirebase login\n\n# Upload an Android AAB to tester groups\nfirebase appdistribution:distribute app-release.aab \\\n  --app 1:1234567890:android:abcd1234efgh \\\n  --release-notes-file release-notes.md \\\n  --groups \"qa,internal,beta\" \\\n  --testers \"pm@company.com,designer@company.com\"\n\n# Upload an iOS IPA\nfirebase appdistribution:distribute app-release.ipa \\\n  --app 1:1234567890:ios:zzzz \\\n  --release-notes \"fix login crash on iOS 17\" \\\n  --groups \"qa,internal\"\n\n# List releases / tester groups / testers\nfirebase appdistribution:testers:list\nfirebase appdistribution:group:list\n\n# CI (GitHub Actions) — service-account auth\n#   GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json\n#   The service account needs 'Firebase App Distribution Admin' role." },
+    { "type": "theory", "markdown": "## Fastlane + GitHub Actions example" },
+    { "type": "code", "language": "yaml", "code": "# .github/workflows/nightly-distribute.yml\nname: Nightly build → Firebase\non:\n  push:\n    branches: [main]\njobs:\n  distribute-android:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: subosito/flutter-action@v2\n      - run: flutter build appbundle --release --obfuscate --split-debug-info=./symbols\n\n      # Firebase upload\n      - uses: wzieba/Firebase-Distribution-Github-Action@v1\n        with:\n          appId: ${{ secrets.FIREBASE_APP_ID_ANDROID }}\n          serviceCredentialsFileContent: ${{ secrets.FIREBASE_CREDS }}\n          groups: qa,internal\n          releaseNotes: ${{ github.event.head_commit.message }}\n          file: build/app/outputs/bundle/release/app-release.aab\n\n      # Symbol upload — critical for Crashlytics readability!\n      - run: |\n          firebase crashlytics:symbols:upload \\\n            --app ${{ secrets.FIREBASE_APP_ID_ANDROID }} \\\n            ./symbols" },
+    { "type": "theory", "markdown": "## In-app 'new build available' via Tester SDK" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml:\n//   firebase_app_distribution: ^0.2.0  // (Flutter plugin; check current version)\n\n// Note: the Tester SDK is DEBUG / distribution-build ONLY.\n// Include in staging flavor, exclude from Play Store release.\n\nimport 'package:firebase_app_distribution/firebase_app_distribution.dart';\n\nFuture<void> checkForUpdate() async {\n  if (!isStagingBuild) return;\n\n  final ad = FirebaseAppDistribution.instance;\n  await ad.signInTester();\n  final update = await ad.checkForUpdate();\n  if (update != null) {\n    // Show confirmation dialog — 'v1.2.5 available: fix login crash. Install?'\n    final ok = await confirmDialog(context, update);\n    if (ok) await ad.updateApp();\n  }\n}" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Manual uploads from a laptop.** Someone forgets; QA gets no build. Automate ALL uploads in CI." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Distributing debug builds by default.** Debug flavor + missing obfuscation + Firebase collection enabled = polluted analytics + easy reverse-engineering. Distribute a **staging** flavor: minified, obfuscated, staging Firebase project, feature flags set for QA." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: No release notes.** Tester gets 'new build v2.3.5' — has no idea what to test. Auto-populate from git log or PR description." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Forgetting to upload iOS provisioning profile.** Ad-hoc distribution needs each tester's UDID in the profile — Firebase collects them via the invite flow; must re-sign + re-upload when adding testers. Or use Enterprise / TestFlight instead." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Shipping the Tester SDK in Play Store release.** Includes debug scaffolding + Firebase-tester auth flows in prod. Gate behind flavor / build config." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Committing service-account JSON to git.** Full delete-project privileges. Use GitHub Secrets / KMS." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: One 'testers' group for everyone.** Break into `qa`, `internal`, `design`, `partners`. Only send the relevant build to the relevant group; reduces noise." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: No cleanup of stale testers.** Ex-employees still receive builds. Sync tester list to HR / IdP periodically." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. CI-only uploads.** No manual laptop uploads." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Staging flavor** — obfuscated, staging Firebase, feature-flags for QA visibility." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Auto-populate release notes** from commit message or PR body." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Symbol upload alongside** — Crashlytics needs dSYM / mapping / debug-info to symbolicate crashes from distributed builds." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Segmented groups** — `qa`, `internal`, `beta`, `partners_india`." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Tester SDK behind a flag** — 'new build available' in staging only." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Cadence: nightly → weekly → release**.** Nightly to internal, weekly to beta, release to Play/TestFlight." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Rotate testers periodically** — HR / IdP-linked source of truth." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Upload from CLI.** Distribute one AAB to a `qa` group via `firebase appdistribution:distribute`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Automate from GitHub Actions.** On push-to-main, build + distribute to `qa`; verify tester email arrives." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Tester SDK.** Show 'v1.2.5 available' dialog inside the staging build." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — Multi-ring pipeline.** Nightly → App Distribution; weekly → Play Internal / TestFlight; monthly → production." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard) — Signed + symbol-uploaded builds** — verify Crashlytics reports from distributed builds are symbolicated." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert) — HR-synced testers.** Cloud Function reads Google Workspace / Okta group membership; syncs to Firebase tester groups nightly." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: How does App Distribution differ from Play Internal Testing and TestFlight?**\n\n**A:** **App Distribution:** no store review; instant delivery to invited emails; free unlimited testers; works for AAB/APK/IPA. **Play Internal Testing:** ~2-hour review for the AAB signing chain to validate; up to 100 testers; free; delivered via Play Store (better upgrade UX, auto-updates). **TestFlight Internal:** no review; up to 100 dev-team members with App Store Connect roles; iOS-only. **TestFlight External:** ~1-day review; up to 10,000 testers by email invite or public link. **When to use each:** internal QA fast → App Distribution; iOS internal → TestFlight Internal; broader beta → Play Closed + TestFlight External; testing store-upgrade path itself → Play Internal. **Most teams run BOTH App Distribution (nightlies) + Play Internal (weeklies) + Play Open (release-candidate).**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How do you automate distribution from CI?**\n\n**A:** **(1) Service-account key** with `Firebase App Distribution Admin` role, stored in GitHub Secrets / KMS. **(2) CI job** — build Flutter app → `flutter build appbundle --obfuscate --split-debug-info=./symbols`. **(3) Firebase upload** — `wzieba/Firebase-Distribution-Github-Action` or `fastlane firebase_app_distribution`. Groups + release notes injected from the commit / PR. **(4) Symbol upload** — `firebase crashlytics:symbols:upload` — CRITICAL, or crashes are unreadable. **(5) Failure alerts** — CI job fails → Slack notification to the release channel. **(6) Multi-flavor** — separate jobs for `dev`, `staging`, `prod` targets; distribute to different tester groups. **Cadence:** every push-to-main → nightly; every tag → weekly; every release-branch → play internal + testflight. **Interviewers listen for the SYMBOL upload step + the flavor separation.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: iOS ad-hoc distribution has UDID challenges — how do you handle them?**\n\n**A:** iOS **ad-hoc** builds are signed against a provisioning profile that lists **each tester device's UDID**. When you invite a new tester through Firebase App Distribution: **(1)** They receive an email. **(2)** On tap, Firebase's tester app collects their UDID via a Safari profile install. **(3)** You must **re-sign** the IPA with an updated provisioning profile containing that UDID, then upload the new IPA. **Automation options:** Fastlane's `match` manages provisioning profiles + certificates in a shared git repo; the `firebase_app_distribution` action can auto-invite new testers via Fastlane. **The hassle** is a reason many teams **prefer TestFlight** for external iOS testing — no UDIDs to manage; Apple handles it. **Use App Distribution for iOS mostly for internal / signed-with-enterprise-cert scenarios.** Enterprise cert (paid Apple Enterprise Program) sidesteps UDIDs — but that program's scope is 'employee-only' + Apple audits it strictly." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How does the Tester SDK work and when should you use it?**\n\n**A:** The **Tester SDK** is a Firebase SDK gated to distribution builds: it (1) authenticates the tester via a Firebase-hosted OAuth flow, (2) checks for newer builds in App Distribution, and (3) if found, presents a native 'update available' dialog that installs the new APK. **Enables:** in-app 'you have a new build!' UX — faster than waiting for testers to open email. **Constraints:** DEBUG / staging flavor ONLY — don't ship this SDK in the Play Store release, or you leak an update path outside the store's control (against store policy + adds size). **Setup:** initialize behind a `kDebugMode || isStaging` flag; require sign-in only when a check is manually triggered. **Cadence:** on cold-start of staging build; or a manual 'check for updates' button in a dev-menu. **Fits into:** the internal QA loop — build lands in CI → email arrives → tester ignores it → but next time they open the app, the SDK offers the update in-place." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you fit App Distribution into a full release pipeline?**\n\n**A:** Multi-ring: **(1) Every PR merge to `main`** → CI builds `staging` flavor + distributes to `qa` group via App Distribution. Fast feedback for QA. **(2) Every green nightly** → distributes to `internal` (whole company) via App Distribution — dogfooding. **(3) Weekly Friday** → build a `beta` flavor (production Firebase project, feature-flags for beta cohort) → Play Closed Test + TestFlight External → external beta cohort. **(4) Release candidate** → tag `v1.2.0-rc1` → build + push to Play Internal + TestFlight Internal for last-mile QA. **(5) After sign-off** → promote same AAB / IPA to Production (Play → Open or Prod; App Store → prod submission). **Cadence rules:** app-distribution builds live 30 days (garbage collected); Play / TestFlight builds are permanent. **Symbolization + Crashlytics upload happen at every step.** Interviewers score highly on hearing about signing-key parity — nightly and prod share the same upload key so Crashlytics grouping works." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What are common cost + security pitfalls?**\n\n**A:** **Cost:** App Distribution itself is FREE — no per-tester / per-build charge. The real cost hides in **build-minutes** (GitHub Actions / Codemagic) — parallel iOS + Android + staging + release matrix explodes fast. Batch smart; run staging only on `main`, not every branch. **Security:** **(1) Service-account key with App Distribution Admin role** = broad delete-any-release rights. Rotate + scope to only App Distribution. **(2) Signing keys** — Android upload/signing keys must live in KMS / Play App Signing; never in the repo. iOS certificates in Fastlane match (encrypted git). **(3) Stale testers** — auto-remove ex-employees. **(4) Public download links** — App Distribution's tester-invite URLs are non-guessable but shareable; treat as sensitive. **(5) Enterprise cert (iOS) misuse** — Apple revokes it if you distribute to non-employees; use TestFlight for that instead. **(6) Debug SDKs in prod** — always flavor-gate the Tester SDK." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Nightly QA loop** — every mobile team.\n- **External beta** — invite a partner or key customer to test a new feature before public launch.\n- **Feature-branch previews** — CI distributes a build per-feature-branch to designers for review.\n- **Sales demos** — hand a customer an early build for a demo.\n- **Bug repro** — 'here's a build with extra logging'.\n- **Not the same as** Play/TestFlight — those are for wider beta + store-signing validation." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Automatic release-notes from git log** — `git log --pretty=format:'- %s (%h)' HEAD~10..HEAD`.\n- **Multi-flavor CI** — matrix over `(platform, flavor)` — Android+iOS × dev+staging+release.\n- **Fastlane `firebase_app_distribution` plugin** — full Fastlane integration incl. auto-invite testers.\n- **Codemagic + Firebase App Distribution** — first-class checkbox in Codemagic workflows.\n- **Deep links to specific tester group** — App Distribution URLs can carry group context.\n- **Auto-cleanup** — App Distribution releases expire after 30 days; keep production release process for archival.\n- **In-app 'What's new' dialog** — on tester install, show a full-screen release-notes screen (build with Remote Config).\n- **Analytics on distributions** — App Distribution surfaces install rate per tester group.\n- **Feedback tab** — testers can send text feedback + screenshots (paid feature or via 3rd-party plugin).\n- **Programmatic API** — REST endpoint for CI-driven distribution when Fastlane / CLI isn't a fit.\n- **Rate limits** — very generous; not a practical concern.\n- **Signing parity** — Crashlytics groups by signature; parity between nightly + prod signing preserves grouping." }
   ],
   "flashcards": [
-    { "front": "What does App Distribution ship?", "back": "APK/AAB/IPA to invited testers by email, without store review." },
-    { "front": "App Distribution vs TestFlight?", "back": "Fastest iteration for internal QA (both platforms); TestFlight for larger iOS beta programs." },
-    { "front": "Common CI action?", "back": "firebase appdistribution:distribute <artifact> --app <id> --groups <groups>." }
+    { "front": "App Distribution vs Play Internal?", "back": "App Dist = no review + instant; Play Internal = ~2h review, delivered via Play Store, tests upload signing." },
+    { "front": "Automate uploads from?", "back": "GitHub Actions / Fastlane / Codemagic; service-account JSON in secrets." },
+    { "front": "Tester SDK — where?", "back": "Staging / debug flavor only. Never ship in Play Store release." },
+    { "front": "iOS ad-hoc UDID hassle?", "back": "Each tester's UDID must be in the provisioning profile; re-sign on invite. TestFlight sidesteps this." },
+    { "front": "Symbol upload — when?", "back": "Same CI job as every distribution build — Crashlytics needs it to symbolicate." },
+    { "front": "Release-notes source?", "back": "Auto-populate from git log or PR body." },
+    { "front": "App Distribution build TTL?", "back": "~30 days before garbage collected." }
   ],
   "quiz": [
-    { "q": "App Distribution requires…", "options": ["Store review", "Nothing — direct to invited testers", "In-app purchase config", "Root access"], "answer": 1, "explain": "No review; direct email invites." },
-    { "q": "In a typical release pipeline it's used for…", "options": ["Public releases", "Internal QA loops", "Kernel updates", "Server deploys"], "answer": 1, "explain": "Fast iteration to a small tester group." },
-    { "q": "Best CI practice?", "options": ["Manual uploads", "Automated fastlane/codemagic/gh-actions distribution", "Copy files by hand", "Skip release notes"], "answer": 1, "explain": "Automate with commit-SHA release notes." }
+    { "q": "App Distribution main advantage over Play Internal?", "options": ["Cheaper", "No review — instant delivery", "Better UI", "Ad-supported"], "answer": 1, "explain": "Skips store review entirely." },
+    { "q": "iOS ad-hoc distribution needs?", "options": ["Nothing extra", "Tester UDIDs in the provisioning profile", "Enterprise cert", "TestFlight only"], "answer": 1, "explain": "Ad-hoc = UDID-based; Firebase automates collection but re-signing is needed." },
+    { "q": "Tester SDK is safe to ship in…", "options": ["Every build", "Debug / staging flavor only", "Play Store release", "Enterprise builds"], "answer": 1, "explain": "Keep out of store releases." },
+    { "q": "CI service-account should have role…", "options": ["Owner", "Firebase App Distribution Admin", "Read-only", "None"], "answer": 1, "explain": "Least privilege for distribution." },
+    { "q": "Symbol upload matters because…", "options": ["Not needed", "Crashlytics needs it to symbolicate crashes from distributed builds", "Reduces APK size", "Speeds startup"], "answer": 1, "explain": "Otherwise crashes are unreadable." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Upload one APK to a tester group via CLI." },
-    { "level": "Medium", "text": "Automate distribution from GitHub Actions on push to main." },
-    { "level": "Hard", "text": "Add in-app update prompt using the App Distribution Testers SDK." },
-    { "level": "Expert", "text": "Multi-stage pipeline: App Distribution (nightly) → Play internal (weekly) → production track." }
+    { "level": "Easy", "text": "Upload one APK to a `qa` tester group via CLI." },
+    { "level": "Easy", "text": "Add release-notes-file with git log content." },
+    { "level": "Medium", "text": "Automate distribution from GitHub Actions on push-to-main." },
+    { "level": "Medium", "text": "Auto-upload Crashlytics symbols alongside distribution build." },
+    { "level": "Hard", "text": "In-app 'new build available' dialog via Tester SDK in staging build." },
+    { "level": "Hard", "text": "Multi-ring pipeline: nightly → App Dist QA, weekly → Play Internal + TestFlight, release → prod." },
+    { "level": "Expert", "text": "HR-linked tester sync: Cloud Function reads Okta groups + updates Firebase tester groups nightly." }
   ],
   "interviewQuestions": [
-    "When use App Distribution vs Play Internal vs TestFlight?",
-    "How do you automate uploads?",
-    "How do testers get notified of new builds?",
-    "What's in release notes / metadata?",
-    "How do you deprecate old testers?"
+    "App Distribution vs Play Internal vs TestFlight — differences?",
+    "How do you automate distribution from CI?",
+    "iOS ad-hoc UDID challenges — how do you handle them?",
+    "How does the Tester SDK work + when should you use it?",
+    "How do you fit App Distribution into a full release pipeline?",
+    "What are the common cost + security pitfalls?"
   ],
   "references": [
-    { "label": "App Distribution", "url": "https://firebase.google.com/docs/app-distribution" }
+    { "label": "Firebase App Distribution docs", "url": "https://firebase.google.com/docs/app-distribution" },
+    { "label": "Get started (Flutter)", "url": "https://firebase.google.com/docs/app-distribution/android/distribute-flutter" },
+    { "label": "GitHub Action for distribution", "url": "https://github.com/wzieba/Firebase-Distribution-Github-Action" }
   ]
 }

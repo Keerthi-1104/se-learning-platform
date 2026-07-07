@@ -1,50 +1,102 @@
 {
   "id": "fb.performance",
   "levelId": 9,
-  "title": "Performance Monitoring",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "title": "Firebase Performance Monitoring",
+  "xp": 50,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Capture app-start, screen-render and network traces",
-    "Add custom traces around business flows",
-    "Set SLIs and alert on regressions"
+    "Understand Performance Monitoring via a real-life analogy",
+    "Read auto-collected app-start, screen-render, network traces",
+    "Design custom traces + attributes for business flows",
+    "Pick top-line SLIs and alert on regressions",
+    "Correlate Perf + Analytics + Crashlytics for release quality",
+    "Answer Performance Monitoring interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Firebase Performance Monitoring auto-collects app-start, foreground/background, screen rendering, and network request timings. You can add custom traces to time any business flow — and see p50/p95 in the console per app version." },
-    { "type": "code", "language": "dart", "code": "final t = FirebasePerformance.instance.newTrace('checkout');\nawait t.start();\n// ... your work ...\nt.setMetric('items', cart.length);\nt.putAttribute('paymentMethod', 'card');\nawait t.stop();\n\n// HTTP: auto-captured; you can also wrap manually\nfinal metric = FirebasePerformance.instance.newHttpMetric(url, HttpMethod.Get);\nawait metric.start(); ...; await metric.stop();" },
-    { "type": "table", "headers": ["Signal", "What it measures"], "rows": [
-      ["app_start", "Cold/warm start time"],
-      ["screen render", "Slow + frozen frames per screen"],
-      ["Network trace", "Duration, success rate, payload size per endpoint"],
-      ["Custom trace", "Any business flow you time"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Performance Monitoring as your app's fitness tracker.**\n\nA fitness watch doesn't just say 'you feel tired.' It measures **specific metrics** — resting heart rate, HRV, VO2 max, sleep score — over time, and screams at you when they regress week over week.\n\nFirebase Perf does exactly this for your app:\n\n- **Auto-collected vitals** — cold-start p95, screen-render p95, network-request p95 per endpoint. You don't lift a finger.\n- **Custom traces** — you decide what to time (`checkout`, `feed_load`, `pdf_render`) with attributes (`payment_method`, `tenant`, `user_plan`) and metrics (`items_in_cart`).\n- **Percentiles, not averages** — p50 hides the pain; **p95 / p99 tell you what your slowest users experience**.\n- **Alerts on regression** — 'checkout p95 up 30% since release 2.5.0? Page the on-call.' Same as a fitness watch alerting on abnormal resting heart rate.\n- **Slice by app version + device tier + country** — the aggregate can hide a disaster on cheap Android in India.\n\n**Why every mobile team wires this on day one:** without it, 'the app feels slow' is folklore. With it, 'checkout p95 on 2.5.0 is 4.2s vs 3.1s on 2.4.9 for Android 12 users' is a fact. Blocks bad releases before they scale." },
+    { "type": "callout", "variant": "definition", "markdown": "**Firebase Performance Monitoring** auto-collects **app-start (cold/warm/hot), foreground/background transitions, screen render (slow-frames / frozen-frames), and HTTP/S network request timings**. Adds an SDK for **custom traces** (any code region) + **screen traces** (frame timings per screen). Ships percentile aggregates + attribute breakdowns to a Firebase console dashboard; also feeds BigQuery. Free at any volume. Sampling is automatic; there's a per-project session cap." },
+    { "type": "theory", "markdown": "## What's auto-collected" },
+    { "type": "table", "headers": ["Metric", "What it measures", "Why you care"], "rows": [
+      ["**app_start**", "Cold + warm + hot start durations", "First impression = retention"],
+      ["**_app_in_foreground / _app_in_background**", "Session boundaries", "Slices for other metrics"],
+      ["**_st_<Screen>** (screen trace)", "Slow-frames %, frozen-frames %", "Jank UX SLO"],
+      ["**HTTP/S network request**", "URL, status, duration, response size", "API latency + error rate"],
+      ["**custom trace**", "Any code region you time", "Business-flow SLI"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "Pick 2–3 top-line SLIs (cold start p95, checkout trace p95, home network p95). Alert when they regress by > 20% between two releases. This turns 'the app feels slow' into an SLO that ships or blocks releases." },
-    { "type": "callout", "variant": "mistake", "markdown": "Instrumenting everything → data overload + noise. Trace the flows that matter to users + revenue; use custom attributes to slice by network type / device tier. On top of Firebase Performance, Android Macrobenchmark and Impeller GPU frame telemetry catch different issues." }
+    { "type": "theory", "markdown": "## Complete Flutter setup" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml:\n//   firebase_performance: ^0.9.3+8\n\nimport 'package:firebase_performance/firebase_performance.dart';\n\nfinal perf = FirebasePerformance.instance;\n\n// 1. Global on/off (respect user consent — same pattern as Analytics/Crashlytics).\nawait perf.setPerformanceCollectionEnabled(userConsent.telemetry);\n\n// ────── Custom trace ──────\nfinal trace = perf.newTrace('checkout');\nawait trace.start();\ntrace.putAttribute('payment_method', 'card');   // string attribute — sliceable in console\ntrace.putAttribute('tenant', tenantId);\ntrace.setMetric('items_in_cart', cart.length); // numeric metric — aggregated + averaged\n\ntry {\n  await runCheckoutFlow();\n} finally {\n  await trace.stop();\n}\n\n// ────── HTTP metric — one-off timing for a request you control ──────\nfinal metric = perf.newHttpMetric('https://api.example.com/orders', HttpMethod.Post);\nawait metric.start();\nfinal resp = await http.post(url, body: body);\nmetric.responseCode = resp.statusCode;\nmetric.responsePayloadSize = resp.contentLength ?? 0;\nawait metric.stop();\n\n// ────── Screen trace (Flutter — auto via widget) ──────\n// The plugin ships a `withPerformanceOverlay` widget that auto-emits screen traces.\n// Also available via a route observer on newer plugin versions.\n\n// ────── Debugging locally ──────\n// Console → Performance → 'DebugView' shows real-time traces from the connected device.\n// Ensure enough sessions have occurred (~12 h in prod)." },
+    { "type": "theory", "markdown": "## Custom trace patterns\n\n**Rule: time flows that matter to users or revenue.** Not every code path.\n\n- **`app_start` (auto)** — reference baseline.\n- **`first_meaningful_paint`** — first frame with real data (post-hydration).\n- **`feed_load`** — pull-to-refresh flow.\n- **`checkout`** — cart-review to payment-success.\n- **`upload_photo`** — pick + compress + upload.\n- **`pdf_render`** — page-1 render for a document.\n- **`report_generate`** — expensive local computation.\n\n**Attributes** (max 5 per trace): `tenant`, `payment_method`, `variant` (RC), `network` (wifi/cellular), `screen`.\n\n**Metrics** (max 32 per trace, numeric): `items_in_cart`, `bytes_transferred`, `retry_count`." },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Instrumenting everything.** Every function timed = noise, no signal, no clear SLO. Time 2-5 top business flows, no more." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Watching averages, not p95/p99.** `avg=1.2s` hides the 5% of users at 8s. Alert on p95 regression, not mean." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Not slicing by attributes.** Aggregate p95 fine; but Android 12 + Redmi p95 disaster. Slice by device tier, OS, country, tenant." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: No release-over-release comparison.** Release 2.5.0 dashboard alone tells you nothing without 2.4.9 baseline." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Trace overlap / leaked traces.** `start` without `stop` = phantom hangs. Always `try/finally` around the flow." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: PII in attributes.** Never `user_email` as an attribute. Only pseudonymous fields (`plan`, `tenant`)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Ignoring network traces.** Auto-collected but often ignored — where most 'app slow' complaints actually come from. Set an alert on `api.example.com p95 > 2s`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Not disabling in DEBUG.** Debug builds bloat aggregate p95 (hot-reload spikes, debugger pauses)." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Define 3-5 top-line SLIs.** Cold-start p95, checkout p95, feed_load p95, key API p95, screen render slow-frames %. Everything else is diagnostic." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Alert on release-over-release regression** — > 15-20% p95 change = automatic bug bug." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Slice by device tier + country + variant** — hidden failures live here." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Attributes for business context** — `payment_method`, `tenant`, `remote_config_variant`, `network`." },
+    { "type": "callout", "variant": "best", "markdown": "**5. HTTP metrics for outbound network** — every critical API endpoint measured." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Try/finally around every trace** — no phantom hangs." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Respect telemetry consent** — `setPerformanceCollectionEnabled` gated by user choice." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Correlate with Crashlytics + Analytics** — same UID, same custom keys — story of a slow release." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Turn on Perf.** Wire SDK; verify `app_start` + auto network appear in the console after a session." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Custom trace.** Wrap `checkout` with attributes (`payment_method`, `tenant`) + a metric (`items_in_cart`)." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — HTTP metric.** Manually measure a Dio request; compare against auto-collected trace." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — SLI alerting.** Define cold-start p95 + checkout p95 alerts; simulate regression + verify alert fires." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard) — Slice by device tier.** Break out Redmi Note 9 users specifically; verify p95 differs; discuss." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert) — Release-gate.** CI pipeline blocks promotion to prod if p95 for cold-start or checkout regresses > 20% vs previous release." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What does Firebase Performance auto-collect and what do you have to add manually?**\n\n**A:** **Auto:** cold-start / warm-start / hot-start durations, foreground/background transitions, per-screen slow-frames + frozen-frames rates (via screen traces), and HTTP/S request timings (URL, status, response size, duration) — the SDK swizzles the HTTP client to capture these transparently. **Manual:** **custom traces** for any business flow (`checkout`, `feed_load`, `pdf_render`) via `newTrace('name').start() / stop()`; **HTTP metrics** for requests not caught by auto-instrumentation (some custom Dio interceptors bypass it); **attributes** (up to 5 string attributes per trace) for slicing; **metrics** (up to 32 numeric metrics per trace) for aggregating (`items_in_cart`, `bytes_transferred`, `retry_count`). **Key rule:** don't trace everything — 2-5 top-line flows. Aggregate p95 in the console, alert on release-over-release regression. **Also NOT auto:** Flutter widget-tree render timings; there's a `withPerformanceOverlay` for local dev, and newer plugin versions provide a navigator observer for auto screen traces." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: Averages vs percentiles — why does Firebase Perf show p50/p75/p90/p95?**\n\n**A:** Latency distributions are **long-tailed** — a few users experience durations 10-50x the median. **Averages hide this** — if 95 users take 0.5s and 5 users take 10s, mean = 0.975s. Sounds fine. But 5% of users are miserable. **Percentiles reveal tails:** p50 = median (typical user), p95 = the 95th-worst user (a slow user), p99 = the very slowest 1%. **Firebase surfaces p50/p75/p90/p95** for exactly this reason. **SLO on p95** — 'checkout p95 < 3s for Tier-2 Android devices' — because that's what your slowest realistic users hit. **Alerts fire on p95 regressions** — 'p95 up 30% since 2.5.0' — because a bad release can silently move only the tail. **Averages are OK for anomaly *detection*, useless for target-setting.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: Which SLIs would you alert on for a Flutter app? Give a concrete SLO.**\n\n**A:** **Top-line SLIs:** **(1) app_start_cold p95** — target ≤ 2.5s p95 on median device. **(2) `checkout` custom trace p95** — ≤ 3s. **(3) `feed_load` custom trace p95** — ≤ 1.5s. **(4) HTTP metric `POST /orders` p95** — ≤ 800ms. **(5) Screen trace `HomeScreen` slow-frames %** — ≤ 5%; frozen-frames % ≤ 0.5%. **Alerts:** any of (1-4) regressing > 20% release-over-release fires PagerDuty. Any of (5) slipping beyond target for a full day fires Slack. **Slice by** app version, device tier (via device model → tier lookup), country, RC variant. **Combine with Crashlytics + Analytics conversion drop** — a slow AND crashy release is bad; either one alone is worth investigating. **Release-gate** the CI pipeline: block promotion to prod if any SLI regressed > 20% in the 24h internal-QA window." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do you use custom traces effectively — what are the do's and don'ts?**\n\n**A:** **Do:** (1) **Wrap business-critical flows** — check-out, feed-load, first-meaningful-paint. (2) **`try/finally` around `stop()`** — otherwise a thrown exception = phantom hang skewing p95. (3) **Attributes for high-cardinality slicing** — `payment_method`, `tenant`, `remote_config_variant`, `network`. Max 5 string attributes per trace. (4) **Metrics for numeric aggregation** — `items_in_cart`, `bytes_transferred`. Max 32 numeric metrics. (5) **Consistent naming** across versions — Firebase groups by name. **Don't:** (1) Time every function — noise. (2) Overlap traces of the same name in the same session — the SDK stops both when either stops. (3) Attach PII as attributes — pseudonymous only. (4) Use dynamic values in NAMES (e.g., `checkout_<user_id>`) — explodes the trace-name cardinality; there's a cap. (5) Time inside `build()` — Perf overhead + you can't guarantee `stop`." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you correlate Perf + Crashlytics + Analytics to explain a bad release?**\n\n**A:** Story-of-a-release: **(1)** Analytics conversion drops by 15% after 2.5.0 rollout. **(2)** Crashlytics shows a modest crash-free-users % drop from 99.6 → 99.3% — not catastrophic. **(3)** Perf shows checkout p95 up 40% for Android 12. **(4) Slice by RC variant** — Perf p95 regression is concentrated in `checkout_layout_version=3`. Analytics conversion drop is in the same segment. **Hypothesis:** the new checkout layout is slow, users abandon, small crash bump is from timeout retries. **(5)** Flip RC variant back to `version=2` for the affected cohort → watch p95 recover in 24h → confirm hypothesis → hotfix + re-release. **This cross-service triage** is where every senior interview goes — the ability to weave 3 signals into 1 explanation. Same UID + custom keys (`variant`, `tenant`, `payment_method`) across all three services is what enables it. BigQuery export unifies + lets you SQL against the combined dataset." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: Perf overhead + sampling — what should you know?**\n\n**A:** Firebase Perf is **low-overhead by design** (< 1% CPU + memory typically) but has **automatic sampling** — the SDK doesn't collect every session's traces, only a subset chosen to keep console volumes manageable. **Sampling rate** is controlled per-project (backend) + can be tuned via `setPerformanceCollectionEnabled` on the client (all or nothing per client). **You don't manually decide 'sample this trace'** — the SDK handles it. **Implication:** p95 in the console is a **statistical estimate**, not exact. For heavy-tail investigations, cross-check via BigQuery export. **Overhead sources:** HTTP-client instrumentation (swizzling), foreground/background listeners, on-disk queue of unsent events, network flush every N minutes. **Turn OFF in tests** — CI benchmark suites shouldn't include Perf. **Turn OFF in some Dart isolates** — the SDK is main-isolate only; background isolate init is a no-op." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every serious mobile team** — 3-5 SLIs monitored, release gates.\n- **Startup optimization** — cold start reductions are a shipped-quarterly-goal at most consumer apps.\n- **Backend SLO signal** — 'our mobile p95 for /orders is 2s; backend claims 400ms — network is the bottleneck.'\n- **A/B test measurement** — RC variant A vs B on p95 tells you if a new layout is slower.\n- **Not a replacement for** — Sentry Performance (deeper distributed traces via OTel), Firebase Test Lab (device farm), macrobenchmark (Android profiling).\n- **BigQuery integration** — join Perf events with Crashlytics + Analytics for one 'session story.'" },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **BigQuery export** — every trace event + attributes + metrics → SQL-queryable, unlimited retention.\n- **Auto screen traces (Flutter)** — newer plugin versions provide a `PerformanceObserver` for `MaterialApp.navigatorObservers`.\n- **Screen-trace metrics** — slow-frames %, frozen-frames %, total-frames — jank UX SLO.\n- **HTTP URL patterning** — Firebase groups similar URLs (`/orders/{id}` → one bucket); avoid trailing IDs blowing cardinality.\n- **Web Vitals for Web** — LCP, FID, CLS available in Web SDK.\n- **Custom-trace name cardinality cap** — ~200 unique names per project. Don't inject dynamic values.\n- **`setCollectionEnabled(false)`** — global kill for privacy compliance.\n- **DebugView** — real-time trace stream for the connected device — useful in dev.\n- **Integration with Google Cloud Trace** — for backend correlation via headers.\n- **OpenTelemetry gap** — Perf doesn't emit OTel spans; roll Sentry Perf or Datadog RUM for distributed traces.\n- **Anomaly detection** — Firebase Alerts on p95 regression > X% between two releases.\n- **Release-gate** — CI pipeline checks the previous 24h p95 for cold-start + checkout; block promotion on regression." }
   ],
   "flashcards": [
-    { "front": "What does Performance Monitoring auto-collect?", "back": "App start, foreground/background, screen render (slow/frozen frames), and HTTP request timings." },
-    { "front": "Custom trace API essentials?", "back": "newTrace(name) → start() → setMetric/putAttribute → stop()." },
-    { "front": "Good SLI to alert on?", "back": "Cold-start p95 or a key custom trace p95, regressing >20% between releases." }
+    { "front": "What does Perf auto-collect?", "back": "app_start (cold/warm/hot), foreground/background, screen render, HTTP/S requests." },
+    { "front": "Percentiles to SLO on?", "back": "p95 (typical worst-case user); p99 for very-tail; NEVER average alone." },
+    { "front": "Custom trace API?", "back": "newTrace('name').start(); putAttribute; setMetric; stop() in try/finally." },
+    { "front": "HTTP metric API?", "back": "newHttpMetric(url, method); responseCode + payloadSize; start/stop." },
+    { "front": "Attribute vs metric?", "back": "Attribute = string, sliceable (max 5). Metric = number, aggregated (max 32)." },
+    { "front": "Sampling?", "back": "Firebase samples automatically; console p95 is a statistical estimate. Turn to BigQuery for exact." },
+    { "front": "PII in attributes?", "back": "Never. Pseudonymous only." }
   ],
   "quiz": [
-    { "q": "Which is auto-collected?", "options": ["Payment amounts", "App start + network request timings", "User passwords", "Chat messages"], "answer": 1, "explain": "Auto instrumentation focuses on performance signals." },
-    { "q": "Best sign that performance work is winning?", "options": ["More features shipped", "Cold-start / key-flow p95 improves across releases", "Bigger APK", "More logs"], "answer": 1, "explain": "Track p95 SLIs over time." },
-    { "q": "Too much tracing…", "options": ["Is always good", "Creates noise and hides signal", "Improves battery", "Reduces app size"], "answer": 1, "explain": "Instrument what matters; slice with attributes." }
+    { "q": "Firebase Perf auto-collects…", "options": ["Nothing", "app_start, screen render, HTTP timings", "Only crashes", "Only screen views"], "answer": 1, "explain": "Auto-instrumentation covers vitals + network." },
+    { "q": "Which percentile do you SLO on?", "options": ["Average", "p50", "p95 (or p99 for tail)", "min"], "answer": 2, "explain": "p95 reveals slowest-user experience." },
+    { "q": "Custom trace attributes are…", "options": ["Numeric metrics", "String slicing dimensions (max 5)", "Timestamps", "URLs"], "answer": 1, "explain": "Attributes slice; metrics aggregate." },
+    { "q": "How many unique custom-trace names before hitting cardinality caps?", "options": ["Unlimited", "~200 per project", "10", "1000"], "answer": 1, "explain": "Don't encode dynamic values in trace names." },
+    { "q": "Should you trace every function?", "options": ["Yes", "No — 2-5 business flows", "Only startup", "Only network"], "answer": 1, "explain": "Signal > noise." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Turn on Performance; observe app_start and network signals." },
-    { "level": "Medium", "text": "Add a custom trace around a checkout flow with attributes." },
-    { "level": "Hard", "text": "Compare p95 across releases and gate a rollout on regression." },
-    { "level": "Expert", "text": "Correlate performance signals with Analytics events + Crashlytics for holistic release quality." }
+    { "level": "Easy", "text": "Turn on Perf; verify app_start + network signals appear." },
+    { "level": "Easy", "text": "Add a custom trace around checkout with try/finally." },
+    { "level": "Medium", "text": "Attach attributes (payment_method, tenant) + metrics (items_in_cart)." },
+    { "level": "Medium", "text": "HTTP metric on a Dio POST; compare with auto-collected." },
+    { "level": "Hard", "text": "Slice p95 by device tier + country + RC variant." },
+    { "level": "Hard", "text": "Release-over-release comparison + alerts on > 20% p95 regression." },
+    { "level": "Expert", "text": "CI release-gate blocks promotion to prod on any SLI regression." }
   ],
   "interviewQuestions": [
-    "What does Performance Monitoring auto-collect?",
-    "How do you add a custom trace?",
-    "Which SLIs would you alert on?",
-    "How do you compare p95 across releases?",
-    "Perf vs Macrobenchmark vs Impeller telemetry?"
+    "What does Firebase Perf auto-collect + what's manual?",
+    "Why do you SLO on p95 instead of average?",
+    "Which SLIs do you alert on for a Flutter app?",
+    "How do you use custom traces effectively?",
+    "How do you correlate Perf + Crashlytics + Analytics?",
+    "What's the overhead + sampling story?"
   ],
   "references": [
-    { "label": "Firebase Performance", "url": "https://firebase.google.com/docs/perf-mon" }
+    { "label": "Firebase Performance docs", "url": "https://firebase.google.com/docs/perf-mon" },
+    { "label": "Get started (Flutter)", "url": "https://firebase.google.com/docs/perf-mon/flutter/get-started" },
+    { "label": "Custom traces", "url": "https://firebase.google.com/docs/perf-mon/custom-code-traces" }
   ]
 }
