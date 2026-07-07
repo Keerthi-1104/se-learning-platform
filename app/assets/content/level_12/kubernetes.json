@@ -1,52 +1,109 @@
 {
   "id": "devops.kubernetes",
   "levelId": 12,
-  "title": "Kubernetes (DevOps view)",
+  "title": "Kubernetes",
   "xp": 60,
-  "estimatedMinutes": 35,
+  "estimatedMinutes": 50,
   "objectives": [
-    "Templatize manifests with Helm / Kustomize",
-    "Deploy via GitOps (Argo CD / Flux)",
-    "Roll out safely with health checks + progressive delivery"
+    "Understand Kubernetes via a real-life analogy",
+    "Model Pods, Deployments, Services, Ingress, ConfigMaps, Secrets",
+    "Deploy a backend + database + expose it",
+    "Handle scaling, rolling updates, rollbacks",
+    "Secure the cluster (RBAC, NetworkPolicy, PodSecurity)",
+    "Answer Kubernetes interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "For DevOps, Kubernetes is your **container orchestrator + rollout engine**. You declare desired state in YAML/Helm; controllers converge, do rolling updates, restart bad pods, and autoscale — but only if you set the right probes and resource requests." },
-    { "type": "code", "language": "yaml", "code": "# k8s Deployment (essentials)\nspec:\n  replicas: 3\n  strategy: { type: RollingUpdate,\n              rollingUpdate: { maxUnavailable: 0, maxSurge: 1 } }\n  template:\n    spec:\n      containers:\n      - name: api\n        image: ghcr.io/org/api@sha256:abc...\n        readinessProbe: { httpGet: { path: /health, port: 8080 } }\n        livenessProbe:  { httpGet: { path: /alive,  port: 8080 } }\n        resources:\n          requests: { cpu: 100m, memory: 128Mi }\n          limits:   { cpu: 500m, memory: 512Mi }" },
-    { "type": "table", "headers": ["Layer", "Tool"], "rows": [
-      ["Templating", "Helm charts (versioned, values.yaml)"],
-      ["Overlays per env", "Kustomize"],
-      ["GitOps deploy", "Argo CD / Flux (repo = truth)"],
-      ["Progressive delivery", "Argo Rollouts / Flagger (canary, blue-green)"],
-      ["Secrets", "SealedSecrets / SOPS / External Secrets"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Kubernetes as a datacenter operating system — scheduling processes across many machines.**\n\nDocker gives you containers. Kubernetes (k8s) orchestrates thousands of them across a cluster of nodes:\n\n- **Node** — one server (VM or bare metal).\n- **Cluster** — many nodes managed as one.\n- **Pod** — smallest deployable unit; one or more tightly-coupled containers sharing network + storage.\n- **Deployment** — declares 'I want N replicas of pod X'; handles rolling updates + rollbacks.\n- **Service** — stable network endpoint for a set of pods (load-balances).\n- **Ingress** — HTTP router (host + path) to services; terminates TLS.\n- **ConfigMap / Secret** — config + secrets injected into pods.\n- **PersistentVolume / Claim** — durable storage.\n\n**Declarative:** you describe DESIRED state in YAML; k8s reconciles ACTUAL to DESIRED. Node dies? Pods rescheduled. Traffic spikes? HorizontalPodAutoscaler adds replicas. Deploy new version? Rolling update with health checks.\n\n**Why every backend beyond hobby scale ends up here:** manual server management doesn't scale; ad-hoc orchestration (bash + cron) breaks; k8s is the industry standard for containerized workloads. GKE / EKS / AKS make it operable without full-time SREs at small scale.\n\n**Flutter connection:** you don't deploy Flutter apps to k8s (they run on user devices). But your BACKEND — the auth service, the API, the EPCIS repo, the FCM sender — runs on k8s. Every serious Flutter product needs backend + backend needs k8s at some scale." },
+    { "type": "callout", "variant": "definition", "markdown": "**Kubernetes (k8s)** is an open-source container orchestration system by Google (based on internal Borg). Cluster = **control plane** (API server, scheduler, controllers, etcd) + **worker nodes** (kubelet + container runtime). Objects (Pod, Deployment, Service, ConfigMap, Secret, Ingress, PersistentVolume) are declared via YAML and reconciled by controllers. Ecosystem tools: Helm (package manager), Kustomize (YAML overlays), operators (custom controllers)." },
+    { "type": "theory", "markdown": "## Core object cheat sheet" },
+    { "type": "table", "headers": ["Object", "Purpose"], "rows": [
+      ["**Pod**", "One or more containers, shared network + storage"],
+      ["**Deployment**", "Declares desired # of replicas + rolling-update policy"],
+      ["**StatefulSet**", "Ordered pods with stable identity + persistent storage (databases)"],
+      ["**DaemonSet**", "One pod per node (log collector, metrics)"],
+      ["**Job / CronJob**", "One-off + scheduled tasks"],
+      ["**Service (ClusterIP / NodePort / LoadBalancer)**", "Stable network endpoint"],
+      ["**Ingress**", "HTTP routing + TLS termination"],
+      ["**ConfigMap**", "Non-secret config"],
+      ["**Secret**", "Sensitive data (base64-encoded, not encrypted by default)"],
+      ["**PersistentVolume + PVC**", "Durable storage"],
+      ["**Namespace**", "Isolation + quotas"],
+      ["**HorizontalPodAutoscaler**", "Auto-scale based on CPU / memory / custom metrics"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "Modern K8s stack = **GitOps**. The desired state of the cluster lives in git; Argo CD / Flux continuously reconcile. Deployments become PRs — reviewable, auditable, and easy to roll back by reverting the commit." },
-    { "type": "callout", "variant": "mistake", "markdown": "Missing readiness probes = 500 storms during rollouts. Missing PodDisruptionBudget = evictions take out too many replicas. Missing resource requests = CPU-starved pods + noisy neighbors. Fix the trio before shipping anything to prod." },
-    { "type": "callout", "variant": "best", "markdown": "Progressive delivery with canary (5% → 25% → 100%) tied to SLO checks (error rate + latency) auto-rolls back on regression. Combined with GitOps + immutable digests, deploys become boring — which is the goal." }
+    { "type": "theory", "markdown": "## Deploying a Node backend + Postgres" },
+    { "type": "code", "language": "yaml", "code": "# ── deployment.yaml ──\napiVersion: apps/v1\nkind: Deployment\nmetadata: {name: api}\nspec:\n  replicas: 3\n  strategy:\n    type: RollingUpdate\n    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}\n  selector: {matchLabels: {app: api}}\n  template:\n    metadata: {labels: {app: api}}\n    spec:\n      containers:\n      - name: api\n        image: registry.example.com/api:1.2.3   # NEVER 'latest' in prod\n        ports: [{containerPort: 3000}]\n        env:\n        - {name: NODE_ENV, value: production}\n        - name: DATABASE_URL\n          valueFrom: {secretKeyRef: {name: db-creds, key: url}}\n        resources:\n          requests: {cpu: 100m, memory: 128Mi}\n          limits:   {cpu: 500m, memory: 256Mi}\n        livenessProbe:\n          httpGet: {path: /health, port: 3000}\n          initialDelaySeconds: 10\n          periodSeconds: 10\n        readinessProbe:\n          httpGet: {path: /ready, port: 3000}\n---\n# ── service.yaml ──\napiVersion: v1\nkind: Service\nmetadata: {name: api}\nspec:\n  selector: {app: api}\n  ports: [{port: 80, targetPort: 3000}]\n---\n# ── ingress.yaml ──\napiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: api\n  annotations:\n    cert-manager.io/cluster-issuer: letsencrypt-prod\nspec:\n  tls: [{hosts: [api.example.com], secretName: api-tls}]\n  rules:\n  - host: api.example.com\n    http:\n      paths:\n      - {path: /, pathType: Prefix, backend: {service: {name: api, port: {number: 80}}}}\n---\n# ── secret.yaml (in real life: created via kubectl, sealed-secrets, or external-secrets) ──\napiVersion: v1\nkind: Secret\nmetadata: {name: db-creds}\ntype: Opaque\nstringData:\n  url: postgres://user:pass@db-postgresql:5432/app" },
+    { "type": "theory", "markdown": "## HPA + rolling update commands" },
+    { "type": "code", "language": "bash", "code": "# Apply manifests\nkubectl apply -f k8s/\n\n# Scale + autoscale\nkubectl scale deploy/api --replicas=5\nkubectl autoscale deploy/api --min=3 --max=20 --cpu-percent=70\n\n# Rolling update\nkubectl set image deploy/api api=registry.example.com/api:1.2.4\nkubectl rollout status deploy/api\nkubectl rollout undo deploy/api    # rollback\n\n# Debug\nkubectl get pods -o wide\nkubectl describe pod <name>\nkubectl logs -f <pod> -c api\nkubectl exec -it <pod> -- sh\nkubectl top pods                    # CPU/memory\n\n# Port-forward for local debugging\nkubectl port-forward svc/api 3000:80\n\n# Delete\nkubectl delete -f k8s/" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: `latest` tag in prod.** Rollback impossible; deployment picks up random image. Always version-tag." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: No resource requests/limits.** Pods eat everything; noisy-neighbor kills; OOM cascades. Always set." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: No liveness/readiness probes.** Bad pods stay in rotation; users hit errors. Health checks matter." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Storing state in Deployment.** Restart = data gone. Use StatefulSet + PVC for databases." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Secrets as base64 in Git.** k8s Secret is base64 (not encrypted); commit = leak. Use sealed-secrets or external-secrets-operator." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: RBAC too permissive.** Give service accounts minimum roles; audit." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: No NetworkPolicy.** Any pod can talk to any pod; lateral movement paradise. Restrict." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Manual kubectl apply in prod.** Not versioned + not audited. Use GitOps (Argo CD / Flux)." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Version-tag images** — SHA or semver." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Resource requests + limits** on every container." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Liveness + readiness probes** on HTTP services." },
+    { "type": "callout", "variant": "best", "markdown": "**4. StatefulSets for stateful workloads.**" },
+    { "type": "callout", "variant": "best", "markdown": "**5. sealed-secrets / external-secrets for secrets.**" },
+    { "type": "callout", "variant": "best", "markdown": "**6. Least-privilege RBAC.**" },
+    { "type": "callout", "variant": "best", "markdown": "**7. NetworkPolicy + PodSecurity.**" },
+    { "type": "callout", "variant": "best", "markdown": "**8. GitOps (Argo CD / Flux)** — declarative infra + audit trail." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Deploy an nginx pod + expose via NodePort in `minikube`/`kind`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Deployment + Service + Ingress + TLS via cert-manager." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — ConfigMap + Secret injected into a pod." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — StatefulSet with Postgres + PVC + backup CronJob." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — HPA + load-test; observe scale-up + scale-down." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — GitOps: Argo CD syncing from a Git repo; blue-green deploy." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What is a Pod + why not deploy containers directly?**\n\n**A:** A **Pod** is Kubernetes' smallest deployable unit: one or more tightly-coupled containers that share **network** (same IP, `localhost` communication) + **storage** (shared volumes) + **lifecycle**. Why not just 'a container' as the unit? Because **sidecars** are useful: a main app container + a log-shipping sidecar + an Istio-proxy sidecar all running together. **All containers in a pod share the fate** — pod dies = all containers stop. **In practice** — most pods have ONE main container; multi-container pods are for sidecars. **Direct pod deployment is rare** — you deploy a **Deployment** (or StatefulSet), which manages a set of pods with replication + rolling updates. Directly running a pod = no self-healing (pod dies, nothing replaces it). Interviewer signal: knowing pod vs Deployment distinction." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: Walk through a rolling update.**\n\n**A:** **Trigger:** `kubectl set image deploy/api api=new:1.2.4` OR update manifest + `kubectl apply`. **Deployment controller sees new spec + creates a new ReplicaSet** for the new image; scales it up gradually. `maxSurge` = extra pods above desired (usually 25% or 1); `maxUnavailable` = pods you can lose (usually 0). **Sequence:** new pod created + waits for readiness probe green → OLD pod deleted → next new pod → next old pod deleted → until fully rolled. **If new pod's readiness fails**, the rollout PAUSES; no more old pods removed. **Rollback:** `kubectl rollout undo deploy/api` — swaps back to prior ReplicaSet. **Advanced strategies:** Blue-Green (parallel deploy + traffic switch); Canary (5% new + 95% old, gradual shift via Argo Rollouts or Flagger). **Health checks matter enormously** — bad readiness probe = broken pods stay in rotation. Interviewer bonus: strategies + rollback." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What is a Service + when to use each type?**\n\n**A:** A **Service** provides a stable IP + DNS name for a set of pods (which come + go). Types: **(1) ClusterIP** (default) — internal IP; only reachable inside the cluster. Perfect for inter-service communication. **(2) NodePort** — opens the same port on every node; external traffic can hit any node's IP:port. Basic external access; not recommended in prod. **(3) LoadBalancer** — cloud provider provisions an external LB (AWS ELB, GCP LB); external traffic → LB → pods. Best for external HTTP if you don't need Ingress. **(4) ExternalName** — DNS alias to an external service. **Ingress** — separate object above Services for HTTP routing (host + path) + TLS termination. **Practical prod pattern:** ClusterIP Services for internal + one Ingress + one LoadBalancer for the Ingress controller. **Interviewer signal:** knowing when each fits + not confusing Service with Ingress." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How are secrets handled + what's the recommended pattern?**\n\n**A:** k8s **Secret** object stores sensitive data — BUT it's **base64-encoded, NOT encrypted** at rest by default. `kubectl get secret X -o yaml` reveals values instantly. **Attack surface:** anyone with cluster read access + committed-to-git manifests. **Best practice:** **(1) Encryption at rest** — configure kube-apiserver `EncryptionConfiguration` (AES-256). **(2) Sealed Secrets (Bitnami)** — encrypted secrets in git; controller decrypts in-cluster. **(3) External Secrets Operator** — pulls from AWS Secrets Manager / GCP Secret Manager / Vault; syncs to k8s Secret. **(4) Vault agent injector** — sidecar mounts secrets at runtime. **(5) SPIFFE/SPIRE** — workload identity → cloud IAM without static secrets. **Rotation:** all these support rotation. **Interviewer signal:** naming multiple mature options + knowing base64 ≠ encryption." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What are Requests vs Limits + why do they matter?**\n\n**A:** **Requests** = minimum resources the scheduler reserves for the pod on a node. Used for scheduling decisions (fit-first). **Limits** = maximum resources the pod can use before enforcement (CPU throttled; memory → OOMKill). **CPU:** millicores; `100m` = 0.1 core. **Memory:** bytes; `128Mi` = 128 mebibytes. **QoS classes:** (1) **Guaranteed** — requests == limits; highest priority; last evicted under pressure. (2) **Burstable** — requests < limits; middle. (3) **BestEffort** — no requests/limits; first evicted. **Anti-patterns:** (a) no requests → pods pile onto one node → node crash. (b) no limits → one bad pod eats all memory → OOM cascade. (c) requests too high → wasted capacity + fewer pods per node. **Right-sizing:** measure actual usage + tune; Vertical Pod Autoscaler can automate. **Interviewer bonus:** knowing QoS classes." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How would you architect a Flutter product's backend on Kubernetes?**\n\n**A:** **(1) Cluster:** GKE / EKS / AKS — managed control plane; ~3-node worker pool minimum. **(2) Namespaces:** `dev`, `staging`, `prod` — isolation + quotas. **(3) Backend Deployments** — API + auth + push-sender + EPCIS repo, each 3+ replicas. **(4) StatefulSet + PVC** for Postgres (or cloud-managed RDS/Cloud SQL — usually preferred). **(5) Redis + Kafka** — managed services (Elasticache, Confluent Cloud) or in-cluster StatefulSets. **(6) Ingress + cert-manager** for HTTPS. **(7) HorizontalPodAutoscaler** — 3 min, 20 max, target 70% CPU. **(8) Prometheus + Grafana + Loki** for metrics + logs. **(9) External Secrets Operator** → GCP Secret Manager. **(10) GitOps via Argo CD** — cluster reconciles from git. **(11) CI (GitHub Actions) builds + pushes images + updates manifest + Argo syncs.** **(12) Distroless images + non-root + NetworkPolicy + PodSecurity.** **(13) Sentry + Crashlytics** for error tracking. **(14) OTel** for tracing. **(15) Cost monitoring** — kubecost / GCP Recommender. **Interviewer signal:** end-to-end architecture including security + observability + GitOps." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every scale-up backend** for Flutter products.\n- **Multi-tenant SaaS** — namespaces per tenant OR pod-per-tenant depending on isolation.\n- **Microservices** — dozens of small services.\n- **Batch + streaming** — Jobs + CronJobs + Kafka.\n- **NOT ideal for** — Flutter apps themselves (they run on user devices)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Helm** — package manager; charts template YAML.\n- **Kustomize** — overlays without templating (built into `kubectl`).\n- **Argo CD / Flux** — GitOps controllers.\n- **Argo Rollouts / Flagger** — canary + blue-green.\n- **Istio / Linkerd** — service mesh (mTLS + traffic policy + tracing).\n- **Cilium** — CNI + eBPF-based observability.\n- **cert-manager** — automated TLS via Let's Encrypt.\n- **Sealed Secrets / External Secrets** — secret management.\n- **OPA / Kyverno** — policy engines.\n- **Cluster autoscaler** — nodes scale up/down.\n- **VPA (Vertical Pod Autoscaler)** — right-size requests.\n- **KEDA** — event-driven autoscaling (queue depth, etc.).\n- **Longhorn / Rook** — cloud-native storage.\n- **etcd** — control plane database; backup regularly.\n- **kube-bench** — CIS benchmark.\n- **Falco** — runtime security.\n- **Chaos Mesh** — chaos engineering.\n- **Backstage** — dev portal on top of k8s.\n- **Karpenter** — smarter node provisioning (AWS)." }
   ],
   "flashcards": [
-    { "front": "GitOps in one sentence?", "back": "Cluster state is a function of a git repo; Argo CD / Flux continuously converge cluster to repo." },
-    { "front": "Trio you need before prod?", "back": "Readiness/liveness probes + PDB + resource requests/limits." },
-    { "front": "Progressive delivery pattern?", "back": "Canary in stages (5→25→100%) with automatic rollback on SLO regression." }
+    { "front": "Pod?", "back": "Smallest deployable unit; 1+ containers sharing network + storage + lifecycle." },
+    { "front": "Deployment purpose?", "back": "Manages a set of pod replicas with rolling updates + self-healing." },
+    { "front": "Service types?", "back": "ClusterIP (internal), NodePort (basic external), LoadBalancer (cloud LB), ExternalName (DNS alias)." },
+    { "front": "Requests vs Limits?", "back": "Requests = scheduler reserves; Limits = enforcement cap (CPU throttled, memory OOMKilled)." },
+    { "front": "Secret storage?", "back": "Base64 (NOT encrypted) by default; use sealed-secrets / external-secrets / vault." },
+    { "front": "GitOps?", "back": "Cluster state declared in Git; Argo CD / Flux reconciles. Audit + rollback." },
+    { "front": "Stateful workloads?", "back": "StatefulSet + PersistentVolume + PVC for databases (better: managed DB service)." }
   ],
   "quiz": [
-    { "q": "Under GitOps the cluster state is…", "options": ["Whatever kubectl applied last", "Reconciled from a git repo", "Manual only", "Random"], "answer": 1, "explain": "Repo = source of truth." },
-    { "q": "Missing readiness probes cause…", "options": ["Nothing", "500 storms during rollouts", "Faster deploys", "Better latency"], "answer": 1, "explain": "Traffic goes to pods that aren't ready." },
-    { "q": "For safe rollouts prefer…", "options": ["kubectl apply -f big.yaml manually", "Argo Rollouts / Flagger canary tied to SLOs", "Restart cluster", "Delete pods"], "answer": 1, "explain": "Progressive delivery with auto-rollback." }
+    { "q": "Latest tag in prod?", "options": ["Best", "Rollback impossible + non-reproducible", "Faster", "iOS only"], "answer": 1, "explain": "Always version-tag." },
+    { "q": "Health check?", "options": ["Optional", "Liveness + readiness probes essential", "Only for iOS", "Nothing"], "answer": 1, "explain": "Bad pods stay in rotation without them." },
+    { "q": "Secrets in git?", "options": ["Fine", "Base64 = decoded — use sealed / external-secrets", "Encrypted", "Only in prod"], "answer": 1, "explain": "k8s Secret is not encrypted at rest by default." },
+    { "q": "Rolling update rollback?", "options": ["Impossible", "kubectl rollout undo deploy/X", "New cluster", "iOS only"], "answer": 1, "explain": "Prior ReplicaSet scaled back up." },
+    { "q": "Multi-container pod?", "options": ["Never", "For sidecars (log, mesh proxy, secrets injector)", "Only in dev", "Free tier"], "answer": 1, "explain": "Tightly-coupled workloads." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Deploy an app to kind with Deployment + Service + probes." },
-    { "level": "Medium", "text": "Templatize with Kustomize; two overlays (dev, prod)." },
-    { "level": "Hard", "text": "Deploy via Argo CD from a git repo; test rollback via revert." },
-    { "level": "Expert", "text": "Add Argo Rollouts canary tied to SLO checks (error rate + latency)." }
+    { "level": "Easy", "text": "Deploy nginx pod + NodePort in minikube/kind." },
+    { "level": "Medium", "text": "Deployment + Service + Ingress + TLS via cert-manager." },
+    { "level": "Medium", "text": "ConfigMap + Secret injected into a pod." },
+    { "level": "Hard", "text": "StatefulSet Postgres + PVC + backup CronJob." },
+    { "level": "Hard", "text": "HPA + load-test; observe scale up/down." },
+    { "level": "Expert", "text": "Argo CD GitOps + blue-green deploy of an API." }
   ],
   "interviewQuestions": [
-    "What is GitOps and why use it?",
-    "Trio needed before prod deploys?",
-    "Progressive delivery vs plain rolling update?",
-    "How do you handle secrets in K8s + git?",
-    "How do you monitor deployment health?"
+    "What is a Pod + why not deploy containers directly?",
+    "Walk through a rolling update.",
+    "Service types + when to use each?",
+    "How are secrets handled + what's the recommended pattern?",
+    "Requests vs Limits + why they matter?",
+    "Architect a Flutter product's backend on k8s?"
   ],
   "references": [
-    { "label": "Argo CD", "url": "https://argo-cd.readthedocs.io" }
+    { "label": "Kubernetes docs", "url": "https://kubernetes.io/docs/home/" },
+    { "label": "Argo CD", "url": "https://argo-cd.readthedocs.io" },
+    { "label": "External Secrets Operator", "url": "https://external-secrets.io" }
   ]
 }

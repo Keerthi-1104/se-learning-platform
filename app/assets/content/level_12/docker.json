@@ -1,52 +1,108 @@
 {
   "id": "devops.docker",
   "levelId": 12,
-  "title": "Docker (DevOps view)",
+  "title": "Docker",
   "xp": 50,
-  "estimatedMinutes": 25,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Use Docker to build reproducible CI environments",
-    "Bake images with the right base + cache",
-    "Ship images to a registry with security scanning"
+    "Understand Docker via a real-life analogy",
+    "Build images from Dockerfile + run containers",
+    "Use multi-stage builds + volumes + networks",
+    "Compose multi-service local envs with docker-compose",
+    "Deploy Flutter backend / build environments in containers",
+    "Answer Docker interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "For DevOps, Docker is your **portable build/run environment**. You ship the app + its runtime as one image; CI, staging and prod use the same artifact — solving 'works on my machine' for both dev and ops." },
-    { "type": "code", "language": "docker", "code": "# CI image with cached deps\nFROM eclipse-temurin:21-jdk AS build\nWORKDIR /src\nCOPY pom.xml .           # dep manifest first\nRUN mvn -B -o dependency:go-offline\nCOPY . .\nRUN mvn -B package -DskipTests\n\nFROM eclipse-temurin:21-jre-alpine\nCOPY --from=build /src/target/*.jar /app/app.jar\nUSER 1000\nENTRYPOINT [\"java\",\"-jar\",\"/app/app.jar\"]" },
-    { "type": "table", "headers": ["Practice", "Why"], "rows": [
-      ["Multi-stage build", "Tiny final image; leave build tools behind"],
-      ["Order layers by change frequency", "Cache hits on rebuilds"],
-      ["Non-root USER + read-only FS", "Reduce blast radius"],
-      ["Pin base by digest", "Reproducible builds"],
-      ["Scan (Trivy / Grype)", "Catch CVEs before push"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Docker as portable shipping containers for your software.**\n\nA shipping container standardizes the interface: every ship, every crane, every truck handles a container the same way, regardless of what's inside. Docker containers standardize how software runs: same interface (Linux kernel + Docker daemon) regardless of what's inside (Python, Node, Postgres, Flutter build env).\n\n- **Image** = the frozen blueprint (like an ISO); layered filesystem, immutable, pushed to a registry.\n- **Container** = a running instance of an image; process + isolated filesystem/network.\n- **Dockerfile** = the recipe to build an image.\n- **docker-compose** = orchestrate multiple containers as a set.\n- **Registry** = Docker Hub, GitHub Container Registry, GCR — where images live.\n\n- **Reproducibility** — same image → same behavior everywhere (dev, staging, prod).\n- **Isolation** — apps + deps stay bundled; no more 'works on my machine.'\n- **Density** — a machine runs 100s of containers; VMs would take 10s.\n\n**Why every serious Flutter backend + dev-env team uses Docker:** local dev spins up Postgres + Redis + your backend with `docker compose up`; CI uses same image; prod deploys same image. Zero drift. Also — Flutter build environments (Linux + Flutter SDK + Android SDK) shrink from 'set up a laptop' to 'pull an image.'" },
+    { "type": "callout", "variant": "definition", "markdown": "**Docker** is a container platform. Uses Linux kernel features (namespaces + cgroups) to isolate processes. **Image** = layered filesystem snapshot in a registry. **Container** = running instance of an image with its own PID + network + mount namespace. **Dockerfile** = declarative build spec. **docker-compose** = YAML for multi-container apps. **Docker Desktop** on macOS/Windows runs Linux VM under the hood." },
+    { "type": "theory", "markdown": "## Core commands" },
+    { "type": "table", "headers": ["Command", "Purpose"], "rows": [
+      ["`docker build -t myapp:1.0 .`", "Build image from current dir's Dockerfile"],
+      ["`docker run --rm -p 8080:80 myapp:1.0`", "Run container; map port"],
+      ["`docker exec -it <container> bash`", "Shell into running container"],
+      ["`docker ps` / `docker ps -a`", "List running / all containers"],
+      ["`docker images` / `docker rmi`", "Manage images"],
+      ["`docker logs -f <container>`", "Follow logs"],
+      ["`docker inspect <container>`", "Config + state"],
+      ["`docker push` / `docker pull`", "Registry ops"],
+      ["`docker compose up` / `down`", "Multi-service"],
+      ["`docker volume` / `docker network`", "Persistent data + custom networks"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "For CI/CD, images are your **hermetic build environment**. Push each build's image to a registry with a mutable + immutable tag (`v1.2.3` + `sha-abc123`), scan for CVEs, and promote the SAME image from staging to prod — never rebuild for prod." },
-    { "type": "callout", "variant": "mistake", "markdown": "Rebuilding for each environment. Every rebuild risks non-determinism (deps updated, base image drift). Build once → promote the same digest across environments." },
-    { "type": "callout", "variant": "tip", "markdown": "Use buildx for multi-arch (amd64 + arm64) and BuildKit cache mounts for even faster CI. Store images in a private registry (ECR/GCR/GHCR); enable image signing (cosign) if you care about supply chain." }
+    { "type": "theory", "markdown": "## Multi-stage Dockerfile for a Node backend" },
+    { "type": "code", "language": "dockerfile", "code": "# --- build stage ---\nFROM node:20-alpine AS build\nWORKDIR /app\nCOPY package.json package-lock.json ./\nRUN npm ci --production=false\nCOPY . .\nRUN npm run build\n\n# --- runtime stage ---\nFROM node:20-alpine AS runtime\nWORKDIR /app\nRUN adduser -D app && chown -R app:app /app\nUSER app\nCOPY --from=build --chown=app:app /app/dist ./dist\nCOPY --from=build --chown=app:app /app/node_modules ./node_modules\nCOPY --from=build --chown=app:app /app/package.json ./\nENV NODE_ENV=production\nEXPOSE 3000\nHEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \\\n  CMD wget -qO- http://localhost:3000/health || exit 1\nCMD [\"node\", \"dist/server.js\"]" },
+    { "type": "theory", "markdown": "## docker-compose for local dev" },
+    { "type": "code", "language": "yaml", "code": "# docker-compose.yml\nservices:\n  db:\n    image: postgres:16-alpine\n    environment:\n      POSTGRES_USER: dev\n      POSTGRES_PASSWORD: dev\n      POSTGRES_DB: app\n    volumes:\n      - db_data:/var/lib/postgresql/data\n    ports: ['5432:5432']\n    healthcheck:\n      test: ['CMD-SHELL', 'pg_isready -U dev']\n      interval: 5s\n      timeout: 5s\n      retries: 5\n\n  redis:\n    image: redis:7-alpine\n    ports: ['6379:6379']\n\n  api:\n    build: .\n    depends_on:\n      db: {condition: service_healthy}\n      redis: {condition: service_started}\n    environment:\n      DATABASE_URL: postgres://dev:dev@db:5432/app\n      REDIS_URL: redis://redis:6379\n    ports: ['3000:3000']\n    develop:\n      watch:\n        - action: sync\n          path: ./src\n          target: /app/src\n\nvolumes:\n  db_data:" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Running as root inside container.** Compromise = root on host if escape. Use `USER app` with a non-root uid." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: `latest` tag in prod.** Non-reproducible; use `1.2.3` or a git SHA." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: No `.dockerignore`.** `node_modules` + `.git` bloat build context; slow builds." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Copying everything then running `npm install`.** Cache-invalidates every source change. Copy lockfiles first + install; then copy source." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Building on macOS + deploying to Linux amd64 without cross-arch.** M1/M2 defaults to arm64; use `docker buildx build --platform linux/amd64,linux/arm64`." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Ignoring image size.** 1 GB base image + `curl bash install` scripts = huge; use `-alpine` or `-slim` + multi-stage." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Secrets in `ENV`.** Baked into image; `docker inspect` reveals. Use runtime env vars or secret mounts." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Persistent data inside container.** Container removed = data gone. Use named volumes." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Multi-stage builds** — small final image." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Alpine / slim base** — < 100 MB target." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Non-root USER.**" },
+    { "type": "callout", "variant": "best", "markdown": "**4. Version-tag images** — never `latest` in prod." },
+    { "type": "callout", "variant": "best", "markdown": "**5. `.dockerignore` node_modules + build + .git.**" },
+    { "type": "callout", "variant": "best", "markdown": "**6. Multi-arch builds (buildx)** for M-series + amd64." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Healthchecks** for orchestration awareness." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Sign + scan images** — Docker Content Trust + Trivy / Grype." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Dockerfile for a Hello-World Node HTTP server." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Multi-stage build for a compiled backend." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — docker-compose: API + Postgres + Redis." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Multi-arch build via buildx." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Non-root user + healthcheck + Trivy scan." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Flutter build image with Android SDK + `flutter build appbundle` in one image." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Image vs Container — what's the difference?**\n\n**A:** **Image** = frozen blueprint. Layered filesystem, immutable, stored in a registry. Think of it like an ISO or class definition. **Container** = running instance of an image. Has its own writable filesystem layer on top of the image, its own PID + network + mount namespaces. Think of it like a running process or object instance. **Multiple containers** can be created from the same image; each is independent. `docker run` = create + start a new container from an image; `docker start`/`stop` operate on existing containers; `docker rm` removes them. Images + containers are stored in Docker's overlay filesystem — deleted containers don't remove the image. **Common confusion:** 'my container is 500 MB'; correct: 'the base image is 500 MB, the container adds a small writable layer on top.' Interviewer signal: crisp mental model." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: Why use multi-stage builds?**\n\n**A:** **Problem:** to BUILD an app, you need compilers + build tools (gcc, npm, Java SDK). To RUN it, you only need the runtime. Single-stage Dockerfile includes both → huge final image + attack surface. **Multi-stage solution:** `FROM node:20 AS build` — build stage with all tools; produce artifacts. Then `FROM node:20-alpine AS runtime` — start over with minimal base + `COPY --from=build` only the artifacts needed. **Result:** final image is 10-50x smaller (200 MB vs 2 GB); fewer attack surface; faster deploys. **Extra pattern:** distroless (Google) images have ZERO shell + zero package manager — attacker can't run commands even if compromised. **Every prod image should be multi-stage.** Interviewer signal: knowing the practice + why." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How does Docker layer caching + cache invalidation work?**\n\n**A:** Each Dockerfile instruction (FROM, COPY, RUN, ...) creates a **layer**. Layers are hashed; if the input to a layer is unchanged, Docker reuses the cached layer. **Order matters:** if `COPY . .` comes BEFORE `RUN npm install`, then ANY source change invalidates the copy layer, invalidating the install layer, forcing a re-install (5 minutes for large projects). **Correct order:** COPY package.json + package-lock.json FIRST; RUN npm install; THEN COPY source. Source changes invalidate only the source-copy layer + everything after, but node_modules is preserved. **Cache-busting techniques:** `--no-cache` flag for full rebuild; ARG-based cache-busters (`ARG CACHE_DATE=...`). **BuildKit** (default in 2024+) adds parallel builds + cache mounts (`RUN --mount=type=cache,target=/root/.npm`). **Registry caching:** `--cache-from` reuses layers from an image in the registry. Interviewer signal: knowing this = 10x faster builds." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: Docker vs VM vs bare metal?**\n\n**A:** **Bare metal** — physical server; one OS + one workload; wastes resources. **VM** — hypervisor (VMware, VirtualBox) runs multiple GUEST OS instances on host hardware; STRONG isolation but each VM has full OS overhead (2 GB+ RAM). **Container** — shares host kernel via namespaces; near-zero overhead (10 MB per container); many containers per host; isolation is LOWER than VM (kernel escape = host compromise). **Rule:** VM for multi-tenant / regulatory / mixed OS; container for microservices at scale + same-OS workloads; bare metal for latency-critical (HFT, HPC). **Mobile relevance:** iOS builds MUST run on macOS VMs (Apple licensing); Android builds can run in containers. **Kubernetes** is the container orchestrator that abstracts scheduling across hosts. Interviewer signal: knowing the trade-offs + when each fits." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you keep Docker images secure?**\n\n**A:** **(1) Minimal base image** — alpine / slim / distroless; less installed = less to exploit. **(2) Non-root USER** — even if compromised, attacker isn't root. **(3) Read-only filesystem** — `--read-only` flag + writable tmpfs for logs. **(4) Drop capabilities** — `--cap-drop=ALL --cap-add=NET_BIND_SERVICE` reduces kernel powers. **(5) Signed images** — Docker Content Trust + Sigstore/Cosign. **(6) Scan for vulnerabilities** — Trivy, Grype, Snyk on every build. **(7) Update base images regularly** — CVE patches. **(8) Never bake secrets** — use runtime env vars, mounted secrets, or vault sidecars. **(9) Least-privilege registry access** — pull-only tokens for prod runners. **(10) Network policies** — restrict which containers can talk to which. **(11) Runtime security** — Falco monitors for anomalous syscalls. **(12) Regular security review** of Dockerfiles. Interviewer bonus: comprehensive layered defense." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: When would you use Docker for a Flutter project?**\n\n**A:** **Yes:** (1) **Backend for Flutter app** — Node/Go/Python API + Postgres + Redis all in docker-compose; local dev matches prod. (2) **Android build environment** — dockerize Android SDK + Flutter SDK + gradle; CI pipelines use the same image; local dev too. (3) **Test infrastructure** — spin up mock services (Wiremock, LocalStack for AWS) in containers. (4) **Documentation site** — MkDocs/Docusaurus in a container. **No:** (1) iOS builds — Apple licensing requires macOS; containers on macOS work but with heavy Docker Desktop overhead; use native macOS runners. (2) Flutter Web hot-reload — containers add friction; use `flutter run -d chrome` on host. **In our SE Learning Platform:** you could dockerize the content-publish tool + the CDN sync + a mock EPCIS repo for testing. Interviewer signal: pragmatic use vs sledgehammer." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every microservice backend** — API + DB + cache + queue containers.\n- **CI Android build environments.**\n- **Local dev environments** — docker-compose.\n- **Test infrastructure** — LocalStack, Wiremock.\n- **NOT ideal for** — iOS builds (macOS-only)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **BuildKit** — modern builder; parallel + cache mounts + secret mounts.\n- **buildx** — multi-platform builds.\n- **Docker Desktop resource limits** — configure RAM + CPU for macOS/Windows.\n- **Rootless Docker** — daemon runs as non-root user.\n- **Podman** — daemonless alternative.\n- **Docker Hub rate limits** — anonymous pulls throttled; authenticate.\n- **Signed provenance** — SLSA levels + Sigstore.\n- **Namespaces** — pid, net, mount, uts, ipc, user.\n- **cgroups v2** — resource limits.\n- **CNI plugins** — networking.\n- **CSI plugins** — storage.\n- **Compose profiles** — conditional services.\n- **Compose overlays** — dev vs prod configs.\n- **Kubernetes** — production orchestration.\n- **k3s / kind / minikube** — local Kubernetes for testing.\n- **Distroless** — Google's minimal runtime images." }
   ],
   "flashcards": [
-    { "front": "Build once, promote everywhere?", "back": "Build one image, tag it, promote the SAME digest through staging → prod. Never rebuild for prod." },
-    { "front": "Registry tagging strategy?", "back": "Immutable tag (sha-abc) + mutable version tag (v1.2.3); always promote by digest." },
-    { "front": "Fastest CI docker builds?", "back": "Order layers by change frequency, use BuildKit cache mounts, and multi-stage builds." }
+    { "front": "Image vs container?", "back": "Image = frozen blueprint (layered fs); Container = running instance with writable layer." },
+    { "front": "Multi-stage build?", "back": "Build stage with tools; runtime stage with only artifacts; 10-50x smaller final image." },
+    { "front": "Cache invalidation rule?", "back": "COPY package.json + install FIRST; then COPY source. Preserves node_modules layer." },
+    { "front": "Container vs VM?", "back": "Container = shared kernel + tiny overhead + lower isolation; VM = full OS + strong isolation + heavy." },
+    { "front": "Security essentials?", "back": "Non-root USER + minimal base + signed images + scan for CVE + no secrets in ENV." },
+    { "front": "Multi-arch?", "back": "docker buildx build --platform linux/amd64,linux/arm64 — for M-series + servers." },
+    { "front": "Persistent data?", "back": "Named volumes — outlive containers." }
   ],
   "quiz": [
-    { "q": "For hermetic prod deploys…", "options": ["Rebuild for prod", "Promote same digest across envs", "Rebuild nightly", "Recompile at boot"], "answer": 1, "explain": "Same digest guarantees identical artifact." },
-    { "q": "Best base for a small Java runtime?", "options": ["Full Ubuntu", "eclipse-temurin JRE alpine / distroless", "Windows Server", "None"], "answer": 1, "explain": "Tiny + secure." },
-    { "q": "For multi-arch use…", "options": ["buildx", "sudo", "npm", "gzip"], "answer": 0, "explain": "buildx builds for arm64 + amd64." }
+    { "q": "Multi-stage build wins?", "options": ["Slower", "Smaller final image + fewer CVEs", "Nothing", "Only iOS"], "answer": 1, "explain": "Only runtime in final image." },
+    { "q": "COPY order for cache?", "options": ["Anything works", "COPY lockfile → install → COPY source", "COPY source → install", "No cache"], "answer": 1, "explain": "Preserves install layer across source changes." },
+    { "q": "Container vs VM isolation?", "options": ["Same", "VM is stronger (full OS)", "Container is stronger", "None"], "answer": 1, "explain": "Container shares kernel." },
+    { "q": "Secrets in ENV?", "options": ["Fine", "Baked into image — use runtime vars/secret mounts", "Encrypted", "iOS only"], "answer": 1, "explain": "docker inspect reveals ENV." },
+    { "q": "iOS build in Docker?", "options": ["Yes", "Apple licensing requires macOS — mostly no", "Free tier only", "Only via cloud"], "answer": 1, "explain": "macOS containers exist but rare." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Write a Dockerfile for your Spring Boot app; run it locally." },
-    { "level": "Medium", "text": "Push to GHCR from GitHub Actions with a versioned + immutable tag." },
-    { "level": "Hard", "text": "Add Trivy scanning and fail build on HIGH/CRITICAL CVEs." },
-    { "level": "Expert", "text": "Multi-arch build with buildx + cosign signing." }
+    { "level": "Easy", "text": "Dockerfile for a Hello-World Node HTTP server + docker run." },
+    { "level": "Easy", "text": "docker-compose: API + Postgres." },
+    { "level": "Medium", "text": "Multi-stage build for a compiled backend; measure image size delta." },
+    { "level": "Medium", "text": "Non-root user + healthcheck + Trivy scan." },
+    { "level": "Hard", "text": "Multi-arch build via buildx for amd64 + arm64." },
+    { "level": "Hard", "text": "docker-compose with depends_on: service_healthy + watch mode." },
+    { "level": "Expert", "text": "Flutter build image with Android SDK; use in GitHub Actions." }
   ],
   "interviewQuestions": [
-    "Why 'build once, promote everywhere'?",
-    "How do you keep images small and secure?",
-    "How do you scan images?",
-    "How do you cache in CI?",
-    "Multi-arch builds — how?"
+    "Image vs container?",
+    "Why use multi-stage builds?",
+    "How does layer caching + cache invalidation work?",
+    "Docker vs VM vs bare metal?",
+    "How do you keep Docker images secure?",
+    "When would you use Docker for a Flutter project?"
   ],
   "references": [
-    { "label": "Docker BuildKit", "url": "https://docs.docker.com/build/buildkit/" }
+    { "label": "Docker docs", "url": "https://docs.docker.com" },
+    { "label": "BuildKit", "url": "https://docs.docker.com/build/buildkit/" },
+    { "label": "Distroless images", "url": "https://github.com/GoogleContainerTools/distroless" }
   ]
 }

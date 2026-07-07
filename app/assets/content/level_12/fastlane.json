@@ -2,51 +2,108 @@
   "id": "devops.fastlane",
   "levelId": 12,
   "title": "Fastlane",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 50,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Automate mobile signing + upload + screenshots",
-    "Use match for shared iOS signing",
-    "Compose lanes for common tasks"
+    "Understand Fastlane via a real-life analogy",
+    "Use lanes, actions, plugins for mobile release automation",
+    "Manage certificates via `match`",
+    "Ship builds to Play + TestFlight + Firebase App Distribution",
+    "Integrate Fastlane with any CI (Actions, Codemagic, Bitrise)",
+    "Answer Fastlane interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "**Fastlane** is a set of Ruby tools for mobile automation: manage certificates + provisioning profiles (**match**), upload to TestFlight / Play (**deliver / supply**), generate screenshots, and orchestrate multi-step tasks in **lanes**." },
-    { "type": "code", "language": "ruby", "code": "# Fastfile\nplatform :ios do\n  lane :beta do\n    match(type: 'appstore')             # sync certs/profiles from a private git repo\n    build_app(scheme: 'Runner')\n    upload_to_testflight\n  end\nend\nplatform :android do\n  lane :beta do\n    gradle(task: 'bundleRelease')\n    upload_to_play_store(track: 'internal', aab: '../build/app/outputs/bundle/release/app-release.aab')\n  end\nend" },
-    { "type": "table", "headers": ["Tool", "Purpose"], "rows": [
-      ["match", "Team-shared iOS certs & profiles via a private git repo"],
-      ["deliver", "Upload iOS metadata + build → App Store Connect"],
-      ["supply", "Upload Android metadata + AAB → Play Console"],
-      ["snapshot / screengrab", "Automate localized store screenshots"],
-      ["pilot", "Manage TestFlight testers + builds"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Fastlane as the Swiss Army knife for mobile-release automation.**\n\nEverything you'd do manually to release a mobile app — bump version, build, sign, upload dSYMs, upload IPA to TestFlight, submit for review, notify Slack, tag git, generate changelog — Fastlane wraps into **actions**. You compose actions into **lanes** (recipes) and invoke them from CI or your terminal.\n\n- **Ruby-based** — Fastfile is a Ruby file; actions are Ruby modules.\n- **> 400 built-in actions + community plugins** — Play Store, App Store, Firebase, Slack, changelog, screenshots.\n- **`match`** — the crown jewel: syncs iOS certificates + provisioning profiles via an encrypted git repo. No more 'certificate expired' emergencies.\n- **`deliver` + `pilot`** — App Store metadata + TestFlight upload.\n- **`supply`** — Google Play Console metadata + upload.\n- **Cross-CI** — runs on GitHub Actions, Codemagic, Bitrise, Jenkins, local machines.\n\n**Why every serious mobile team uses Fastlane:** iOS signing is a nightmare without it (7 different files that expire, revoke, cross-team-share). Fastlane's `match` alone justifies adoption. Add automated store uploads + Slack notifications + git tagging and the release checklist collapses from 40 manual steps to 1 command." },
+    { "type": "callout", "variant": "definition", "markdown": "**Fastlane** is an open-source mobile-release automation toolkit written in Ruby. **Fastfile** declares **lanes** (recipes) composed of **actions** (units of work). Ships 400+ built-in actions covering signing (`match`), building (`gym`, `build_android_app`), uploading (`pilot`, `supply`, `firebase_app_distribution`), notifying (`slack`), and versioning. Cross-platform (macOS + Linux + Windows). Runs anywhere Ruby is available." },
+    { "type": "theory", "markdown": "## Common actions cheat sheet" },
+    { "type": "table", "headers": ["Action", "Purpose"], "rows": [
+      ["**match**", "iOS signing certs + provisioning via encrypted git repo"],
+      ["**pilot / upload_to_testflight**", "Upload IPA to TestFlight"],
+      ["**deliver / upload_to_app_store**", "Upload metadata + screenshots + IPA to App Store"],
+      ["**supply / upload_to_play_store**", "Upload AAB + metadata to Play Console"],
+      ["**firebase_app_distribution**", "Upload to Firebase App Distribution"],
+      ["**increment_build_number / _version_number**", "Bump versions"],
+      ["**gym / build_app**", "Build IPA (iOS)"],
+      ["**build_android_app**", "Build APK/AAB (Android)"],
+      ["**slack**", "Send Slack notification"],
+      ["**changelog_from_git_commits**", "Generate release notes"],
+      ["**upload_symbols_to_crashlytics**", "dSYM upload"],
+      ["**scan**", "Run tests"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "**match** solved the biggest iOS pain: shared team signing. It stores encrypted certs + profiles in a private git repo; every developer / CI runs `fastlane match` and gets the same setup. Combined with the App Store Connect API key you get near-zero-touch iOS builds." },
-    { "type": "callout", "variant": "mistake", "markdown": "Committing the match encryption password or the API key file. Store the passphrase as a secret in your CI provider; keep the private-key file as a masked file secret and delete it after the job." },
-    { "type": "callout", "variant": "tip", "markdown": "Wrap common flows in named lanes (`beta`, `promote`, `screenshots`) and call them from CI (`fastlane ios beta`). Local devs can run the same lanes — one truth for release recipes." }
+    { "type": "theory", "markdown": "## A Fastfile for a Flutter iOS release" },
+    { "type": "code", "language": "ruby", "code": "# ios/fastlane/Fastfile\ndefault_platform(:ios)\n\nplatform :ios do\n  desc \"Sync signing with match (read-only)\"\n  lane :sync_signing do\n    match(type: 'appstore', readonly: true)\n  end\n\n  desc \"Bump build + tag + push\"\n  lane :bump do\n    increment_build_number(xcodeproj: 'Runner.xcodeproj')\n    build_number = get_build_number(xcodeproj: 'Runner.xcodeproj')\n    sh(\"cd .. && cd .. && git add ios/Runner.xcodeproj/project.pbxproj\")\n    sh(\"cd .. && cd .. && git commit -m 'chore: bump ios build to #{build_number}'\")\n    sh(\"cd .. && cd .. && git push\")\n  end\n\n  desc \"Ship to TestFlight\"\n  lane :beta do\n    sync_signing\n    Dir.chdir(\"../..\") do\n      sh(\"flutter build ipa --release --obfuscate --split-debug-info=./symbols --export-options-plist=/tmp/export.plist\")\n    end\n    pilot(\n      ipa: '../build/ios/ipa/Runner.ipa',\n      skip_waiting_for_build_processing: true,\n      changelog: changelog_from_git_commits(pretty: '- %s', number_of_commits: 20),\n    )\n    upload_symbols_to_crashlytics(dsym_path: '../build/ios/ipa/Runner.app.dSYM.zip')\n    slack(message: 'iOS TestFlight build shipped 🚀', channel: '#releases')\n  end\n\n  desc \"Ship to App Store\"\n  lane :release do\n    sync_signing\n    Dir.chdir(\"../..\") do\n      sh(\"flutter build ipa --release --obfuscate --split-debug-info=./symbols\")\n    end\n    deliver(\n      ipa: '../build/ios/ipa/Runner.ipa',\n      submit_for_review: true,\n      automatic_release: true,\n      force: true,   # skip HTML preview\n      precheck_include_in_app_purchases: false,\n    )\n  end\nend" },
+    { "type": "theory", "markdown": "## match — iOS certificate management" },
+    { "type": "code", "language": "bash", "code": "# One-time setup:\n# 1. Create a private git repo `certificates` (only DevOps + release-eng access)\n# 2. Set a strong MATCH_PASSWORD env variable (24+ char); share via password manager.\n\ncd ios\nfastlane match init            # asks for URL of certificates repo\nfastlane match appstore        # creates + uploads distribution cert + prov profile\nfastlane match development     # dev certs\n\n# On CI or new machine:\nfastlane match appstore --readonly     # download-only; never generates new\n\n# match stores encrypted cert + profiles in the git repo; MATCH_PASSWORD decrypts on use.\n# Rotate MATCH_PASSWORD periodically." },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: match not `readonly` on CI.** CI creates new certs each run; existing team machines fail. Always `readonly: true` on CI." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: MATCH_PASSWORD in code.** Set via CI env var; store in password manager." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Not encrypting the certificates repo.** MATCH_PASSWORD encrypts; but repo access = compromised anyway. Restrict access." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Ignoring 2FA + App-Specific Password for iTunes Connect.** Modern App Store Connect API key eliminates password prompts." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Uploading dSYMs manually.** `upload_symbols_to_crashlytics` action + CI." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Not versioning lanes.** Fastfile changes untracked → surprises in release. Commit Fastfile changes as PRs." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Same lane for internal + external distribution.** Distinct lanes with distinct config." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Not running Fastlane locally before CI.** Debugging CI-only failures is painful." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. `match` for iOS signing.** No manual certs." },
+    { "type": "callout", "variant": "best", "markdown": "**2. App Store Connect API key** — modern; no password/2FA prompts." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Distinct lanes** — dev / beta / release / hotfix." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Commit Fastfile changes** as PRs." },
+    { "type": "callout", "variant": "best", "markdown": "**5. `readonly: true` for match on CI.**" },
+    { "type": "callout", "variant": "best", "markdown": "**6. Automate release notes** from git commits." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Slack notifications** on start + success + failure." },
+    { "type": "callout", "variant": "best", "markdown": "**8. dSYM upload on every iOS build.**" },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Fastfile with `beta` lane that runs `flutter build ipa`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Set up `match` for App Store cert distribution." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — TestFlight upload lane with changelog + Slack." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Play Store lane via `supply` with staged rollout." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — App Store Connect API key auth (no password)." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — CI-invoked lane: on tag push → beta → release; with dSYM upload + git tag." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Why does every serious iOS release process use Fastlane?**\n\n**A:** **iOS signing is arcane** — 7+ different files (developer certificate, distribution certificate, provisioning profiles, entitlements, App IDs) that expire, revoke, and cross-team-share badly. Manually re-generating them is 30 mins of clicking in Apple's portal, plus updating team members. Fastlane's `match` action **stores all of these in an encrypted git repo**; teammates and CI download via `fastlane match appstore --readonly`. New team member? Run `match` on their laptop; ready in 2 minutes. Cert expired? Everyone auto-updates. Add automated **TestFlight upload** + **changelog from git** + **dSYM upload to Crashlytics** + **Slack notification** and the release checklist collapses from 40 manual steps to `fastlane beta` on your terminal. **Not using Fastlane** = every iOS release involves 30 mins of clicking, 3 emails to teammates about expired certs, and manual copy-paste of release notes. Interviewer signal: appreciating the pain it solves." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How does `match` work in detail?**\n\n**A:** **(1) Setup** — create a private git repo `certificates` (only DevOps has access). Set MATCH_PASSWORD env var (24+ char strong). **(2) First run** — `fastlane match appstore` — connects to Apple portal, creates + downloads dist cert + prov profile, encrypts with MATCH_PASSWORD, commits to the certificates repo. **(3) On other machines / CI** — `fastlane match appstore --readonly` — pulls the repo, decrypts with MATCH_PASSWORD, installs into Keychain + Xcode. **Advantages:** (a) one source of truth for signing artifacts; (b) new hires productive in minutes; (c) CI just works; (d) cert rotation is one command. **Trade-offs:** (a) two secrets to manage (repo access + MATCH_PASSWORD); (b) if certificates repo compromised, attacker needs MATCH_PASSWORD too (defense in depth). **Rotation:** `MATCH_PASSWORD` rotated quarterly + certificates rebuilt annually. Interviewer signal: technical depth." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: When would you use the App Store Connect API key over match?**\n\n**A:** **Apple's App Store Connect API** (v1.0+) supports **key-based authentication** for `pilot`, `deliver`, `supply` — bypasses username/password/2FA prompts. **Use when:** (1) You want CI to run without Apple ID email/password. (2) You need to avoid 2FA interruptions on shared CI accounts. (3) You want fine-grained scope (upload-only vs. metadata-edit). **Setup:** create API key in App Store Connect → download `.p8` file + note key ID + issuer ID → store all three as CI secrets. In Fastlane: `app_store_connect_api_key(key_id:, issuer_id:, key_content:)`. **`match` compatibility:** modern match uses the API key too; no more Apple ID at all. **This is the 2024+ default.** Older Fastlane setups used `FASTLANE_USER` + `FASTLANE_PASSWORD` + `FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD` — hell for 2FA. Migrate. Interviewer signal: knowing the modern path." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How would you integrate Fastlane with GitHub Actions?**\n\n**A:** **Fastlane runs on any Ruby-installed machine, including GitHub-hosted macOS runners.** **Workflow:** (1) `actions/setup-ruby@v1` installs Ruby + Bundler. (2) `bundle install --path vendor/bundle` installs Fastlane + plugins. (3) Restore certificates repo via git clone with a deploy key. (4) `bundle exec fastlane ios beta` runs the lane. (5) Secrets injected via `env:` (MATCH_PASSWORD, ASC_API_KEY, FIREBASE_SA_JSON). **Caching:** cache `vendor/bundle` for faster runs. **Trigger:** on push to release/* or on tag. **Alternative:** Codemagic + Bitrise have native Fastlane integration — pass secrets via env-var groups; workflows call `fastlane` command directly. **Cross-CI:** Fastlane is CI-agnostic; same Fastfile runs everywhere. That portability is a huge win. Interviewer bonus signal." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What's the difference between `deliver`, `pilot`, `supply`?**\n\n**A:** All three are Fastlane actions for store uploads: **`deliver`** (aliased `upload_to_app_store`) — App Store production. Uploads IPA + metadata (title, keywords, screenshots, review notes) + submits for review. Renamed from `deliver` for clarity. **`pilot`** (aliased `upload_to_testflight`) — TestFlight beta. Uploads IPA + distributes to internal or external testers + optional beta groups. **`supply`** (aliased `upload_to_play_store`) — Google Play Console. Uploads AAB/APK + metadata + staged rollout config (10 % → 100 %). Each uses its store's API + auth. **Combined with `deliver`:** `precheck` action lints metadata BEFORE submission. Interviewer signal: knowing all three by their canonical + aliased names + when to use each." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What are common Fastlane mistakes teams make?**\n\n**A:** **(1) `match` not `readonly` on CI** — CI generates new certs, other machines fail. **(2) MATCH_PASSWORD in code** — must be env var + rotated. **(3) Uploading dSYMs manually** — `upload_symbols_to_crashlytics` action solves. **(4) Same lane for internal + external** — different config; separate. **(5) Not committing Fastfile changes as PR** — reviews prevent surprises. **(6) 40-step manual release fallback** when Fastlane fails — invest time in Fastlane instead. **(7) Not running locally before CI** — debug on laptop first. **(8) Ignoring App Store Connect API key** — 2FA/password interruptions plague old setups. **(9) `submit_for_review: true` on every build** — floods Apple review queue; use only on release lane. **(10) No Slack notifications** — silent failures leave the team unaware. Interviewer signal: comprehensive practical experience." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every serious iOS team** — Fastlane match is table-stakes.\n- **Automated release notes** from git.\n- **Cross-CI portability** — same Fastfile in GitHub Actions + Codemagic.\n- **Legacy Ruby stack** — Bundler + Gemfile per project.\n- **NOT ideal for** — tiny hobby projects (overhead > benefit)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`Appfile`** — bundle id + Apple ID + team ID; shared config.\n- **`Matchfile`** — match config.\n- **`Deliverfile` / `Screengrabfile`** — deliver + screengrab config.\n- **Plugins** — `fastlane-plugin-firebase_app_distribution`, `fastlane-plugin-git_helper`.\n- **`Gemfile` + Bundler** — pin Fastlane version + plugins per project.\n- **`sigh`** — provisioning-profile manager (used by match).\n- **`cert`** — certificate manager.\n- **`scan`** — run Xcode tests.\n- **`slather`** — Xcode code coverage.\n- **`snapshot`** — automated screenshots.\n- **`gym` deprecated** — use `build_app`.\n- **`fastlane android` platform** — build_android_app + supply + upload_to_play_store_internal_app_sharing.\n- **CI/CD-agnostic** — Codemagic + Bitrise + GitHub Actions + Jenkins.\n- **`FASTLANE_HIDE_CHANGELOG` etc.** — CLI flags for CI silence.\n- **`before_all` / `after_all`** hooks — Fastfile lifecycle.\n- **Multi-platform lanes** — `lane :beta do ... end` inside `platform :ios do ... end`." }
   ],
   "flashcards": [
-    { "front": "What does match do?", "back": "Shares iOS certs/profiles across a team via an encrypted private git repo, so every dev/CI is in sync." },
-    { "front": "supply vs deliver?", "back": "supply → Play Store (Android). deliver → App Store Connect (iOS)." },
-    { "front": "What are lanes?", "back": "Named recipes in the Fastfile (`lane :beta do ... end`) callable from CI or dev." }
+    { "front": "Fastlane's crown jewel?", "back": "match — encrypted git repo of iOS certs + provisioning profiles." },
+    { "front": "match on CI setting?", "back": "readonly: true — CI downloads, never generates." },
+    { "front": "App Store Connect API key?", "back": "Modern auth — bypasses username/password/2FA. Store .p8 + key id + issuer id." },
+    { "front": "Three upload actions?", "back": "deliver (App Store) / pilot (TestFlight) / supply (Play Store)." },
+    { "front": "Fastfile lives at?", "back": "ios/fastlane/Fastfile or android/fastlane/Fastfile — Ruby DSL." },
+    { "front": "Cross-CI portability?", "back": "Same Fastfile runs on GitHub Actions + Codemagic + Bitrise + Jenkins." },
+    { "front": "dSYM upload?", "back": "upload_symbols_to_crashlytics action after every iOS build." }
   ],
   "quiz": [
-    { "q": "match manages…", "options": ["Play Store", "Shared iOS signing across team + CI", "Android keystores only", "Screenshots"], "answer": 1, "explain": "Encrypted git repo of certs/profiles." },
-    { "q": "For Play upload use…", "options": ["deliver", "supply", "screengrab", "match"], "answer": 1, "explain": "supply is the Play publisher." },
-    { "q": "Best pattern for CI callouts?", "options": ["Inline scripts", "Named lanes reused by CI + devs", "Copy-paste steps", "Manual runs"], "answer": 1, "explain": "One source of truth in the Fastfile." }
+    { "q": "iOS signing via Fastlane?", "options": ["Manual", "match — encrypted git repo", "cocoapods", "gh CLI"], "answer": 1, "explain": "Cert management done right." },
+    { "q": "Modern Apple auth?", "options": ["Password + 2FA", "App Store Connect API key (.p8)", "iCloud", "Nothing"], "answer": 1, "explain": "2FA-free CI." },
+    { "q": "TestFlight upload action?", "options": ["deliver", "pilot", "supply", "scan"], "answer": 1, "explain": "TestFlight = pilot." },
+    { "q": "match on CI?", "options": ["Not readonly", "readonly: true — never generate", "Skip match", "Only Xcode"], "answer": 1, "explain": "CI must not create new certs." },
+    { "q": "Fastlane portability?", "options": ["GitHub only", "Any CI + local", "iOS only", "macOS only"], "answer": 1, "explain": "Ruby-based; runs anywhere." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Add a Fastfile with `ios beta` and `android beta` lanes." },
-    { "level": "Medium", "text": "Set up match with a private git repo for team signing." },
-    { "level": "Hard", "text": "Automate localized screenshots via snapshot + fastlane deliver." },
-    { "level": "Expert", "text": "Combine Fastlane inside GitHub Actions + Codemagic with the same lanes shared." }
+    { "level": "Easy", "text": "Fastfile with a beta lane running flutter build ipa." },
+    { "level": "Medium", "text": "match setup for App Store cert." },
+    { "level": "Medium", "text": "TestFlight upload lane with changelog + Slack." },
+    { "level": "Hard", "text": "Play Store lane via supply with staged rollout." },
+    { "level": "Hard", "text": "App Store Connect API key auth end-to-end." },
+    { "level": "Expert", "text": "CI: on tag push → beta lane → release lane; dSYM + git tag + Slack." }
   ],
   "interviewQuestions": [
-    "What is Fastlane and its main tools?",
-    "How does match work?",
-    "supply vs deliver?",
-    "How do you keep the match passphrase safe?",
-    "How does Fastlane integrate with CI providers?"
+    "Why does every serious iOS release use Fastlane?",
+    "How does match work in detail?",
+    "When to use App Store Connect API key over match?",
+    "Integrate Fastlane with GitHub Actions?",
+    "deliver vs pilot vs supply?",
+    "Common Fastlane mistakes?"
   ],
   "references": [
-    { "label": "Fastlane docs", "url": "https://docs.fastlane.tools" }
+    { "label": "Fastlane docs", "url": "https://docs.fastlane.tools" },
+    { "label": "match action", "url": "https://docs.fastlane.tools/actions/match/" },
+    { "label": "App Store Connect API key", "url": "https://docs.fastlane.tools/app-store-connect-api/" }
   ]
 }

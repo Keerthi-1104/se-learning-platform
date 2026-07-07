@@ -2,44 +2,99 @@
   "id": "devops.codemagic",
   "levelId": 12,
   "title": "Codemagic",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "xp": 40,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Set up Codemagic for Flutter iOS + Android",
-    "Manage code signing without manual pain",
-    "Distribute to Play + App Store from one place"
+    "Understand Codemagic via a real-life analogy",
+    "Configure a Flutter workflow via UI + codemagic.yaml",
+    "Handle signing + secrets + publishing to Play / TestFlight",
+    "Compare Codemagic vs GitHub Actions vs Bitrise for Flutter",
+    "Answer Codemagic interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "**Codemagic** is a hosted CI/CD purpose-built for Flutter (also RN and native). Config as `codemagic.yaml` at repo root; handles macOS iOS builds without you owning a Mac, plus Play / App Store submission." },
-    { "type": "code", "language": "yaml", "code": "workflows:\n  release:\n    name: Release\n    instance_type: mac_mini_m2\n    environment:\n      flutter: stable\n      groups: [ appstore_creds, playstore_creds ]\n    scripts:\n      - flutter pub get\n      - flutter test\n      - flutter build ipa --export-options-plist=$CM_BUILD_DIR/ios/ExportOptions.plist\n      - flutter build appbundle\n    publishing:\n      app_store_connect: { auth: integration, submit_to_testflight: true }\n      google_play:       { credentials: $GCP_JSON, track: internal }" },
-    { "type": "callout", "variant": "interview", "markdown": "Codemagic's edge over GitHub Actions is **mobile-first ergonomics**: iOS signing, App Store Connect API integration, screenshots via Fastlane, and per-workflow macOS instances without the Actions macOS minute cost." },
-    { "type": "callout", "variant": "mistake", "markdown": "Uploading `.p12` and provisioning profiles as raw secrets and letting them expire without rotation. Use Codemagic's built-in **App Store Connect API integration** (no distribution certs needed) — smoother renewals." },
-    { "type": "callout", "variant": "tip", "markdown": "Split workflows: `pr_check` (fast, no signing), `nightly` (App Distribution), `release` (Play + TestFlight from tag). Keep secrets in **groups** and share across workflows via `groups:`." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Codemagic as CI/CD tuned specifically for Flutter — like a barista who only makes espresso, but does it perfectly.**\n\nCodemagic (Nevercode, Estonia) is a hosted CI/CD service **specialized for Flutter + React Native + native mobile**. Unlike GitHub Actions (general purpose), Codemagic has Flutter as a first-class citizen: UI walk-through auto-detects Flutter version, wires signing, sets up Firebase distribution, and integrates with Play + TestFlight in a few clicks.\n\n- **UI-driven or YAML-driven** — start simple, graduate to config-as-code.\n- **500 free build minutes/month** (mostly for small teams / open source).\n- **macOS + Linux + Windows runners.**\n- **Built-in Flutter caching + version manager.**\n- **First-class Fastlane integration.**\n- **Store publishing** — Play + TestFlight + Firebase App Distribution in 3 clicks.\n- **Post-build reports** — screenshots + code analysis + performance.\n\n**Why Flutter teams pick Codemagic over GitHub Actions:** faster onboarding for pure-mobile projects; fewer YAML wrangling hours; Fastlane pre-configured. **Trade-off:** vendor lock-in + higher per-minute cost at scale + weaker general-purpose flexibility. **Rule of thumb:** startups + small teams love Codemagic; large orgs with mixed-stack repos stay on GitHub Actions." },
+    { "type": "callout", "variant": "definition", "markdown": "**Codemagic** (by Nevercode) is a hosted CI/CD service optimized for mobile app development, especially Flutter. Provides GUI workflow editor + `codemagic.yaml` for config-as-code. Includes macOS + Linux + Windows runners, Fastlane integration, code signing management, store publishing (Play, TestFlight, App Distribution), and monitoring. Free tier: 500 build minutes/month. Paid: per-minute pricing with heavy discounts for annual commit." },
+    { "type": "theory", "markdown": "## Codemagic vs GitHub Actions vs Bitrise" },
+    { "type": "table", "headers": ["Aspect", "Codemagic", "GitHub Actions", "Bitrise"], "rows": [
+      ["Flutter focus", "Native + first-class", "Generic + community actions", "Native + first-class"],
+      ["UI onboarding", "Excellent", "None (YAML from day one)", "Excellent"],
+      ["Free tier", "500 min/month", "Generous public + limited private", "200 builds/month"],
+      ["macOS cost", "Middle", "Highest", "Middle"],
+      ["Store publishing", "3-click", "Marketplace actions", "3-click"],
+      ["Custom scripts / general purpose", "OK but not the strength", "Excellent", "OK"],
+      ["Best for", "Pure Flutter/mobile startups", "Mixed-stack + GitHub-heavy teams", "Native iOS/Android + Flutter"]
+    ]},
+    { "type": "theory", "markdown": "## Sample codemagic.yaml" },
+    { "type": "code", "language": "yaml", "code": "# codemagic.yaml (checked into repo root)\nworkflows:\n  ios-release:\n    name: iOS Release\n    max_build_duration: 60\n    instance_type: mac_mini_m2\n\n    environment:\n      flutter: 3.24.0\n      xcode: latest\n      cocoapods: default\n      groups:\n        - ios_credentials    # Codemagic env-var group with Apple keys\n      vars:\n        BUNDLE_ID: 'com.example.app'\n\n    triggering:\n      events: [tag]\n      tag_patterns: [{pattern: 'v*'}]\n\n    scripts:\n      - name: pub get\n        script: flutter pub get\n\n      - name: analyze + test\n        script: |\n          flutter analyze\n          flutter test\n\n      - name: build ios\n        script: |\n          flutter build ipa --release \\\n            --obfuscate --split-debug-info=./symbols \\\n            --export-options-plist=/tmp/export.plist\n\n    artifacts:\n      - build/ios/ipa/*.ipa\n      - flutter_drive.log\n      - /tmp/xcodebuild_logs/*.log\n\n    publishing:\n      app_store_connect:\n        auth: integration\n        submit_to_testflight: true\n        beta_groups: ['beta-testers']\n      email:\n        recipients: ['team@example.com']\n\n  android-nightly:\n    name: Android Nightly\n    triggering:\n      events: [push]\n      branch_patterns: [{pattern: 'main'}]\n    scripts:\n      - script: flutter build appbundle --release --obfuscate --split-debug-info=./symbols\n    artifacts: [build/**/outputs/**/*.aab]\n    publishing:\n      firebase:\n        firebase_service_account: $FIREBASE_SA_JSON\n        android: {app_id: '1:1234:android:abcd', groups: ['qa', 'internal']}" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Not using groups for secrets.** Codemagic env-var groups scope secrets to workflows; without them, everything's shared." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Hard-coding versions.** Flutter version pinned wrongly breaks build; use `flutter: latest` in dev, pinned in release." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: UI-only config that grows uncontrolled.** As pipeline complexity grows, move to `codemagic.yaml` for version control + review." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Signing keys in email attachments to Codemagic.** Use the built-in code-signing manager or Fastlane match." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: No `max_build_duration`.** Runaway builds burn minutes." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Same workflow for dev + prod.** Distinct workflows per env + trigger." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Ignoring build cache.** Codemagic caches pub + gradle + pods — enable them." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Not archiving artifacts.** Cannot debug 3 months later." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. `codemagic.yaml` in repo** — versioned + reviewable." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Env-var groups scoped per workflow.**" },
+    { "type": "callout", "variant": "best", "markdown": "**3. Pin Flutter + Xcode versions for release.**" },
+    { "type": "callout", "variant": "best", "markdown": "**4. Fastlane match for iOS signing** or Codemagic built-in." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Distinct workflows per env** — dev / staging / release." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Store publishing via built-in integrations.**" },
+    { "type": "callout", "variant": "best", "markdown": "**7. Archive artifacts** — bundles + logs + screenshots." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Monitor build minutes** to control cost." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Connect a Flutter GitHub repo to Codemagic; run first build." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Move config to `codemagic.yaml`." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — iOS signing via Codemagic's code-signing manager." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Auto-publish to TestFlight on tag push." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Nightly Android distribution to Firebase App Distribution." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Multi-flavor + multi-env pipeline with Slack notifications." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: Codemagic vs GitHub Actions for a Flutter team — how do you pick?**\n\n**A:** **Codemagic wins for:** pure Flutter / mobile projects with small teams. Onboarding takes minutes (UI walk-through). Store publishing is built in. Signing is managed. Fastlane pre-configured. Cost is low at small scale. **GitHub Actions wins for:** larger orgs with mixed-stack repos (Flutter + backend + web) — one CI system for everything. Marketplace is massive. Public repo free tier is generous. General-purpose flexibility. **Cost consideration:** at scale, GitHub Actions macOS minutes are pricey; Codemagic can be cheaper per-minute BUT you're stuck with Codemagic. **Decision axes:** Team's other tools (GitHub-centric or not); pipeline complexity; multi-stack repo; budget vs onboarding time. **Interview red flag:** 'always pick GitHub Actions' or 'always Codemagic' — nuance matters." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How does Codemagic handle iOS code signing?**\n\n**A:** Two options: **(1) Codemagic's built-in code-signing manager** — you upload your `.p12` cert + `.mobileprovision` files via UI + Codemagic handles Xcode signing at build. Simplest for teams that don't want to manage Fastlane. **(2) Fastlane `match`** — Codemagic can call match to pull certs from a separate encrypted git repo. Better if you also build locally with the same certs. **(3) App Store Connect API key** — modern approach; Codemagic signs with the key + auto-fetches provisioning profiles. **Trap:** provisioning profile expiry sneaks up — automation alerts before expiry. **For distribution:** Codemagic → TestFlight via App Store Connect API key + auto-submit. Interviewer signal: knowing multiple paths + when to use each." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: When does Codemagic cost more than GitHub Actions?**\n\n**A:** **Depends on your workload profile.** **Codemagic per-minute costs:** ~$0.038/min Linux, ~$0.14/min mac_mini_m2 (as of 2024, check current). **GitHub Actions:** free tier for public + Team plans give 3000 min/month private; paid Linux ~$0.008/min, macOS ~$0.08/min. **At small scale (< 500 min/month):** both roughly free. **Medium scale (5-20K min/month macOS):** GitHub Actions cheaper. **Large scale (100K+ min/month):** self-hosted runners on either platform. **Codemagic's advantage:** you're paying for less DevOps time (built-in features), which for small teams matters more than raw minute cost. **Interview trick answer:** 'depends on team size + build minutes + how much DevOps time is worth' — no absolute answer." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How would you architect Codemagic workflows for dev / staging / release?**\n\n**A:** **Distinct workflows:** **(1) dev-nightly** — trigger on push-to-main; build dev flavor; distribute to internal Firebase App Distribution qa group. **(2) staging-weekly** — trigger on push-to-release/* branch; build staging flavor; distribute to Play Closed + TestFlight External beta. **(3) release-tag** — trigger on tag `v*`; build prod flavor + upload symbols + submit to Play prod (staged rollout 10%) + submit to TestFlight for review-then-prod. **(4) hotfix** — trigger via workflow_dispatch (manual); build + submit. **Env-var groups:** `dev_secrets`, `staging_secrets`, `prod_secrets` — scoped access. **Approval gates:** prod workflow includes a manual approval step (Codemagic supports). **Slack notifications** on start + success + failure. **Artifacts archived** per env. **Reusable script blocks** for common steps." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you debug a failing Codemagic build?**\n\n**A:** **(1) Read the build log** in Codemagic UI — colored + collapsible per step. **(2) Enable verbose Flutter logs** — `flutter build ... --verbose`. **(3) Archive `xcodebuild_logs/*`** in `artifacts` for iOS. **(4) `codemagic-cli-tools`** (Python package) — reproduce steps locally. **(5) SSH into build machine** — Codemagic Enterprise plan offers this; helps for hard cases. **(6) Re-run with SSH-debug enabled.** **(7) Check env-var group scope** — 'variable not set' often means wrong group. **(8) Cache invalidation** — try Codemagic UI 'Clear cache' + rebuild. **(9) Version compatibility** — pin Flutter + Xcode explicitly. **(10) Support** — Codemagic support is responsive on paid tiers. Interviewer signal: knowing the CLI tools reproduce locally." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What's the SUNRISE of Codemagic for open-source Flutter projects?**\n\n**A:** Codemagic offers **free plan** with 500 min/month for public + private repos. For OSS: (1) badge + build status in README. (2) Auto-run on PRs for community contribution. (3) Multi-platform build coverage (Android + iOS + web) proves cross-platform. (4) Store publishing for maintainers releasing sample apps. (5) Screenshots + reports embedded in PRs. **Cost:** 500 min covers most small OSS projects easily; larger OSS may exceed. Alternative: GitHub Actions free tier for public is unlimited-ish. **Choice:** Codemagic's onboarding is easier; Actions integrates with issues / PRs more deeply. Many OSS Flutter projects use both — Codemagic for release-tag builds, Actions for PR checks." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Small-to-mid Flutter startups.**\n- **Codemagic-native customers** (they run their own dogfood).\n- **Enterprises with iOS-heavy signing complexity.**\n- **OSS Flutter maintainers on free tier.**\n- **NOT ideal for** — mixed-stack orgs (GitHub Actions wins); very large scale (self-hosted cheaper)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **`codemagic.yaml` schema** — validated in dashboard.\n- **Instance types** — `linux_x2`, `mac_mini_m1`, `mac_mini_m2`, `mac_pro`.\n- **`max_build_duration`** — hard cap.\n- **`working_directory`** — for monorepo Flutter subfolder.\n- **`scripts.*.ignore_failure: true`** — non-blocking steps.\n- **`when.condition`** — branch / tag / event conditions.\n- **`triggering.cancel_previous_builds`** — cancel-on-push.\n- **Cache paths** — `.pub-cache`, `.gradle`, `ios/Pods`.\n- **Firebase App Distribution** integration built in.\n- **Google Play** integration built in (staged rollout support).\n- **App Store Connect API** — auto-submit + TestFlight.\n- **Slack + Email + Microsoft Teams** notifications.\n- **Post-build reports** — screenshots for widget tests.\n- **codemagic-cli-tools** — reproduce steps locally.\n- **Environment groups** — team-shared secret bundles.\n- **SSH debug** — enterprise plan feature." }
   ],
   "flashcards": [
-    { "front": "Codemagic's config file?", "back": "codemagic.yaml at repo root." },
-    { "front": "Codemagic's edge for iOS?", "back": "Hosted macOS + App Store Connect API integration + built-in signing." },
-    { "front": "How to organize workflows?", "back": "pr_check, nightly (App Distribution), release (Play + TestFlight from tag)." }
+    { "front": "Codemagic strength?", "back": "Flutter/mobile first-class; UI onboarding + built-in signing + store publishing." },
+    { "front": "Config file?", "back": "codemagic.yaml checked into repo; supports UI-only or YAML." },
+    { "front": "iOS signing options?", "back": "Codemagic manager, Fastlane match, or App Store Connect API key." },
+    { "front": "vs GitHub Actions?", "back": "Codemagic = easier onboard for pure Flutter; Actions = broader ecosystem + mixed-stack." },
+    { "front": "Store publishing?", "back": "Built-in for Play / TestFlight / Firebase App Distribution." },
+    { "front": "Free tier?", "back": "500 min/month; covers small OSS + startups." },
+    { "front": "Env-var groups?", "back": "Scoped secret bundles per workflow — never share prod secrets with dev workflow." }
   ],
   "quiz": [
-    { "q": "Codemagic is primarily targeted at…", "options": ["Backend Java", "Flutter/mobile CI/CD", "Web scraping", "Data pipelines"], "answer": 1, "explain": "Mobile-first CI/CD (though it does more)." },
-    { "q": "For iOS signing, the smoothest approach is…", "options": ["Manual .p12 upload", "App Store Connect API integration", "No signing", "Print certs"], "answer": 1, "explain": "The API integration handles renewals well." },
-    { "q": "Best workflow split for a mobile team?", "options": ["One giant workflow", "pr_check + nightly + release", "None", "Only prod"], "answer": 1, "explain": "Right stage, right frequency." }
+    { "q": "Codemagic config file?", "options": ["codemagic.json", "codemagic.yaml", "actions.yml", "Fastfile"], "answer": 1, "explain": "YAML checked into repo." },
+    { "q": "iOS signing options?", "options": ["Only Fastlane", "Codemagic manager / match / API key", "Only App Store", "Manual only"], "answer": 1, "explain": "Three paths." },
+    { "q": "When Codemagic > Actions?", "options": ["Always", "Pure Flutter/mobile small teams — easier onboard", "Never", "Only iOS"], "answer": 1, "explain": "Flutter-tuned + built-in features." },
+    { "q": "Free tier?", "options": ["0 min", "500 min/month", "Unlimited", "iOS only"], "answer": 1, "explain": "500 min baseline." },
+    { "q": "Store publishing?", "options": ["Manual", "Built-in Play/TestFlight/Firebase integrations", "Only iOS", "Web only"], "answer": 1, "explain": "3-click config." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Add codemagic.yaml with a PR-check workflow that runs `flutter test`." },
-    { "level": "Medium", "text": "Add a release workflow that uploads to TestFlight + Play Internal." },
-    { "level": "Hard", "text": "Manage 3 flavors (dev/staging/prod) with separate signing + Firebase configs." },
-    { "level": "Expert", "text": "Add store screenshot automation via Fastlane + upload." }
+    { "level": "Easy", "text": "Connect a Flutter repo to Codemagic + first build." },
+    { "level": "Medium", "text": "Move config to codemagic.yaml." },
+    { "level": "Medium", "text": "iOS signing via Codemagic manager." },
+    { "level": "Hard", "text": "Auto-publish to TestFlight on tag push." },
+    { "level": "Hard", "text": "Nightly Android to Firebase App Distribution." },
+    { "level": "Expert", "text": "Multi-flavor + multi-env with Slack notifications + approval gates." }
   ],
   "interviewQuestions": [
-    "Codemagic vs GitHub Actions for Flutter?",
-    "How does Codemagic handle iOS signing?",
-    "How do you organize codemagic.yaml workflows?",
-    "How do you share secrets across workflows?",
-    "How do you cache dependencies?"
+    "Codemagic vs GitHub Actions — how to pick?",
+    "iOS code signing on Codemagic?",
+    "When does Codemagic cost more than Actions?",
+    "Architect workflows for dev / staging / release?",
+    "Debug a failing Codemagic build?",
+    "Codemagic for OSS Flutter projects?"
   ],
   "references": [
-    { "label": "Codemagic docs", "url": "https://docs.codemagic.io" }
+    { "label": "Codemagic docs", "url": "https://docs.codemagic.io" },
+    { "label": "codemagic.yaml reference", "url": "https://docs.codemagic.io/yaml-basic-configuration/yaml-getting-started/" }
   ]
 }
