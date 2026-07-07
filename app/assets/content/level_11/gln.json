@@ -2,49 +2,96 @@
   "id": "gs1.gln",
   "levelId": 11,
   "title": "GLN — Global Location Number",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "xp": 40,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Explain what GLN identifies",
-    "Distinguish legal, physical and functional locations",
-    "Use GLNs correctly in EDI / EPCIS"
+    "Understand GLN via a real-life analogy",
+    "Distinguish physical, functional + party GLNs",
+    "Use GLNs in orders, shipments + EPCIS events",
+    "Validate + store GLNs safely",
+    "Answer GLN interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "A **GLN** (Global Location Number) is a 13-digit identifier for a party or place — a company, a warehouse, a store, a hospital ward, a specific dock door. It's how supply chain messages (EDI orders, EPCIS events, invoices) address 'where' or 'who' with a single global key." },
-    { "type": "table", "headers": ["Type", "Example"], "rows": [
-      ["Legal entity", "A company / hospital / school"],
-      ["Physical location", "A warehouse, store, dock door, ward"],
-      ["Function", "A department (procurement, ship-to)"],
-      ["Digital", "A web service endpoint"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of a GLN as the corporate postal + roll-call ID for a place, a role, or a company.**\n\nWhen a purchase order says 'ship to Reliance Retail's warehouse in Bhiwandi + notify their receiving department + bill the Mumbai HQ finance team,' GLNs let all three of those endpoints be **globally unique 13-digit numbers**. No 'which warehouse do you mean?' ambiguity.\n\nThree flavors:\n- **Physical location GLN** — a warehouse building, a store aisle, a hospital ward.\n- **Functional (role) GLN** — a department: 'Receiving,' 'Pharmacy,' 'Accounts Payable.' Distinct from the building.\n- **Party GLN** — a legal entity: 'Reliance Retail Ltd' or 'GS1 India.' Used to bill or invoice.\n\nOne physical building can hold many role GLNs (dock, receiving, pharmacy each get their own). One party can operate many physical GLNs (all Reliance stores share one party but each store has its own physical GLN).\n\n**Why every supply-chain / hospital / retail Flutter app that talks EDI needs to speak GLN:** ANSI X12, EDIFACT, GS1 EPCIS all identify participants + locations by GLN. Get the GLN wrong on a purchase order and it goes to the wrong dock. Get it wrong on a pharmacy dispense event and the trace breaks." },
+    { "type": "callout", "variant": "definition", "markdown": "**GLN (Global Location Number)** is a 13-digit GS1 key that identifies a physical location (a specific building or spot), a functional entity (a role/department), or a legal party (a company or subsidiary). Structure: GS1 Company Prefix (GCP) + location reference + mod-10 check digit. Used in orders, shipments, invoices, EPCIS events, and healthcare compliance flows (HL7, hospital pharmacy)." },
+    { "type": "theory", "markdown": "## GLN types" },
+    { "type": "table", "headers": ["Type", "Identifies", "Example use"], "rows": [
+      ["**Physical**", "A specific site or spot", "A warehouse building, a store aisle, a hospital bed"],
+      ["**Functional**", "A department / role", "'Receiving,' 'Accounts Payable'"],
+      ["**Party**", "A legal entity", "'Reliance Retail Ltd', 'AIIMS Delhi'"]
     ]},
-    { "type": "code", "language": "text", "code": "GLN structure (13 digits):\n  GCP + Location Reference + Check Digit\nSame check-digit algorithm as GTIN.\n\nUsage in EDI / EPCIS:\n  bizLocation:  urn:epc:id:sgln:8901234.00021.0\n  readPoint:    urn:epc:id:sgln:8901234.00021.dock5\n  (Extension after '.' identifies the sub-location.)" },
-    { "type": "callout", "variant": "interview", "markdown": "One GLN can act as multiple parties: same location as 'ship-to,' 'bill-to,' 'end user.' In EDI (EDIFACT / X12) and EPCIS, GLNs replace free-text addresses — the whole supply chain agrees on the same key, so integrations don't break on name changes." },
-    { "type": "callout", "variant": "mistake", "markdown": "Using one GLN for many distinct physical sites. If two warehouses share the same GLN, you can't route inventory correctly. Issue distinct GLNs per physical location, plus GLN extensions for dock doors / rooms / shelves." }
+    { "type": "theory", "markdown": "## GLN Extension Component (GLNX)\n\nMany apps need finer-grained identification than one GLN per building. **GLN Extension** (AI 254) lets you attach a sub-location code — 'aisle 4 shelf 2' — to a base GLN. Optional; use only when you can't split further via distinct GLNs." },
+    { "type": "theory", "markdown": "## Check digit + validation" },
+    { "type": "code", "language": "dart", "code": "// GLN check digit uses the same mod-10 algorithm as GTIN.\nbool isValidGln(String gln) {\n  if (!RegExp(r'^\\d{13}$').hasMatch(gln)) return false;\n  final body = gln.substring(0, 12);\n  final check = int.parse(gln[12]);\n  int sum = 0;\n  for (int i = 0; i < body.length; i++) {\n    final digit = int.parse(body[body.length - 1 - i]);\n    sum += (i.isEven ? 3 : 1) * digit;\n  }\n  return (10 - sum % 10) % 10 == check;\n}\n\nassert(isValidGln('0614141000012'));" },
+    { "type": "theory", "markdown": "## GLN in real messages" },
+    { "type": "code", "language": "json", "code": "// EPCIS event — a shipping event pointing to a physical dispatch location\n{\n  \"eventType\": \"ObjectEvent\",\n  \"action\": \"OBSERVE\",\n  \"bizStep\": \"shipping\",\n  \"epcList\": [\"urn:epc:id:sgtin:8901234.567895.789\"],\n  \"readPoint\": {\"id\": \"urn:epc:id:sgln:8901234.00001.0\"},\n  \"bizLocation\": {\"id\": \"urn:epc:id:sgln:8901234.00001.0\"}\n}\n\n// EDIFACT ORDERS: 'ship-to' + 'bill-to' + 'notify' each identify a GLN\n// NAD+ST+8901234567895'\n// NAD+IV+8901234567802'\n// NAD+NT+8901234567819'" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: One GLN per company for everything.** Loses the physical vs functional vs party distinction. Multiple GLNs are cheap." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Storing as int.** Loses leading zeros. TEXT column always." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Recycling GLNs.** GS1 discourages; retire + assign new when a location closes." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: No check-digit validation.** Same as GTIN — typos slip through." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Using GLN Extension when a separate GLN would do.** Extensions are harder to search; prefer distinct GLNs." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Mixing GLN + GTIN in the same column.** Data-quality nightmare; separate columns." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Assuming trading partner uses your naming.** Their `Warehouse 1` is your `WH-BOM-01`; use the shared GLN as the join key." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Not tracking effective dates.** GLNs get retired + reassigned; effective-from/to columns save you." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Separate physical + functional + party GLNs.**" },
+    { "type": "callout", "variant": "best", "markdown": "**2. Validate check digit at every entry point.**" },
+    { "type": "callout", "variant": "best", "markdown": "**3. Effective-from/to columns** for lifecycle." },
+    { "type": "callout", "variant": "best", "markdown": "**4. GLN = join key with partners** — not names." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Extension only when GLN split not feasible.**" },
+    { "type": "callout", "variant": "best", "markdown": "**6. Store as TEXT 13-char** — no int, no leading-zero corruption." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Bind GLN to your internal location record** but always send GLN externally." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Track retirement history** — never delete rows; mark inactive." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Validate GLN check digit in Dart." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Location catalog: separate physical / functional / party tables." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Purchase order: ship-to + bill-to + notify GLNs on one order." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — EPCIS event JSON with readPoint + bizLocation GLNs; validate schema." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert)** — GLN lifecycle: effective-from/to + auto-migration flow on partner GLN change." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What's the difference between a physical GLN, a functional GLN, and a party GLN?**\n\n**A:** **Physical GLN** — identifies a *spot on Earth* (a warehouse building, a hospital ward, a store aisle). **Functional GLN** — identifies a *role or department* independent of physical location ('Receiving,' 'Pharmacy,' 'Accounts Payable'). **Party GLN** — identifies a *legal entity* ('Reliance Retail Ltd,' 'AIIMS Delhi'). One company (party) can operate many warehouses (physical) each of which has multiple departments (functional). All three can appear in one order: 'Ship to physical GLN A, notify functional GLN B, invoice party GLN C.' The distinction lets partners route messages precisely + separate legal-billing from operational-flow. Interviewers score highly on candidates who articulate this decomposition." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How is a GLN validated + why does the check digit matter?**\n\n**A:** GLN uses the same **mod-10 check-digit algorithm as GTIN**: right-to-left, alternate ×3 and ×1 weighting, sum, `(10 - sum%10) % 10`. Catches ~90 % of single-digit typos + adjacent-transpositions. **Why bother:** a wrong GLN on a purchase order = wrong ship-to = shipment to the wrong dock or wrong company. Real money loss. **Also required by GS1 standards** — a 13-digit number without a valid check digit is *not* a GLN. Validate at every ingest boundary: user input, EDI parser, EPCIS event validator." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: When would you use the GLN Extension component vs a separate GLN?**\n\n**A:** **Separate GLN** — when the sub-location is stable + likely to be referenced independently by partners: a specific dock, a specific aisle, a store's pharmacy department. Cheaper for search, joins, analytics. **GLN Extension (AI 254)** — when you can't easily assign a new GLN + need a temporary sub-location tag: 'bay 12 shelf 4 of warehouse GLN X.' Common in hospital pharmacy (dose location extending the pharmacy's GLN). **Cost of extensions:** partners must know to parse them; not all EDI systems handle the extra AI cleanly. **Rule:** prefer distinct GLNs where feasible; extensions when granularity exceeds practical assignment. Interviewer bonus: knowing extensions exist AT ALL is a differentiator." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do GLNs interact with EPCIS events?**\n\n**A:** EPCIS event structures reference **two GLNs**: **`readPoint`** — the physical location where the event was OBSERVED (a scanner at loading dock 3); **`bizLocation`** — the business location the item is AT AFTER the event (the warehouse's outbound area). These are usually both **physical GLNs** (encoded as SGLN URNs like `urn:epc:id:sgln:8901234.00001.0`). **Party GLN** appears in the event's `bizTransactionList` for the related purchase order or invoice. **Functional GLN** may appear as an event source/destination when hand-off between departments matters. **Interview signal:** knowing readPoint vs bizLocation vs source/destination + when to use each." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What's the pharma / hospital story for GLNs?**\n\n**A:** In Indian pharma + hospitals: **(1)** Manufacturer party GLN issues drugs. **(2)** Each pharmacy shipment identifies the wholesaler party GLN + hospital party GLN. **(3)** Physical GLNs identify the hospital site + specific pharmacy + specific ward. **(4)** Functional GLNs identify roles ('Chief Pharmacist,' 'Ward Nurse'). **(5)** EPCIS events chain: manufacturer ships to wholesaler (bizStep=shipping), wholesaler ships to hospital, hospital pharmacy dispenses to a ward. Each event has readPoint + bizLocation as GLNs. **Regulatory:** DSCSA (US) + India CDSCO drug tracing frameworks require this end-to-end chain. GLNs are the addressing backbone; SGTINs are the item identity; EPCIS glues them together." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How would you model GLNs in a Flutter app for a healthcare + logistics client?**\n\n**A:** **(1) Separate tables for physical / functional / party locations** — each with GLN as unique key. **(2) Effective-from/to columns** — GLNs get retired; historic data must still match. **(3) Relationship table** — physical location `hasFunctions` set of functional GLNs + `operatedBy` a party GLN. **(4) Trading-partner mapping** — your internal `WH-BOM-01` ↔ external partner's `Warehouse 1` — join on the shared GLN. **(5) Address + contact metadata** cached locally (not authoritative — GS1 is authoritative; you sync). **(6) Search API** — user searches by address / name / GLN; return list of matching physical + functional / party rows. **(7) Compliance-related fields** — some GLNs are regulated (hospital pharmacy) with extra required attributes." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **EDI orders / shipments / invoices** — ship-to + bill-to + notify parties.\n- **EPCIS events** — readPoint + bizLocation.\n- **Hospital pharmacy** — GLN identifies pharmacy + ward for compliance.\n- **Wholesalers + distributors** — party GLN identifies each customer for billing.\n- **NOT for** — identifying products (that's GTIN) or individual shipments (that's SSCC)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **AI (410-415)** — ship-to / bill-to / purchased-by GLN in barcodes.\n- **AI (254)** — GLN Extension component.\n- **SGLN URN** — `urn:epc:id:sgln:GCP.locationRef.extension`.\n- **GS1 GLN Registry / VerifiedByGS1** — authoritative lookup for GLN → address.\n- **GLN in GS1 Digital Link** — `https://id.gs1.org/414/8901234567895` resolves to a location page.\n- **Trading-partner-specific naming** — GLN is the source of truth; names differ per partner.\n- **Retired GLNs** — GS1 discourages re-use for 48 months.\n- **Small orgs** — one Party GLN + zero physical GLNs may be fine; add physical as ops grow.\n- **Regulatory + compliance** — DSCSA, EU FMD, India CDSCO drug tracing all rely on GLN + SGTIN.\n- **Location metadata caching** — cache GS1 Registry lookups; invalidate periodically." }
   ],
   "flashcards": [
-    { "front": "GLN in one sentence?", "back": "13-digit global identifier for a party (company/department) or a place (warehouse/store/dock/ward)." },
-    { "front": "GLN extension?", "back": "A suffix identifying a sub-location within a GLN (e.g., dock5 in an SGLN)." },
-    { "front": "GLN vs GTIN check digit?", "back": "Same algorithm — mod-10 with weight-3-and-1 pattern." }
+    { "front": "GLN identifies?", "back": "Physical location, functional role, or party (legal entity) — not products." },
+    { "front": "Length + check digit?", "back": "13 digits; last is mod-10 check (same algorithm as GTIN)." },
+    { "front": "Three types?", "back": "Physical / Functional / Party." },
+    { "front": "GLN Extension?", "back": "AI 254 — sub-location tag on a base GLN; use only when a separate GLN isn't feasible." },
+    { "front": "EPCIS readPoint vs bizLocation?", "back": "readPoint = where observed; bizLocation = where AFTER the event." },
+    { "front": "Storage?", "back": "TEXT 13-char; effective-from/to for lifecycle." },
+    { "front": "SGLN URN?", "back": "urn:epc:id:sgln:GCP.locationRef.extension." }
   ],
   "quiz": [
-    { "q": "GLN identifies…", "options": ["A trade item", "A location or party", "An event", "A digital certificate"], "answer": 1, "explain": "Locations or parties in the supply chain." },
-    { "q": "One warehouse should have…", "options": ["No GLN", "One GLN (dock doors as extensions)", "Ten unrelated GLNs", "Only a name"], "answer": 1, "explain": "One physical location = one GLN; sub-locations via extensions." },
-    { "q": "In EPCIS, `readPoint` typically references…", "options": ["A GTIN", "An SGLN (GLN + extension)", "A GCP", "An SSCC"], "answer": 1, "explain": "SGLN identifies exactly where the event was captured." }
+    { "q": "GLN identifies…", "options": ["Products", "Places / roles / parties", "Shipments", "Serials"], "answer": 1, "explain": "Three types of location/entity." },
+    { "q": "GLN length?", "options": ["12", "13", "14", "18"], "answer": 1, "explain": "13 digits including check." },
+    { "q": "readPoint in EPCIS?", "options": ["Party GLN", "Physical location OBSERVED", "Function GLN", "Serial"], "answer": 1, "explain": "Where the scan happened." },
+    { "q": "GLN Extension AI?", "options": ["01", "254", "21", "422"], "answer": 1, "explain": "Sub-location within a base GLN." },
+    { "q": "Storage recommendation?", "options": ["int", "TEXT 13-char with effective dates", "double", "no schema"], "answer": 1, "explain": "Preserve leading zeros + lifecycle." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Compute a GLN check digit; verify against a known correct GLN." },
-    { "level": "Medium", "text": "Model warehouse + dock doors as GLN + extensions in your DB." },
-    { "level": "Hard", "text": "Emit an EPCIS `readPoint` and `bizLocation` from a mobile scan event." },
-    { "level": "Expert", "text": "Design GLN allocation policy for a retailer with 500 stores and multiple functional GLNs each." }
+    { "level": "Easy", "text": "GLN mod-10 validator." },
+    { "level": "Medium", "text": "Separate physical / functional / party tables with GLN unique keys." },
+    { "level": "Medium", "text": "Purchase order with ship-to + bill-to + notify GLNs." },
+    { "level": "Hard", "text": "EPCIS event with readPoint + bizLocation SGLN URNs." },
+    { "level": "Expert", "text": "GLN lifecycle + partner-name mapping table." }
   ],
   "interviewQuestions": [
-    "What is a GLN and what does it identify?",
-    "GLN vs GTIN?",
-    "Physical vs functional GLN — when use each?",
-    "What is a GLN extension?",
-    "How is GLN used in EDI / EPCIS?"
+    "Physical vs functional vs party GLN?",
+    "Validation + why check digit matters?",
+    "When to use GLN Extension vs separate GLNs?",
+    "How do GLNs interact with EPCIS?",
+    "Pharma / hospital story for GLNs?",
+    "How would you model GLNs in a healthcare app?"
   ],
   "references": [
-    { "label": "GS1 — GLN", "url": "https://www.gs1.org/standards/id-keys/gln" }
+    { "label": "GS1 GLN overview", "url": "https://www.gs1.org/standards/id-keys/gln" },
+    { "label": "EPCIS + CBV", "url": "https://ref.gs1.org/standards/epcis/" }
   ]
 }

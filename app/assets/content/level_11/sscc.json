@@ -2,43 +2,93 @@
   "id": "gs1.sscc",
   "levelId": 11,
   "title": "SSCC — Serial Shipping Container Code",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "xp": 40,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Explain what SSCC identifies",
-    "Structure an SSCC (extension digit + GCP + serial + check)",
-    "Use SSCC in logistics labels (GS1-128)"
+    "Understand SSCC via a real-life analogy",
+    "Structure + validate an 18-digit SSCC",
+    "Combine SSCCs with SGTIN + EPCIS for pallet traceability",
+    "Build + parse an SSCC-18 barcode (AI 00)",
+    "Answer SSCC interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "An **SSCC** (Serial Shipping Container Code) is an 18-digit identifier for a **logistics unit** — a pallet, carton, or roll cage — that travels through the supply chain. Every SSCC is unique; you never reuse it (traceability depends on it)." },
-    { "type": "code", "language": "text", "code": "SSCC structure (18 digits):\n  [Extension][GCP][Serial Reference][Check Digit]\n  Extension: 0..9 (chosen by the brand — expands capacity)\n  Total data: 17 digits + 1 check digit\n\nOn a logistics label: SSCC uses Application Identifier (00)\n  GS1-128:  (00) 3 8901234 000000001 5" },
-    { "type": "callout", "variant": "interview", "markdown": "SSCC vs GTIN: **GTIN identifies a product type; SSCC identifies a specific physical shipment container**. Two identical pallets of the same GTIN each have their own SSCC. That's what enables track-and-trace of shipments." },
-    { "type": "callout", "variant": "mistake", "markdown": "Reusing an SSCC 'because the shipment is done.' GS1 requires SSCCs remain unique for at least **12 months**. Reusing too soon breaks recalls and reconciliation with historical logistics data." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of an SSCC as the vehicle registration plate for a shipping unit.**\n\nA pallet, a container, a mixed carton, a returnable tote — anything that TRAVELS as a unit gets its own **Serial Shipping Container Code**. Each SSCC identifies exactly one physical logistics unit. Two identical pallets loaded on the same truck have different SSCCs.\n\n- **18 digits** — extension digit + GCP + serial reference + check digit.\n- **Never reused** — each SSCC is a one-time identifier for one specific logistics unit.\n- **AI (00)** — barcode-encoded via Application Identifier 00; typically Code 128 or GS1-128.\n- **Pallet label** — 'GS1 Logistic Label' with SSCC + destination GLN + PO number.\n- **Contains SGTINs** — the pallet is made up of items with their own SGTINs; the ASN (Advance Shipping Notice) EDI message + EPCIS aggregation events tie SSCC → contained SGTINs.\n\n**Why every warehouse / 3PL / logistics Flutter app must handle SSCC:** scanning the SSCC on a pallet retrieves the ENTIRE contents + destination + PO context in one shot — much faster than scanning every item. Ports, distribution centers, cross-docks all key their handovers on SSCC." },
+    { "type": "callout", "variant": "definition", "markdown": "**SSCC (Serial Shipping Container Code)** is an 18-digit GS1 key identifying an individual logistics unit — a pallet, container, tote, or any physical shipping unit. Structure: extension digit (0-9, brand-owner choice) + GCP + serial reference + mod-10 check digit. Encoded in barcodes via **AI (00)**. Combined with SGTINs via aggregation events in EPCIS to describe pallet contents." },
+    { "type": "theory", "markdown": "## SSCC anatomy" },
+    { "type": "code", "language": "text", "code": "0  8901234  01234567890  1\n│  │        │            └── check digit\n│  │        └────────────── serial reference (assigned by owner)\n│  └─────────────────────── GCP\n└────────────────────────── extension digit (0-9)" },
+    { "type": "theory", "markdown": "## Validation + AI encoding" },
+    { "type": "code", "language": "dart", "code": "bool isValidSscc(String sscc) {\n  if (!RegExp(r'^\\d{18}$').hasMatch(sscc)) return false;\n  final body = sscc.substring(0, 17);\n  final check = int.parse(sscc[17]);\n  int sum = 0;\n  for (int i = 0; i < body.length; i++) {\n    final digit = int.parse(body[body.length - 1 - i]);\n    sum += (i.isEven ? 3 : 1) * digit;\n  }\n  return (10 - sum % 10) % 10 == check;\n}\n\n// Barcode-embed via AI (00):\n// GS1-128 element string: `(00)389012340123456787`\n// Parenthesis notation for humans; group-separator ASCII 29 between AIs on machines.\n\nString ssccElement(String sscc) => '(00)$sscc';\n\n// SSCC URN (EPCIS):\n// urn:epc:id:sscc:GCP.extensionAndSerial\nString ssccUrn({required String gcp, required String extAndSerial}) =>\n    'urn:epc:id:sscc:$gcp.$extAndSerial';" },
+    { "type": "theory", "markdown": "## Pallet contents via EPCIS aggregation" },
+    { "type": "code", "language": "json", "code": "// AggregationEvent — pallet SSCC contains 12 SGTINs\n{\n  \"eventType\": \"AggregationEvent\",\n  \"action\": \"ADD\",\n  \"parentID\": \"urn:epc:id:sscc:8901234.0123456789\",\n  \"childEPCs\": [\n    \"urn:epc:id:sgtin:8901234.567895.001\",\n    \"urn:epc:id:sgtin:8901234.567895.002\",\n    \"urn:epc:id:sgtin:8901234.567895.003\"\n  ],\n  \"bizStep\": \"packing\",\n  \"disposition\": \"in_progress\",\n  \"readPoint\": {\"id\": \"urn:epc:id:sgln:8901234.00001.0\"}\n}\n\n// Later ObjectEvent — pallet ships\n{\n  \"eventType\": \"ObjectEvent\",\n  \"action\": \"OBSERVE\",\n  \"epcList\": [\"urn:epc:id:sscc:8901234.0123456789\"],\n  \"bizStep\": \"shipping\",\n  \"bizLocation\": {\"id\": \"urn:epc:id:sgln:8901234.00001.0\"},\n  \"bizTransactionList\": [{\"type\": \"po\", \"bizTransaction\": \"urn:epcglobal:cbv:bt:po:12345\"}]\n}" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Reusing SSCCs.** GS1 requires 48 months of no reuse; many warehouses accidentally recycle. Broken trace." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Confusing SSCC with SGTIN.** SSCC = logistics unit; SGTIN = individual product. A pallet's SSCC contains many SGTINs." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Storing without leading zero.** Extension digit `0` gets dropped when SSCC treated as int." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Missing aggregation event.** Pallet ships without a prior AggregationEvent → trace can't tell what's inside. Every pack step needs one." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: SSCC without a GS1 Logistic Label.** The label must include SSCC + destination GLN + PO # + weight + carrier fields. Just an SSCC is not enough for warehouse handoff." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Ignoring EDI ASN.** Advance Shipping Notice EDI message (856 in X12, DESADV in EDIFACT) references the SSCC + contained SGTINs. Both channels — barcode + EDI — must agree." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Not validating check digit on receive.** Damaged label + wrong number = wrong pallet identity. Scanner should reject." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: One SSCC for multiple physical units.** Splitting a pallet mid-shipment without generating a new SSCC = trace broken." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. One SSCC per physical unit;** never reuse for 48+ months." },
+    { "type": "callout", "variant": "best", "markdown": "**2. AggregationEvent on pack, DisaggregationEvent on unpack.**" },
+    { "type": "callout", "variant": "best", "markdown": "**3. TEXT 18-char storage** with check-digit validation." },
+    { "type": "callout", "variant": "best", "markdown": "**4. GS1 Logistic Label** — SSCC + GLNs + PO # + carrier fields." },
+    { "type": "callout", "variant": "best", "markdown": "**5. EDI ASN + EPCIS mirror each other** — cross-check." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Analytics** — dwell time, PO cycle time keyed on SSCC." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Reprint recovery** — if label damaged, generate a NEW SSCC + record parent→child link." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Serial exhaustion planning** — extension digit + 10 digits = 10 billion IDs per GCP; still plan reuse policy at scale." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — SSCC validator in Dart." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Generator: given a GCP + serial counter, produce a valid SSCC." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Print a GS1 Logistic Label PDF with SSCC + GLNs." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — AggregationEvent JSON generator; verify against EPCIS schema." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Warehouse app: scan SSCC → show pallet contents from EPCIS repo." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — Split-pallet recovery flow: new SSCC + partial DisaggregationEvent." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What does an SSCC identify + how is it different from a GTIN?**\n\n**A:** SSCC identifies an INDIVIDUAL PHYSICAL LOGISTICS UNIT — one specific pallet, one specific container, one specific tote. Every pallet gets its own SSCC. GTIN identifies a product TYPE — 100 identical pallets sharing the same product mix would have 100 different SSCCs but the products inside share GTINs. **Rule:** SSCC = 'this specific box on this specific truck'; GTIN = 'this SKU.' **Contained items** — the pallet's SSCC + the items' SGTINs are linked via an EPCIS AggregationEvent (on pack) and DisaggregationEvent (on unpack). This is the backbone of pallet-scan-once workflows in warehouses." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How is an SSCC used in a Warehouse Management System workflow?**\n\n**A:** **(1) Pack:** items packed onto pallet; system assigns SSCC + emits AggregationEvent linking pallet to child SGTINs. **(2) Print label:** GS1 Logistic Label with SSCC barcode (AI 00) + destination GLN + PO # + carrier fields. **(3) Ship:** driver scans SSCC → ObjectEvent(shipping) with bizLocation of dispatching warehouse. **(4) Receive:** receiving warehouse scans SSCC → ObjectEvent(receiving); one scan retrieves ALL pallet contents from EPCIS repo. **(5) Put-away:** DisaggregationEvent breaks pallet into slots. **(6) Cross-dock:** SSCC ObjectEvent(inTransit) without disaggregation. **(7) Return:** SSCC referenced in return authorization. Every touchpoint keys off the SSCC — hence 'scan pallet once' becomes a huge productivity win." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How do EDI ASN + EPCIS relate to SSCC?**\n\n**A:** Both channels reference the SSCC. **EDI ASN** (X12 856 / EDIFACT DESADV) is the pre-shipment message sent to the receiver: 'here comes pallet SSCC X, containing items Y' — allows the receiver to pre-allocate slots + slot into their WMS before the truck arrives. **EPCIS** is the event stream: 'at time T, pallet SSCC X was packed / shipped / received / disaggregated.' EDI is one-shot notification; EPCIS is continuous event log. **Cross-check:** if a pallet arrives whose SSCC has no matching ASN, receive with caution + flag. Some warehouses gate receive on ASN match. **Modern integrations** are moving toward EPCIS as the source of truth + EDI as a legacy compatibility layer." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What does the extension digit do + why does GS1 include it?**\n\n**A:** The **extension digit** is the leading 0-9 in an SSCC; the brand owner assigns it freely. Purpose: gives the brand owner 10× MORE unique SSCC serials without expanding into another GCP. Effectively splits the 18-digit space into 10 sub-spaces. **How brand owners use it:** some assign per-plant (0 = Chennai plant, 1 = Delhi plant); others per shipping-type (0 = standard, 1 = returnable). Some reset the extension digit as a wrap-around when serial reference exhausts. **Not required** for uniqueness — the serial reference + GCP alone provides billions of unique IDs — but useful for splitting namespaces logically. **Interview signal:** knowing that extension digit is BRAND-OWNER-CHOSEN, not GS1-assigned." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How would you handle a damaged / unreadable SSCC label mid-shipment?**\n\n**A:** **(1)** Scan surrounding pallets to confirm which pallet the label was on. **(2)** Look up ASN / PO # for the shipment; find the missing pallet's expected SSCC. **(3)** Generate a REPLACEMENT SSCC + reprint label + record parent→child linkage in EPCIS (custom event or CBV extension). **(4)** ObjectEvent that references BOTH old + new SSCC for auditability. **(5)** Notify partner of SSCC change (ASN correction). **Never** just 'guess' the missing number from context; corruption there breaks trace forever. **Auditability + immutability** — original AggregationEvent isn't rewritten; new event chain layered on top." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How would you model SSCC in a Flutter warehouse-worker app?**\n\n**A:** **(1)** Scanner screen: scan barcode → detect AI (00) → extract 18-digit SSCC → validate. **(2)** Lookup: query local EPCIS repo (or backend cache) for the pallet's AggregationEvent → list child SGTINs. **(3)** Show pallet summary: SKU count, destination, PO #, weight. **(4)** Action buttons: Receive / Ship / Disaggregate / Split. **(5)** Offline mode: cache last-100 pallets seen; queue events for upload. **(6)** UI accessibility: giant SSCC digits (readable at arm's length); haptic + audio on scan. **(7)** Barcode + typed-entry fallback for damaged labels. **(8)** Integrate mobile_scanner or Scandit for the scan itself. Interviewer respect: full flow, not just the parser." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Warehouses + 3PLs** — scan-pallet-once receive.\n- **Shipping carriers** — tracking numbers derived from SSCC.\n- **Pharma / cold-chain** — SSCC + temperature log per pallet.\n- **Retail DC** — pallet-based cross-dock.\n- **NOT for** — individual items (SGTIN) or locations (GLN)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **AI (00)** — SSCC in a GS1 element string.\n- **AggregationEvent** — link SSCC to child SGTINs.\n- **DisaggregationEvent** — break aggregation on unpack.\n- **AI (401)** — GINC (Global Identification Number for Consignment) — links multiple SSCCs into one shipment.\n- **AI (402)** — GSIN (Global Shipment Identification Number).\n- **RFID EPC encoding** — 96-bit binary form of SSCC.\n- **GS1 Logistic Label spec** — dimensions + zones + font sizes.\n- **Reusable Transport Items (RTIs)** — GRAI (Global Returnable Asset Identifier) — different from SSCC (RTIs reused; SSCC not).\n- **EDIFACT DESADV / X12 856** — ASN reference to SSCC.\n- **GS1 Digital Link** for SSCC — resolves via GS1 URI syntax.\n- **Local vs global uniqueness** — SSCC is globally unique because GCP is unique; even if you exhaust your serial space, extension digit gives 10× more.\n- **Print quality** — Code 128 must meet ISO 15416 grade C or better for reliable scans." }
   ],
   "flashcards": [
-    { "front": "What does SSCC identify?", "back": "A specific logistics unit — pallet, carton or container travelling in the supply chain." },
-    { "front": "SSCC total length + first digit?", "back": "18 digits total, first digit is an 'extension' (0–9)." },
-    { "front": "SSCC reuse rule?", "back": "Do not reuse for at least 12 months — traceability data depends on uniqueness." }
+    { "front": "SSCC identifies?", "back": "One specific physical logistics unit (pallet, container, tote) — 18 digits." },
+    { "front": "AI code?", "back": "AI (00) — SSCC in a GS1 element string." },
+    { "front": "SSCC vs SGTIN?", "back": "SSCC = logistics unit; SGTIN = individual product. AggregationEvent links them." },
+    { "front": "Reuse policy?", "back": "GS1 discourages re-use of the same SSCC for 48+ months." },
+    { "front": "Extension digit?", "back": "0-9 leading digit chosen by brand owner; 10× more serials per GCP." },
+    { "front": "EDI / EPCIS mirror?", "back": "ASN (856/DESADV) + EPCIS ObjectEvent both reference SSCC — must agree." },
+    { "front": "Damaged label recovery?", "back": "Generate new SSCC + record parent→child link in EPCIS; never guess." }
   ],
   "quiz": [
-    { "q": "SSCC vs GTIN?", "options": ["Same thing", "GTIN = product type; SSCC = physical logistics unit", "SSCC is for stores", "GTIN is for pallets"], "answer": 1, "explain": "Product identity vs unit identity." },
-    { "q": "SSCC is…", "options": ["12 digits", "13 digits", "17 digits", "18 digits (incl. check)"], "answer": 3, "explain": "18 digits with a check digit." },
-    { "q": "SSCC reuse before 12 months…", "options": ["Is fine", "Breaks traceability / GS1 rules", "Is required", "Improves speed"], "answer": 1, "explain": "Reuse too early breaks recalls and reconciliation." }
+    { "q": "SSCC length?", "options": ["13", "14", "18", "20"], "answer": 2, "explain": "18 digits including check." },
+    { "q": "AI for SSCC?", "options": ["00", "01", "21", "10"], "answer": 0, "explain": "AI (00)." },
+    { "q": "SSCC contains SGTINs via…", "options": ["Nothing", "AggregationEvent parent→child", "String concatenation", "GTIN"], "answer": 1, "explain": "EPCIS event." },
+    { "q": "Extension digit chosen by…", "options": ["GS1", "Brand owner", "Random", "Country"], "answer": 1, "explain": "Free assignment." },
+    { "q": "Reuse SSCC after 6 months?", "options": ["Fine", "GS1 discourages < 48 months", "Encouraged", "Only pharma"], "answer": 1, "explain": "Long non-reuse window." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Compute the check digit for a 17-digit SSCC seed." },
-    { "level": "Medium", "text": "Print a GS1-128 label encoding `(00) SSCC` and scan-test it." },
-    { "level": "Hard", "text": "Add a per-warehouse SSCC allocator that never repeats (persistent counter)." },
-    { "level": "Expert", "text": "Model pallet → cartons → items with SSCC/SSCC/SGTIN in EPCIS `aggregation` events." }
+    { "level": "Easy", "text": "Dart SSCC validator." },
+    { "level": "Medium", "text": "SSCC generator with brand-owner extension digit + counter." },
+    { "level": "Medium", "text": "Print GS1 Logistic Label PDF." },
+    { "level": "Hard", "text": "AggregationEvent JSON generator + EPCIS schema check." },
+    { "level": "Hard", "text": "Warehouse app: scan SSCC → show pallet contents." },
+    { "level": "Expert", "text": "Damaged-label recovery flow with parent→child SSCC linkage." }
   ],
   "interviewQuestions": [
-    "What does SSCC identify?",
-    "How is an SSCC structured?",
-    "SSCC vs GTIN?",
-    "SSCC reuse rules?",
-    "How is SSCC encoded on a logistics label?"
+    "SSCC identifies + how differs from GTIN?",
+    "WMS workflow using SSCC?",
+    "How do EDI ASN + EPCIS relate to SSCC?",
+    "What does the extension digit do?",
+    "Handle a damaged / unreadable SSCC label?",
+    "Model SSCC in a Flutter warehouse app?"
   ],
   "references": [
-    { "label": "GS1 — SSCC", "url": "https://www.gs1.org/standards/id-keys/sscc" }
+    { "label": "GS1 SSCC overview", "url": "https://www.gs1.org/standards/id-keys/sscc" },
+    { "label": "EPCIS aggregation events", "url": "https://ref.gs1.org/standards/epcis/" }
   ]
 }

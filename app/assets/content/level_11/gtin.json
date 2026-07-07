@@ -2,50 +2,102 @@
   "id": "gs1.gtin",
   "levelId": 11,
   "title": "GTIN — Global Trade Item Number",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 50,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Explain what a GTIN identifies",
-    "Distinguish GTIN-8, 12, 13, 14",
-    "Compute and validate the GTIN check digit"
+    "Understand GTIN via a real-life analogy",
+    "Distinguish GTIN-8 / 12 / 13 / 14 and when each is used",
+    "Compute + validate the GS1 check digit correctly",
+    "Handle GTIN in Indica trade + import / export scenarios",
+    "Store + query GTINs efficiently in an app database",
+    "Answer GTIN interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "A **GTIN** (Global Trade Item Number) is the globally unique identifier for a trade item — a product, packaging level or service — that can be priced, ordered, or invoiced. It's the number encoded in the barcode on virtually every product sold at retail." },
-    { "type": "table", "headers": ["Format", "Digits", "Where it's used"], "rows": [
-      ["GTIN-8", "8", "Very small items (small labels)"],
-      ["GTIN-12 (UPC-A)", "12", "North America retail"],
-      ["GTIN-13 (EAN-13)", "13", "Rest of world retail (default in India)"],
-      ["GTIN-14", "14", "Trade units / cases (in ITF-14 or GS1-128)"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of a GTIN as the passport number for a product.**\n\nEvery unique product SKU sold in the world of retail carries a Global Trade Item Number — a number that identifies the *product itself*, not the physical box. Two identical 500 g packs of Amul butter share the same GTIN. A 1 kg pack of Amul butter has a **different** GTIN. A carton of 12 × 500 g packs (a case) has yet another GTIN (a GTIN-14 with an *indicator digit* saying 'this is a case').\n\n- **GTIN is a NUMBER, not a barcode.** The barcode is one way to carry the number; you could also print it in ink, embed it in a URL, or NFC it.\n- **Globally unique** — GS1 gives your company a **GCP** (Global Company Prefix); you assign the remaining digits to your products. No collisions worldwide.\n- **Four lengths** — 8, 12, 13, 14 digits. All are stored/exchanged padded to 14 digits with leading zeros.\n- **Check digit** — the last digit is a mod-10 checksum that catches most scanning errors.\n- **Not a serial number.** A GTIN tells you *WHAT the item is* (Amul butter 500g). A serial number tells you *WHICH INDIVIDUAL BOX*. Serialization requires SGTIN — GTIN + serial via AI (21).\n\n**Why every retail Flutter app must speak GTIN fluently:** scan barcode → parse GTIN → look up product in your catalog. Get the check-digit validation wrong and every wrong number crashes the flow. Get the length normalization wrong and cross-catalog joins fail silently." },
+    { "type": "callout", "variant": "definition", "markdown": "**GTIN (Global Trade Item Number)** is a GS1-assigned numeric identifier for a trade item — a product intended to be priced, ordered, or invoiced at any point in the supply chain. Four forms: **GTIN-8** (small items, GS1 country-assigned), **GTIN-12** (UPC-A, primarily North America), **GTIN-13** (EAN-13, primarily Europe + rest of world), **GTIN-14** (cases / cartons, uses an indicator digit). All GTINs are equivalent when padded to 14 digits. Last digit = mod-10 check digit." },
+    { "type": "theory", "markdown": "## GTIN variants at a glance" },
+    { "type": "table", "headers": ["Variant", "Digits", "Where used", "Example"], "rows": [
+      ["**GTIN-8**", "8", "Very small items (chewing gum, cosmetics)", "01234565"],
+      ["**GTIN-12 / UPC-A**", "12", "North America retail", "012345678905"],
+      ["**GTIN-13 / EAN-13**", "13", "Europe + India + most of world", "8901234567895"],
+      ["**GTIN-14**", "14", "Cases + logistics units", "18901234567892"]
     ]},
-    { "type": "code", "language": "text", "code": "GTIN-13 example: 8 901234 000015\n  8901234 = GS1 India company prefix (GCP)\n  00001   = Item reference (assigned by brand)\n  5       = Check digit (computed)\n\nCheck-digit algorithm (all GTIN lengths):\n  From RIGHT of the number without check digit:\n    - Multiply digits at odd positions by 3, even positions by 1\n    - Sum them\n    - Check digit = (10 - sum mod 10) mod 10" },
-    { "type": "callout", "variant": "interview", "markdown": "Every GTIN has three parts: **GCP** (issued by GS1 to the brand), **item reference** (assigned by the brand), and a **check digit** computed from the other 12 digits. Understanding this decomposition is fundamental — it's how you verify authenticity and route look-ups." },
-    { "type": "callout", "variant": "mistake", "markdown": "Storing GTINs as integers (loses leading zeros) or as `int64` (fine, but never as int32 → GTIN-13 overflows). Always store as a **string** in DBs and DTOs, padded to full length." },
-    { "type": "callout", "variant": "best", "markdown": "One GTIN per distinct trade item / consumer variant (size, flavor, pack). Different pack sizes → different GTINs. Reassigning a retired GTIN too early breaks retailer and search history — respect GS1's reuse rules (currently 48 months after discontinuation)." }
+    { "type": "theory", "markdown": "## GTIN-14 anatomy\n\n```\n1  8901234  567895  2\n│  │        │       └── check digit\n│  │        └────────── item reference (assigned by brand owner)\n│  └─────────────────── GCP (Global Company Prefix from GS1)\n└────────────────────── indicator digit (0 = consumer unit, 1-8 = packaging level, 9 = variable measure)\n```\n\n**Indicator digit** — allows a brand owner to create a hierarchy: `0` for the individual can, `1` for the 6-pack, `2` for the case, `3` for the pallet, all sharing the same GCP + item reference." },
+    { "type": "theory", "markdown": "## Check-digit algorithm (mod 10)" },
+    { "type": "code", "language": "dart", "code": "/// Validates any GTIN (8, 12, 13, 14) via the mod-10 check digit.\nbool isValidGtin(String gtin) {\n  if (!RegExp(r'^\\d{8}$|^\\d{12}$|^\\d{13}$|^\\d{14}$').hasMatch(gtin)) return false;\n  return computeCheckDigit(gtin.substring(0, gtin.length - 1)) ==\n      int.parse(gtin[gtin.length - 1]);\n}\n\n/// Returns the mod-10 check digit for a GTIN body (all digits except the last).\nint computeCheckDigit(String body) {\n  // From RIGHT, alternately multiply by 3 and 1.\n  int sum = 0;\n  for (int i = 0; i < body.length; i++) {\n    final digit = int.parse(body[body.length - 1 - i]);\n    sum += (i.isEven ? 3 : 1) * digit;\n  }\n  return (10 - sum % 10) % 10;\n}\n\n/// Normalizes any GTIN variant to 14 digits (leading-zero padding).\nString normalizeToGtin14(String gtin) {\n  return gtin.padLeft(14, '0');\n}\n\n// Round-trip examples\nassert(isValidGtin('01234565'));         // GTIN-8\nassert(isValidGtin('8901234567895'));    // EAN-13 (Indian GCP prefix 890)\nassert(normalizeToGtin14('8901234567895') == '08901234567895');" },
+    { "type": "theory", "markdown": "## Store + query GTINs in your app" },
+    { "type": "code", "language": "dart", "code": "// ALWAYS store as GTIN-14 in the DB. Every join / lookup uses the padded form.\nclass Product {\n  final String gtin14;    // padded to 14 digits, indexed\n  final String name;\n  final String? gcp;\n  Product({required this.gtin14, required this.name, this.gcp});\n}\n\n// Drift table:\nclass Products extends Table {\n  TextColumn get gtin14 => text().withLength(min: 14, max: 14).unique()();\n  TextColumn get name => text()();\n}\n\n// Scan flow:\nvoid onScanResult(String rawValue) {\n  if (!isValidGtin(rawValue)) {\n    showToast('Invalid barcode');\n    return;\n  }\n  final gtin14 = normalizeToGtin14(rawValue);\n  final product = await db.productByGtin(gtin14);\n  if (product == null) {\n    showToast('Unknown SKU');\n    return;\n  }\n  navigateTo(ProductScreen(product));\n}" },
+    { "type": "theory", "markdown": "## India-specific notes\n\n- Indian GCPs typically start with **890** (assigned by GS1 India). A GTIN starting `890` = manufactured/registered in India.\n- FSSAI + BIS regulations increasingly require GS1-registered GTINs on packaged food + medical devices.\n- Pharmaceutical DPDPA + drug traceability rules use GS1 DataMatrix (GTIN + batch + expiry + serial).\n- **Never assume country from GCP alone** — the GTIN tells you WHERE it was registered, not WHERE it was made or sold." },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Storing without padding.** DB has `8901234567895` (13 digits); the sync partner sends `08901234567895` (14 digits) — cross-catalog joins silently miss. Normalize on ingest." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Skipping check-digit validation.** A user typo in a manual-entry field passes through; the scan flow works but the catalog lookup fails. Validate at boundaries." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Truncating leading zeros.** Excel opens the CSV, drops the leading zero, product data corrupted. Always TEXT-typed GTIN columns; never numeric." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Confusing GTIN with SKU.** SKU is internal — 'SKU-123'. GTIN is external + globally unique. Both fields on the product row." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Using GTIN as a serial number.** GTIN identifies the product TYPE. To identify an individual physical box, use **SGTIN** (GTIN + AI 21 serial)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Restricted-Circulation Numbers (2xx / 04-09) treated as global.** GTINs starting with 2 (in-store) or 04-05 are internal-only + reused across chains. Filter or flag." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Ignoring indicator digit on GTIN-14.** Case GTIN and consumer GTIN look similar but are different products; the indicator makes the difference." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Assuming barcode format = GTIN length.** DataMatrix can carry a GTIN-14; EAN-13 carries a GTIN-13. Barcode ≠ number." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. GTIN-14 canonical form** in your DB." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Validate check digit at every entry point** — scan, import, manual entry." },
+    { "type": "callout", "variant": "best", "markdown": "**3. TEXT column** — never numeric; never Excel-imported without quoting." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Index the GTIN column** for fast catalog lookup." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Store BOTH SKU (internal) + GTIN (external)** on the product." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Flag restricted / in-store GTINs** — don't sync to external partners." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Track hierarchy** — consumer unit + case + pallet all as separate rows with links." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Log invalid-GTIN scan attempts** — catalog gaps + scanner-hardware issues." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Dart function that validates a GTIN of any variant." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Easy)** — Normalize GTIN-8/12/13 to GTIN-14 padded form." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Scan flow: mobile_scanner → validate → normalize → catalog lookup." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Medium)** — Product catalog Drift table with GTIN-14 unique index." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard)** — Hierarchy: link a case GTIN-14 to its consumer GTIN-14 with indicator + pack quantity." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert)** — GS1 catalog import from a supplier CSV: dedupe, validate, resolve conflicts." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: What exactly does a GTIN identify + how is that different from a serial number?**\n\n**A:** A GTIN identifies a **product type** (a stock-keeping unit): 'Amul butter 500g salted.' Every physical unit of that SKU has the same GTIN. A **serial number** identifies a *specific physical unit*: 'this exact box, made on 2026-06-30, batch B7'. In GS1, serial numbers are combined with a GTIN via **AI (21)** to form an **SGTIN** — `Serialized GTIN`. Pharmacies + medical devices + high-value electronics use SGTIN because they must track each unit through the supply chain. Grocery + FMCG use plain GTIN because tracking each individual can is overkill. **Interview red flag:** confusing GTIN with SKU or with serial. **Signal of depth:** knowing that GS1's AI (01) is GTIN + AI (21) is serial + AI (10) is batch/lot + AI (17) is expiry." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How does the mod-10 check digit work + why bother?**\n\n**A:** Algorithm: reading the number RIGHT-TO-LEFT (ignoring the check digit), alternately multiply each digit by 3 and 1, sum, mod 10, subtract from 10, mod 10 → check digit. Catches ~90% of single-digit errors and adjacent-digit transpositions (`53` typed as `35`). **Why bother:** scanners misread; users typo. A single-digit corruption without a check digit silently maps to a DIFFERENT valid product; with the check digit, ~90 % of corruptions are caught. In retail, a wrong scan = wrong price / wrong inventory decrement = money loss + audit nightmare. **Also required by GS1 standards** — any GTIN without a valid check digit is *not* a GTIN. Validate at every boundary." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: Why store as GTIN-14 canonical form?**\n\n**A:** GS1 documentation calls out GTIN-14 as the **exchange format** for supply-chain messages. If your DB stores GTIN-13 for local products but a supplier sends GTIN-14 (with leading `0` for consumer units, `1-9` for cases), your join silently fails to match. **Rule:** normalize all inputs to GTIN-14 on ingest (pad left with 0). This: (1) simplifies joins with external systems; (2) allows hierarchical products (consumer unit + case + pallet) to be stored the same way; (3) makes indexing predictable. **Cost:** minor — 14-char strings are cheap. **Alternative:** store 8/12/13/14 as-is + normalize on every query — brittle + performance hit. Interviewers score highly on this specific answer." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What is a restricted-circulation number + why does it matter for imports?**\n\n**A:** GTIN prefixes **2** (used for in-store products — weighed items, private-label SKUs) and **04-09** (varies by GS1 country policy) are **not globally unique** — they're allocated for in-store or internal use and can be reused by different retailers. **Implication:** if you ingest a `2xxxxxxxx` GTIN from your retail POS + try to look it up in a global catalog (Amazon, GS1 Registry), it will collide with another retailer's assignment. **Handle:** flag the GTIN as `restrictedCirculation: true` at ingest; do NOT sync to external partners; do NOT trust as a global identifier. Retailers use these for in-store weighed items (a `20xxxxxxxx` on a cheese label encodes price/weight, not identity). Not knowing this leads to catalog data pollution + wrong-partner integrations. Interviewer bonus signal." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How would you handle GTIN hierarchies (consumer + case + pallet) in a data model?**\n\n**A:** Three linked rows: (1) consumer unit GTIN-14 (indicator=0, e.g., 500 g pack); (2) case GTIN-14 (indicator=2, e.g., 12-pack); (3) pallet GTIN-14 (indicator=3, e.g., 40 cases). Each is a separate row in `products`; a `packaging_hierarchy` table links parent GTIN → child GTIN with a `pack_quantity` column (12, 40). **Query patterns:** scan a case GTIN → look up children → decrement inventory; scan a consumer unit → look up parent → identify case identity. **Serial flow:** SGTINs are attached to consumer units; the case's serial (**SSCC**) contains references to the SGTINs it holds — this is the digital-twin backbone for pharma track-and-trace. Interviewers respect this end-to-end grasp." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What are common Indian regulatory + retail considerations for GTINs?**\n\n**A:** **(1) GS1 India assigns GCPs starting with 890.** Companies register + pay annual fees. **(2) FSSAI** (Food Safety) increasingly encourages GS1 codes on packaged food for traceability. **(3) BIS / drug regulations** — Ministry of Health mandates GS1 DataMatrix on Schedule H1 drugs + medical devices (with GTIN + batch + expiry + serial). **(4) Export rules** — some countries reject imports without GS1-registered GTINs; India-made goods for export must ensure GCP is legitimate. **(5) Duplicates / counterfeits** — anti-counterfeit initiatives use GS1 Digital Link (product-authentication URL). **(6) Restricted-circulation** — private-label products use 890 GCPs from GS1 India (not `2` prefix which is in-store). **Practical impact for apps** — Indian retail + pharma + food supply chain apps depend on correct GTIN handling; wrong data = compliance + audit problems." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Retail POS** — scan → GTIN lookup → price + inventory.\n- **E-commerce** — GTIN in product listing schema.org markup (Google demands it).\n- **Pharma** — GTIN + batch + expiry in DataMatrix; regulatory traceability.\n- **Supply chain** — case/pallet GTIN-14 in shipping documents.\n- **India export** — GS1 India-issued GCPs mandatory for many export markets.\n- **NOT for** — internal SKUs / stock codes (use a separate SKU field)." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **AI (01)** = GTIN in a GS1 element string.\n- **`ai:'01'`** in GS1 Digital Link URLs.\n- **Variable-measure GTIN** — indicator digit `9` marks weight/price-embedded codes.\n- **GTIN restrictions** — 240-259 range (GTIN-12/13 prefixes) is reserved.\n- **GS1 Registry** — global catalog of GTIN → brand-owner + product name.\n- **VerifiedByGS1** — brand owners verify their own GTINs; consumer apps can query.\n- **GLN vs GTIN** — GLN identifies parties + locations; GTIN identifies products.\n- **Historic UPC-E** — 6-digit compressed UPC-A; expand to UPC-A on ingest.\n- **Reused GTINs** — GS1 discourages but allows after 48 months of no supply-chain activity.\n- **Data quality** — verify GTIN existence via GS1 Verified or the brand owner's authoritative service before trusting.\n- **Migration** — apps built pre-2005 sometimes stored EAN-13 as 13-char TEXT; upgrade to GTIN-14 padded during a schema migration.\n- **Barcode symbology encoding** — UPC-A encodes GTIN-12; EAN-13 encodes GTIN-13; ITF-14 encodes GTIN-14; DataMatrix + QR encode any via AI (01)." }
   ],
   "flashcards": [
-    { "front": "GTIN in one sentence?", "back": "Globally unique identifier for a trade item that can be priced, ordered or invoiced." },
-    { "front": "GTIN-13 in India?", "back": "13-digit EAN-13; starts with the GS1 India company prefix (e.g., 890)." },
-    { "front": "Storing GTINs in DBs?", "back": "As STRINGS (preserve leading zeros); left-pad to full length." }
+    { "front": "GTIN identifies?", "back": "A product TYPE (SKU), not a specific physical unit. Serial number identifies the unit." },
+    { "front": "Storage form?", "back": "GTIN-14 padded left with zeros. Always TEXT column." },
+    { "front": "Check-digit algorithm?", "back": "Right-to-left, alternate × 3 and × 1, sum, (10 - sum%10) % 10." },
+    { "front": "Indian GCP prefix?", "back": "890 — GS1 India-assigned." },
+    { "front": "Restricted-circulation prefixes?", "back": "2xx (in-store), 04-09 — reused across retailers; not globally unique." },
+    { "front": "GTIN + serial?", "back": "SGTIN = GTIN (AI 01) + serial (AI 21); used in pharma traceability." },
+    { "front": "Case/pallet indicator digit?", "back": "GTIN-14 leading digit: 0=consumer, 1-8=packaging levels, 9=variable measure." }
   ],
   "quiz": [
-    { "q": "GTIN identifies…", "options": ["A person", "A location", "A trade item / product variant", "An event"], "answer": 2, "explain": "A pricable/orderable/invoiceable trade item." },
-    { "q": "The default retail format in India is…", "options": ["GTIN-8", "GTIN-12 (UPC-A)", "GTIN-13 (EAN-13)", "GTIN-14"], "answer": 2, "explain": "EAN-13 dominates the rest of the world including India." },
-    { "q": "GTINs should be stored in DBs as…", "options": ["Integers", "Floats", "Strings", "Booleans"], "answer": 2, "explain": "Preserving leading zeros and treating as opaque code." }
+    { "q": "GTIN uniquely identifies…", "options": ["Each individual box", "A product TYPE (SKU)", "A brand", "A country"], "answer": 1, "explain": "Serial number (AI 21) identifies individual units." },
+    { "q": "Canonical DB form?", "options": ["Whatever length scanned", "GTIN-14 padded", "GTIN-13", "Numeric"], "answer": 1, "explain": "Padded 14-char TEXT is the exchange format." },
+    { "q": "Check digit uses…", "options": ["Luhn", "Mod-10 with 3/1 weighting", "SHA-256", "None"], "answer": 1, "explain": "GS1 mod-10 rule." },
+    { "q": "GTIN starting with 2…", "options": ["Normal global", "In-store restricted; may collide", "Only Europe", "Serial number"], "answer": 1, "explain": "Retailer-internal SKUs." },
+    { "q": "Indian GCP prefix?", "options": ["501", "890", "690", "955"], "answer": 1, "explain": "GS1 India-assigned." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Compute the check digit for '890123400001' and verify it equals 5." },
-    { "level": "Medium", "text": "Write a `GTIN.isValid(code)` that validates any GTIN-8/12/13/14." },
-    { "level": "Hard", "text": "Given an EAN-13, extract GCP + item reference (assume 7-digit GCP)." },
-    { "level": "Expert", "text": "Build a lookup service that resolves a GTIN to product data via a local Isar cache + a GS1 Digital Link fallback." }
+    { "level": "Easy", "text": "Dart validator for GTIN-8/12/13/14 with check digit." },
+    { "level": "Easy", "text": "Normalize any GTIN input to GTIN-14 padded form." },
+    { "level": "Medium", "text": "Scan → validate → normalize → catalog lookup flow." },
+    { "level": "Medium", "text": "Drift table with GTIN-14 unique index + product name." },
+    { "level": "Hard", "text": "Packaging hierarchy: consumer + case + pallet rows linked with pack qty." },
+    { "level": "Hard", "text": "Detect + flag restricted-circulation prefixes on ingest." },
+    { "level": "Expert", "text": "Supplier CSV import: dedupe, validate, resolve conflicts with existing catalog." }
   ],
   "interviewQuestions": [
-    "What is a GTIN and what does it identify?",
-    "Formats and where each is used?",
-    "How is the check digit computed?",
-    "Why do different pack sizes need different GTINs?",
-    "GS1's rules on reusing a retired GTIN?"
+    "What does a GTIN identify + how is that different from a serial number?",
+    "How does the mod-10 check digit work + why bother?",
+    "Why store as GTIN-14 canonical form?",
+    "What is a restricted-circulation GTIN + why does it matter for imports?",
+    "How would you handle GTIN hierarchies in a data model?",
+    "Indian regulatory + retail considerations for GTINs?"
   ],
   "references": [
-    { "label": "GS1 — GTIN", "url": "https://www.gs1.org/standards/id-keys/gtin" }
+    { "label": "GS1 General Specifications", "url": "https://www.gs1.org/standards/barcodes-epcrfid-id-keys/gs1-general-specifications" },
+    { "label": "GS1 India — GCP prefixes", "url": "https://gs1india.org" }
   ]
 }

@@ -2,44 +2,99 @@
   "id": "gs1.gcp",
   "levelId": 11,
   "title": "GCP — GS1 Company Prefix",
-  "xp": 30,
-  "estimatedMinutes": 15,
+  "xp": 40,
+  "estimatedMinutes": 30,
   "objectives": [
-    "Explain what the GCP is and how it's licensed",
-    "Understand variable GCP lengths",
-    "Route lookups by GCP correctly"
+    "Understand GCP via a real-life analogy",
+    "Parse a GCP out of a GTIN / GLN / SSCC",
+    "Choose the right GCP length for a company's needs",
+    "Handle GCP updates when GS1 restructures",
+    "Answer GCP interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "The **GS1 Company Prefix (GCP)** is the unique digit sequence a GS1 Member Organization (like GS1 India) licenses to a brand. Every GTIN/GLN/SSCC/etc. that brand issues starts with its GCP — that's what makes those numbers globally unique." },
-    { "type": "code", "language": "text", "code": "EAN-13: 8 9 0 1 2 3 4 0 0 0 0 1 5\n         [ ---- GCP ---- ][item][cd]\nGCP length is VARIABLE (typically 7–12 digits).\nRule: longer GCP = fewer item slots but cheaper subscription.\n  - Big brand with many SKUs → shorter GCP (7–8) → more item slots\n  - Small brand with few products → longer GCP (10–12)" },
-    { "type": "callout", "variant": "interview", "markdown": "GCP length is **not encoded in the barcode**. To split a GTIN into GCP + item reference, you need the **GCP length table** from GS1 (per prefix range) or use the **GEPIR** service. This is why 'give me the brand from a GTIN' is not trivial." },
-    { "type": "callout", "variant": "mistake", "markdown": "Hard-coding 'GCP is always 7 digits.' It varies. Look up the length via GS1's published GCP-length table for the leading prefix, or via the Verified by GS1 / GEPIR API." },
-    { "type": "callout", "variant": "best", "markdown": "Cache the GCP-length table locally in your app; refresh on a schedule. Combined with a cache of GCP → brand mapping, you get instant offline 'who owns this GTIN' answers." }
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of a GCP as your company's telephone area code — assigned by GS1.**\n\nEvery GS1 identifier (GTIN, GLN, SSCC, GRAI, GIAI, ...) STARTS with a **GS1 Company Prefix** — a variable-length block of digits GS1 assigns to your company. Everything after the GCP is yours to allocate.\n\n- **Variable length** — from 4 digits to 12 digits. Shorter = you can register with more products; longer = smaller company with fewer products to identify.\n- **Prefix determines country of ISSUE**, not manufacture — GS1 India assigns `890xxx`; GS1 US assigns various ranges.\n- **Everything after the GCP is your item reference** — 500 g pack vs 1 kg pack vs the 12-count case.\n- **Parsing a GTIN back into GCP + item reference** requires a lookup — GCP length isn't encoded in the number itself.\n\n**Why every serious retail integration must resolve GCPs correctly:** partner catalogs join on GCP → brand owner. Get the parse wrong (assume 6-digit GCP when it's actually 8) and you attribute products to the wrong company. GS1 provides the **GS1 GEPIR** service — global directory that maps GCP → company. Big apps cache GEPIR lookups locally." },
+    { "type": "callout", "variant": "definition", "markdown": "**GCP (GS1 Company Prefix)** is the variable-length numeric prefix GS1 issues to a company that identifies them uniquely worldwide. It sits at the start of every GS1 key issued by that company (GTIN, GLN, SSCC, GRAI, GIAI, GDTI, GSIN, GSRN). Length varies (typically 6-10 digits). Combined with an item reference + check digit forms a full GS1 key." },
+    { "type": "theory", "markdown": "## GCP prefix highlights (country of ISSUE)" },
+    { "type": "table", "headers": ["Prefix range", "GS1 Member Organization", "Notes"], "rows": [
+      ["000-019, 030-039, 060-139", "GS1 US", "UPC-A legacy + newer allocations"],
+      ["300-379", "GS1 France", ""],
+      ["400-440", "GS1 Germany", ""],
+      ["450-459, 490-499", "GS1 Japan", ""],
+      ["690-695", "GS1 China", ""],
+      ["**890**", "**GS1 India**", "Indian brand owners"],
+      ["978-979", "Bookland (ISBN)", "Special GTIN-13 for books"],
+      ["977", "ISSN", "Serials"]
+    ]},
+    { "type": "theory", "markdown": "## Parsing GCP from a GTIN\n\nGCP length isn't encoded in the barcode — you need GS1's **GCP length table** (published as CSV). Common lengths for the 890 range: 7 digits (`890xxxx`) is typical, but some GS1 India allocations are 6-, 8-, or 10-digit." },
+    { "type": "code", "language": "dart", "code": "// Lookup GCP length from the CSV table published by GS1 (simplified).\nclass GcpLengthTable {\n  final Map<int, int> _prefixToLen;\n  GcpLengthTable(this._prefixToLen);\n\n  /// Returns the GCP length for a given GTIN (14-digit padded form).\n  int lengthFor(String gtin14) {\n    // Ignore the leading indicator digit for GTIN-14 → work on the following 12 digits.\n    final numeric = int.parse(gtin14.substring(1, 13));\n    // Table has entries by 4-digit prefix; look up progressively.\n    for (int prefixLen = 12; prefixLen >= 3; prefixLen--) {\n      final key = int.parse(gtin14.substring(1, 1 + prefixLen));\n      final len = _prefixToLen[key];\n      if (len != null) return len;\n    }\n    return 7; // conservative default (not authoritative)\n  }\n\n  String extractGcp(String gtin14) {\n    final len = lengthFor(gtin14);\n    return gtin14.substring(1, 1 + len);\n  }\n}\n\n// Usage:\nfinal table = GcpLengthTable(loadGcpTable());\nfinal gcp = table.extractGcp('08901234567890');   // e.g. '8901234'" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Assuming fixed GCP length.** 'It's 7 digits' — no, it varies per company. Always look up in the current GCP-length CSV." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Cache never invalidated.** The GCP length table + GEPIR data change over time. Sync monthly." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Attribute product to prefix's country of ISSUE.** 890 = registered via GS1 India ≠ manufactured in India. Don't display 'Made in India' from GCP alone." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Ignoring ISBN / ISSN GCPs.** 978/979 books + 977 serials look like normal GTINs but have their own catalog systems." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Confusing GCP with GS1 Prefix.** GS1 Prefix is the FIRST 3 digits (identifies the Member Organization); GCP is the full company prefix (which INCLUDES the GS1 Prefix)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Ignoring restricted-circulation prefixes.** 02 + some 04-09 prefixes are in-store; GCP doesn't apply." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Storing without leading zeros.** GCPs starting with `0` corrupt when stored as int." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Trusting user-typed GCP.** Users guess; always validate against the authoritative GEPIR service or your synced snapshot." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Sync GCP length table monthly.**" },
+    { "type": "callout", "variant": "best", "markdown": "**2. Cache GEPIR lookups** with TTL." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Store GCP as TEXT** — never int." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Attribute country of registration** (not manufacture)." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Detect restricted prefixes** + branch handling." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Log unknown-prefix products** for catalog cleanup." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Handle ISBN / ISSN specially** — different lookup services." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Never let users edit a product's GCP field manually** — derived from GTIN." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Parse GCP from a set of GTINs given a length table." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Sync GCP length CSV from GS1 + refresh Hive cache." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — GEPIR lookup with retry + cache TTL." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Filter restricted-prefix GTINs out of an outbound partner sync." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert)** — Batch attribution flow: incoming supplier catalog → resolve GCP → identify brand owners → flag conflicts." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: How do you parse a GTIN into GCP + item reference?**\n\n**A:** GTIN itself doesn't encode where the GCP ends. You need the **GS1 GCP length table** (published as CSV by GS1). For a GTIN-14 (padded), strip the leading indicator digit, then look up the longest matching prefix in the table to find the length. That's your GCP; everything after (except the check digit) is the item reference. **Cache the table locally**; refresh monthly. **Common bug:** hardcoding '7 digits' — works for many companies but fails for the ones with shorter or longer prefixes. **Interview signal:** knowing the length table exists AT ALL." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: What's the GS1 Prefix vs GCP?**\n\n**A:** **GS1 Prefix** — the FIRST 2-3 digits of the GCP, identifies the GS1 Member Organization that issued it. Example: `890` = GS1 India. **GCP** — the full company prefix INCLUDING those first digits. Example: `8901234` (7-digit GCP for an Indian company). **Every GCP includes a GS1 Prefix.** The GS1 Prefix tells you 'which MO issued this,' not the brand owner. The GCP identifies the brand owner. Both matter for compliance + attribution. Interviewer bonus: knowing that `978/979` (bookland) + `977` (serials) are GS1 Prefixes reserved for ISBN + ISSN." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: Why can't you infer country-of-manufacture from GCP?**\n\n**A:** GS1 Prefix tells you where the GCP was ISSUED — which Member Organization the company registered with — NOT where the product was made. An Indian brand may have used GS1 US to register their US-facing SKUs; a Chinese factory may make products for a French brand whose GCP is `300xxx`. **Displaying 'Made in India' from `890` prefix = misleading + legally risky.** Real country-of-origin is a separate data attribute + regulated by customs / packaging laws. **Interview signal:** distinguishing 'registered' from 'manufactured' + 'sold.'" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How does GEPIR fit in + how would you use it?**\n\n**A:** **GEPIR (Global Electronic Party Information Registry)** is GS1's global directory that maps GCP → brand owner + address + contact. Free HTTP service (rate-limited). **Use:** on ingesting an unfamiliar GTIN, resolve its GCP + query GEPIR to identify the brand owner + populate catalog metadata. **Cache aggressively** — GEPIR data changes slowly; TTL of days is safe. **Alternative:** GS1's Verified by GS1 API + GS1 Registry — more authoritative, covers GTIN-level lookups (not just GCP). **For India-specific data**, GS1 India also maintains a directory. **Interview senior signal:** integrating GEPIR into your data-quality pipeline." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: What happens when GS1 restructures / expands a GCP length?**\n\n**A:** GS1 occasionally publishes new GCP-length rules: some prefixes get subdivided (a `6-digit` prefix range becomes a mix of `7-digit` and `8-digit` prefixes as GS1 allocates deeper into it). **Impact on your app:** the same GTIN parsed with the old table might attribute to a different company under the new table. **Handle:** monthly sync of the length table; re-attribute historic products on major changes; log discrepancies for manual review. **Rare but painful** — a catalog that misattributes 5000 products because of a stale length table causes real business impact. Interviewer bonus: knowing the length table CAN change." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: How would you architect GCP handling in a Flutter e-commerce app?**\n\n**A:** **(1)** Bundle a starter GCP-length CSV in the app; sync monthly to refresh. **(2)** On product ingest, extract GCP via the table + store both `gtin14` + `gcp` on the row. **(3)** Resolve brand-owner via GEPIR lookup + cache. **(4)** UI shows 'Brand: X Ltd (verified)' when GEPIR confirms; 'Unknown brand' when not. **(5)** Restricted-circulation prefixes (`2xx`, `04-09`) flagged + branch handling. **(6)** On catalog import, log unknown-brand ingestion for manual triage. **(7)** Analytics: track resolution rates + latency; a drop suggests stale table." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **E-commerce catalogs** — resolve brand owner per GTIN.\n- **Compliance apps** — verify GCP registration for regulated categories.\n- **Retail POS** — quick brand attribution.\n- **Pharma track-and-trace** — GCP embedded in every SGTIN.\n- **NOT for** — end-user display of country of manufacture." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **GS1 GCP length table** — CSV downloadable from GS1 sites; format `prefix,length`.\n- **GEPIR** — global directory service; free tier + paid enterprise.\n- **Verified by GS1** — modern API for authoritative GTIN + brand + attributes.\n- **Restricted-circulation prefixes** (in-store) — no GCP applies.\n- **GS1 India** — 890 range; also handles education + training + compliance.\n- **VOICE prefixes** — 977/978/979 for ISSN + ISBN.\n- **GS1 Prefix changes** — infrequent but real; monitor GS1 announcements.\n- **GCP hijacking** — pirate use of another company's GCP; legal action + GS1 dispute process.\n- **Small-brand GCPs** — GS1 India offers licenses for start-ups; length varies.\n- **App size** — a full GCP length table is ~200 KB CSV; sync incrementally.\n- **Attribution UI** — pair GCP-derived brand name with a 'source: GEPIR' badge for transparency." }
   ],
   "flashcards": [
-    { "front": "What does GS1 license to a brand?", "back": "A GCP — a unique digit sequence that starts every identifier that brand issues." },
-    { "front": "Is GCP length fixed?", "back": "No — variable (typically 7–12 digits); consult the GS1 GCP-length table." },
-    { "front": "How to look up brand from a GTIN?", "back": "Use GEPIR / Verified by GS1 — the GCP resolves to the licensee." }
+    { "front": "GCP length?", "back": "Variable (typically 6-10 digits); look up in GS1 CSV table." },
+    { "front": "GS1 India prefix?", "back": "890 — issued by GS1 India MO." },
+    { "front": "Country from GCP?", "back": "Country of REGISTRATION, not manufacture. Never display as 'Made in'." },
+    { "front": "GEPIR?", "back": "GS1 global directory mapping GCP → brand owner + address." },
+    { "front": "Store as?", "back": "TEXT (leading zeros); refresh table monthly." },
+    { "front": "Bookland?", "back": "978/979 = ISBN; 977 = ISSN; special GTIN handling." },
+    { "front": "Verified by GS1?", "back": "Modern GS1 authoritative API for GTIN + brand + attributes." }
   ],
   "quiz": [
-    { "q": "The GCP is licensed to…", "options": ["Each product", "Each store", "The brand (company)", "The consumer"], "answer": 2, "explain": "The company licenses one GCP and issues all identifiers under it." },
-    { "q": "GCP length…", "options": ["Is always 7", "Is always 12", "Varies (7–12) per licensee", "Is stored in the check digit"], "answer": 2, "explain": "Longer GCP = fewer item slots but cheaper." },
-    { "q": "To resolve a GTIN to its brand you can use…", "options": ["Guessing", "GEPIR / Verified by GS1", "The check digit", "Random API"], "answer": 1, "explain": "Global registry that maps GCP → licensee." }
+    { "q": "GCP length?", "options": ["Fixed 7", "Variable — look up in table", "Fixed 10", "Encoded in GTIN"], "answer": 1, "explain": "GS1 CSV lists it." },
+    { "q": "890 prefix?", "options": ["GS1 France", "GS1 India", "GS1 US", "ISBN"], "answer": 1, "explain": "GS1 India MO." },
+    { "q": "Display 'Made in India' from GCP 890?", "options": ["Yes", "Never — registration ≠ manufacture", "Only for India", "Optional"], "answer": 1, "explain": "Country of registration only." },
+    { "q": "Global brand-owner directory?", "options": ["EPCIS", "GEPIR", "Firestore", "GDrive"], "answer": 1, "explain": "GS1's global registry." },
+    { "q": "978 prefix?", "options": ["ISBN (books)", "China", "India", "Restricted"], "answer": 0, "explain": "Bookland allocation." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Given a GTIN and a known GCP length, split into GCP + item reference." },
-    { "level": "Medium", "text": "Fetch the GCP-length table and cache it in Isar with a TTL." },
-    { "level": "Hard", "text": "Add a local GEPIR-like lookup fallback for brand name given a GCP." },
-    { "level": "Expert", "text": "Handle GCP length reassignment / prefix rearrangement without breaking historical scans." }
+    { "level": "Easy", "text": "Parse GCP from a padded GTIN-14 with a bundled length table." },
+    { "level": "Medium", "text": "Sync GCP length CSV → refresh Hive cache monthly." },
+    { "level": "Medium", "text": "GEPIR lookup with TTL cache." },
+    { "level": "Hard", "text": "Restricted-prefix filter for outbound partner sync." },
+    { "level": "Expert", "text": "Batch catalog import + brand attribution + conflict logging." }
   ],
   "interviewQuestions": [
-    "What is a GCP and how is it licensed?",
-    "Why is GCP length variable?",
-    "Given a GTIN, how do you find the licensee?",
-    "How is Verified by GS1 different from GEPIR?",
-    "How would you cache the GCP-length table on mobile?"
+    "How do you parse GTIN → GCP + item reference?",
+    "GS1 Prefix vs GCP?",
+    "Why can't you infer country-of-manufacture from GCP?",
+    "How does GEPIR fit in + how would you use it?",
+    "What happens when GS1 restructures a GCP length?",
+    "How would you architect GCP handling in a Flutter e-commerce app?"
   ],
   "references": [
-    { "label": "GS1 — Company Prefix", "url": "https://www.gs1.org/services/gs1-company-prefix" }
+    { "label": "GS1 GCP Length Table", "url": "https://www.gs1.org/services/gcp-length-table" },
+    { "label": "GEPIR", "url": "https://gepir.gs1.org" },
+    { "label": "Verified by GS1", "url": "https://www.gs1.org/services/verified-by-gs1" }
   ]
 }
