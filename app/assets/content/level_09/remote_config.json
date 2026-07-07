@@ -2,50 +2,102 @@
   "id": "fb.remote_config",
   "levelId": 9,
   "title": "Remote Config",
-  "xp": 40,
-  "estimatedMinutes": 20,
+  "xp": 50,
+  "estimatedMinutes": 40,
   "objectives": [
-    "Feature-flag and A/B test with Remote Config",
-    "Target audiences safely",
-    "Fetch/activate wisely to avoid stale UI"
+    "Understand Remote Config via a real-life analogy",
+    "Ship code once, roll out gradually via console",
+    "Design a robust default → fetch → activate cycle",
+    "Target by audience, condition, user property",
+    "Combine with Analytics + Crashlytics for auto-rollback",
+    "Answer Remote Config interview questions"
   ],
   "sections": [
-    { "type": "callout", "variant": "definition", "markdown": "Firebase Remote Config is a managed feature-flag + configuration service. You set defaults in the app, override values in the console (with conditions targeting audiences), and the client fetches + activates the latest values." },
-    { "type": "code", "language": "dart", "code": "final rc = FirebaseRemoteConfig.instance;\nawait rc.setDefaults({'home_variant': 'A', 'max_items': 20});\nawait rc.setConfigSettings(RemoteConfigSettings(\n  fetchTimeout: Duration(seconds: 10),\n  minimumFetchInterval: Duration(hours: 1)));\nawait rc.fetchAndActivate();\nfinal variant = rc.getString('home_variant');" },
-    { "type": "table", "headers": ["Use case", "How"], "rows": [
-      ["Feature flag", "Boolean key gated in code"],
-      ["A/B test", "Random assignment condition + Analytics event"],
-      ["Kill switch", "Force disable a broken feature instantly"],
-      ["Config values", "Timeouts, URLs, thresholds without releases"]
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Remote Config as the dimmer switches + kill switches on your app's dashboard.**\n\nImagine a big theater with hundreds of lights (features). Old-school way: to change any light, an electrician rewires the whole board (ship a new APK, wait for store review, wait for users to update).\n\nRemote Config gives you a **remote-controlled dimmer** for every light. You can:\n\n- **Kill switch** — instant OFF for the feature that's misbehaving in prod. No store re-review.\n- **Gradual dimmer** — 0% → 1% → 10% → 50% → 100% rollout. Watch metrics between steps.\n- **Audience-conditional** — 'this dimmer only for Pro users in India' or 'only on Android 14+.'\n- **A/B test** — one dimmer at variant-A, another at variant-B, half the audience each; Firebase computes statistical significance.\n- **Personalization** — Firebase ML picks the best variant per user (paid tier).\n\n**The catch — the app must have a DEFAULT for every value**, so the first launch (no network yet) still works. Then a **fetch** downloads new values in the background, and an **activate** promotes them for the next read.\n\n**Why every serious app ships with this from day one:** production is a moving target. Bugs escape review, user segments regress, backend services fail. Remote Config turns 'wait 2 weeks for a hotfix release' into 'flip a boolean and it's fixed in 60 seconds.'" },
+    { "type": "callout", "variant": "definition", "markdown": "**Firebase Remote Config** is a managed feature-flag + configuration service. Defaults live in the app; overrides live in the Firebase console with **conditions** (audience, user property, app version, OS, country, random-percentile). Client SDK **fetches** the latest values (throttled per project) + **activates** them for future reads. Also drives **A/B testing** (variants + conversion events) and **Personalization** (Firebase ML picks per user). Free at any scale." },
+    { "type": "theory", "markdown": "## Fetch / activate lifecycle" },
+    { "type": "table", "headers": ["Phase", "What happens", "You call"], "rows": [
+      ["**setDefaults**", "Baked-in fallbacks so first launch works offline", "`setDefaults({...})` at app start"],
+      ["**fetch**", "Downloads the latest values (throttled)", "`fetch(minimumFetchInterval: 1h)`"],
+      ["**activate**", "Promotes fetched values to be readable", "`activate()`"],
+      ["**getValue**", "Reads current active value (default, fetched, or activated)", "`getString('key')` / `getBool` / `getInt` / `getDouble`"],
+      ["**fetchAndActivate**", "One-shot convenience", "`fetchAndActivate()`"],
+      ["**onConfigUpdated**", "Real-time listener (SDK v3+)", "`onConfigUpdated.listen((_) => activate())`"]
     ]},
-    { "type": "callout", "variant": "interview", "markdown": "Remote Config's superpower: **release code once, roll it out gradually**. Ship the feature dark, enable for 1% → 10% → 100% via console. Combined with Crashlytics/Analytics you can auto-roll-back on regression." },
-    { "type": "callout", "variant": "mistake", "markdown": "Fetching on every screen — that flakes and burns quota. Fetch once on launch (with a fresh throttle), activate, and let the UI observe the active values." },
-    { "type": "callout", "variant": "tip", "markdown": "Always set defaults in the client bundle so the first launch never shows a broken UI. Use conditions (country, app version, user property) — never target by raw user ID." }
+    { "type": "theory", "markdown": "## Complete Flutter setup" },
+    { "type": "code", "language": "dart", "code": "// pubspec.yaml:\n//   firebase_remote_config: ^4.3.0\n\nimport 'package:firebase_remote_config/firebase_remote_config.dart';\n\nFuture<void> initRemoteConfig() async {\n  final rc = FirebaseRemoteConfig.instance;\n\n  // 1. Baked defaults — app WORKS OFFLINE / first launch.\n  await rc.setDefaults({\n    'home_variant': 'A',\n    'max_cart_items': 20,\n    'feature_x_enabled': false,\n    'promo_banner_text': 'Welcome!',\n    'checkout_layout_version': 2,\n    'min_supported_app_version': '1.0.0',\n  });\n\n  // 2. Fetch settings — throttled by MIN interval.\n  await rc.setConfigSettings(RemoteConfigSettings(\n    fetchTimeout: const Duration(seconds: 10),\n    minimumFetchInterval: const Duration(hours: 1),  // prod\n    // minimumFetchInterval: Duration.zero,           // dev\n  ));\n\n  // 3. Fetch + activate (one-shot).\n  try {\n    final activated = await rc.fetchAndActivate();\n    // activated = true if new values were pulled + swapped in.\n  } catch (_) {\n    // Fetch failure → app still runs on defaults / last-activated.\n  }\n\n  // 4. Optional: real-time listener (SDK v3+).\n  rc.onConfigUpdated.listen((_) async {\n    await rc.activate();\n    // notify UI to re-read values (e.g., via Riverpod / Bloc).\n  });\n}\n\n// ────── Read values anywhere in the app ──────\nfinal rc = FirebaseRemoteConfig.instance;\nfinal variant = rc.getString('home_variant');       // 'A' | 'B' | 'C'\nfinal max = rc.getInt('max_cart_items');            // 20 or overridden\nfinal enabled = rc.getBool('feature_x_enabled');    // false → true when console flips\nfinal banner = rc.getString('promo_banner_text');\nfinal minVer = rc.getString('min_supported_app_version');\n\n// ────── Force-update pattern ──────\nif (Version.parse(currentVersion) < Version.parse(minVer)) {\n  showBlockingUpdateDialog();\n}" },
+    { "type": "theory", "markdown": "## Targeting — conditions in the console\n\nA parameter can have a **default value** + N **conditional overrides**. Common conditions:\n\n- **App version** — `>= 2.5.0`\n- **OS + version** — Android 12+, iOS 15+\n- **Country / region** — from IP\n- **Language** — `en`, `hi`, `es`\n- **First open** — 'users who first opened this week'\n- **User property** — `plan == 'pro'` (property set via Analytics)\n- **Random percentile** — 0-10% of users (rollout dial)\n- **User in Audience** — Analytics-computed segment\n\nConditions **compose** (AND); if multiple conditions match, the FIRST-matched (by console order) wins." },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: No defaults.** First launch has no network; keys return empty/null; UI breaks. Always `setDefaults` before anything reads a value." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Fetch on every screen.** Blows the throttle quota (SDK returns cached silently) + wastes battery. Fetch once per launch (or via real-time listener); use activated values everywhere." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Reading values during BUILD.** Value can change mid-session (activation). Read once per state boundary + rebuild via listener, not per-frame." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: No kill switch by default.** For every risky feature: gate behind a boolean. Default 'on' when validated. Console flips to 'off' rescues you in an outage." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: Free-form JSON strings + parse client-side.** OK sometimes; but validate schema + version the JSON. A malformed override can crash all users. Prefer typed keys (bool/int/string)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: No rollback plan.** Rolling forward 100% straight from 5% because 'metrics look fine' when they haven't stabilized. Wait 24h between rollout steps for high-risk changes." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Not versioning.** RC history in the console shows every publish; keep a change-log; only 1 person may publish at a time (races silently)." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: Stale caches after console change.** SDK caches for `minimumFetchInterval` (default 12h in prod). Set it to `Duration.zero` in DEBUG builds; leave sensible in release." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. Ship every risky feature behind a boolean flag.** Kill switch = one-flag rescue." },
+    { "type": "callout", "variant": "best", "markdown": "**2. Always setDefaults.** For every key. First launch must work." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Gradual rollout via random percentile** — 1% → 10% → 50% → 100%. Watch Analytics + Crashlytics between steps." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Wire A/B tests via Firebase A/B Testing** — variants + Analytics conversion — Firebase computes stats." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Real-time updates for critical toggles** — `onConfigUpdated` on SDK v3+; feature flips propagate in seconds." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Force-update by min-supported-version key.** Blocking dialog when a security-critical release lands." },
+    { "type": "callout", "variant": "best", "markdown": "**7. Auto-rollback via Cloud Function** — Crashlytics velocity alert → Function → RC flip." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Store big JSON in Storage + serve URL via RC** — RC max 1 MiB per param; big content is better fetched from a URL." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy) — Boolean flag.** Gate a UI change behind `feature_x_enabled`. Flip in console; verify next launch shows new UI." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium) — Gradual rollout.** Set random-percentile condition 10%; roll 3 users out of 30; verify only ~3 see new variant." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium) — Real-time.** Wire `onConfigUpdated`; flip a flag in console; verify UI updates in ≤10 seconds without app restart." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard) — A/B test.** Two home-screen variants + `select_content` conversion; run 7 days; pick winner." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Hard) — Force update.** `min_supported_app_version` param + blocking dialog; publish a bump; verify old app forces update." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 6 (Expert) — Auto-rollback.** Cloud Function watches Crashlytics velocity; on regression, flips `feature_x_enabled` to false via Admin SDK. Test end-to-end." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: How does Remote Config work? Walk through fetch → activate → getValue.**\n\n**A:** RC is a **client-side flag cache with server-controlled overrides**. The client holds three value sets: **defaults** (baked in), **fetched** (last downloaded, not yet visible to reads), **active** (currently readable). **Flow:** (1) App calls `setDefaults({...})` before any read — first launch works offline. (2) `fetch()` calls Firebase's endpoint; server computes the correct value per key by evaluating **conditions** against this device's context (app version, user property, audience, country, random percentile). Result is stored in the *fetched* slot — reads still see *active*. (3) `activate()` swaps *fetched* → *active*; next `getValue` returns new value. (4) `fetchAndActivate` does both in one call. **Why the split?** Lets you download in the background but only activate on a stable UI boundary (app start, backgrounding) to avoid mid-screen changes. On SDK v3+, `onConfigUpdated` gives real-time push — server pushes 'new config available' via a hanging connection; you call `activate` and re-render." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How do you roll out a risky feature safely?**\n\n**A:** **(1) Ship code dark.** Merge behind a boolean flag defaulted `false`. Nobody sees it. **(2) Console: create the flag; set default `false`; add a condition `random-percentile 0-1%` → `true`.** 1% of users get the feature. **(3) Watch metrics for 24-48h** — Crashlytics crash-free-users %, Analytics conversion, Performance p95 for the affected flow, custom SLIs. **(4) Escalate percentiles** — 10% → 50% → 100% at each safe checkpoint. Wait a full day between big jumps. **(5) Kill switch ready** — one console flip drops back to 0%. **(6) Segment-first for risky changes** — 'internal employees + beta testers only' condition before random-%. **(7) Auto-rollback** — Cloud Function watches Crashlytics velocity + Analytics conversion; on regression, sets rollout back to 0% via Admin SDK. **(8) After 100% + stable for a week, remove the flag** — flags left forever become tech debt. Every serious team uses this pattern; interviewers love the specifics." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: How does Firebase A/B Testing use Remote Config?**\n\n**A:** **A/B Testing** builds on Remote Config: you create an **experiment** with N variants; each variant defines RC parameter values. Firebase splits your target audience by user, assigns each user to exactly one variant (sticky), delivers the corresponding RC values on fetch, and correlates them with a **primary Analytics conversion event** (`purchase`, `sign_up`, or a custom event). **Statistical analysis is automatic** — Firebase computes lift, confidence intervals, probability-to-beat-baseline. You watch until an experiment reaches significance (typical: 1-2 weeks depending on traffic), roll out the winner to 100%. **Advantages over rolling your own:** deterministic per-user assignment (survives reinstalls via `user_pseudo_id`), Firebase handles sample-ratio checks, and it hooks into the same audience + condition machinery as RC. **Under the hood:** it's RC with a special **exclusivity condition** — a user in experiment X can't be in experiment Y. **Downsides:** analysis is basic (no post-hoc slicing without BigQuery); dashboard latency can be 24 h. Serious teams still cross-check via BigQuery." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: What happens on first launch with no network?**\n\n**A:** `fetch()` throws (or the SDK silently keeps the last-known values); **the app runs on `defaults`** you baked in via `setDefaults`. This is why the FIRST rule of RC is: **always call `setDefaults` before any UI reads a value.** If you skip defaults, `getString` returns `''`, `getBool` returns `false`, `getInt` returns `0` — often causing subtle UI bugs (empty banners, disabled buttons). **Concrete pattern:** define defaults as a Dart `Map<String, Object>` right next to the RC init call — checked into git, code-reviewed, the source of truth. On next successful `fetch + activate`, values switch over; the app never has an 'unconfigured' state. **Also:** the SDK caches the last-activated set on disk; a launch with cached values but no network still shows the last-seen prod values." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How do you kill-switch a bad release?**\n\n**A:** Assumes you shipped every risky feature behind an RC boolean (kill-switch pattern). **(1) Confirm regression** — Crashlytics velocity spike or Analytics conversion drop attributed to the new release version. **(2) Console: set the RC boolean to `false`** for a condition matching that app version (`app.version == 2.4.0` → `feature_enabled: false`). **(3) Publish.** Clients on that version fetch (real-time push if SDK v3, next launch otherwise) + activate → feature disappears. **(4) Force-fetch acceleration** — set `minimumFetchInterval: 0` isn't retroactive; but a real-time channel + push notifications can nudge users to reopen. **(5) If code path is more severe than a flag can bypass** — use `min_supported_app_version` param + blocking dialog to force update. **(6) Root-cause fix + hotfix release + only then remove the kill-switch condition.** The whole flow can be automated via Cloud Function on Crashlytics velocity alert. **Interviewers love hearing the automation layer.**" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: Remote Config vs LaunchDarkly / Optimizely / Statsig — when to pick which?**\n\n**A:** **Remote Config wins when:** you're on Firebase already (free, native Analytics/Crashlytics tie-ins), don't need per-request evaluation on the server, and one-per-launch update latency is fine. **LaunchDarkly / Optimizely / Statsig win when:** (1) server-side flags at every request (LD's core competency), (2) fine-grained targeting with programmatic segments, (3) audit + governance (SOC2 workflow), (4) advanced experimentation (multi-arm bandits, CUPED variance reduction), (5) unified cross-stack flags (backend + web + mobile from one source), (6) integrations (Datadog, PagerDuty, Slack). **Cost:** RC free; LD paid ($$$). **Typical evolution:** startups start with RC → outgrow when the server-side story or governance matters → migrate to LD/Statsig. Some teams run both — RC for mobile-only client flags, LD for cross-cutting server flags. Interviewers respect a nuanced answer here — 'it depends on your ops maturity + surface area.'" },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **Every mobile team** with a rollout process — startups to Duolingo to NYT.\n- **Force-update flow** — `min_supported_app_version` param; blocking dialog on old versions.\n- **Regional rollouts** — country condition; enable feature in India first, then rest.\n- **A/B testing** — home screen variants, pricing variants, checkout flow variants.\n- **Kill switches** — every risky feature behind a boolean; auto-rollback via Cloud Function.\n- **Personalization** — ML picks the variant per user (paid tier).\n- **Cross-service** — RC + Analytics audiences + FCM for targeted messaging campaigns." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Personalization** — Firebase ML picks the best-performing variant per user based on a conversion metric.\n- **Real-time SDK v3+** — server push via long-poll; feature flips propagate within seconds.\n- **Server-side Remote Config** — Cloud Functions can `getServerConfig` — same flags on backend + client for consistency.\n- **JSON parameters** — up to 1 MiB per param; keep small + version the schema.\n- **Conditions ordering matters** — first matching condition wins in the console list.\n- **Max ~2000 params** and **~500 conditions** per project.\n- **Change history + rollback** — every publish is versioned; one-click rollback to any prior version.\n- **Publish rate limits** — 500 publishes/day, 40/minute. Don't publish from CI on every commit.\n- **Analytics user properties → RC conditions** — powerful pattern (target 'plan=pro users').\n- **RC + FCM segmented push** — combine RC audience targeting with FCM topic delivery.\n- **`getString`/`getBool` return type coercion** — if the param is missing, defaults apply; typed defaults recommended.\n- **In-app-messaging** — Firebase IAM uses RC-like targeting; complement to RC for pop-ups." }
   ],
   "flashcards": [
-    { "front": "Remote Config in one line?", "back": "Server-controlled key-value config with targeting conditions, delivered to clients." },
-    { "front": "Why set defaults?", "back": "So first-run users see a good UI before any fetch completes." },
-    { "front": "How to roll out safely?", "back": "Start at 1%, monitor Crashlytics/Analytics, ramp up; keep a kill switch." }
+    { "front": "Three RC value sources?", "back": "Defaults (baked), fetched (downloaded), active (currently readable)." },
+    { "front": "Why setDefaults?", "back": "First launch has no network; without defaults, keys return empty." },
+    { "front": "Fetch throttle in prod?", "back": "Default 12h; SDK returns cache silently if you exceed. Set explicitly via minimumFetchInterval." },
+    { "front": "Real-time updates?", "back": "SDK v3+ onConfigUpdated stream — server push; call activate() + re-render." },
+    { "front": "Kill switch?", "back": "Every risky feature behind a boolean flag; console flips → instant off." },
+    { "front": "Force-update pattern?", "back": "min_supported_app_version param + blocking dialog when device version is below." },
+    { "front": "RC max param size?", "back": "1 MiB per param. Bigger blobs → serve URL from Storage." }
   ],
   "quiz": [
-    { "q": "Remote Config is best used for…", "options": ["Storing user data", "Feature flags + gradual rollout + A/B", "Photo storage", "Push notifications"], "answer": 1, "explain": "It's a managed config + flag system." },
-    { "q": "Best time to fetch on mobile?", "options": ["Every screen", "Once per app launch (with throttle)", "Every button tap", "Never"], "answer": 1, "explain": "Fetch sparingly; use active values thereafter." },
-    { "q": "Missing defaults means…", "options": ["Nothing", "First launch may show a broken UI", "Better security", "Faster fetch"], "answer": 1, "explain": "Defaults are the safety net before a successful fetch." }
+    { "q": "Before ANY read of an RC value…", "options": ["fetch()", "setDefaults()", "activate()", "reset()"], "answer": 1, "explain": "First launch runs on defaults." },
+    { "q": "Real-time flag updates require SDK…", "options": ["v1", "v2", "v3+ (onConfigUpdated)", "None supported"], "answer": 2, "explain": "onConfigUpdated added in v3+." },
+    { "q": "Gradual rollout in RC uses…", "options": ["Manual APK builds", "Random-percentile conditions", "Store staged rollouts only", "Email invites"], "answer": 1, "explain": "Percentile lets you dial 1% → 100%." },
+    { "q": "Firebase A/B testing runs on top of…", "options": ["Custom infra", "Remote Config", "Storage", "Crashlytics"], "answer": 1, "explain": "Variants live as RC values + Firebase computes stats." },
+    { "q": "Max size per RC parameter?", "options": ["10 KB", "1 MiB", "5 MiB", "Unlimited"], "answer": 1, "explain": "Big blobs should go via Storage URL." }
   ],
   "challenges": [
-    { "level": "Easy", "text": "Gate a UI change behind a boolean flag with a default." },
-    { "level": "Medium", "text": "Roll out a new home layout to 10% of users; measure with Analytics." },
-    { "level": "Hard", "text": "Add a kill switch tied to Crashlytics alerts (via a rule)." },
-    { "level": "Expert", "text": "Run an A/B test with Analytics conversions and choose the winner." }
+    { "level": "Easy", "text": "Gate a UI change behind a boolean flag; flip in console + verify." },
+    { "level": "Easy", "text": "Set defaults for 5 params; run offline; verify UI still works." },
+    { "level": "Medium", "text": "Gradual rollout via 10% random-percentile condition." },
+    { "level": "Medium", "text": "Real-time listener — flip a param + verify UI updates without restart." },
+    { "level": "Hard", "text": "A/B test two home layouts with a conversion event; pick winner." },
+    { "level": "Hard", "text": "Force-update via min_supported_app_version + blocking dialog." },
+    { "level": "Expert", "text": "Auto-rollback pipeline: Crashlytics velocity → Cloud Function → RC flip." }
   ],
   "interviewQuestions": [
-    "How does Remote Config work?",
-    "How do you gradually roll out a feature?",
-    "Why set defaults?",
-    "How do you run A/B tests?",
-    "Remote Config vs LaunchDarkly/Optimizely?"
+    "Walk through fetch → activate → getValue.",
+    "How do you roll out a risky feature safely?",
+    "How does Firebase A/B testing use Remote Config?",
+    "What happens on first launch with no network?",
+    "How do you kill-switch a bad release?",
+    "Remote Config vs LaunchDarkly / Optimizely / Statsig — trade-offs?"
   ],
   "references": [
-    { "label": "Firebase Remote Config", "url": "https://firebase.google.com/docs/remote-config" }
+    { "label": "Firebase Remote Config docs", "url": "https://firebase.google.com/docs/remote-config" },
+    { "label": "Remote Config real-time updates", "url": "https://firebase.google.com/docs/remote-config/get-started?platform=flutter#add-a-real-time-remote-config-listener" },
+    { "label": "Firebase A/B Testing", "url": "https://firebase.google.com/docs/ab-testing" }
   ]
 }
