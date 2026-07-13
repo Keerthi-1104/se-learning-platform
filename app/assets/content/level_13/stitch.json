@@ -1,0 +1,98 @@
+{
+  "id": "ux.stitch",
+  "levelId": 13,
+  "title": "Google Stitch",
+  "xp": 40,
+  "estimatedMinutes": 30,
+  "objectives": [
+    "Understand Google Stitch via a real-life analogy",
+    "Use Stitch to generate UI mockups + prototypes from prompts",
+    "Export Stitch designs to Figma + code",
+    "Fit Stitch into a Flutter design workflow",
+    "Handle the AI-design trade-offs",
+    "Answer Stitch interview questions"
+  ],
+  "sections": [
+    { "type": "callout", "variant": "analogy", "markdown": "**Think of Google Stitch as the AI intern that can produce a first-draft UI in 30 seconds.**\n\nYou describe a screen ('a settings page for a delivery app with dark mode, notification toggles, and a logout button'); Stitch generates a Figma-quality mockup, exports vector components, and lets you iterate via chat. Powered by Gemini + Google's design AI.\n\n- **Prompt-to-UI** — natural language → clickable prototype.\n- **Chat iteration** — 'make it more minimal,' 'switch to Material 3.'\n- **Export** — Figma, HTML/CSS, code snippets.\n- **Stitch Chats vs Canvases** — chat mode for iteration; canvas mode for precise editing.\n- **Material Design 3 baseline** — output follows M3 conventions.\n- **Multi-screen flows** — generate whole user journeys.\n\n**Why Google Stitch matters for Flutter teams in 2026:** first-drafts of screens take minutes, not hours. Product managers can produce reviewable mockups without a designer. Designers accelerate from blank canvas → refined design. Engineers can start Flutter implementation from clean vectors + Material 3 tokens. **Limits:** AI output is generic; brand + micro-interactions still need human designers." },
+    { "type": "callout", "variant": "definition", "markdown": "**Google Stitch** (announced 2024, generally available 2025+) is Google's AI-powered UI design tool. Uses Gemini to convert natural-language prompts + reference images into complete UI mockups, prototypes, and exportable code. Output follows Material Design 3 by default. Integrates with Figma export, HTML/CSS export, and future Android + iOS + Flutter code output. Web + upcoming native apps." },
+    { "type": "theory", "markdown": "## Stitch vs Figma vs Codemagic" },
+    { "type": "table", "headers": ["Aspect", "Stitch", "Figma", "Codemagic AI"], "rows": [
+      ["Primary interaction", "Prompt-to-UI", "Direct manipulation", "Code + UI hybrid"],
+      ["Design system", "Material 3 baseline", "Any system", "Brand-dependent"],
+      ["Best for", "First-draft mockups + rapid iteration", "Refined design system + team files", "Full app scaffolding"],
+      ["Output", "Figma / HTML/CSS", "Design + Dev Mode", "Full Flutter code"],
+      ["Learning curve", "Very low (chat)", "Medium (Figma skills)", "Medium (prompt + code)"],
+      ["Collaboration", "Prompt-driven", "Real-time multiplayer", "GitHub PR review"]
+    ]},
+    { "type": "theory", "markdown": "## Sample Stitch workflow" },
+    { "type": "code", "language": "text", "code": "// 1. Open Stitch → new project → chat mode\n// 2. Prompt:\n\"Create a settings page for a Flutter delivery app. Material 3, dark mode.\n Include: profile row, notification toggles (order updates, promotions),\n dark-mode toggle, language selector, logout button (danger style).\"\n\n// 3. Stitch generates a full mockup in ~15s\n// 4. Iterate: \"Make the profile row more compact.\"\n//              \"Add a support / contact row.\"\n// 5. Switch to Canvas mode for precise tweaks\n// 6. Export → Figma (edit further) OR HTML/CSS (reference for Flutter)\n\n// Advanced: multi-screen flow\n\"Create a 4-screen onboarding flow: welcome, permissions, sign-in, home preview.\n Material 3, follows Google's onboarding guidelines.\"\n// Stitch links frames + adds prototype transitions" },
+    { "type": "theory", "markdown": "## Common mistakes" },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 1: Treating Stitch output as final.** AI first-drafts always need human polish — brand voice, micro-interactions, edge cases." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 2: Skipping the prompt-refinement iteration.** First output is generic; specific prompts + chat iteration produce better results." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 3: Ignoring accessibility.** Stitch output may not meet WCAG contrast + touch-target rules — audit." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 4: Copying HTML/CSS output directly.** Web idioms don't map to Flutter widgets 1:1; use as reference, rewrite in Flutter." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 5: No brand alignment.** Stitch defaults to generic Material 3; override with brand colors / typography." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 6: Prompt overload.** Kitchen-sink prompt = mediocre output; iterate one concern at a time." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 7: Skipping the Figma export.** Direct-to-code often lacks Figma-level refinability." },
+    { "type": "callout", "variant": "mistake", "markdown": "**Mistake 8: PII in reference images.** If uploading user screenshots, redact first." },
+    { "type": "theory", "markdown": "## Best practices" },
+    { "type": "callout", "variant": "best", "markdown": "**1. First-draft with Stitch; refine in Figma.**" },
+    { "type": "callout", "variant": "best", "markdown": "**2. Iterative prompts** — one concern at a time." },
+    { "type": "callout", "variant": "best", "markdown": "**3. Reference images** for style anchoring." },
+    { "type": "callout", "variant": "best", "markdown": "**4. Brand palette + type from Variables** in Figma post-export." },
+    { "type": "callout", "variant": "best", "markdown": "**5. Accessibility audit** post-export." },
+    { "type": "callout", "variant": "best", "markdown": "**6. Use HTML/CSS as reference** only — implement in Flutter idioms." },
+    { "type": "callout", "variant": "best", "markdown": "**7. PM + designer + engineer** in the room during iteration." },
+    { "type": "callout", "variant": "best", "markdown": "**8. Sensitive data redacted** before uploading references." },
+    { "type": "theory", "markdown": "## Practice programs" },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 1 (Easy)** — Generate a login screen from a text prompt." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 2 (Medium)** — Iterate a settings page 3 times with chat prompts." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 3 (Medium)** — Export to Figma + apply brand tokens." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 4 (Hard)** — Multi-screen onboarding flow with prototype links." },
+    { "type": "callout", "variant": "note", "markdown": "**Practice 5 (Expert)** — Reference-image-driven design: upload competitor screenshot + prompt Stitch to design a similar-styled screen." },
+    { "type": "theory", "markdown": "## Interview Q&A" },
+    { "type": "callout", "variant": "interview", "markdown": "**Q1: When would you use Stitch vs Figma from scratch?**\n\n**A:** **Stitch** for FIRST-DRAFTS + rapid iteration + when the design brief is 'we need something to react to.' Perfect for: PMs sketching a feature idea, engineers wireframing a screen for demo, designers accelerating early exploration. **Figma from scratch** for FINAL design + brand nuance + micro-interactions + design system work. Stitch's Material 3 baseline is generic; brand alignment + illustration + custom motion still need Figma craft. **Best workflow:** Stitch first-draft (15 min) → export to Figma → designer refines → tokens applied → Dev Mode hand-off. **Trap:** treating Stitch output as production-ready without human review + accessibility check + brand polish. Interviewer signal: knowing Stitch is a first-draft accelerator, not a designer replacement." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q2: How does Stitch fit into a Flutter team's workflow?**\n\n**A:** **Pattern:** (1) **PM writes a feature spec** — 'add a settings page with X, Y, Z.' (2) **PM/designer uses Stitch** to generate a first mockup in 15 min. (3) **Design review** — 3 iterations via chat prompts. (4) **Export to Figma** — designer applies brand tokens + Auto Layout + variants. (5) **Dev Mode hand-off** to Flutter engineer. (6) **Flutter implementation** using theme tokens. **Speed win:** the traditional 'PM writes → designer produces → review → iterate' loop compresses from days to hours for early feedback. **Where Stitch doesn't help:** brand identity + complex flows + design-system-level decisions still need designer craft. **The Flutter angle:** Material 3 baseline maps well to Flutter's `MaterialApp` + `useMaterial3: true`; token export can drop into `ThemeData`. Interviewer signal: process integration, not just tool novelty." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q3: What are the accessibility risks of AI-generated UI?**\n\n**A:** AI-generated designs often fail WCAG: (1) **Contrast** — low-contrast text/background (Stitch's generic palette may not meet AA/AAA). (2) **Touch targets** — buttons < 48×48 dp (Flutter's default requirement). (3) **Text scaling** — layouts break when user zooms. (4) **Screen reader labels** — icons without accessible names. (5) **Focus order** — non-linear tab order. (6) **Motion sensitivity** — flashy animations. **Mitigation:** post-generation audit with WCAG tools (axe, Contrast Checker), Flutter accessibility inspector, manual VoiceOver/TalkBack testing. **Regulator-aware:** EU + India accessibility laws increasingly apply to consumer apps. **AI won't solve accessibility for you** — treat as a first-draft that still requires human accessibility review. Interviewer signal: knowing AI doesn't absolve accessibility duty." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q4: How do prompt-engineering skills translate to Stitch?**\n\n**A:** **Effective prompts include:** (1) **Screen type** — 'settings page,' 'onboarding step 2 of 4.' (2) **Design system baseline** — 'Material 3 dark mode.' (3) **Content specifics** — 'notification toggles: order updates, promotions.' (4) **Brand hints** — 'formal + trustworthy tone.' (5) **Layout constraints** — 'single-column mobile.' (6) **State** — 'error state.' (7) **Reference** — 'similar to Google Maps settings.' **Iterative refinement:** 'Move the profile row to the top' > 'Fix the layout.' **Anti-patterns:** vague ('modern + cool'); kitchen-sink (10 requirements at once); no context (no target device). **Same rules apply as LLM prompting:** specific, iterative, well-scoped. **Interviewer signal:** knowing prompt engineering IS design skill in AI tools." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q5: How would you evaluate whether Stitch output is production-ready?**\n\n**A:** **Checklist:** (1) **Brand alignment** — colors, typography, tone match brand. (2) **Accessibility** — WCAG AA contrast, touch targets, focus order, screen reader labels. (3) **Design system consistency** — reuses existing components, doesn't invent new ones. (4) **Content clarity** — copy is clear + not placeholder. (5) **Edge cases** — empty states, error states, loading states shown. (6) **Multi-form-factor** — mobile + tablet + landscape considered. (7) **Interaction states** — hover, pressed, disabled variants. (8) **Motion** — respects prefers-reduced-motion. (9) **Localization** — text expansion + RTL considered. (10) **Legal / compliance** — regulator-required disclosures included. **First-draft rarely passes all 10;** designer refinement + engineer review closes gaps." },
+    { "type": "callout", "variant": "interview", "markdown": "**Q6: What are the ethical + IP considerations?**\n\n**A:** **(1) Training data provenance** — Stitch trained on public + licensed designs; output may echo styles of specific brands. Avoid outputs that clone competitor UI. **(2) Attribution + license** — Google's Stitch terms; generally you own outputs but check current TOS. **(3) Brand safety** — don't upload internal designs to public tools without approval. **(4) Reference-image copyright** — uploading a screenshot may create derivative-work claims. **(5) Employee handoff** — as team member, ensure AI-tool use aligns with employer policy. **(6) Client work** — client contracts may forbid AI-generated deliverables. **(7) Disclosure** — some regulators (EU AI Act) may require disclosing AI-generated design in certain contexts. **(8) Sustainability** — AI compute has energy cost; batch usage is more efficient. **Interviewer signal:** professional maturity + not naive on AI ethics." },
+    { "type": "theory", "markdown": "## Real-world usage\n\n- **PM sketching** — feature ideas without a designer.\n- **Designer acceleration** — first-drafts in minutes.\n- **Engineer wireframes** — visual comm before code.\n- **Design system exploration** — variant discovery.\n- **NOT for** — finalized designs; brand identity; complex flows without human refinement." },
+    { "type": "theory", "markdown": "## Advanced notes\n\n- **Multi-modal input** — text + reference images.\n- **Chat mode vs Canvas mode** — iteration vs precision.\n- **Figma export** — with variables + Auto Layout preserved.\n- **HTML/CSS export** — reference-quality; not production Flutter.\n- **Multi-screen flows** — Stitch links + adds prototype transitions.\n- **Material 3 default** — override via prompt for other systems.\n- **Version history** — chat log preserves iteration.\n- **Team collaboration** — share Stitch canvases with team.\n- **AI + design system** — Stitch respects brand tokens if provided.\n- **Trade-offs vs Codemagic AI** — Stitch focuses on design; Codemagic AI on full app scaffolding.\n- **Vertex AI Design Studio** — Google's related enterprise offering.\n- **Alternatives** — v0 by Vercel, Uizard, Galileo AI, Framer AI.\n- **Trend** — AI + designer + engineer collaboration; not designer replacement." }
+  ],
+  "flashcards": [
+    { "front": "Stitch's superpower?", "back": "Prompt-to-UI first-drafts in 15 minutes; iterate via chat." },
+    { "front": "Baseline system?", "back": "Material Design 3; override via prompt." },
+    { "front": "Best workflow?", "back": "Stitch first-draft → Figma refinement → tokens + Auto Layout → Dev Mode hand-off." },
+    { "front": "Accessibility risk?", "back": "AI output often fails WCAG; human audit required." },
+    { "front": "Not production-ready when?", "back": "Missing brand alignment / edge cases / interaction states / accessibility." },
+    { "front": "HTML/CSS export use?", "back": "Reference only; implement in Flutter idioms." },
+    { "front": "Ethics?", "back": "Training data provenance + brand safety + AI disclosure + client contract review." }
+  ],
+  "quiz": [
+    { "q": "Stitch output baseline?", "options": ["Cupertino", "Material 3", "Custom", "None"], "answer": 1, "explain": "M3 default; override via prompt." },
+    { "q": "Best use?", "options": ["Final design", "First-draft + iterate", "Only illustrations", "Never"], "answer": 1, "explain": "AI-accelerated exploration." },
+    { "q": "Accessibility?", "options": ["Auto-handled", "Manual audit required", "iOS only", "Nothing"], "answer": 1, "explain": "AI output often fails WCAG." },
+    { "q": "HTML/CSS to Flutter?", "options": ["Copy-paste", "Use as reference; implement in Flutter widgets", "Impossible", "Web only"], "answer": 1, "explain": "Idiom mismatch." },
+    { "q": "Best prompt style?", "options": ["Kitchen-sink", "Iterative + specific", "Vague", "Long paragraphs"], "answer": 1, "explain": "Specific + iterative wins." }
+  ],
+  "challenges": [
+    { "level": "Easy", "text": "Generate a login screen from a text prompt." },
+    { "level": "Medium", "text": "Iterate a settings page 3 times via chat." },
+    { "level": "Medium", "text": "Export to Figma + apply brand tokens." },
+    { "level": "Hard", "text": "Multi-screen onboarding flow with prototype transitions." },
+    { "level": "Expert", "text": "Reference-image-driven design + accessibility audit + Flutter theme mapping." }
+  ],
+  "interviewQuestions": [
+    "Stitch vs Figma from scratch?",
+    "How does Stitch fit a Flutter team workflow?",
+    "Accessibility risks of AI-generated UI?",
+    "Prompt engineering for Stitch?",
+    "Evaluate whether output is production-ready?",
+    "Ethics + IP considerations?"
+  ],
+  "references": [
+    { "label": "Google Stitch", "url": "https://stitch.withgoogle.com" },
+    { "label": "Material Design 3", "url": "https://m3.material.io" }
+  ]
+}
